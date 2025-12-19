@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
-    <title>Stimolatore Lessicale V22</title>
+    <title>Stimolatore V24</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#1e1e2f">
@@ -134,7 +134,6 @@
         /* GRID SYSTEM (Responsive) */
         .grid-adaptive {
             display: grid; gap: 15px; width: 100%; max-width: 900px; margin: 0 auto;
-            /* Default fallback */
             grid-template-columns: repeat(4, 1fr); 
         }
 
@@ -181,9 +180,12 @@
         .modal-body { flex: 1; overflow-y: auto; padding: 20px; max-width: 1000px; margin: 0 auto; width: 100%; padding-bottom: 80px; }
 
         .lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; }
-        .lib-card { background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: 12px; padding: 15px; transition: 0.2s; display: flex; flex-direction: column; gap: 10px; }
+        .lib-card { background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: 12px; padding: 15px; transition: 0.2s; display: flex; flex-direction: column; gap: 5px; }
         .lib-card:hover { background: rgba(255,255,255,0.08); border-color: var(--accent-color); }
         .lib-card.clinical { border-left: 4px solid var(--success-color); }
+        .lib-title { font-weight:bold; font-size:1.1rem; }
+        .lib-cat { font-size:0.8rem; color:var(--accent-color); text-transform:uppercase; font-weight:bold; }
+        .lib-meta { font-size:0.75rem; color:#aaa; margin-bottom:10px; }
 
         .editor-item { display: flex; align-items: center; gap: 15px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 10px; margin-bottom: 10px; border: 1px solid transparent; flex-wrap: wrap; cursor: pointer; transition: 0.2s; }
         .editor-item.active-paste { border-color: var(--accent-color); background: rgba(99, 102, 241, 0.2); }
@@ -193,8 +195,6 @@
         .prompt-input { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid #444; padding: 5px; font-size: 0.8rem; margin-top: 5px; color: #ccc; }
         
         .loader-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.7); display: flex; justify-content: center; align-items: center; color: white; z-index: 5; }
-        
-        /* Fallback Text Badge */
         .fallback-badge { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #eee; color: #333; font-weight: 800; text-align: center; border-radius: 8px; font-size: 1.2rem; padding: 5px; }
 
         /* UTILS */
@@ -207,7 +207,7 @@
     <div class="app-shell">
         <header>
             <div>
-                <h1>Stimolatore V22</h1>
+                <h1>Stimolatore V24</h1>
                 <div class="storage-bar-container">
                     <i class="fa-solid fa-hard-drive"></i>
                     <div class="storage-progress"><div id="storage-fill" class="storage-fill"></div></div>
@@ -216,12 +216,12 @@
             </div>
             <div style="display:flex; align-items:center; gap:10px;">
                 <button class="btn-icon" onclick="toggleFullScreen()" title="Schermo Intero"><i class="fa-solid fa-expand" id="fs-icon"></i></button>
-                <button class="btn-icon" onclick="openLibrary()" title="Libreria Set"><i class="fa-solid fa-book-open"></i><span id="lib-count" class="badge-count">0</span></button>
+                <button class="btn-icon" onclick="openLibrary()" title="Gestione Archivi"><i class="fa-solid fa-book-open"></i><span id="lib-count" class="badge-count">0</span></button>
                 <button class="btn-icon" onclick="openSettings()" title="API Key"><i class="fa-solid fa-key"></i></button>
             </div>
         </header>
 
-        <!-- CONTROLLI PRINCIPALI (SEMPRE VISIBILI) -->
+        <!-- CONTROLLI -->
         <div class="controls-row">
             <div class="control-group">
                 <label>Modalità</label>
@@ -233,33 +233,11 @@
                 </select>
             </div>
 
-            <!-- QUICK SELECT -->
+            <!-- DYNAMIC DROPDOWN -->
             <div class="control-group">
-                <label>Set / Categoria</label>
+                <label>Seleziona Set (Dall'Archivio)</label>
                 <select id="category-select">
-                    <option value="" disabled selected>-- Scegli --</option>
-                    <optgroup label=" ✨ AI Custom">
-                        <option value="ai_custom">Prompt Personale...</option>
-                    </optgroup>
-                    <optgroup label="🐶 Animali (20)">
-                        <option value="anim_liv1">Liv 1: Bisillabe Piane</option>
-                        <option value="anim_liv2">Liv 2: Trisillabe</option>
-                        <option value="anim_liv3">Liv 3: Complesse</option>
-                    </optgroup>
-                    <optgroup label="🍎 Cibi (20)">
-                        <option value="food_liv1">Liv 1: Semplici</option>
-                        <option value="food_liv2">Liv 2: Medi</option>
-                    </optgroup>
-                    <optgroup label="🏠 Casa (20)">
-                        <option value="home_liv1">Liv 1: Alta Frequenza</option>
-                        <option value="home_liv2">Liv 2: Media Frequenza</option>
-                    </optgroup>
-                    <optgroup label="👕 Abbigliamento (20)">
-                        <option value="clothes_liv1">Vestiario Comune</option>
-                    </optgroup>
-                    <optgroup label="🏃 Verbi (20)">
-                        <option value="verbs_liv1">Azioni Quotidiane</option>
-                    </optgroup>
+                    <option value="" disabled selected>-- Caricamento... --</option>
                 </select>
                 <input type="text" id="custom-input" class="hidden" placeholder="Es. Strumenti musicali..." style="margin-top:5px;">
             </div>
@@ -306,7 +284,7 @@
                 <i class="fa-solid fa-play"></i> INIZIA
             </button>
             <button class="btn btn-ghost" onclick="openLibrary()">
-                <i class="fa-solid fa-folder-open"></i> Libreria
+                <i class="fa-solid fa-folder-open"></i> Gestione Archivi
             </button>
             <button id="btn-save" class="btn btn-ghost hidden" onclick="saveSetFromSession()">
                 <i class="fa-solid fa-floppy-disk"></i>
@@ -317,8 +295,7 @@
         <div id="game-stage">
             <div style="position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; align-items:center; color:var(--text-secondary);">
                 <i class="fa-solid fa-database" style="font-size:4rem; margin-bottom:20px; opacity:0.3;"></i>
-                <p>Seleziona e premi CARICA</p>
-                <p style="font-size:0.8rem; opacity:0.6; margin-top:5px;">oppure apri Libreria</p>
+                <p>Seleziona un set e premi CARICA</p>
             </div>
         </div>
 
@@ -329,9 +306,9 @@
         <div class="modal-header">
             <h2>Archivio Locale</h2>
             <div style="display:flex; gap:10px;">
-                <button class="btn btn-primary btn-sm" onclick="createEmptySet()"><i class="fa-solid fa-plus"></i></button>
-                <button class="btn btn-ghost btn-sm" onclick="exportAllSets()"><i class="fa-solid fa-file-export"></i></button>
-                <button class="btn btn-ghost btn-sm" onclick="document.getElementById('file-upload').click()"><i class="fa-solid fa-file-import"></i></button>
+                <button class="btn btn-primary btn-sm" onclick="createEmptySet()"><i class="fa-solid fa-plus"></i> Nuovo</button>
+                <button class="btn btn-ghost btn-sm" onclick="exportAllSets()"><i class="fa-solid fa-file-export"></i> Backup</button>
+                <button class="btn btn-ghost btn-sm" onclick="document.getElementById('file-upload').click()"><i class="fa-solid fa-file-import"></i> Import</button>
                 <input type="file" id="file-upload" class="hidden" accept=".json" onchange="importSets(this)">
                 <button class="btn btn-danger btn-sm" onclick="closeLibrary()"><i class="fa-solid fa-xmark"></i></button>
             </div>
@@ -351,7 +328,10 @@
             </div>
         </div>
         <div class="modal-body">
-            <input type="text" id="edit-set-name" placeholder="Nome del Set" style="width:100%; margin-bottom:20px;">
+            <div style="display:flex; gap:10px; margin-bottom:20px;">
+                <input type="text" id="edit-set-name" placeholder="Nome del Set" style="flex:2;">
+                <input type="text" id="edit-set-cat" placeholder="Categoria" style="flex:1;">
+            </div>
              <div class="actions-row" style="justify-content: flex-start; margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.1);">
                  <button class="btn btn-ghost btn-sm" onclick="document.getElementById('bulk-upload').click()"><i class="fa-solid fa-images"></i> Carica Foto...</button>
                  <input type="file" id="bulk-upload" class="hidden" multiple accept="image/*" onchange="bulkUploadImages(this)">
@@ -382,7 +362,7 @@
     <script>
         // --- 0. DB MANAGER ---
         const DB_NAME = 'StimolatoreLessicaleDB';
-        const DB_VERSION = 1;
+        const DB_VERSION = 2; // Incremented for schema update if needed
         const STORE_NAME = 'sets';
         class DB {
             static async open() { return new Promise((res, rej) => { const r = indexedDB.open(DB_NAME, DB_VERSION); r.onupgradeneeded = e => { const db = e.target.result; if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME, { keyPath: 'id' }); }; r.onsuccess = e => res(e.target.result); r.onerror = e => rej(e.target.error); }); }
@@ -391,63 +371,42 @@
             static async deleteSet(id) { const db = await DB.open(); return new Promise((res, rej) => { const tx = db.transaction(STORE_NAME, 'readwrite'); const r = tx.objectStore(STORE_NAME).delete(id); r.onsuccess = () => res(true); r.onerror = () => rej(r.error); }); }
         }
 
-        // --- 1. DATA ---
-        const CLINICAL_SETS = {
-            "anim_liv1": [
-                {l:"Cane", p:"Cute dog"}, {l:"Gatto", p:"Cute cat"}, {l:"Topo", p:"Cute mouse"}, {l:"Rana", p:"Green frog"}, {l:"Toro", p:"Bull"}, 
-                {l:"Mucca", p:"Cow"}, {l:"Lupo", p:"Wolf"}, {l:"Gufo", p:"Owl"}, {l:"Orso", p:"Bear"}, {l:"Ape", p:"Bee"},
-                {l:"Gallo", p:"Rooster"}, {l:"Pollo", p:"Chicken"}, {l:"Oca", p:"Goose"}, {l:"Mulo", p:"Donkey"}, {l:"Falco", p:"Falcon"}, 
-                {l:"Ragno", p:"Spider"}, {l:"Bruco", p:"Caterpillar"}, {l:"Verme", p:"Worm"}, {l:"Mosca", p:"Fly"}, {l:"Puma", p:"Puma"}
-            ],
-            "anim_liv2": [
-                {l:"Pecora", p:"Sheep"}, {l:"Medusa", p:"Jellyfish"}, {l:"Gallina", p:"Hen"}, {l:"Balena", p:"Whale"}, {l:"Gorilla", p:"Gorilla"}, 
-                {l:"Giraffa", p:"Giraffe"}, {l:"Maiale", p:"Pig"}, {l:"Delfino", p:"Dolphin"}, {l:"Cavallo", p:"Horse"}, {l:"Pinguino", p:"Penguin"},
-                {l:"Cammello", p:"Camel"}, {l:"Pantera", p:"Panther"}, {l:"Castoro", p:"Beaver"}, {l:"Coniglio", p:"Rabbit"}, {l:"Formica", p:"Ant"}, 
-                {l:"Lumaca", p:"Snail"}, {l:"Gazzella", p:"Gazelle"}, {l:"Bisonte", p:"Bison"}, {l:"Canguro", p:"Kangaroo"}, {l:"Koala", p:"Koala"}
-            ],
-            "anim_liv3": [
-                {l:"Coccodrillo", p:"Crocodile"}, {l:"Tartaruga", p:"Turtle"}, {l:"Elefante", p:"Elephant"}, {l:"Rinoceronte", p:"Rhino"}, {l:"Ippopotamo", p:"Hippo"}, 
-                {l:"Pipistrello", p:"Bat"}, {l:"Serpente", p:"Snake"}, {l:"Zebra", p:"Zebra"}, {l:"Scoiattolo", p:"Squirrel"}, {l:"Farfalla", p:"Butterfly"}, 
-                {l:"Coccinella", p:"Ladybug"}, {l:"Cavalletta", p:"Grasshopper"}, {l:"Scorpione", p:"Scorpion"}, {l:"Dromedario", p:"Dromedary"}, {l:"Pappagallo", p:"Parrot"}, 
-                {l:"Fenicottero", p:"Flamingo"}, {l:"Formichiere", p:"Anteater"}, {l:"Armadillo", p:"Armadillo"}, {l:"Camaleonte", p:"Chameleon"}, {l:"Salamandra", p:"Salamander"}
-            ],
-            "food_liv1": [
-                {l:"Pane", p:"Bread"}, {l:"Mela", p:"Apple"}, {l:"Pera", p:"Pear"}, {l:"Uva", p:"Grapes"}, {l:"Latte", p:"Milk"}, 
-                {l:"Uovo", p:"Egg"}, {l:"Riso", p:"Rice"}, {l:"Kiwi", p:"Kiwi"}, {l:"Torta", p:"Cake"}, {l:"Pizza", p:"Pizza"},
-                {l:"Noce", p:"Walnut"}, {l:"Fico", p:"Fig"}, {l:"Mais", p:"Corn"}, {l:"Sale", p:"Salt"}, {l:"Pepe", p:"Pepper"}, 
-                {l:"Sugo", p:"Tomato sauce"}, {l:"Pasta", p:"Pasta"}, {l:"Kebab", p:"Kebab"}, {l:"Sushi", p:"Sushi"}, {l:"Tè", p:"Tea"}
-            ],
-            "food_liv2": [
-                {l:"Banana", p:"Banana"}, {l:"Carota", p:"Carrot"}, {l:"Patata", p:"Potato"}, {l:"Gelato", p:"Ice cream"}, {l:"Limone", p:"Lemon"}, 
-                {l:"Fragola", p:"Strawberry"}, {l:"Ciliegia", p:"Cherry"}, {l:"Arancia", p:"Orange"}, {l:"Pomodoro", p:"Tomato"}, {l:"Formaggio", p:"Cheese"},
-                {l:"Biscotto", p:"Cookie"}, {l:"Caramella", p:"Candy"}, {l:"Cioccolato", p:"Chocolate"}, {l:"Insalata", p:"Salad"}, {l:"Panino", p:"Sandwich"}, 
-                {l:"Salsiccia", p:"Sausage"}, {l:"Wurstel", p:"Hot dog"}, {l:"Ananas", p:"Pineapple"}, {l:"Anguria", p:"Watermelon"}, {l:"Zucchina", p:"Zucchini"}
-            ],
-            "home_liv1": [
-                {l:"Sole", p:"Sun"}, {l:"Luna", p:"Moon"}, {l:"Casa", p:"House"}, {l:"Letto", p:"Bed"}, {l:"Tubo", p:"Pipe"}, 
-                {l:"Muro", p:"Wall"}, {l:"Faro", p:"Lighthouse"}, {l:"Mare", p:"Sea"}, {l:"Vaso", p:"Vase"}, {l:"Dito", p:"Finger"},
-                {l:"Naso", p:"Nose"}, {l:"Mano", p:"Hand"}, {l:"Piede", p:"Foot"}, {l:"Buca", p:"Hole"}, {l:"Ramo", p:"Branch"}, 
-                {l:"Fiore", p:"Flower"}, {l:"Erba", p:"Grass"}, {l:"Fuoco", p:"Fire"}, {l:"Neve", p:"Snow"}, {l:"Nube", p:"Cloud"}
-            ],
-            "home_liv2": [
-                {l:"Divano", p:"Sofa"}, {l:"Matita", p:"Pencil"}, {l:"Tavolo", p:"Table"}, {l:"Valigia", p:"Suitcase"}, {l:"Bambola", p:"Doll"}, 
-                {l:"Collana", p:"Necklace"}, {l:"Cuscino", p:"Pillow"}, {l:"Pentola", p:"Pot"}, {l:"Orologio", p:"Clock"}, {l:"Telefono", p:"Telephone"},
-                {l:"Forchetta", p:"Fork"}, {l:"Cucchiaio", p:"Spoon"}, {l:"Coltello", p:"Knife"}, {l:"Bicchiere", p:"Glass"}, {l:"Bottiglia", p:"Bottle"}, 
-                {l:"Tovaglia", p:"Tablecloth"}, {l:"Poltrona", p:"Armchair"}, {l:"Tappeto", p:"Rug"}, {l:"Finestra", p:"Window"}, {l:"Specchio", p:"Mirror"}
-            ],
-            "clothes_liv1": [
-                {l:"Scarpa", p:"Shoe"}, {l:"Maglia", p:"T-shirt"}, {l:"Calza", p:"Sock"}, {l:"Borsa", p:"Bag"}, {l:"Cappello", p:"Hat"}, 
-                {l:"Guanto", p:"Glove"}, {l:"Gonna", p:"Skirt"}, {l:"Sciarpa", p:"Scarf"}, {l:"Cintura", p:"Belt"}, {l:"Giacca", p:"Jacket"},
-                {l:"Pantaloni", p:"Pants"}, {l:"Camicia", p:"Shirt"}, {l:"Cravatta", p:"Tie"}, {l:"Vestito", p:"Dress"}, {l:"Occhiali", p:"Glasses"}, 
-                {l:"Anello", p:"Ring"}, {l:"Orecchini", p:"Earrings"}, {l:"Bracciale", p:"Bracelet"}, {l:"Stivale", p:"Boot"}, {l:"Ciabatta", p:"Slipper"}
-            ],
-            "verbs_liv1": [
-                {l:"Mangiare", p:"Eating"}, {l:"Bere", p:"Drinking"}, {l:"Dormire", p:"Sleeping"}, {l:"Correre", p:"Running"}, {l:"Lavare", p:"Washing"}, 
-                {l:"Giocare", p:"Playing"}, {l:"Leggere", p:"Reading"}, {l:"Scrivere", p:"Writing"}, {l:"Saltare", p:"Jumping"}, {l:"Ridere", p:"Laughing"}, 
-                {l:"Piangere", p:"Crying"}, {l:"Nuotare", p:"Swimming"}, {l:"Volare", p:"Flying"}, {l:"Cadere", p:"Falling"}, {l:"Aprire", p:"Opening"}, 
-                {l:"Chiudere", p:"Closing"}, {l:"Tagliare", p:"Cutting"}, {l:"Disegnare", p:"Drawing"}, {l:"Cantare", p:"Singing"}, {l:"Ballare", p:"Dancing"}
-            ]
-        };
+        // --- 1. FULL CLINICAL SEED DATA (30+ SETS) ---
+        const CLINICAL_SEED = [
+            // ANIMALI
+            { id: "anim_liv1", cat: "🐶 Animali", name: "Liv 1 (Bisillabe)", items: [{l:"Cane", p:"Cute dog"}, {l:"Gatto", p:"Cute cat"}, {l:"Topo", p:"Cute mouse"}, {l:"Rana", p:"Green frog"}, {l:"Toro", p:"Bull"}, {l:"Mucca", p:"Cow"}, {l:"Lupo", p:"Wolf"}, {l:"Gufo", p:"Owl"}, {l:"Orso", p:"Bear"}, {l:"Ape", p:"Bee"}, {l:"Gallo", p:"Rooster"}, {l:"Pollo", p:"Chicken"}, {l:"Oca", p:"Goose"}, {l:"Mulo", p:"Donkey"}, {l:"Falco", p:"Falcon"}, {l:"Ragno", p:"Spider"}, {l:"Bruco", p:"Caterpillar"}, {l:"Verme", p:"Worm"}, {l:"Mosca", p:"Fly"}, {l:"Puma", p:"Puma"}] },
+            { id: "anim_liv2", cat: "🐶 Animali", name: "Liv 2 (Trisillabe)", items: [{l:"Pecora", p:"Sheep"}, {l:"Medusa", p:"Jellyfish"}, {l:"Gallina", p:"Hen"}, {l:"Balena", p:"Whale"}, {l:"Gorilla", p:"Gorilla"}, {l:"Giraffa", p:"Giraffe"}, {l:"Maiale", p:"Pig"}, {l:"Delfino", p:"Dolphin"}, {l:"Cavallo", p:"Horse"}, {l:"Pinguino", p:"Penguin"}, {l:"Cammello", p:"Camel"}, {l:"Pantera", p:"Panther"}, {l:"Castoro", p:"Beaver"}, {l:"Coniglio", p:"Rabbit"}, {l:"Formica", p:"Ant"}, {l:"Lumaca", p:"Snail"}, {l:"Gazzella", p:"Gazelle"}, {l:"Bisonte", p:"Bison"}, {l:"Canguro", p:"Kangaroo"}, {l:"Koala", p:"Koala"}] },
+            { id: "anim_liv3", cat: "🐶 Animali", name: "Liv 3 (Complesse)", items: [{l:"Coccodrillo", p:"Crocodile"}, {l:"Tartaruga", p:"Turtle"}, {l:"Elefante", p:"Elephant"}, {l:"Rinoceronte", p:"Rhino"}, {l:"Ippopotamo", p:"Hippo"}, {l:"Pipistrello", p:"Bat"}, {l:"Serpente", p:"Snake"}, {l:"Zebra", p:"Zebra"}, {l:"Scoiattolo", p:"Squirrel"}, {l:"Farfalla", p:"Butterfly"}, {l:"Coccinella", p:"Ladybug"}, {l:"Cavalletta", p:"Grasshopper"}, {l:"Scorpione", p:"Scorpion"}, {l:"Dromedario", p:"Dromedary"}, {l:"Pappagallo", p:"Parrot"}, {l:"Fenicottero", p:"Flamingo"}, {l:"Formichiere", p:"Anteater"}, {l:"Armadillo", p:"Armadillo"}, {l:"Camaleonte", p:"Chameleon"}, {l:"Salamandra", p:"Salamander"}] },
+            { id: "anim_sea", cat: "🐶 Animali", name: "Habitat Marino", items: [{l:"Pesce", p:"Fish"}, {l:"Squalo", p:"Shark"}, {l:"Polpo", p:"Octopus"}, {l:"Granchio", p:"Crab"}, {l:"Stella", p:"Starfish"}, {l:"Cavalluccio", p:"Seahorse"}, {l:"Aragosta", p:"Lobster"}, {l:"Gambero", p:"Shrimp"}, {l:"Medusa", p:"Jellyfish"}, {l:"Balena", p:"Whale"}, {l:"Delfino", p:"Dolphin"}, {l:"Orco", p:"Killer whale"}, {l:"Foca", p:"Seal"}, {l:"Tricheco", p:"Walrus"}, {l:"Pinguino", p:"Penguin"}, {l:"Tartaruga", p:"Sea turtle"}, {l:"Razza", p:"Stingray"}, {l:"Corallo", p:"Coral"}, {l:"Conchiglia", p:"Seashell"}, {l:"Gabbiano", p:"Seagull"}] },
+            { id: "anim_farm", cat: "🐶 Animali", name: "Fattoria", items: [{l:"Mucca", p:"Cow"}, {l:"Toro", p:"Bull"}, {l:"Vitello", p:"Calf"}, {l:"Maiale", p:"Pig"}, {l:"Pecora", p:"Sheep"}, {l:"Agnello", p:"Lamb"}, {l:"Capra", p:"Goat"}, {l:"Cavallo", p:"Horse"}, {l:"Asino", p:"Donkey"}, {l:"Mulo", p:"Mule"}, {l:"Gallo", p:"Rooster"}, {l:"Gallina", p:"Hen"}, {l:"Pulcino", p:"Chick"}, {l:"Anatra", p:"Duck"}, {l:"Oca", p:"Goose"}, {l:"Tacchino", p:"Turkey"}, {l:"Coniglio", p:"Rabbit"}, {l:"Cane", p:"Farm dog"}, {l:"Gatto", p:"Farm cat"}, {l:"Topo", p:"Mouse"}] },
+
+            // CIBI
+            { id: "food_liv1", cat: "🍎 Cibi", name: "Liv 1 (Semplici)", items: [{l:"Pane", p:"Bread"}, {l:"Mela", p:"Apple"}, {l:"Pera", p:"Pear"}, {l:"Uva", p:"Grapes"}, {l:"Latte", p:"Milk"}, {l:"Uovo", p:"Egg"}, {l:"Riso", p:"Rice"}, {l:"Kiwi", p:"Kiwi"}, {l:"Torta", p:"Cake"}, {l:"Pizza", p:"Pizza"}, {l:"Noce", p:"Walnut"}, {l:"Fico", p:"Fig"}, {l:"Mais", p:"Corn"}, {l:"Sale", p:"Salt"}, {l:"Pepe", p:"Pepper"}, {l:"Sugo", p:"Tomato sauce"}, {l:"Pasta", p:"Pasta"}, {l:"Kebab", p:"Kebab"}, {l:"Sushi", p:"Sushi"}, {l:"Tè", p:"Tea"}] },
+            { id: "food_liv2", cat: "🍎 Cibi", name: "Liv 2 (Medi)", items: [{l:"Banana", p:"Banana"}, {l:"Carota", p:"Carrot"}, {l:"Patata", p:"Potato"}, {l:"Gelato", p:"Ice cream"}, {l:"Limone", p:"Lemon"}, {l:"Fragola", p:"Strawberry"}, {l:"Ciliegia", p:"Cherry"}, {l:"Arancia", p:"Orange"}, {l:"Pomodoro", p:"Tomato"}, {l:"Formaggio", p:"Cheese"}, {l:"Biscotto", p:"Cookie"}, {l:"Caramella", p:"Candy"}, {l:"Cioccolato", p:"Chocolate"}, {l:"Insalata", p:"Salad"}, {l:"Panino", p:"Sandwich"}, {l:"Salsiccia", p:"Sausage"}, {l:"Wurstel", p:"Hot dog"}, {l:"Ananas", p:"Pineapple"}, {l:"Anguria", p:"Watermelon"}, {l:"Zucchina", p:"Zucchini"}] },
+            { id: "food_fruit", cat: "🍎 Cibi", name: "Frutta e Verdura", items: [{l:"Mela", p:"Apple"}, {l:"Pera", p:"Pear"}, {l:"Banana", p:"Banana"}, {l:"Uva", p:"Grapes"}, {l:"Arancia", p:"Orange"}, {l:"Limone", p:"Lemon"}, {l:"Fragola", p:"Strawberry"}, {l:"Ciliegia", p:"Cherry"}, {l:"Pesca", p:"Peach"}, {l:"Albicocca", p:"Apricot"}, {l:"Carota", p:"Carrot"}, {l:"Patata", p:"Potato"}, {l:"Pomodoro", p:"Tomato"}, {l:"Zucchina", p:"Zucchini"}, {l:"Melanzana", p:"Eggplant"}, {l:"Peperone", p:"Pepper vegetable"}, {l:"Cipolla", p:"Onion"}, {l:"Aglio", p:"Garlic"}, {l:"Insalata", p:"Lettuce"}, {l:"Broccolo", p:"Broccoli"}] },
+            { id: "food_sweet", cat: "🍎 Cibi", name: "Dolci e Colazione", items: [{l:"Torta", p:"Cake"}, {l:"Biscotto", p:"Cookie"}, {l:"Cioccolato", p:"Chocolate"}, {l:"Gelato", p:"Ice cream"}, {l:"Caramella", p:"Candy"}, {l:"Cornetto", p:"Croissant"}, {l:"Muffin", p:"Muffin"}, {l:"Ciambella", p:"Donut"}, {l:"Budino", p:"Pudding"}, {l:"Yogurt", p:"Yogurt"}, {l:"Latte", p:"Milk"}, {l:"Caffè", p:"Coffee cup"}, {l:"Tè", p:"Tea cup"}, {l:"Succo", p:"Juice glass"}, {l:"Miele", p:"Honey jar"}, {l:"Marmellata", p:"Jam jar"}, {l:"Burro", p:"Butter"}, {l:"Cereali", p:"Cereal bowl"}, {l:"Fetta biscottata", p:"Rusk toast"}, {l:"Pancake", p:"Pancake"}] },
+
+            // CASA
+            { id: "home_liv1", cat: "🏠 Casa", name: "Liv 1 (Alta Freq)", items: [{l:"Sole", p:"Sun"}, {l:"Luna", p:"Moon"}, {l:"Casa", p:"House"}, {l:"Letto", p:"Bed"}, {l:"Tubo", p:"Pipe"}, {l:"Muro", p:"Wall"}, {l:"Faro", p:"Lighthouse"}, {l:"Mare", p:"Sea"}, {l:"Vaso", p:"Vase"}, {l:"Dito", p:"Finger"}, {l:"Naso", p:"Nose"}, {l:"Mano", p:"Hand"}, {l:"Piede", p:"Foot"}, {l:"Buca", p:"Hole"}, {l:"Ramo", p:"Branch"}, {l:"Fiore", p:"Flower"}, {l:"Erba", p:"Grass"}, {l:"Fuoco", p:"Fire"}, {l:"Neve", p:"Snow"}, {l:"Nube", p:"Cloud"}] },
+            { id: "home_liv2", cat: "🏠 Casa", name: "Liv 2 (Oggetti)", items: [{l:"Divano", p:"Sofa"}, {l:"Matita", p:"Pencil"}, {l:"Tavolo", p:"Table"}, {l:"Valigia", p:"Suitcase"}, {l:"Bambola", p:"Doll"}, {l:"Collana", p:"Necklace"}, {l:"Cuscino", p:"Pillow"}, {l:"Pentola", p:"Pot"}, {l:"Orologio", p:"Clock"}, {l:"Telefono", p:"Telephone"}, {l:"Forchetta", p:"Fork"}, {l:"Cucchiaio", p:"Spoon"}, {l:"Coltello", p:"Knife"}, {l:"Bicchiere", p:"Glass"}, {l:"Bottiglia", p:"Bottle"}, {l:"Tovaglia", p:"Tablecloth"}, {l:"Poltrona", p:"Armchair"}, {l:"Tappeto", p:"Rug"}, {l:"Finestra", p:"Window"}, {l:"Specchio", p:"Mirror"}] },
+            { id: "home_bath", cat: "🏠 Casa", name: "Bagno e Igiene", items: [{l:"Lavandino", p:"Sink"}, {l:"Vasca", p:"Bathtub"}, {l:"Doccia", p:"Shower"}, {l:"Water", p:"Toilet"}, {l:"Carta igienica", p:"Toilet paper"}, {l:"Spazzolino", p:"Toothbrush"}, {l:"Dentifricio", p:"Toothpaste"}, {l:"Sapone", p:"Soap"}, {l:"Shampoo", p:"Shampoo bottle"}, {l:"Asciugamano", p:"Towel"}, {l:"Pettine", p:"Comb"}, {l:"Spazzola", p:"Hairbrush"}, {l:"Specchio", p:"Mirror"}, {l:"Phon", p:"Hairdryer"}, {l:"Bilancia", p:"Scale"}, {l:"Cesto", p:"Laundry basket"}, {l:"Lavatrice", p:"Washing machine"}, {l:"Rubinetto", p:"Faucet"}, {l:"Spugna", p:"Sponge"}, {l:"Accappatoio", p:"Bathrobe"}] },
+            { id: "home_kitch", cat: "🏠 Casa", name: "Cucina", items: [{l:"Frigo", p:"Fridge"}, {l:"Forno", p:"Oven"}, {l:"Fornello", p:"Stove"}, {l:"Lavastoviglie", p:"Dishwasher"}, {l:"Pentola", p:"Pot"}, {l:"Padella", p:"Pan"}, {l:"Coperchio", p:"Pot lid"}, {l:"Mestolo", p:"Ladle"}, {l:"Coltello", p:"Knife"}, {l:"Forchetta", p:"Fork"}, {l:"Cucchiaio", p:"Spoon"}, {l:"Piatto", p:"Plate"}, {l:"Bicchiere", p:"Glass"}, {l:"Tazza", p:"Mug"}, {l:"Bottiglia", p:"Bottle"}, {l:"Caraffa", p:"Pitcher"}, {l:"Tagliere", p:"Cutting board"}, {l:"Grattugia", p:"Grater"}, {l:"Scolapasta", p:"Colander"}, {l:"Apriscatole", p:"Can opener"}] },
+
+            // ABBIGLIAMENTO
+            { id: "clothes_liv1", cat: "👕 Abbigliamento", name: "Vestiario Base", items: [{l:"Scarpa", p:"Shoe"}, {l:"Maglia", p:"T-shirt"}, {l:"Calza", p:"Sock"}, {l:"Borsa", p:"Bag"}, {l:"Cappello", p:"Hat"}, {l:"Guanto", p:"Glove"}, {l:"Gonna", p:"Skirt"}, {l:"Sciarpa", p:"Scarf"}, {l:"Cintura", p:"Belt"}, {l:"Giacca", p:"Jacket"}, {l:"Pantaloni", p:"Pants"}, {l:"Camicia", p:"Shirt"}, {l:"Cravatta", p:"Tie"}, {l:"Vestito", p:"Dress"}, {l:"Occhiali", p:"Glasses"}, {l:"Anello", p:"Ring"}, {l:"Orecchini", p:"Earrings"}, {l:"Bracciale", p:"Bracelet"}, {l:"Stivale", p:"Boot"}, {l:"Ciabatta", p:"Slipper"}] },
+            { id: "clothes_acc", cat: "👕 Abbigliamento", name: "Accessori", items: [{l:"Orologio", p:"Wristwatch"}, {l:"Collana", p:"Necklace"}, {l:"Anello", p:"Ring"}, {l:"Bracciale", p:"Bracelet"}, {l:"Orecchini", p:"Earrings"}, {l:"Occhiali", p:"Glasses"}, {l:"Cintura", p:"Belt"}, {l:"Borsa", p:"Handbag"}, {l:"Zaino", p:"Backpack"}, {l:"Ombrello", p:"Umbrella"}, {l:"Portafoglio", p:"Wallet"}, {l:"Chiave", p:"Key"}, {l:"Fazzoletto", p:"Handkerchief"}, {l:"Guanti", p:"Gloves"}, {l:"Sciarpa", p:"Scarf"}, {l:"Cappello", p:"Hat"}, {l:"Berretto", p:"Beanie"}, {l:"Cravatta", p:"Tie"}, {l:"Papillon", p:"Bowtie"}, {l:"Spilla", p:"Brooch"}] },
+
+            // VERBI
+            { id: "verbs_liv1", cat: "🏃 Azioni", name: "Verbi Base", items: [{l:"Mangiare", p:"Eating"}, {l:"Bere", p:"Drinking"}, {l:"Dormire", p:"Sleeping"}, {l:"Correre", p:"Running"}, {l:"Lavare", p:"Washing"}, {l:"Giocare", p:"Playing"}, {l:"Leggere", p:"Reading"}, {l:"Scrivere", p:"Writing"}, {l:"Saltare", p:"Jumping"}, {l:"Ridere", p:"Laughing"}, {l:"Piangere", p:"Crying"}, {l:"Nuotare", p:"Swimming"}, {l:"Volare", p:"Flying"}, {l:"Cadere", p:"Falling"}, {l:"Aprire", p:"Opening"}, {l:"Chiudere", p:"Closing"}, {l:"Tagliare", p:"Cutting"}, {l:"Disegnare", p:"Drawing"}, {l:"Cantare", p:"Singing"}, {l:"Ballare", p:"Dancing"}] },
+            { id: "verbs_liv2", cat: "🏃 Azioni", name: "Verbi Movimento", items: [{l:"Camminare", p:"Walking"}, {l:"Salire", p:"Climbing stairs"}, {l:"Scendere", p:"Going down stairs"}, {l:"Lanciare", p:"Throwing ball"}, {l:"Afferrare", p:"Catching ball"}, {l:"Calciare", p:"Kicking ball"}, {l:"Spingere", p:"Pushing"}, {l:"Tirare", p:"Pulling"}, {l:"Sedersi", p:"Sitting down"}, {l:"Alzarsi", p:"Standing up"}, {l:"Abbracciare", p:"Hugging"}, {l:"Baciare", p:"Kissing"}, {l:"Salutare", p:"Waving hello"}, {l:"Indicare", p:"Pointing finger"}, {l:"Toccare", p:"Touching"}, {l:"Guardare", p:"Looking binoculars"}, {l:"Ascoltare", p:"Listening headphones"}, {l:"Annusare", p:"Smelling flower"}, {l:"Assaggiare", p:"Tasting food"}, {l:"Pettinare", p:"Combing hair"}] },
+
+            // CORPO & EMOZIONI
+            { id: "body_parts", cat: "🙂 Corpo & Emozioni", name: "Parti del Corpo", items: [{l:"Testa", p:"Head"}, {l:"Occhio", p:"Eye"}, {l:"Naso", p:"Nose"}, {l:"Bocca", p:"Mouth"}, {l:"Orecchio", p:"Ear"}, {l:"Capelli", p:"Hair"}, {l:"Mano", p:"Hand"}, {l:"Dito", p:"Finger"}, {l:"Braccio", p:"Arm"}, {l:"Gamba", p:"Leg"}, {l:"Piede", p:"Foot"}, {l:"Ginocchio", p:"Knee"}, {l:"Gomito", p:"Elbow"}, {l:"Pancia", p:"Tummy"}, {l:"Schiena", p:"Back body"}, {l:"Collo", p:"Neck"}, {l:"Denti", p:"Teeth"}, {l:"Lingua", p:"Tongue"}, {l:"Unghia", p:"Fingernail"}, {l:"Spalla", p:"Shoulder"}] },
+            { id: "emotions", cat: "🙂 Corpo & Emozioni", name: "Emozioni", items: [{l:"Felice", p:"Happy face"}, {l:"Triste", p:"Sad face"}, {l:"Arrabbiato", p:"Angry face"}, {l:"Spaventato", p:"Scared face"}, {l:"Sorpreso", p:"Surprised face"}, {l:"Stanco", p:"Tired face"}, {l:"Annoiato", p:"Bored face"}, {l:"Innamorato", p:"In love face"}, {l:"Confuso", p:"Confused face"}, {l:"Divertito", p:"Amused face"}, {l:"Preoccupato", p:"Worried face"}, {l:"Timido", p:"Shy face"}, {l:"Fiero", p:"Proud face"}, {l:"Disgustato", p:"Disgusted face"}, {l:"Calmo", p:"Calm face"}, {l:"Eccitato", p:"Excited face"}, {l:"Sonno", p:"Sleepy face"}, {l:"Malato", p:"Sick face"}, {l:"Pensieroso", p:"Thinking face"}, {l:"Curioso", p:"Curious face"}] },
+
+            // TRASPORTI
+            { id: "transp_liv1", cat: "🚗 Trasporti", name: "Mezzi Comuni", items: [{l:"Auto", p:"Car"}, {l:"Moto", p:"Motorcycle"}, {l:"Bici", p:"Bicycle"}, {l:"Bus", p:"Bus"}, {l:"Treno", p:"Train"}, {l:"Aereo", p:"Airplane"}, {l:"Nave", p:"Ship"}, {l:"Barca", p:"Boat"}, {l:"Camion", p:"Truck"}, {l:"Taxi", p:"Taxi"}, {l:"Ambulanza", p:"Ambulance"}, {l:"Pompieri", p:"Fire truck"}, {l:"Polizia", p:"Police car"}, {l:"Elicottero", p:"Helicopter"}, {l:"Trattore", p:"Tractor"}, {l:"Scooter", p:"Scooter"}, {l:"Metro", p:"Subway train"}, {l:"Tram", p:"Tram"}, {l:"Razzo", p:"Rocket"}, {l:"Mongolfiera", p:"Hot air balloon"}] }
+        ];
 
         let state = {
             apiKey: localStorage.getItem('gemini_key') || '',
@@ -478,13 +437,18 @@
                 document.getElementById('modal-preview').style.display = 'none';
 
                 const existing = await DB.getAllSets();
-                if (existing.length === 0) {
-                    for (const key of Object.keys(CLINICAL_SETS)) {
-                        const items = CLINICAL_SETS[key].map(i => ({ label: i.l, prompt: i.p, url: null, isCustom: false }));
-                        await DB.saveSet({ id: 'clin_' + key, name: key.replace('_', ' ').toUpperCase() + " (20)", items: items, theme: 'theme-misto', date: 'Default', isClinical: true });
+                
+                // Seed DB if needed or update existing seed sets
+                for (const seed of CLINICAL_SEED) {
+                    const exists = existing.find(s => s.id === seed.id);
+                    if (!exists) {
+                        const items = seed.items.map(i => ({ label: i.l, prompt: i.p, url: null, isCustom: false }));
+                        await DB.saveSet({ id: seed.id, name: seed.name, category: seed.cat, items: items, theme: 'theme-misto', date: 'Default', isClinical: true });
                     }
                 }
-                await reloadLibrary();
+                
+                await reloadLibrary(); // This now populates dropdown
+                
                 document.getElementById('category-select').addEventListener('change', (e) => { document.getElementById('custom-input').classList.toggle('hidden', e.target.value !== 'ai_custom'); });
                 document.addEventListener('keydown', (e) => { if (state.ranMode === 'single') { if (e.key === 'ArrowRight') nextRan(); if (e.key === 'ArrowLeft') prevRan(); } });
                 document.addEventListener('paste', handlePaste);
@@ -496,6 +460,9 @@
                 state.saved = await DB.getAllSets();
                 const countEl = document.getElementById('lib-count');
                 if(countEl) countEl.innerText = state.saved.length;
+                
+                updateDropdown(state.saved); // NEW: Populate dropdown from DB
+
                 let totalBytes = 0; state.saved.forEach(s => totalBytes += JSON.stringify(s).length);
                 const mb = (totalBytes / (1024 * 1024)).toFixed(1);
                 const fillEl = document.getElementById('storage-fill');
@@ -505,73 +472,104 @@
             } catch(e) { console.error("Library Error", e); }
         }
 
+        // --- NEW DROPDOWN LOGIC ---
+        function updateDropdown(sets) {
+            const select = document.getElementById('category-select');
+            select.innerHTML = '<option value="" disabled selected>-- Scegli Set dall\'Archivio --</option>';
+            
+            // Add AI Custom Option first
+            const aiGroup = document.createElement('optgroup');
+            aiGroup.label = "✨ Generazione AI";
+            const aiOpt = document.createElement('option');
+            aiOpt.value = "ai_custom";
+            aiOpt.text = "Prompt Personale (Crea Nuovo)...";
+            aiGroup.appendChild(aiOpt);
+            select.appendChild(aiGroup);
+
+            // Group by Category
+            const categories = {};
+            sets.forEach(s => {
+                const cat = s.category || "Altri";
+                if(!categories[cat]) categories[cat] = [];
+                categories[cat].push(s);
+            });
+
+            // Create Optgroups
+            for(const [catName, catSets] of Object.entries(categories)) {
+                const group = document.createElement('optgroup');
+                group.label = catName;
+                catSets.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.id; // Value is now the DB ID
+                    opt.text = s.name;
+                    group.appendChild(opt);
+                });
+                select.appendChild(group);
+            }
+        }
+
         window.toggleFullScreen = function() {
             if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen();
             setTimeout(() => { document.getElementById('fs-icon').className = document.fullscreenElement ? 'fa-solid fa-compress' : 'fa-solid fa-expand'; }, 200);
         };
 
-        // --- NEW START & GENERATE LOGIC ---
-        
-        // 1. START GAME (Uses existing items in memory)
-        window.startGame = function() {
+        // --- SESSION ---
+        window.startSession = async function() {
             if(state.items.length === 0) {
-                // AUTO LOAD FROM DROPDOWN IF EMPTY
-                console.log("Empty items, triggering auto-generation...");
+                // If nothing loaded, try to load from selection
                 window.generateSession();
                 return;
             }
-            
-            // Apply Shuffle if requested
             let displayItems = [...state.items];
-            if(state.isShuffle) {
-                displayItems.sort(() => Math.random() - 0.5);
-            }
-            
+            if(state.isShuffle) displayItems.sort(() => Math.random() - 0.5);
             renderGameMode(document.getElementById('mode-select').value, displayItems);
         };
 
-        // 2. GENERATE NEW (Creates fresh set, wiping current)
+        // LOAD / GENERATE
         window.generateSession = async function() {
             const catSelect = document.getElementById('category-select').value;
             const style = document.getElementById('style-select').value;
-            const mode = document.getElementById('mode-select').value;
             const gridSizeInput = document.getElementById('grid-size').value;
             const stage = document.getElementById('game-stage');
             
             if(!catSelect) { alert("Seleziona una categoria."); return; }
-            
-            // Check if we are overwriting unsaved work? Maybe annoying.
-            // if(state.items.length > 0 && !confirm("Sovrascrivere il set corrente?")) return;
-
             stage.innerHTML = `<div style="position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; align-items:center; color:var(--text-secondary);"><i class="fa-solid fa-spinner spin fa-3x"></i><p>Caricamento...</p></div>`;
-            
-            try {
-                let rawData = [];
-                let targetCount = gridSizeInput === '20' ? 20 : (parseInt(gridSizeInput) ** 2);
+            document.getElementById('btn-save').classList.add('hidden');
 
+            try {
+                // CASE 1: AI CUSTOM
                 if (catSelect === 'ai_custom') {
-                    if (!state.apiKey) throw new Error("Per usare AI Custom serve la Chiave API.");
-                    rawData = await fetchAI(document.getElementById('custom-input').value, targetCount);
-                } else {
-                    let source = CLINICAL_SETS[catSelect];
-                    if (!source) throw new Error("Set non trovato");
-                    if (targetCount === 20) rawData = [...source]; 
-                    else rawData = expandList(source, targetCount);
+                    if (!state.apiKey) throw new Error("Serve Chiave API.");
+                    let targetCount = gridSizeInput === '20' ? 20 : (parseInt(gridSizeInput) ** 2);
+                    const rawData = await fetchAI(document.getElementById('custom-input').value, targetCount);
+                    state.items = rawData.map(d => ({ label: d.l, prompt: d.p, url: generateUrl(d.p, style), isCustom: false }));
+                    state.loadedSetName = "AI Custom";
+                    document.getElementById('btn-save').classList.remove('hidden'); // Enable saving for new AI sets
+                } 
+                // CASE 2: LOAD FROM DB (Standard flow now)
+                else {
+                    const set = state.saved.find(s => s.id === catSelect);
+                    if(!set) throw new Error("Set non trovato in archivio");
+                    
+                    // Clone items to avoid mutating DB state directly during session
+                    state.items = JSON.parse(JSON.stringify(set.items));
+                    state.loadedSetName = set.name;
+                    
+                    // If user selected specific count (e.g. 9 instead of 20), slice it
+                    let targetCount = gridSizeInput === '20' ? 20 : (parseInt(gridSizeInput) ** 2);
+                    if(targetCount < state.items.length) {
+                        state.items = state.items.slice(0, targetCount);
+                    }
+                    
+                    // Generate URLs if missing (lazy generation)
+                    state.items.forEach(i => {
+                        if(!i.url) i.url = generateUrl(i.prompt, style);
+                    });
                 }
 
-                // Create new items (generating new URLs)
-                state.items = rawData.map(d => ({
-                    label: d.l || d.label, prompt: d.p || d.prompt || d.label,
-                    url: generateUrl(d.p || d.prompt || d.label, style), isCustom: false
-                }));
-
                 state.currentTheme = 'theme-misto';
-                state.loadedSetName = catSelect.startsWith('anim') ? "Animali" : (catSelect.startsWith('ai') ? "Custom AI" : "Standard");
                 updateStatusLabel();
-                document.getElementById('btn-save').classList.remove('hidden');
-                
-                // Auto-start
-                startGame();
+                window.startGame(); // Auto start
                 
             } catch (err) {
                 stage.innerHTML = `<div style="color:#ef4444; padding:20px; text-align:center;">${err.message}</div>`;
@@ -582,10 +580,7 @@
             document.getElementById('active-set-label').innerText = state.loadedSetName;
         }
 
-        window.changeMode = function() { 
-            if(state.items.length > 0) startGame(); 
-        };
-
+        window.changeMode = function() { if(state.items.length > 0) window.startGame(); };
         function renderGameMode(mode, items) {
             if (mode === 'tact') renderTact(items);
             else if (mode === 'ran') renderRan(items);
@@ -593,7 +588,7 @@
             else if (mode === 'memory') renderMemory(items);
         }
 
-        // --- RENDERERS (Updated to take 'items' arg) ---
+        // --- RENDERERS ---
         function getPlaceholderUrl(label) { return `https://placehold.co/400?text=${encodeURIComponent(label)}`; }
         function handleImgError(img, label) { 
             img.onerror = null; 
@@ -739,8 +734,9 @@
             const container = document.getElementById('lib-list');
             container.innerHTML = state.saved.map(s => `
                 <div class="lib-card ${s.isClinical ? 'clinical' : ''}">
-                    <div style="font-weight:bold; font-size:1.1rem;">${s.isClinical ? '🌿 ' : ''}${s.name}</div>
-                    <div style="font-size:0.8rem; color:#aaa;">${s.items.length} items • ${(JSON.stringify(s).length/1024).toFixed(1)} KB</div>
+                    <div class="lib-title">${s.name}</div>
+                    <div class="lib-cat">${s.category || 'Generale'}</div>
+                    <div class="lib-meta">${s.items.length} items • ${(JSON.stringify(s).length/1024).toFixed(1)} KB</div>
                     <div style="display:flex; gap:5px; margin-top:auto;">
                         <button class="btn btn-primary" style="flex:1; padding:8px;" onclick="loadSet('${s.id}')">Carica</button>
                         <button class="btn btn-ghost" style="padding:8px;" onclick="editSet('${s.id}')"><i class="fa-solid fa-pen"></i></button>
@@ -750,21 +746,30 @@
                 </div>`).join('');
         }
         window.createEmptySet = () => {
-            const cat = prompt("Categoria?"); if(!cat) return;
-            let items = [{label:'Oggetto 1', prompt:'Object 1', url:null, isCustom:false}];
-            const newSet = { id: Date.now().toString(), name: "Nuovo " + cat, items: items, date: new Date().toLocaleDateString(), isClinical: false };
+            const cat = prompt("Categoria? (es. 🐶 Animali)"); if(!cat) return;
+            const name = prompt("Nome del Set?"); if(!name) return;
+            
+            // Create 20 empty items
+            let items = Array(20).fill(null).map((_, i) => ({label: `Oggetto ${i+1}`, prompt: `Object ${i+1}`, url: null, isCustom: false}));
+            
+            const newSet = { id: Date.now().toString(), name: name, category: cat, items: items, date: new Date().toLocaleDateString(), isClinical: false };
             DB.saveSet(newSet).then(() => { reloadLibrary(); editSet(newSet.id); });
         };
+        
         window.saveSetFromSession = function() {
             const name = prompt("Nome del Set:"); if (!name) return;
-            const newSet = { id: Date.now().toString(), name: name, items: state.items, theme: state.currentTheme, date: new Date().toLocaleDateString(), isClinical: false };
+            const cat = prompt("Categoria (es. AI Custom):");
+            const newSet = { id: Date.now().toString(), name: name, category: cat || "AI", items: state.items, theme: state.currentTheme, date: new Date().toLocaleDateString(), isClinical: false };
             DB.saveSet(newSet).then(() => { alert("Salvato!"); reloadLibrary(); });
         };
+        
         window.editSet = async function(id) {
             const allSets = await DB.getAllSets(); const set = allSets.find(s => s.id === id); if (!set) return;
             state.editingSetId = id; state.editingItems = JSON.parse(JSON.stringify(set.items));
             state.activeEditorIndex = null;
-            document.getElementById('edit-set-name').value = set.name; renderEditorList(); window.closeLibrary(); 
+            document.getElementById('edit-set-name').value = set.name; 
+            document.getElementById('edit-set-cat').value = set.category || "";
+            renderEditorList(); window.closeLibrary(); 
             document.getElementById('modal-editor').style.display = 'flex'; requestAnimationFrame(()=>document.getElementById('modal-editor').classList.add('open'));
         };
         
@@ -778,7 +783,7 @@
                 <div class="editor-item ${isActive}" onclick="selectForPaste(${idx})">
                     <div class="editor-thumb" onclick="event.stopPropagation(); showPreview('${item.url}')">
                         <div class="loader-overlay ${isLoading ? '' : 'hidden'}" id="loader-${idx}"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div>
-                        ${(!isLoading && hasUrl) ? `<img src="${item.url}" onerror="handleImgError(this, '${item.label}'); document.getElementById('loader-${idx}').classList.add('hidden')" style="opacity:0; transition:opacity 0.3s" onload="this.style.opacity=1">` : (!isLoading ? `<div class="fallback-badge">${item.label}</div>` : '')}
+                        ${(!isLoading && hasUrl) ? `<img src="${item.url}" onload="this.style.opacity=1; document.getElementById('loader-${idx}').classList.add('hidden')" onerror="handleImgError(this, '${item.label}'); document.getElementById('loader-${idx}').classList.add('hidden')" style="opacity:0; transition:opacity 0.3s" onload="this.style.opacity=1">` : (!isLoading ? `<div class="fallback-badge">${item.label}</div>` : '')}
                     </div>
                     <div class="editor-meta">
                         <div style="font-weight:bold;">${item.label}</div>
@@ -829,12 +834,22 @@
         
         window.saveEditorChanges = function() {
             const newName = document.getElementById('edit-set-name').value;
-            DB.getAllSets().then(all => { const s = all.find(x => x.id === state.editingSetId); if(s) { s.name = newName; s.items = state.editingItems; if(s.isClinical){s.isClinical=false; s.name+=" (Mod)";} DB.saveSet(s).then(() => { alert("Salvato!"); window.closeEditor(); reloadLibrary(); }); } });
+            const newCat = document.getElementById('edit-set-cat').value;
+            DB.getAllSets().then(all => { 
+                const s = all.find(x => x.id === state.editingSetId); 
+                if(s) { 
+                    s.name = newName; 
+                    s.category = newCat || "Generale";
+                    s.items = state.editingItems; 
+                    if(s.isClinical){s.isClinical=false; s.name+=" (Mod)";} 
+                    DB.saveSet(s).then(() => { alert("Salvato!"); window.closeEditor(); reloadLibrary(); }); 
+                } 
+            });
         };
         window.closeEditor = function() { document.getElementById('modal-editor').classList.remove('open'); setTimeout(()=>document.getElementById('modal-editor').style.display='none',300); window.openLibrary(); };
         window.deleteSet = (id) => { if(confirm("Eliminare?")) DB.deleteSet(id).then(() => reloadLibrary()); };
         
-        // 3. LOAD SET LOGIC (Fixing the overwrite issue)
+        // LOAD SET (Now called when hitting Start/Load)
         window.loadSet = async (id) => { 
             const all = await DB.getAllSets(); 
             const s = all.find(x => x.id === id); 
@@ -843,7 +858,7 @@
             updateStatusLabel();
             window.closeLibrary(); 
             
-            // Auto start with loaded items
+            // Auto start if called from library button
             startGame();
         };
         
