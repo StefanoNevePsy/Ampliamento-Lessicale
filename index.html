@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
-    <title>Stimolatore Lessicale V16</title>
+    <title>Stimolatore Lessicale V18</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#1e1e2f">
@@ -152,6 +152,10 @@
         @media (min-width: 768px) { .tombola-layout { flex-direction: row; } }
         .tombola-deck { flex: 0 0 280px; background: rgba(0,0,0,0.3); padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-right: 1px solid var(--glass-border); }
         .tombola-board { flex: 1; padding: 20px; background-color: rgba(0,0,0,0.1); overflow-y: auto; }
+        .card-grid { cursor: pointer; transition: 0.2s; background: white; border-radius: 12px; padding: 5px; position:relative; }
+        .card-grid img { width: 100%; height: auto; border-radius: 6px; }
+        .card-grid.matched { opacity: 0.4; filter: grayscale(100%); pointer-events: none; }
+        .card-grid.matched::after { content: '✔'; position: absolute; top:50%; left:50%; transform: translate(-50%, -50%); font-size: 3rem; color: var(--success-color); }
         
         .memory-card { aspect-ratio: 1; perspective: 1000px; cursor: pointer; position: relative; }
         .memory-inner { width: 100%; height: 100%; text-align: center; transition: transform 0.6s; transform-style: preserve-3d; position: relative; }
@@ -173,8 +177,9 @@
         .lib-card:hover { background: rgba(255,255,255,0.08); border-color: var(--accent-color); }
         .lib-card.clinical { border-left: 4px solid var(--success-color); }
 
-        .editor-item { display: flex; align-items: center; gap: 15px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 10px; margin-bottom: 10px; border: 1px solid transparent; flex-wrap: wrap; }
-        .editor-thumb { width: 80px; height: 80px; border-radius: 8px; object-fit: cover; background: #333; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+        .editor-item { display: flex; align-items: center; gap: 15px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 10px; margin-bottom: 10px; border: 1px solid transparent; flex-wrap: wrap; cursor: pointer; transition: 0.2s; }
+        .editor-item.active-paste { border-color: var(--accent-color); background: rgba(99, 102, 241, 0.2); }
+        .editor-thumb { width: 80px; height: 80px; border-radius: 8px; object-fit: cover; background: #333; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; cursor: zoom-in; }
         .editor-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; }
         .editor-meta { flex: 1; min-width: 200px; }
         .prompt-input { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid #444; padding: 5px; font-size: 0.8rem; margin-top: 5px; color: #ccc; }
@@ -183,6 +188,10 @@
         
         /* Fallback Text Badge */
         .fallback-badge { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #eee; color: #333; font-weight: 800; text-align: center; border-radius: 8px; font-size: 1.2rem; padding: 5px; }
+
+        /* Image Preview Modal */
+        #modal-preview { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 2000; display: flex; justify-content: center; align-items: center; padding: 20px; }
+        #modal-preview img { max-width: 100%; max-height: 100%; border-radius: 12px; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
     </style>
 </head>
 <body>
@@ -190,7 +199,7 @@
     <div class="app-shell">
         <header>
             <div>
-                <h1>Stimolatore V16</h1>
+                <h1>Stimolatore V18</h1>
                 <div class="storage-bar-container">
                     <i class="fa-solid fa-hard-drive"></i>
                     <div class="storage-progress"><div id="storage-fill" class="storage-fill"></div></div>
@@ -321,6 +330,7 @@
              <div class="actions-row" style="justify-content: flex-start; margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.1);">
                  <button class="btn btn-ghost btn-sm" onclick="document.getElementById('bulk-upload').click()"><i class="fa-solid fa-images"></i> Carica Foto...</button>
                  <input type="file" id="bulk-upload" class="hidden" multiple accept="image/*" onchange="bulkUploadImages(this)">
+                 <span style="font-size:0.7rem; color:var(--text-secondary); margin-left:10px;">(Tip: Clicca una riga e usa Ctrl+V per incollare)</span>
             </div>
             <div id="editor-list"></div>
         </div>
@@ -333,10 +343,15 @@
             <p style="color:#aaa; font-size:0.9rem;">Per AI Custom (opzionale).</p>
             <input type="password" id="api-key" placeholder="AIzaSy...">
             <div style="margin-top:20px; text-align:right;">
-                <button class="btn-ghost" onclick="document.getElementById('modal-settings').classList.add('hidden')">Chiudi</button>
+                <button class="btn-ghost" onclick="closeSettings()">Chiudi</button>
                 <button class="btn-primary" onclick="saveKey()">Salva</button>
             </div>
         </div>
+    </div>
+
+    <!-- === PREVIEW MODAL === -->
+    <div id="modal-preview" class="hidden" onclick="this.classList.add('hidden')">
+        <img id="preview-img" src="" alt="Anteprima">
     </div>
 
     <script>
@@ -412,8 +427,8 @@
         let state = {
             apiKey: localStorage.getItem('gemini_key') || '',
             items: [], deck: [], memory: { flipped: [], matched: [], lockBoard: false },
-            saved: [], currentTheme: 'theme-misto', editingSetId: null, editingItems: [],
-            ranMode: 'grid', ranIndex: 0
+            saved: [], currentTheme: 'theme-misto', 
+            editingSetId: null, editingItems: [], activeEditorIndex: null
         };
 
         // --- 2. INIT ---
@@ -428,6 +443,10 @@
             await reloadLibrary();
             document.getElementById('category-select').addEventListener('change', (e) => { document.getElementById('custom-input').classList.toggle('hidden', e.target.value !== 'ai_custom'); });
             document.addEventListener('keydown', (e) => { if (state.ranMode === 'single') { if (e.key === 'ArrowRight') nextRan(); if (e.key === 'ArrowLeft') prevRan(); } });
+            document.getElementById('modal-settings').classList.add('hidden');
+            
+            // Paste Event Listener
+            document.addEventListener('paste', handlePaste);
         };
 
         async function reloadLibrary() {
@@ -458,21 +477,16 @@
 
             try {
                 let rawData = [];
-                // Determine COUNT based on user selection
                 let targetCount = gridSizeInput === '20' ? 20 : (parseInt(gridSizeInput) ** 2);
 
                 if (catSelect === 'ai_custom') {
-                    if (!state.apiKey) throw new Error("Serve API Key.");
+                    if (!state.apiKey) throw new Error("Per usare AI Custom serve la Chiave API (tasto chiave in alto).");
                     rawData = await fetchAI(document.getElementById('custom-input').value, targetCount);
                 } else {
                     let source = CLINICAL_SETS[catSelect];
                     if (!source) throw new Error("Set non trovato");
-                    
-                    if (targetCount === 20) {
-                        rawData = [...source]; // Use Exact Clinical Set
-                    } else {
-                        rawData = expandList(source, targetCount); // Expand or Slice
-                    }
+                    if (targetCount === 20) rawData = [...source]; 
+                    else rawData = expandList(source, targetCount);
                 }
 
                 state.items = rawData.map(d => ({
@@ -498,7 +512,14 @@
 
         // --- 4. RENDERERS ---
         function getPlaceholderUrl(label) { return `https://placehold.co/400?text=${encodeURIComponent(label)}`; }
-        function handleImgError(img, label) { img.onerror = null; img.src = getPlaceholderUrl(label); img.style.opacity = 1; }
+        function handleImgError(img, label) { 
+            img.onerror = null; 
+            img.src = getPlaceholderUrl(label); 
+            img.style.opacity = 1; 
+            if(img.parentElement && img.parentElement.querySelector('.loader-overlay')) {
+                img.parentElement.querySelector('.loader-overlay').classList.add('hidden');
+            }
+        }
 
         function renderTact() {
             const item = state.items[Math.floor(Math.random() * state.items.length)];
@@ -526,11 +547,9 @@
         function updateRanContent() {
             const container = document.getElementById('ran-content');
             if (state.ranMode === 'grid') {
-                // Adaptive Grid for 20 items (5x4)
                 const count = state.items.length;
                 let cols = 4;
-                if(count === 20) cols = 5;
-                else if(count === 25) cols = 5;
+                if(count === 20 || count === 25) cols = 5;
                 else if(count === 9) cols = 3;
                 else cols = Math.ceil(Math.sqrt(count));
 
@@ -558,10 +577,8 @@
 
         function renderTombola() {
             state.deck = [...state.items].sort(() => Math.random() - 0.5);
-            // Adaptive Grid
             const count = state.items.length;
             let cols = count === 20 ? 5 : Math.ceil(Math.sqrt(count));
-            
             document.getElementById('game-stage').innerHTML = `<div class="tombola-layout"><div class="tombola-deck"><div id="deck-area">${getDeckCardHtml()}</div></div><div class="tombola-board"><div class="grid-adaptive" style="grid-template-columns:repeat(${cols}, 1fr);">${state.items.map((item, idx) => `<div class="card-grid" id="slot-${idx}" onclick="handleMatchClick(${idx}, '${item.label}')"><img src="${item.url || getPlaceholderUrl(item.label)}" onerror="handleImgError(this, '${item.label}')"></div>`).join('')}</div></div></div>`;
         }
         function getDeckCardHtml() {
@@ -576,18 +593,13 @@
         };
 
         function renderMemory() {
-            // Memory Logic: Use max 10 pairs (20 cards) if using Full Set to fit screen
             let useItems = state.items;
-            if(useItems.length > 10) useItems = useItems.slice(0, 10); // Cap at 10 pairs for playability
+            if(useItems.length > 10) useItems = useItems.slice(0, 10); 
             else if(useItems.length < 8) useItems = expandList(useItems, 8); 
 
             let memoryDeck = [...useItems, ...useItems].sort(() => Math.random() - 0.5);
             state.memory = { flipped: [], matched: [], deck: memoryDeck, lockBoard: false };
-            
-            // Grid: 20 cards = 5x4. 
-            let cols = 5;
-            if (memoryDeck.length === 16) cols = 4;
-            
+            let cols = 5; if (memoryDeck.length === 16) cols = 4;
             let html = `<div class="memory-grid" style="grid-template-columns: repeat(${cols}, 1fr);">`;
             memoryDeck.forEach((item, idx) => {
                 html += `<div class="memory-card" id="mem-${idx}" onclick="flipCard(${idx})"><div class="memory-inner"><div class="memory-front"><i class="fa-solid fa-question"></i></div><div class="memory-back"><img src="${item.url || getPlaceholderUrl(item.label)}" onerror="handleImgError(this, '${item.label}')"></div></div></div>`;
@@ -621,7 +633,7 @@
             return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}, ${suffix}, white background?nologo=true&seed=${seed}&width=400&height=400`;
         }
         async function fetchAI(prompt, count) {
-            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${state.apiKey}`, { 
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${state.apiKey}`, { 
                 method:'POST', headers:{'Content-Type':'application/json'}, 
                 body: JSON.stringify({ contents:[{parts:[{text:`Genera un JSON array di ${count} oggetti: [{"l":"IT","p":"EN"}]. Topic: ${prompt}`}]}] }) 
             });
@@ -633,7 +645,7 @@
             return res.slice(0, target).sort(() => Math.random() - 0.5);
         }
 
-        // --- LIBRARY & EDITOR (SAME AS V15) ---
+        // --- LIBRARY & EDITOR ---
         function openLibrary() { renderLibList(); document.getElementById('modal-library').classList.add('open'); }
         function closeLibrary() { document.getElementById('modal-library').classList.remove('open'); }
         function renderLibList() {
@@ -664,35 +676,76 @@
         window.editSet = async (id) => {
             const allSets = await DB.getAllSets(); const set = allSets.find(s => s.id === id); if (!set) return;
             state.editingSetId = id; state.editingItems = JSON.parse(JSON.stringify(set.items));
+            state.activeEditorIndex = null;
             document.getElementById('edit-set-name').value = set.name; renderEditorList(); closeLibrary(); document.getElementById('modal-editor').classList.add('open');
         };
+        
         function renderEditorList() {
-            document.getElementById('editor-list').innerHTML = state.editingItems.map((item, idx) => `
-                <div class="editor-item">
-                    <div class="editor-thumb">
-                        <div class="loader-overlay hidden" id="loader-${idx}"><i class="fa-solid fa-spinner spin"></i></div>
-                        ${item.url ? `<img src="${item.url}" onload="this.style.opacity=1; document.getElementById('loader-${idx}').classList.add('hidden')" onerror="handleImgError(this, '${item.label}'); document.getElementById('loader-${idx}').classList.add('hidden')" style="opacity:0; transition:opacity 0.3s">` : '<div class="fallback-badge">'+item.label+'</div>'}
+            document.getElementById('editor-list').innerHTML = state.editingItems.map((item, idx) => {
+                const hasUrl = !!item.url;
+                const isActive = state.activeEditorIndex === idx ? 'active-paste' : '';
+                return `
+                <div class="editor-item ${isActive}" onclick="selectForPaste(${idx})">
+                    <div class="editor-thumb" onclick="event.stopPropagation(); showPreview('${item.url}')" title="Clicca per ingrandire">
+                        <div class="loader-overlay ${hasUrl ? '' : 'hidden'}" id="loader-${idx}"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div>
+                        ${hasUrl ? `<img src="${item.url}" onload="this.style.opacity=1; document.getElementById('loader-${idx}').classList.add('hidden')" onerror="handleImgError(this, '${item.label}'); document.getElementById('loader-${idx}').classList.add('hidden')" style="opacity:0; transition:opacity 0.3s">` : `<div class="fallback-badge">${item.label}</div>`}
                     </div>
                     <div class="editor-meta">
                         <div style="font-weight:bold;">${item.label}</div>
-                        <input type="text" class="prompt-input" value="${item.prompt}" onchange="updatePrompt(${idx}, this.value)">
+                        <input type="text" class="prompt-input" value="${item.prompt}" onchange="updatePrompt(${idx}, this.value)" onclick="event.stopPropagation()">
                     </div>
                     <div style="display:flex;gap:5px;">
-                        <button class="btn btn-ghost btn-sm" onclick="regenerateItem(${idx})"><i class="fa-solid fa-arrows-rotate"></i></button>
-                        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('upload-${idx}').click()"><i class="fa-solid fa-folder"></i></button>
+                        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); regenerateItem(${idx})"><i class="fa-solid fa-arrows-rotate"></i></button>
+                        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); document.getElementById('upload-${idx}').click()"><i class="fa-solid fa-folder"></i></button>
                         <input type="file" id="upload-${idx}" class="hidden" accept="image/*" onchange="uploadImage(${idx}, this)">
-                        <button class="btn btn-danger btn-sm" onclick="removeEditorItem(${idx})"><i class="fa-solid fa-minus"></i></button>
+                        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); removeEditorItem(${idx})"><i class="fa-solid fa-minus"></i></button>
                     </div>
-                </div>`).join('');
+                </div>`;
+            }).join('');
         }
+
+        window.selectForPaste = (idx) => {
+            state.activeEditorIndex = idx;
+            renderEditorList();
+        };
+
+        window.showPreview = (url) => {
+            if(!url || url.includes('placehold')) return;
+            const modal = document.getElementById('modal-preview');
+            const img = document.getElementById('preview-img');
+            img.src = url;
+            modal.classList.remove('hidden');
+        };
+
+        async function handlePaste(e) {
+            // Only if editor is open and an item is selected
+            if (!document.getElementById('modal-editor').classList.contains('open')) return;
+            if (state.activeEditorIndex === null) return;
+
+            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            for (const item of items) {
+                if (item.type.indexOf('image') === 0) {
+                    const blob = item.getAsFile();
+                    const compressed = await compressImage(blob);
+                    
+                    state.editingItems[state.activeEditorIndex].url = compressed;
+                    state.editingItems[state.activeEditorIndex].isCustom = true;
+                    renderEditorList();
+                    break; 
+                }
+            }
+        };
+
         window.updatePrompt = (idx, val) => { state.editingItems[idx].prompt = val; };
         window.removeEditorItem = (idx) => { state.editingItems.splice(idx, 1); renderEditorList(); };
         window.regenerateItem = (idx) => {
-            document.getElementById(`loader-${idx}`).classList.remove('hidden');
+            const item = state.editingItems[idx];
+            const loader = document.getElementById(`loader-${idx}`);
+            if(loader) loader.classList.remove('hidden');
             setTimeout(() => {
-                state.editingItems[idx].url = generateUrl(state.editingItems[idx].prompt, document.getElementById('style-select').value);
-                state.editingItems[idx].isCustom = false; renderEditorList();
-            }, 500); // Stagger
+                item.url = generateUrl(item.prompt, document.getElementById('style-select').value);
+                item.isCustom = false; renderEditorList();
+            }, 500); 
         };
         function compressImage(file) { return new Promise((res) => { const r = new FileReader(); r.onload = e => { const i = new Image(); i.onload = () => { const c = document.createElement('canvas'); let w=i.width, h=i.height; if(w>800){h*=800/w;w=800;} c.width=w; c.height=h; c.getContext('2d').drawImage(i,0,0,w,h); res(c.toDataURL('image/jpeg', 0.6)); }; i.src = e.target.result; }; r.readAsDataURL(file); }); }
         window.uploadImage = async (idx, input) => { const f = input.files[0]; if(!f) return; state.editingItems[idx].url = await compressImage(f); state.editingItems[idx].isCustom = true; renderEditorList(); };
@@ -708,7 +761,9 @@
         window.exportSingleSet = async (id) => { const all = await DB.getAllSets(); const s = all.find(x => x.id === id); if(s) downloadJSON([s], `Set_${s.name}.json`); };
         function downloadJSON(d, n) { const b = new Blob([JSON.stringify(d)], {type:'application/json'}); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href=u; a.download=n; document.body.appendChild(a); a.click(); setTimeout(()=>URL.revokeObjectURL(u),100); }
         window.importSets = (input) => { const r = new FileReader(); r.onload = async e => { try { const d = JSON.parse(e.target.result); for(const s of d) await DB.saveSet(s); reloadLibrary(); alert("Importato!"); } catch(err){alert("Errore");} }; r.readAsText(input.files[0]); };
+        
         window.openSettings = () => document.getElementById('modal-settings').classList.remove('hidden');
+        window.closeSettings = () => document.getElementById('modal-settings').classList.add('hidden');
         window.saveKey = () => { state.apiKey = document.getElementById('api-key').value; localStorage.setItem('gemini_key', state.apiKey); document.getElementById('modal-settings').classList.add('hidden'); };
 
     </script>
