@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
-    <title>Stimolatore Lessicale V18</title>
+    <title>Stimolatore Lessicale V22</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#1e1e2f">
@@ -84,8 +84,8 @@
         .storage-fill { height: 100%; background: var(--success-color); width: 0%; transition: width 0.5s; }
 
         /* CONTROLS */
-        .controls-row { display: flex; flex-wrap: wrap; gap: 10px; }
-        .control-group { flex: 1; min-width: 200px; }
+        .controls-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+        .control-group { flex: 1; min-width: 150px; }
         .control-group label {
             display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary);
             margin-bottom: 6px; text-transform: uppercase;
@@ -99,16 +99,24 @@
         }
         select:focus, input:focus { border-color: var(--accent-color); }
 
+        /* TOGGLE SWITCH */
+        .toggle-switch { display: flex; align-items: center; gap: 10px; cursor: pointer; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 10px; border: 1px solid var(--glass-border); height: 46px;}
+        .toggle-switch input { display: none; }
+        .toggle-knob { width: 40px; height: 20px; background: #444; border-radius: 20px; position: relative; transition: 0.3s; }
+        .toggle-knob::after { content: ''; position: absolute; left: 2px; top: 2px; width: 16px; height: 16px; background: white; border-radius: 50%; transition: 0.3s; }
+        .toggle-switch input:checked + .toggle-knob { background: var(--success-color); }
+        .toggle-switch input:checked + .toggle-knob::after { left: 22px; }
+
         /* ACTIONS */
-        .actions-row { display: flex; gap: 10px; justify-content: center; padding: 10px 0; }
+        .actions-row { display: flex; gap: 10px; justify-content: center; padding: 10px 0; border-top: 1px solid var(--glass-border); margin-top: 10px; }
         .btn {
-            padding: 12px 24px; border-radius: 10px; border: none; font-weight: 700;
-            cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 1rem;
-            transition: transform 0.1s; color: white;
+            padding: 14px 24px; border-radius: 12px; border: none; font-weight: 700;
+            cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 1rem;
+            transition: transform 0.1s; color: white; flex: 1;
         }
         .btn:active { transform: scale(0.96); }
         .btn-primary { background: var(--accent-color); }
-        .btn-success { background: var(--success-color); }
+        .btn-success { background: var(--success-color); box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3); }
         .btn-danger { background: var(--danger-color); }
         .btn-ghost { background: transparent; border: 1px solid var(--glass-border); color: var(--text-secondary); }
         .btn-sm { padding: 6px 12px; font-size: 0.85rem; }
@@ -189,9 +197,9 @@
         /* Fallback Text Badge */
         .fallback-badge { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #eee; color: #333; font-weight: 800; text-align: center; border-radius: 8px; font-size: 1.2rem; padding: 5px; }
 
-        /* Image Preview Modal */
-        #modal-preview { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 2000; display: flex; justify-content: center; align-items: center; padding: 20px; }
-        #modal-preview img { max-width: 100%; max-height: 100%; border-radius: 12px; box-shadow: 0 0 50px rgba(0,0,0,0.5); }
+        /* UTILS */
+        .hidden { display: none !important; }
+        
     </style>
 </head>
 <body>
@@ -199,7 +207,7 @@
     <div class="app-shell">
         <header>
             <div>
-                <h1>Stimolatore V18</h1>
+                <h1>Stimolatore V22</h1>
                 <div class="storage-bar-container">
                     <i class="fa-solid fa-hard-drive"></i>
                     <div class="storage-progress"><div id="storage-fill" class="storage-fill"></div></div>
@@ -213,7 +221,7 @@
             </div>
         </header>
 
-        <!-- CONTROLLI -->
+        <!-- CONTROLLI PRINCIPALI (SEMPRE VISIBILI) -->
         <div class="controls-row">
             <div class="control-group">
                 <label>Modalità</label>
@@ -225,10 +233,11 @@
                 </select>
             </div>
 
+            <!-- QUICK SELECT -->
             <div class="control-group">
-                <label>Set Clinico</label>
+                <label>Set / Categoria</label>
                 <select id="category-select">
-                    <option value="" disabled selected>-- Seleziona --</option>
+                    <option value="" disabled selected>-- Scegli --</option>
                     <optgroup label=" ✨ AI Custom">
                         <option value="ai_custom">Prompt Personale...</option>
                     </optgroup>
@@ -256,16 +265,6 @@
             </div>
 
             <div class="control-group">
-                <label>N. Stimoli</label>
-                <select id="grid-size">
-                    <option value="20" selected>Tutto il Set (20)</option>
-                    <option value="3">9 (3x3)</option>
-                    <option value="4">16 (4x4)</option>
-                    <option value="5">25 (5x5)</option>
-                </select>
-            </div>
-            
-            <div class="control-group">
                 <label>Stile</label>
                 <select id="style-select">
                     <option value="mixed">🔀 Misto</option>
@@ -274,33 +273,59 @@
                     <option value="realistic">📷 Foto</option>
                 </select>
             </div>
+
+            <div class="control-group">
+                <label>N. Stimoli</label>
+                <select id="grid-size">
+                    <option value="20" selected>Tutto il Set (20)</option>
+                    <option value="3">9 (3x3)</option>
+                    <option value="4">16 (4x4)</option>
+                    <option value="5">25 (5x5)</option>
+                </select>
+            </div>
+
+            <!-- Shuffle Toggle -->
+            <label class="toggle-switch" style="margin-top:18px;">
+                <input type="checkbox" id="shuffle-toggle" onchange="updateShuffle(this.checked)">
+                <div class="toggle-knob"></div>
+                <span style="font-size:0.8rem; font-weight:700; color:var(--text-secondary)">Shuffle</span>
+            </label>
         </div>
 
+        <!-- STATUS BAR -->
+        <div style="text-align:right; font-size:0.8rem; color:var(--text-secondary); border-top:1px solid rgba(255,255,255,0.1); padding-top:5px; margin-top:10px;">
+            Set Attivo: <span id="active-set-label" style="color:white; font-weight:bold;">Nessuno</span>
+        </div>
+
+        <!-- ACTIONS -->
         <div class="actions-row">
-            <button class="btn btn-primary" onclick="startSession()">
-                <i class="fa-solid fa-play"></i> Genera
+            <button class="btn btn-primary" onclick="generateSession()">
+                <i class="fa-solid fa-bolt"></i> Carica / Genera
+            </button>
+            <button class="btn btn-success" id="btn-start" onclick="startGame()">
+                <i class="fa-solid fa-play"></i> INIZIA
             </button>
             <button class="btn btn-ghost" onclick="openLibrary()">
                 <i class="fa-solid fa-folder-open"></i> Libreria
             </button>
-            <button id="btn-save" class="btn btn-success hidden" onclick="saveSetFromSession()">
-                <i class="fa-solid fa-floppy-disk"></i> Salva
+            <button id="btn-save" class="btn btn-ghost hidden" onclick="saveSetFromSession()">
+                <i class="fa-solid fa-floppy-disk"></i>
             </button>
         </div>
 
         <!-- STAGE -->
         <div id="game-stage">
             <div style="position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; align-items:center; color:var(--text-secondary);">
-                <i class="fa-solid fa-layer-group" style="font-size:4rem; margin-bottom:20px; opacity:0.3;"></i>
-                <p>Seleziona un set e premi Genera</p>
-                <p style="font-size:0.8rem; opacity:0.6; margin-top:5px;">"Tutto il Set" usa tutti i 20 stimoli standard.</p>
+                <i class="fa-solid fa-database" style="font-size:4rem; margin-bottom:20px; opacity:0.3;"></i>
+                <p>Seleziona e premi CARICA</p>
+                <p style="font-size:0.8rem; opacity:0.6; margin-top:5px;">oppure apri Libreria</p>
             </div>
         </div>
 
     </div>
 
-    <!-- === LIBRARY MODAL === -->
-    <div id="modal-library" class="modal-fs">
+    <!-- === LIBRARY MODAL (INLINE HIDDEN) === -->
+    <div id="modal-library" class="modal-fs" style="display:none;">
         <div class="modal-header">
             <h2>Archivio Locale</h2>
             <div style="display:flex; gap:10px;">
@@ -316,8 +341,8 @@
         </div>
     </div>
 
-    <!-- === EDITOR MODAL === -->
-    <div id="modal-editor" class="modal-fs">
+    <!-- === EDITOR MODAL (INLINE HIDDEN) === -->
+    <div id="modal-editor" class="modal-fs" style="display:none;">
         <div class="modal-header">
             <h2>Modifica</h2>
             <div style="display:flex; gap:10px;">
@@ -336,8 +361,8 @@
         </div>
     </div>
 
-    <!-- === API SETTINGS === -->
-    <div id="modal-settings" class="hidden" style="position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:2000; display:flex; justify-content:center; align-items:center;">
+    <!-- === API SETTINGS (INLINE HIDDEN) === -->
+    <div id="modal-settings" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:2000; justify-content:center; align-items:center;">
         <div style="background:#1e1e2f; padding:30px; border-radius:20px; width:90%; max-width:400px; border:1px solid var(--glass-border);">
             <h3><i class="fa-solid fa-key"></i> API Key</h3>
             <p style="color:#aaa; font-size:0.9rem;">Per AI Custom (opzionale).</p>
@@ -349,9 +374,9 @@
         </div>
     </div>
 
-    <!-- === PREVIEW MODAL === -->
-    <div id="modal-preview" class="hidden" onclick="this.classList.add('hidden')">
-        <img id="preview-img" src="" alt="Anteprima">
+    <!-- === PREVIEW MODAL (INLINE HIDDEN) === -->
+    <div id="modal-preview" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index: 2000; justify-content: center; align-items: center; padding: 20px;" onclick="this.style.display='none'">
+        <img id="preview-img" src="" alt="" style="max-width:100%; max-height:100%; border-radius:12px;">
     </div>
 
     <script>
@@ -366,7 +391,7 @@
             static async deleteSet(id) { const db = await DB.open(); return new Promise((res, rej) => { const tx = db.transaction(STORE_NAME, 'readwrite'); const r = tx.objectStore(STORE_NAME).delete(id); r.onsuccess = () => res(true); r.onerror = () => rej(r.error); }); }
         }
 
-        // --- 1. DATA (20 ITEMS PER SET) ---
+        // --- 1. DATA ---
         const CLINICAL_SETS = {
             "anim_liv1": [
                 {l:"Cane", p:"Cute dog"}, {l:"Gatto", p:"Cute cat"}, {l:"Topo", p:"Cute mouse"}, {l:"Rana", p:"Green frog"}, {l:"Toro", p:"Bull"}, 
@@ -428,43 +453,85 @@
             apiKey: localStorage.getItem('gemini_key') || '',
             items: [], deck: [], memory: { flipped: [], matched: [], lockBoard: false },
             saved: [], currentTheme: 'theme-misto', 
-            editingSetId: null, editingItems: [], activeEditorIndex: null
+            editingSetId: null, editingItems: [], activeEditorIndex: null,
+            ranMode: 'grid', ranIndex: 0, 
+            isShuffle: false, // New Shuffle State
+            loadedSetName: "Nessuno"
         };
 
-        // --- 2. INIT ---
+        // --- GLOBAL UI HELPERS ---
+        window.openSettings = function() { document.getElementById('modal-settings').style.display = 'flex'; };
+        window.closeSettings = function() { document.getElementById('modal-settings').style.display = 'none'; };
+        window.saveKey = function() { 
+            state.apiKey = document.getElementById('api-key').value; 
+            localStorage.setItem('gemini_key', state.apiKey); 
+            window.closeSettings();
+        };
+        window.updateShuffle = function(val) { state.isShuffle = val; };
+
+        // --- INIT ---
         window.onload = async () => {
-            const existing = await DB.getAllSets();
-            if (existing.length === 0) {
-                for (const key of Object.keys(CLINICAL_SETS)) {
-                    const items = CLINICAL_SETS[key].map(i => ({ label: i.l, prompt: i.p, url: null, isCustom: false }));
-                    await DB.saveSet({ id: 'clin_' + key, name: key.replace('_', ' ').toUpperCase() + " (20)", items: items, theme: 'theme-misto', date: 'Default', isClinical: true });
+            try {
+                window.closeSettings();
+                document.getElementById('modal-library').style.display = 'none';
+                document.getElementById('modal-editor').style.display = 'none';
+                document.getElementById('modal-preview').style.display = 'none';
+
+                const existing = await DB.getAllSets();
+                if (existing.length === 0) {
+                    for (const key of Object.keys(CLINICAL_SETS)) {
+                        const items = CLINICAL_SETS[key].map(i => ({ label: i.l, prompt: i.p, url: null, isCustom: false }));
+                        await DB.saveSet({ id: 'clin_' + key, name: key.replace('_', ' ').toUpperCase() + " (20)", items: items, theme: 'theme-misto', date: 'Default', isClinical: true });
+                    }
                 }
-            }
-            await reloadLibrary();
-            document.getElementById('category-select').addEventListener('change', (e) => { document.getElementById('custom-input').classList.toggle('hidden', e.target.value !== 'ai_custom'); });
-            document.addEventListener('keydown', (e) => { if (state.ranMode === 'single') { if (e.key === 'ArrowRight') nextRan(); if (e.key === 'ArrowLeft') prevRan(); } });
-            document.getElementById('modal-settings').classList.add('hidden');
-            
-            // Paste Event Listener
-            document.addEventListener('paste', handlePaste);
+                await reloadLibrary();
+                document.getElementById('category-select').addEventListener('change', (e) => { document.getElementById('custom-input').classList.toggle('hidden', e.target.value !== 'ai_custom'); });
+                document.addEventListener('keydown', (e) => { if (state.ranMode === 'single') { if (e.key === 'ArrowRight') nextRan(); if (e.key === 'ArrowLeft') prevRan(); } });
+                document.addEventListener('paste', handlePaste);
+            } catch(e) { console.error("Init Error", e); }
         };
 
         async function reloadLibrary() {
-            state.saved = await DB.getAllSets();
-            document.getElementById('lib-count').innerText = state.saved.length;
-            let totalBytes = 0; state.saved.forEach(s => totalBytes += JSON.stringify(s).length);
-            const mb = (totalBytes / (1024 * 1024)).toFixed(1);
-            document.getElementById('storage-fill').style.width = Math.min((totalBytes/(500*1024*1024))*100, 100) + '%';
-            document.getElementById('storage-text').innerText = `${mb} MB`;
+            try {
+                state.saved = await DB.getAllSets();
+                const countEl = document.getElementById('lib-count');
+                if(countEl) countEl.innerText = state.saved.length;
+                let totalBytes = 0; state.saved.forEach(s => totalBytes += JSON.stringify(s).length);
+                const mb = (totalBytes / (1024 * 1024)).toFixed(1);
+                const fillEl = document.getElementById('storage-fill');
+                if(fillEl) fillEl.style.width = Math.min((totalBytes/(500*1024*1024))*100, 100) + '%';
+                const textEl = document.getElementById('storage-text');
+                if(textEl) textEl.innerText = `${mb} MB`;
+            } catch(e) { console.error("Library Error", e); }
         }
 
-        function toggleFullScreen() {
+        window.toggleFullScreen = function() {
             if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen();
             setTimeout(() => { document.getElementById('fs-icon').className = document.fullscreenElement ? 'fa-solid fa-compress' : 'fa-solid fa-expand'; }, 200);
-        }
+        };
 
-        // --- 3. SESSION LOGIC ---
-        async function startSession() {
+        // --- NEW START & GENERATE LOGIC ---
+        
+        // 1. START GAME (Uses existing items in memory)
+        window.startGame = function() {
+            if(state.items.length === 0) {
+                // AUTO LOAD FROM DROPDOWN IF EMPTY
+                console.log("Empty items, triggering auto-generation...");
+                window.generateSession();
+                return;
+            }
+            
+            // Apply Shuffle if requested
+            let displayItems = [...state.items];
+            if(state.isShuffle) {
+                displayItems.sort(() => Math.random() - 0.5);
+            }
+            
+            renderGameMode(document.getElementById('mode-select').value, displayItems);
+        };
+
+        // 2. GENERATE NEW (Creates fresh set, wiping current)
+        window.generateSession = async function() {
             const catSelect = document.getElementById('category-select').value;
             const style = document.getElementById('style-select').value;
             const mode = document.getElementById('mode-select').value;
@@ -472,15 +539,18 @@
             const stage = document.getElementById('game-stage');
             
             if(!catSelect) { alert("Seleziona una categoria."); return; }
-            stage.innerHTML = `<div style="position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; align-items:center; color:var(--text-secondary);"><i class="fa-solid fa-spinner spin fa-3x"></i><p>Generazione...</p></div>`;
-            document.getElementById('btn-save').classList.add('hidden');
+            
+            // Check if we are overwriting unsaved work? Maybe annoying.
+            // if(state.items.length > 0 && !confirm("Sovrascrivere il set corrente?")) return;
 
+            stage.innerHTML = `<div style="position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; align-items:center; color:var(--text-secondary);"><i class="fa-solid fa-spinner spin fa-3x"></i><p>Caricamento...</p></div>`;
+            
             try {
                 let rawData = [];
                 let targetCount = gridSizeInput === '20' ? 20 : (parseInt(gridSizeInput) ** 2);
 
                 if (catSelect === 'ai_custom') {
-                    if (!state.apiKey) throw new Error("Per usare AI Custom serve la Chiave API (tasto chiave in alto).");
+                    if (!state.apiKey) throw new Error("Per usare AI Custom serve la Chiave API.");
                     rawData = await fetchAI(document.getElementById('custom-input').value, targetCount);
                 } else {
                     let source = CLINICAL_SETS[catSelect];
@@ -489,28 +559,41 @@
                     else rawData = expandList(source, targetCount);
                 }
 
+                // Create new items (generating new URLs)
                 state.items = rawData.map(d => ({
                     label: d.l || d.label, prompt: d.p || d.prompt || d.label,
                     url: generateUrl(d.p || d.prompt || d.label, style), isCustom: false
                 }));
 
                 state.currentTheme = 'theme-misto';
-                renderGameMode(mode);
+                state.loadedSetName = catSelect.startsWith('anim') ? "Animali" : (catSelect.startsWith('ai') ? "Custom AI" : "Standard");
+                updateStatusLabel();
                 document.getElementById('btn-save').classList.remove('hidden');
+                
+                // Auto-start
+                startGame();
+                
             } catch (err) {
                 stage.innerHTML = `<div style="color:#ef4444; padding:20px; text-align:center;">${err.message}</div>`;
             }
+        };
+
+        function updateStatusLabel() {
+            document.getElementById('active-set-label').innerText = state.loadedSetName;
         }
 
-        function changeMode() { if(state.items.length > 0) renderGameMode(document.getElementById('mode-select').value); }
-        function renderGameMode(mode) {
-            if (mode === 'tact') renderTact();
-            else if (mode === 'ran') renderRan();
-            else if (mode === 'tombola') renderTombola();
-            else if (mode === 'memory') renderMemory();
+        window.changeMode = function() { 
+            if(state.items.length > 0) startGame(); 
+        };
+
+        function renderGameMode(mode, items) {
+            if (mode === 'tact') renderTact(items);
+            else if (mode === 'ran') renderRan(items);
+            else if (mode === 'tombola') renderTombola(items);
+            else if (mode === 'memory') renderMemory(items);
         }
 
-        // --- 4. RENDERERS ---
+        // --- RENDERERS (Updated to take 'items' arg) ---
         function getPlaceholderUrl(label) { return `https://placehold.co/400?text=${encodeURIComponent(label)}`; }
         function handleImgError(img, label) { 
             img.onerror = null; 
@@ -521,18 +604,19 @@
             }
         }
 
-        function renderTact() {
-            const item = state.items[Math.floor(Math.random() * state.items.length)];
+        function renderTact(items) {
+            const item = items[Math.floor(Math.random() * items.length)];
             document.getElementById('game-stage').innerHTML = `
                 <div class="tact-stage"><div class="tact-card-lg">
                     <img src="${item.url || getPlaceholderUrl(item.label)}" onload="this.style.opacity=1" onerror="handleImgError(this, '${item.label}')" style="opacity:0; transition:opacity 0.3s">
                     <div class="tact-title">${item.label}</div>
-                    <button class="btn btn-ghost" style="margin:20px;" onclick="renderTact()"><i class="fa-solid fa-shuffle"></i> Prossimo</button>
+                    <button class="btn btn-ghost" style="margin:20px;" onclick="startGame()"><i class="fa-solid fa-shuffle"></i> Prossimo</button>
                 </div></div>`;
         }
 
-        function renderRan() {
+        function renderRan(items) {
             const stage = document.getElementById('game-stage');
+            state.displayItems = items; 
             stage.innerHTML = `
                 <div class="ran-container">
                     <div class="ran-header">
@@ -543,43 +627,46 @@
                 </div>`;
             updateRanContent();
         }
-        function setRanMode(mode) { state.ranMode = mode; updateRanContent(); }
+        window.setRanMode = function(mode) { state.ranMode = mode; updateRanContent(); };
         function updateRanContent() {
             const container = document.getElementById('ran-content');
+            const items = state.displayItems;
+            
             if (state.ranMode === 'grid') {
-                const count = state.items.length;
+                const count = items.length;
                 let cols = 4;
                 if(count === 20 || count === 25) cols = 5;
                 else if(count === 9) cols = 3;
                 else cols = Math.ceil(Math.sqrt(count));
 
                 let html = `<div class="grid-adaptive" style="grid-template-columns: repeat(${cols}, 1fr);">`;
-                state.items.forEach(item => {
+                items.forEach(item => {
                     html += `<div class="ran-card"><img src="${item.url || getPlaceholderUrl(item.label)}" onerror="handleImgError(this, '${item.label}')"></div>`;
                 });
                 html += `</div>`; container.innerHTML = html;
             } else {
-                const item = state.items[state.ranIndex];
+                if(state.ranIndex >= items.length) state.ranIndex = 0;
+                const item = items[state.ranIndex];
                 container.innerHTML = `
                     <div class="ran-seq-stage">
                         <img src="${item.url || getPlaceholderUrl(item.label)}" class="ran-seq-img" onerror="handleImgError(this, '${item.label}')">
                         <div style="font-size:2rem; font-weight:bold; margin-top:20px;">${item.label}</div>
                         <div class="ran-controls">
                             <button class="ran-nav-btn" onclick="prevRan()"><i class="fa-solid fa-arrow-left"></i></button>
-                            <span style="font-size:1.2rem; opacity:0.7;">${state.ranIndex + 1} / ${state.items.length}</span>
+                            <span style="font-size:1.2rem; opacity:0.7;">${state.ranIndex + 1} / ${items.length}</span>
                             <button class="ran-nav-btn" onclick="nextRan()"><i class="fa-solid fa-arrow-right"></i></button>
                         </div>
                     </div>`;
             }
         }
-        function nextRan() { if (state.ranIndex < state.items.length - 1) { state.ranIndex++; updateRanContent(); } }
-        function prevRan() { if (state.ranIndex > 0) { state.ranIndex--; updateRanContent(); } }
+        window.nextRan = function() { if (state.ranIndex < state.displayItems.length - 1) { state.ranIndex++; updateRanContent(); } };
+        window.prevRan = function() { if (state.ranIndex > 0) { state.ranIndex--; updateRanContent(); } };
 
-        function renderTombola() {
-            state.deck = [...state.items].sort(() => Math.random() - 0.5);
-            const count = state.items.length;
+        function renderTombola(items) {
+            state.deck = [...items].sort(() => Math.random() - 0.5); 
+            const count = items.length;
             let cols = count === 20 ? 5 : Math.ceil(Math.sqrt(count));
-            document.getElementById('game-stage').innerHTML = `<div class="tombola-layout"><div class="tombola-deck"><div id="deck-area">${getDeckCardHtml()}</div></div><div class="tombola-board"><div class="grid-adaptive" style="grid-template-columns:repeat(${cols}, 1fr);">${state.items.map((item, idx) => `<div class="card-grid" id="slot-${idx}" onclick="handleMatchClick(${idx}, '${item.label}')"><img src="${item.url || getPlaceholderUrl(item.label)}" onerror="handleImgError(this, '${item.label}')"></div>`).join('')}</div></div></div>`;
+            document.getElementById('game-stage').innerHTML = `<div class="tombola-layout"><div class="tombola-deck"><div id="deck-area">${getDeckCardHtml()}</div></div><div class="tombola-board"><div class="grid-adaptive" style="grid-template-columns:repeat(${cols}, 1fr);">${items.map((item, idx) => `<div class="card-grid" id="slot-${idx}" onclick="handleMatchClick(${idx}, '${item.label}')"><img src="${item.url || getPlaceholderUrl(item.label)}" onerror="handleImgError(this, '${item.label}')"></div>`).join('')}</div></div></div>`;
         }
         function getDeckCardHtml() {
             if (state.deck.length === 0) return `<div style="text-align:center; color:white; font-size:1.5rem;">🎉<br>Finito!</div>`;
@@ -592,8 +679,8 @@
             state.deck.shift(); document.getElementById('deck-area').innerHTML = getDeckCardHtml();
         };
 
-        function renderMemory() {
-            let useItems = state.items;
+        function renderMemory(items) {
+            let useItems = items;
             if(useItems.length > 10) useItems = useItems.slice(0, 10); 
             else if(useItems.length < 8) useItems = expandList(useItems, 8); 
 
@@ -625,7 +712,7 @@
             state.memory.flipped = []; state.memory.lockBoard = false;
         }
 
-        // --- 6. COMMON UTILS ---
+        // --- UTILS ---
         function generateUrl(prompt, style) {
             let s = style === 'mixed' ? ['3d','vector','realistic'][Math.floor(Math.random()*3)] : style;
             let suffix = s==='3d' ? "cute 3d clay" : s==='vector' ? "flat vector icon" : "photo";
@@ -646,8 +733,8 @@
         }
 
         // --- LIBRARY & EDITOR ---
-        function openLibrary() { renderLibList(); document.getElementById('modal-library').classList.add('open'); }
-        function closeLibrary() { document.getElementById('modal-library').classList.remove('open'); }
+        window.openLibrary = function() { renderLibList(); document.getElementById('modal-library').style.display = 'flex'; requestAnimationFrame(() => document.getElementById('modal-library').classList.add('open')); };
+        window.closeLibrary = function() { document.getElementById('modal-library').classList.remove('open'); setTimeout(()=>document.getElementById('modal-library').style.display='none',300); };
         function renderLibList() {
             const container = document.getElementById('lib-list');
             container.innerHTML = state.saved.map(s => `
@@ -655,7 +742,7 @@
                     <div style="font-weight:bold; font-size:1.1rem;">${s.isClinical ? '🌿 ' : ''}${s.name}</div>
                     <div style="font-size:0.8rem; color:#aaa;">${s.items.length} items • ${(JSON.stringify(s).length/1024).toFixed(1)} KB</div>
                     <div style="display:flex; gap:5px; margin-top:auto;">
-                        <button class="btn btn-primary" style="flex:1; padding:8px;" onclick="loadSet('${s.id}')">Apri</button>
+                        <button class="btn btn-primary" style="flex:1; padding:8px;" onclick="loadSet('${s.id}')">Carica</button>
                         <button class="btn btn-ghost" style="padding:8px;" onclick="editSet('${s.id}')"><i class="fa-solid fa-pen"></i></button>
                         <button class="btn btn-ghost" style="padding:8px;" onclick="exportSingleSet('${s.id}')" title="Esporta"><i class="fa-solid fa-file-export"></i></button>
                         <button class="btn btn-danger" style="padding:8px;" onclick="deleteSet('${s.id}')"><i class="fa-solid fa-trash"></i></button>
@@ -664,31 +751,34 @@
         }
         window.createEmptySet = () => {
             const cat = prompt("Categoria?"); if(!cat) return;
-            let items = [{label:'Oggetto 1', prompt:'Object 1', url:null}];
+            let items = [{label:'Oggetto 1', prompt:'Object 1', url:null, isCustom:false}];
             const newSet = { id: Date.now().toString(), name: "Nuovo " + cat, items: items, date: new Date().toLocaleDateString(), isClinical: false };
             DB.saveSet(newSet).then(() => { reloadLibrary(); editSet(newSet.id); });
         };
-        function saveSetFromSession() {
+        window.saveSetFromSession = function() {
             const name = prompt("Nome del Set:"); if (!name) return;
             const newSet = { id: Date.now().toString(), name: name, items: state.items, theme: state.currentTheme, date: new Date().toLocaleDateString(), isClinical: false };
             DB.saveSet(newSet).then(() => { alert("Salvato!"); reloadLibrary(); });
-        }
-        window.editSet = async (id) => {
+        };
+        window.editSet = async function(id) {
             const allSets = await DB.getAllSets(); const set = allSets.find(s => s.id === id); if (!set) return;
             state.editingSetId = id; state.editingItems = JSON.parse(JSON.stringify(set.items));
             state.activeEditorIndex = null;
-            document.getElementById('edit-set-name').value = set.name; renderEditorList(); closeLibrary(); document.getElementById('modal-editor').classList.add('open');
+            document.getElementById('edit-set-name').value = set.name; renderEditorList(); window.closeLibrary(); 
+            document.getElementById('modal-editor').style.display = 'flex'; requestAnimationFrame(()=>document.getElementById('modal-editor').classList.add('open'));
         };
         
         function renderEditorList() {
             document.getElementById('editor-list').innerHTML = state.editingItems.map((item, idx) => {
-                const hasUrl = !!item.url;
                 const isActive = state.activeEditorIndex === idx ? 'active-paste' : '';
+                const isLoading = item.isLoading === true;
+                const hasUrl = !!item.url;
+                
                 return `
                 <div class="editor-item ${isActive}" onclick="selectForPaste(${idx})">
-                    <div class="editor-thumb" onclick="event.stopPropagation(); showPreview('${item.url}')" title="Clicca per ingrandire">
-                        <div class="loader-overlay ${hasUrl ? '' : 'hidden'}" id="loader-${idx}"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div>
-                        ${hasUrl ? `<img src="${item.url}" onload="this.style.opacity=1; document.getElementById('loader-${idx}').classList.add('hidden')" onerror="handleImgError(this, '${item.label}'); document.getElementById('loader-${idx}').classList.add('hidden')" style="opacity:0; transition:opacity 0.3s">` : `<div class="fallback-badge">${item.label}</div>`}
+                    <div class="editor-thumb" onclick="event.stopPropagation(); showPreview('${item.url}')">
+                        <div class="loader-overlay ${isLoading ? '' : 'hidden'}" id="loader-${idx}"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div>
+                        ${(!isLoading && hasUrl) ? `<img src="${item.url}" onerror="handleImgError(this, '${item.label}'); document.getElementById('loader-${idx}').classList.add('hidden')" style="opacity:0; transition:opacity 0.3s" onload="this.style.opacity=1">` : (!isLoading ? `<div class="fallback-badge">${item.label}</div>` : '')}
                     </div>
                     <div class="editor-meta">
                         <div style="font-weight:bold;">${item.label}</div>
@@ -704,30 +794,17 @@
             }).join('');
         }
 
-        window.selectForPaste = (idx) => {
-            state.activeEditorIndex = idx;
-            renderEditorList();
-        };
-
-        window.showPreview = (url) => {
-            if(!url || url.includes('placehold')) return;
-            const modal = document.getElementById('modal-preview');
-            const img = document.getElementById('preview-img');
-            img.src = url;
-            modal.classList.remove('hidden');
-        };
-
+        window.selectForPaste = (idx) => { state.activeEditorIndex = idx; renderEditorList(); };
+        window.showPreview = (url) => { if(!url || url.includes('placehold')) return; document.getElementById('preview-img').src = url; document.getElementById('modal-preview').style.display='flex'; };
+        
         async function handlePaste(e) {
-            // Only if editor is open and an item is selected
-            if (!document.getElementById('modal-editor').classList.contains('open')) return;
+            if (document.getElementById('modal-editor').style.display === 'none') return;
             if (state.activeEditorIndex === null) return;
-
             const items = (e.clipboardData || e.originalEvent.clipboardData).items;
             for (const item of items) {
                 if (item.type.indexOf('image') === 0) {
                     const blob = item.getAsFile();
                     const compressed = await compressImage(blob);
-                    
                     state.editingItems[state.activeEditorIndex].url = compressed;
                     state.editingItems[state.activeEditorIndex].isCustom = true;
                     renderEditorList();
@@ -739,32 +816,41 @@
         window.updatePrompt = (idx, val) => { state.editingItems[idx].prompt = val; };
         window.removeEditorItem = (idx) => { state.editingItems.splice(idx, 1); renderEditorList(); };
         window.regenerateItem = (idx) => {
-            const item = state.editingItems[idx];
-            const loader = document.getElementById(`loader-${idx}`);
-            if(loader) loader.classList.remove('hidden');
-            setTimeout(() => {
-                item.url = generateUrl(item.prompt, document.getElementById('style-select').value);
-                item.isCustom = false; renderEditorList();
-            }, 500); 
+            state.editingItems[idx].isLoading = true; renderEditorList(); 
+            const newUrl = generateUrl(state.editingItems[idx].prompt, document.getElementById('style-select').value);
+            const img = new Image();
+            img.onload = () => { state.editingItems[idx].url = newUrl; state.editingItems[idx].isCustom = false; state.editingItems[idx].isLoading = false; renderEditorList(); };
+            img.onerror = () => { state.editingItems[idx].isLoading = false; renderEditorList(); };
+            img.src = newUrl;
         };
         function compressImage(file) { return new Promise((res) => { const r = new FileReader(); r.onload = e => { const i = new Image(); i.onload = () => { const c = document.createElement('canvas'); let w=i.width, h=i.height; if(w>800){h*=800/w;w=800;} c.width=w; c.height=h; c.getContext('2d').drawImage(i,0,0,w,h); res(c.toDataURL('image/jpeg', 0.6)); }; i.src = e.target.result; }; r.readAsDataURL(file); }); }
         window.uploadImage = async (idx, input) => { const f = input.files[0]; if(!f) return; state.editingItems[idx].url = await compressImage(f); state.editingItems[idx].isCustom = true; renderEditorList(); };
         window.bulkUploadImages = async (input) => { for(let f of input.files) { state.editingItems.push({ label: f.name.split('.')[0], prompt: f.name.split('.')[0], url: await compressImage(f), isCustom: true }); } renderEditorList(); };
-        function saveEditorChanges() {
+        
+        window.saveEditorChanges = function() {
             const newName = document.getElementById('edit-set-name').value;
-            DB.getAllSets().then(all => { const s = all.find(x => x.id === state.editingSetId); if(s) { s.name = newName; s.items = state.editingItems; if(s.isClinical){s.isClinical=false; s.name+=" (Mod)";} DB.saveSet(s).then(() => { alert("Salvato!"); closeEditor(); reloadLibrary(); }); } });
-        }
-        function closeEditor() { document.getElementById('modal-editor').classList.remove('open'); openLibrary(); }
+            DB.getAllSets().then(all => { const s = all.find(x => x.id === state.editingSetId); if(s) { s.name = newName; s.items = state.editingItems; if(s.isClinical){s.isClinical=false; s.name+=" (Mod)";} DB.saveSet(s).then(() => { alert("Salvato!"); window.closeEditor(); reloadLibrary(); }); } });
+        };
+        window.closeEditor = function() { document.getElementById('modal-editor').classList.remove('open'); setTimeout(()=>document.getElementById('modal-editor').style.display='none',300); window.openLibrary(); };
         window.deleteSet = (id) => { if(confirm("Eliminare?")) DB.deleteSet(id).then(() => reloadLibrary()); };
-        window.loadSet = async (id) => { const all = await DB.getAllSets(); const s = all.find(x => x.id === id); state.items = s.items; closeLibrary(); renderGameMode(document.getElementById('mode-select').value); };
+        
+        // 3. LOAD SET LOGIC (Fixing the overwrite issue)
+        window.loadSet = async (id) => { 
+            const all = await DB.getAllSets(); 
+            const s = all.find(x => x.id === id); 
+            state.items = s.items; 
+            state.loadedSetName = s.name;
+            updateStatusLabel();
+            window.closeLibrary(); 
+            
+            // Auto start with loaded items
+            startGame();
+        };
+        
         window.exportAllSets = async () => { const s = await DB.getAllSets(); downloadJSON(s, `Backup_Full.json`); };
         window.exportSingleSet = async (id) => { const all = await DB.getAllSets(); const s = all.find(x => x.id === id); if(s) downloadJSON([s], `Set_${s.name}.json`); };
         function downloadJSON(d, n) { const b = new Blob([JSON.stringify(d)], {type:'application/json'}); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href=u; a.download=n; document.body.appendChild(a); a.click(); setTimeout(()=>URL.revokeObjectURL(u),100); }
         window.importSets = (input) => { const r = new FileReader(); r.onload = async e => { try { const d = JSON.parse(e.target.result); for(const s of d) await DB.saveSet(s); reloadLibrary(); alert("Importato!"); } catch(err){alert("Errore");} }; r.readAsText(input.files[0]); };
-        
-        window.openSettings = () => document.getElementById('modal-settings').classList.remove('hidden');
-        window.closeSettings = () => document.getElementById('modal-settings').classList.add('hidden');
-        window.saveKey = () => { state.apiKey = document.getElementById('api-key').value; localStorage.setItem('gemini_key', state.apiKey); document.getElementById('modal-settings').classList.add('hidden'); };
 
     </script>
 </body>
