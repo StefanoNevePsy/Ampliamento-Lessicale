@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
-    <title>Stimolatore V24</title>
+    <title>Stimolatore V25</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#1e1e2f">
@@ -207,7 +207,7 @@
     <div class="app-shell">
         <header>
             <div>
-                <h1>Stimolatore V24</h1>
+                <h1>Stimolatore V25</h1>
                 <div class="storage-bar-container">
                     <i class="fa-solid fa-hard-drive"></i>
                     <div class="storage-progress"><div id="storage-fill" class="storage-fill"></div></div>
@@ -221,7 +221,7 @@
             </div>
         </header>
 
-        <!-- CONTROLLI -->
+        <!-- CONTROLLI PRINCIPALI (SEMPRE VISIBILI) -->
         <div class="controls-row">
             <div class="control-group">
                 <label>Modalità</label>
@@ -338,6 +338,9 @@
                  <span style="font-size:0.7rem; color:var(--text-secondary); margin-left:10px;">(Tip: Clicca una riga e usa Ctrl+V per incollare)</span>
             </div>
             <div id="editor-list"></div>
+            <button class="btn btn-primary" style="width:100%; margin-top:20px; padding:15px;" onclick="addNewItem()">
+                <i class="fa-solid fa-plus"></i> Aggiungi Elemento Vuoto
+            </button>
         </div>
     </div>
 
@@ -371,12 +374,12 @@
             static async deleteSet(id) { const db = await DB.open(); return new Promise((res, rej) => { const tx = db.transaction(STORE_NAME, 'readwrite'); const r = tx.objectStore(STORE_NAME).delete(id); r.onsuccess = () => res(true); r.onerror = () => rej(r.error); }); }
         }
 
-        // --- 1. FULL CLINICAL SEED DATA (30+ SETS) ---
+        // --- 1. FULL CLINICAL SEED DATA (REFINED) ---
         const CLINICAL_SEED = [
             // ANIMALI
-            { id: "anim_liv1", cat: "🐶 Animali", name: "Liv 1 (Bisillabe)", items: [{l:"Cane", p:"Cute dog"}, {l:"Gatto", p:"Cute cat"}, {l:"Topo", p:"Cute mouse"}, {l:"Rana", p:"Green frog"}, {l:"Toro", p:"Bull"}, {l:"Mucca", p:"Cow"}, {l:"Lupo", p:"Wolf"}, {l:"Gufo", p:"Owl"}, {l:"Orso", p:"Bear"}, {l:"Ape", p:"Bee"}, {l:"Gallo", p:"Rooster"}, {l:"Pollo", p:"Chicken"}, {l:"Oca", p:"Goose"}, {l:"Mulo", p:"Donkey"}, {l:"Falco", p:"Falcon"}, {l:"Ragno", p:"Spider"}, {l:"Bruco", p:"Caterpillar"}, {l:"Verme", p:"Worm"}, {l:"Mosca", p:"Fly"}, {l:"Puma", p:"Puma"}] },
-            { id: "anim_liv2", cat: "🐶 Animali", name: "Liv 2 (Trisillabe)", items: [{l:"Pecora", p:"Sheep"}, {l:"Medusa", p:"Jellyfish"}, {l:"Gallina", p:"Hen"}, {l:"Balena", p:"Whale"}, {l:"Gorilla", p:"Gorilla"}, {l:"Giraffa", p:"Giraffe"}, {l:"Maiale", p:"Pig"}, {l:"Delfino", p:"Dolphin"}, {l:"Cavallo", p:"Horse"}, {l:"Pinguino", p:"Penguin"}, {l:"Cammello", p:"Camel"}, {l:"Pantera", p:"Panther"}, {l:"Castoro", p:"Beaver"}, {l:"Coniglio", p:"Rabbit"}, {l:"Formica", p:"Ant"}, {l:"Lumaca", p:"Snail"}, {l:"Gazzella", p:"Gazelle"}, {l:"Bisonte", p:"Bison"}, {l:"Canguro", p:"Kangaroo"}, {l:"Koala", p:"Koala"}] },
-            { id: "anim_liv3", cat: "🐶 Animali", name: "Liv 3 (Complesse)", items: [{l:"Coccodrillo", p:"Crocodile"}, {l:"Tartaruga", p:"Turtle"}, {l:"Elefante", p:"Elephant"}, {l:"Rinoceronte", p:"Rhino"}, {l:"Ippopotamo", p:"Hippo"}, {l:"Pipistrello", p:"Bat"}, {l:"Serpente", p:"Snake"}, {l:"Zebra", p:"Zebra"}, {l:"Scoiattolo", p:"Squirrel"}, {l:"Farfalla", p:"Butterfly"}, {l:"Coccinella", p:"Ladybug"}, {l:"Cavalletta", p:"Grasshopper"}, {l:"Scorpione", p:"Scorpion"}, {l:"Dromedario", p:"Dromedary"}, {l:"Pappagallo", p:"Parrot"}, {l:"Fenicottero", p:"Flamingo"}, {l:"Formichiere", p:"Anteater"}, {l:"Armadillo", p:"Armadillo"}, {l:"Camaleonte", p:"Chameleon"}, {l:"Salamandra", p:"Salamander"}] },
+            { id: "anim_liv1", cat: "🐶 Animali", name: "Liv 1 (Bisillabe Piane)", items: [{l:"Cane", p:"Cute dog"}, {l:"Gatto", p:"Cute cat"}, {l:"Topo", p:"Cute mouse"}, {l:"Rana", p:"Green frog"}, {l:"Toro", p:"Bull"}, {l:"Mucca", p:"Cow"}, {l:"Lupo", p:"Wolf"}, {l:"Gufo", p:"Owl"}, {l:"Orso", p:"Bear"}, {l:"Ape", p:"Bee"}, {l:"Gallo", p:"Rooster"}, {l:"Mulo", p:"Donkey"}, {l:"Foca", p:"Seal"}, {l:"Oca", p:"Goose"}, {l:"Lama", p:"Llama"}, {l:"Tordo", p:"Thrush bird"}, {l:"Poni", p:"Pony horse"}, {l:"Ratto", p:"Rat"}, {l:"Volpe", p:"Fox"}, {l:"Renna", p:"Reindeer"}] },
+            { id: "anim_liv2", cat: "🐶 Animali", name: "Liv 2 (Trisillabe/Medie)", items: [{l:"Pecora", p:"Sheep"}, {l:"Gallina", p:"Hen"}, {l:"Cavallo", p:"Horse"}, {l:"Maiale", p:"Pig"}, {l:"Giraffa", p:"Giraffe"}, {l:"Gorilla", p:"Gorilla"}, {l:"Balena", p:"Whale"}, {l:"Delfino", p:"Dolphin"}, {l:"Medusa", p:"Jellyfish"}, {l:"Pinguino", p:"Penguin"}, {l:"Cammello", p:"Camel"}, {l:"Pantera", p:"Panther"}, {l:"Castoro", p:"Beaver"}, {l:"Coniglio", p:"Rabbit"}, {l:"Formica", p:"Ant"}, {l:"Lumaca", p:"Snail"}, {l:"Gazzella", p:"Gazelle"}, {l:"Bisonte", p:"Bison"}, {l:"Canguro", p:"Kangaroo"}, {l:"Koala", p:"Koala"}] },
+            { id: "anim_liv3", cat: "🐶 Animali", name: "Liv 3 (Complesse)", items: [{l:"Coccodrillo", p:"Crocodile"}, {l:"Elefante", p:"Elephant"}, {l:"Ippopotamo", p:"Hippo"}, {l:"Rinoceronte", p:"Rhino"}, {l:"Tartaruga", p:"Turtle"}, {l:"Pipistrello", p:"Bat"}, {l:"Serpente", p:"Snake"}, {l:"Zebra", p:"Zebra"}, {l:"Scoiattolo", p:"Squirrel"}, {l:"Farfalla", p:"Butterfly"}, {l:"Coccinella", p:"Ladybug"}, {l:"Cavalletta", p:"Grasshopper"}, {l:"Scorpione", p:"Scorpion"}, {l:"Dromedario", p:"Dromedary"}, {l:"Pappagallo", p:"Parrot"}, {l:"Fenicottero", p:"Flamingo"}, {l:"Formichiere", p:"Anteater"}, {l:"Armadillo", p:"Armadillo"}, {l:"Camaleonte", p:"Chameleon"}, {l:"Salamandra", p:"Salamander"}] },
             { id: "anim_sea", cat: "🐶 Animali", name: "Habitat Marino", items: [{l:"Pesce", p:"Fish"}, {l:"Squalo", p:"Shark"}, {l:"Polpo", p:"Octopus"}, {l:"Granchio", p:"Crab"}, {l:"Stella", p:"Starfish"}, {l:"Cavalluccio", p:"Seahorse"}, {l:"Aragosta", p:"Lobster"}, {l:"Gambero", p:"Shrimp"}, {l:"Medusa", p:"Jellyfish"}, {l:"Balena", p:"Whale"}, {l:"Delfino", p:"Dolphin"}, {l:"Orco", p:"Killer whale"}, {l:"Foca", p:"Seal"}, {l:"Tricheco", p:"Walrus"}, {l:"Pinguino", p:"Penguin"}, {l:"Tartaruga", p:"Sea turtle"}, {l:"Razza", p:"Stingray"}, {l:"Corallo", p:"Coral"}, {l:"Conchiglia", p:"Seashell"}, {l:"Gabbiano", p:"Seagull"}] },
             { id: "anim_farm", cat: "🐶 Animali", name: "Fattoria", items: [{l:"Mucca", p:"Cow"}, {l:"Toro", p:"Bull"}, {l:"Vitello", p:"Calf"}, {l:"Maiale", p:"Pig"}, {l:"Pecora", p:"Sheep"}, {l:"Agnello", p:"Lamb"}, {l:"Capra", p:"Goat"}, {l:"Cavallo", p:"Horse"}, {l:"Asino", p:"Donkey"}, {l:"Mulo", p:"Mule"}, {l:"Gallo", p:"Rooster"}, {l:"Gallina", p:"Hen"}, {l:"Pulcino", p:"Chick"}, {l:"Anatra", p:"Duck"}, {l:"Oca", p:"Goose"}, {l:"Tacchino", p:"Turkey"}, {l:"Coniglio", p:"Rabbit"}, {l:"Cane", p:"Farm dog"}, {l:"Gatto", p:"Farm cat"}, {l:"Topo", p:"Mouse"}] },
 
@@ -786,8 +789,8 @@
                         ${(!isLoading && hasUrl) ? `<img src="${item.url}" onload="this.style.opacity=1; document.getElementById('loader-${idx}').classList.add('hidden')" onerror="handleImgError(this, '${item.label}'); document.getElementById('loader-${idx}').classList.add('hidden')" style="opacity:0; transition:opacity 0.3s" onload="this.style.opacity=1">` : (!isLoading ? `<div class="fallback-badge">${item.label}</div>` : '')}
                     </div>
                     <div class="editor-meta">
-                        <div style="font-weight:bold;">${item.label}</div>
-                        <input type="text" class="prompt-input" value="${item.prompt}" onchange="updatePrompt(${idx}, this.value)" onclick="event.stopPropagation()">
+                        <input type="text" class="prompt-input" style="font-weight:bold; margin-bottom:5px;" value="${item.label}" onchange="updateLabel(${idx}, this.value)" onclick="event.stopPropagation()" placeholder="Nome">
+                        <input type="text" class="prompt-input" value="${item.prompt}" onchange="updatePrompt(${idx}, this.value)" onclick="event.stopPropagation()" placeholder="Prompt Inglese">
                     </div>
                     <div style="display:flex;gap:5px;">
                         <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); regenerateItem(${idx})"><i class="fa-solid fa-arrows-rotate"></i></button>
@@ -798,6 +801,14 @@
                 </div>`;
             }).join('');
         }
+        
+        window.addNewItem = function() {
+            state.editingItems.push({ label: "Nuovo", prompt: "New object", url: null, isCustom: false });
+            renderEditorList();
+            // Scroll to bottom
+            const list = document.getElementById('editor-list');
+            setTimeout(() => list.lastElementChild.scrollIntoView({ behavior: "smooth" }), 100);
+        };
 
         window.selectForPaste = (idx) => { state.activeEditorIndex = idx; renderEditorList(); };
         window.showPreview = (url) => { if(!url || url.includes('placehold')) return; document.getElementById('preview-img').src = url; document.getElementById('modal-preview').style.display='flex'; };
@@ -818,6 +829,7 @@
             }
         };
 
+        window.updateLabel = (idx, val) => { state.editingItems[idx].label = val; };
         window.updatePrompt = (idx, val) => { state.editingItems[idx].prompt = val; };
         window.removeEditorItem = (idx) => { state.editingItems.splice(idx, 1); renderEditorList(); };
         window.regenerateItem = (idx) => {
