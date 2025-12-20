@@ -155,16 +155,75 @@
         .ran-nav-btn:hover { background: var(--accent-color); border-color: var(--accent-color); }
         .ran-controls { display: flex; align-items: center; gap: 30px; margin-top: 20px; }
 
-        .tombola-layout { display: flex; flex: 1; height: 100%; flex-direction: column; }
+        /* TOMBOLA STYLES (UPDATED) */
+        .tombola-layout { display: flex; flex: 1; height: 100%; flex-direction: column; overflow: hidden; }
         @media (min-width: 768px) { .tombola-layout { flex-direction: row; } }
-        .tombola-deck { flex: 0 0 280px; background: rgba(0,0,0,0.3); padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-right: 1px solid var(--glass-border); }
-        .tombola-board { flex: 1; padding: 20px; background-color: rgba(0,0,0,0.1); overflow-y: auto; }
-        .card-grid { cursor: pointer; transition: 0.2s; background: white; border-radius: 12px; padding: 5px; position:relative; }
-        .card-grid img { width: 100%; height: auto; border-radius: 6px; }
+        
+        .tombola-deck { 
+            flex: 0 0 200px; /* Ridotto da 280px */
+            background: rgba(0,0,0,0.3); 
+            padding: 10px; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: flex-start; /* Spostato in alto */
+            border-bottom: 1px solid var(--glass-border); 
+            z-index: 10;
+        }
+        @media (min-width: 768px) { 
+            .tombola-deck { 
+                border-right: 1px solid var(--glass-border); 
+                border-bottom: none; 
+                justify-content: center;
+            } 
+        }
+        
+        .tombola-board { flex: 1; padding: 10px; background-color: rgba(0,0,0,0.1); overflow-y: auto; }
+        
+        /* CARTA TARGET EVIDENZIATA */
+        .target-card-container {
+            width: 140px; /* Più piccolo */
+            border: 4px solid var(--accent-color); /* Bordo colorato */
+            border-radius: 16px;
+            padding: 5px;
+            background: white;
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.5); /* Glow effect */
+            animation: pulse-border 2s infinite;
+            margin-bottom: 10px;
+        }
+        .target-card-container img { width: 100%; height: auto; border-radius: 8px; }
+        .target-label { 
+            font-size: 1.2rem; 
+            font-weight: 900; 
+            color: #333; 
+            margin-top: 5px; 
+            text-align: center; 
+            text-transform: uppercase;
+        }
+        .target-hint { font-size: 0.8rem; color: #fff; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; }
+        
+        @keyframes pulse-border {
+            0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(99, 102, 241, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+        }
+
+        .card-grid { cursor: pointer; transition: 0.2s; background: white; border-radius: 12px; padding: 5px; position:relative; aspect-ratio: 1; display:flex; align-items:center; justify-content:center;}
+        .card-grid img { width: 100%; height: 100%; object-fit: contain; border-radius: 6px; }
         .card-grid.matched { opacity: 0.4; filter: grayscale(100%); pointer-events: none; }
         .card-grid.matched::after { content: '✔'; position: absolute; top:50%; left:50%; transform: translate(-50%, -50%); font-size: 3rem; color: var(--success-color); }
         
-        .memory-card { aspect-ratio: 1; perspective: 1000px; cursor: pointer; position: relative; }
+        /* MEMORY STYLES (UPDATED) */
+        .memory-grid { 
+            display: grid; gap: 10px; padding: 20px; 
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); /* Responsive */
+            width: 100%;
+            height: 100%;
+            align-content: center;
+            justify-content: center;
+            overflow-y: auto;
+        }
+        .memory-card { aspect-ratio: 1; perspective: 1000px; cursor: pointer; position: relative; max-width: 150px; justify-self: center; width:100%;}
         .memory-inner { width: 100%; height: 100%; text-align: center; transition: transform 0.6s; transform-style: preserve-3d; position: relative; }
         .memory-card.flipped .memory-inner { transform: rotateY(180deg); }
         .memory-card.matched { opacity: 0; pointer-events: none; transition: opacity 0.5s; }
@@ -365,7 +424,7 @@
     <script>
         // --- 0. DB MANAGER ---
         const DB_NAME = 'StimolatoreLessicaleDB';
-        const DB_VERSION = 2; // Incremented for schema update if needed
+        const DB_VERSION = 2; 
         const STORE_NAME = 'sets';
         class DB {
             static async open() { return new Promise((res, rej) => { const r = indexedDB.open(DB_NAME, DB_VERSION); r.onupgradeneeded = e => { const db = e.target.result; if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME, { keyPath: 'id' }); }; r.onsuccess = e => res(e.target.result); r.onerror = e => rej(e.target.error); }); }
@@ -664,12 +723,31 @@
             state.deck = [...items].sort(() => Math.random() - 0.5); 
             const count = items.length;
             let cols = count === 20 ? 5 : Math.ceil(Math.sqrt(count));
-            document.getElementById('game-stage').innerHTML = `<div class="tombola-layout"><div class="tombola-deck"><div id="deck-area">${getDeckCardHtml()}</div></div><div class="tombola-board"><div class="grid-adaptive" style="grid-template-columns:repeat(${cols}, 1fr);">${items.map((item, idx) => `<div class="card-grid" id="slot-${idx}" onclick="handleMatchClick(${idx}, '${item.label}')"><img src="${item.url || getPlaceholderUrl(item.label)}" onerror="handleImgError(this, '${item.label}')"></div>`).join('')}</div></div></div>`;
+            document.getElementById('game-stage').innerHTML = `
+            <div class="tombola-layout">
+                <div class="tombola-deck">
+                    <div id="deck-area">${getDeckCardHtml()}</div>
+                </div>
+                <div class="tombola-board">
+                    <div class="grid-adaptive" style="grid-template-columns:repeat(${cols}, 1fr);">
+                        ${items.map((item, idx) => `
+                            <div class="card-grid" id="slot-${idx}" onclick="handleMatchClick(${idx}, '${item.label}')">
+                                <img src="${item.url || getPlaceholderUrl(item.label)}" onerror="handleImgError(this, '${item.label}')">
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>`;
         }
         function getDeckCardHtml() {
             if (state.deck.length === 0) return `<div style="text-align:center; color:white; font-size:1.5rem;">🎉<br>Finito!</div>`;
             const current = state.deck[0];
-            return `<div class="card" style="width:200px;"><img src="${current.url || getPlaceholderUrl(current.label)}" onerror="handleImgError(this, '${current.label}')"><div style="font-size:1.5rem;font-weight:bold;color:#333;">${current.label}</div></div>`;
+            return `
+            <div class="target-card-container">
+                <div class="target-hint">TROVA:</div>
+                <img src="${current.url || getPlaceholderUrl(current.label)}" onerror="handleImgError(this, '${current.label}')">
+                <div class="target-label">${current.label}</div>
+            </div>`;
         }
         window.handleMatchClick = (idx, label) => {
             if (state.deck.length === 0 || label !== state.deck[0].label) return;
@@ -682,9 +760,16 @@
             if(useItems.length > 10) useItems = useItems.slice(0, 10); 
             else if(useItems.length < 8) useItems = expandList(useItems, 8); 
 
-            let memoryDeck = [...useItems, ...useItems].sort(() => Math.random() - 0.5);
+            // FISHER-YATES SHUFFLE for real randomness
+            let memoryDeck = [...useItems, ...useItems];
+            for (let i = memoryDeck.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [memoryDeck[i], memoryDeck[j]] = [memoryDeck[j], memoryDeck[i]];
+            }
+
             state.memory = { flipped: [], matched: [], deck: memoryDeck, lockBoard: false };
             let cols = 5; if (memoryDeck.length === 16) cols = 4;
+            
             let html = `<div class="memory-grid" style="grid-template-columns: repeat(${cols}, 1fr);">`;
             memoryDeck.forEach((item, idx) => {
                 html += `<div class="memory-card" id="mem-${idx}" onclick="flipCard(${idx})"><div class="memory-inner"><div class="memory-front"><i class="fa-solid fa-question"></i></div><div class="memory-back"><img src="${item.url || getPlaceholderUrl(item.label)}" onerror="handleImgError(this, '${item.label}')"></div></div></div>`;
