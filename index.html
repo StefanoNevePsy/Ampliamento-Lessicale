@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
-    <title>Stimolatore V25</title>
+    <title>Stimolatore V26</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#1e1e2f">
@@ -155,18 +155,18 @@
         .ran-nav-btn:hover { background: var(--accent-color); border-color: var(--accent-color); }
         .ran-controls { display: flex; align-items: center; gap: 30px; margin-top: 20px; }
 
-        /* TOMBOLA STYLES (UPDATED) */
+        /* TOMBOLA STYLES */
         .tombola-layout { display: flex; flex: 1; height: 100%; flex-direction: column; overflow: hidden; }
         @media (min-width: 768px) { .tombola-layout { flex-direction: row; } }
         
         .tombola-deck { 
-            flex: 0 0 200px; /* Ridotto da 280px */
+            flex: 0 0 200px;
             background: rgba(0,0,0,0.3); 
             padding: 10px; 
             display: flex; 
             flex-direction: column; 
             align-items: center; 
-            justify-content: flex-start; /* Spostato in alto */
+            justify-content: flex-start;
             border-bottom: 1px solid var(--glass-border); 
             z-index: 10;
         }
@@ -180,26 +180,18 @@
         
         .tombola-board { flex: 1; padding: 10px; background-color: rgba(0,0,0,0.1); overflow-y: auto; }
         
-        /* CARTA TARGET EVIDENZIATA */
         .target-card-container {
-            width: 140px; /* Più piccolo */
-            border: 4px solid var(--accent-color); /* Bordo colorato */
+            width: 140px; 
+            border: 4px solid var(--accent-color);
             border-radius: 16px;
             padding: 5px;
             background: white;
-            box-shadow: 0 0 20px rgba(99, 102, 241, 0.5); /* Glow effect */
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.5);
             animation: pulse-border 2s infinite;
             margin-bottom: 10px;
         }
         .target-card-container img { width: 100%; height: auto; border-radius: 8px; }
-        .target-label { 
-            font-size: 1.2rem; 
-            font-weight: 900; 
-            color: #333; 
-            margin-top: 5px; 
-            text-align: center; 
-            text-transform: uppercase;
-        }
+        .target-label { font-size: 1.2rem; font-weight: 900; color: #333; margin-top: 5px; text-align: center; text-transform: uppercase; }
         .target-hint { font-size: 0.8rem; color: #fff; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; }
         
         @keyframes pulse-border {
@@ -213,15 +205,11 @@
         .card-grid.matched { opacity: 0.4; filter: grayscale(100%); pointer-events: none; }
         .card-grid.matched::after { content: '✔'; position: absolute; top:50%; left:50%; transform: translate(-50%, -50%); font-size: 3rem; color: var(--success-color); }
         
-        /* MEMORY STYLES (UPDATED) */
+        /* MEMORY STYLES */
         .memory-grid { 
             display: grid; gap: 10px; padding: 20px; 
-            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); /* Responsive */
-            width: 100%;
-            height: 100%;
-            align-content: center;
-            justify-content: center;
-            overflow-y: auto;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); 
+            width: 100%; height: 100%; align-content: center; justify-content: center; overflow-y: auto;
         }
         .memory-card { aspect-ratio: 1; perspective: 1000px; cursor: pointer; position: relative; max-width: 150px; justify-self: center; width:100%;}
         .memory-inner { width: 100%; height: 100%; text-align: center; transition: transform 0.6s; transform-style: preserve-3d; position: relative; }
@@ -236,7 +224,7 @@
         .modal-fs { position: fixed; inset: 0; background: #1e1e2f; z-index: 1000; display: flex; flex-direction: column; transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         .modal-fs.open { transform: translateY(0); }
         .modal-header { padding: 20px; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding-top: env(safe-area-inset-top); } 
-        .modal-body { flex: 1; overflow-y: auto; padding: 20px; max-width: 1000px; margin: 0 auto; width: 100%; padding-bottom: 80px; }
+        .modal-body { flex: 1; overflow-y: auto; padding: 20px; max-width: 1000px; margin: 0 auto; width: 100%; padding-bottom: 80px; position:relative;}
 
         .lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; }
         .lib-card { background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: 12px; padding: 15px; transition: 0.2s; display: flex; flex-direction: column; gap: 5px; }
@@ -247,6 +235,7 @@
         .lib-meta { font-size:0.75rem; color:#aaa; margin-bottom:10px; }
 
         .editor-item { display: flex; align-items: center; gap: 15px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 10px; margin-bottom: 10px; border: 1px solid transparent; flex-wrap: wrap; cursor: pointer; transition: 0.2s; }
+        .editor-item.disabled { opacity: 0.4; filter: grayscale(100%); background: rgba(0,0,0,0.4); }
         .editor-item.active-paste { border-color: var(--accent-color); background: rgba(99, 102, 241, 0.2); }
         .editor-thumb { width: 80px; height: 80px; border-radius: 8px; object-fit: cover; background: #333; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; cursor: zoom-in; }
         .editor-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; }
@@ -255,6 +244,18 @@
         
         .loader-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.7); display: flex; justify-content: center; align-items: center; color: white; z-index: 5; }
         .fallback-badge { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #eee; color: #333; font-weight: 800; text-align: center; border-radius: 8px; font-size: 1.2rem; padding: 5px; }
+
+        /* FLOATING COUNTER */
+        #editor-counter {
+            position: fixed; bottom: 20px; right: 20px; 
+            background: var(--glass-bg); backdrop-filter: blur(10px);
+            padding: 10px 20px; border-radius: 30px; 
+            border: 1px solid var(--glass-border);
+            font-weight: bold; box-shadow: var(--shadow);
+            z-index: 1500; display: flex; align-items: center; gap: 8px;
+        }
+        .count-good { color: var(--success-color); }
+        .count-bad { color: var(--danger-color); }
 
         /* UTILS */
         .hidden { display: none !important; }
@@ -266,7 +267,7 @@
     <div class="app-shell">
         <header>
             <div>
-                <h1>Stimolatore V25</h1>
+                <h1>Stimolatore V26</h1>
                 <div class="storage-bar-container">
                     <i class="fa-solid fa-hard-drive"></i>
                     <div class="storage-progress"><div id="storage-fill" class="storage-fill"></div></div>
@@ -400,6 +401,10 @@
             <button class="btn btn-primary" style="width:100%; margin-top:20px; padding:15px;" onclick="addNewItem()">
                 <i class="fa-solid fa-plus"></i> Aggiungi Elemento Vuoto
             </button>
+        </div>
+        <!-- FLOATING COUNTER -->
+        <div id="editor-counter">
+            <i class="fa-solid fa-list-check"></i> <span id="counter-text">0 / 0</span>
         </div>
     </div>
 
@@ -582,7 +587,16 @@
                 window.generateSession();
                 return;
             }
-            let displayItems = [...state.items];
+            
+            // Filter out hidden items
+            const activeItems = state.items.filter(i => !i.hidden);
+
+            if (activeItems.length === 0) {
+                alert("Nessun item attivo nel set! Abilitane alcuni dall'editor.");
+                return;
+            }
+
+            let displayItems = [...activeItems];
             if(state.isShuffle) displayItems.sort(() => Math.random() - 0.5);
             renderGameMode(document.getElementById('mode-select').value, displayItems);
         };
@@ -800,7 +814,8 @@
             let s = style === 'mixed' ? ['3d','vector','realistic'][Math.floor(Math.random()*3)] : style;
             let suffix = s==='3d' ? "cute 3d clay" : s==='vector' ? "flat vector icon" : "photo";
             const seed = Math.floor(Math.random() * 999999);
-            return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}, ${suffix}, white background?nologo=true&seed=${seed}&width=400&height=400`;
+            return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}, ${suffix}, white background?nologo=true&seed=${seed}&width=400&height=400&steps=4`; 
+            // Added steps=4 for speed optimization
         }
         async function fetchAI(prompt, count) {
             const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${state.apiKey}`, { 
@@ -862,13 +877,16 @@
         };
         
         function renderEditorList() {
-            document.getElementById('editor-list').innerHTML = state.editingItems.map((item, idx) => {
+            let enabledCount = 0;
+            const html = state.editingItems.map((item, idx) => {
                 const isActive = state.activeEditorIndex === idx ? 'active-paste' : '';
                 const isLoading = item.isLoading === true;
                 const hasUrl = !!item.url;
+                const isHidden = item.hidden === true;
+                if (!isHidden) enabledCount++;
                 
                 return `
-                <div class="editor-item ${isActive}" onclick="selectForPaste(${idx})">
+                <div class="editor-item ${isActive} ${isHidden ? 'disabled' : ''}" onclick="selectForPaste(${idx})">
                     <div class="editor-thumb" onclick="event.stopPropagation(); showPreview('${item.url}')">
                         <div class="loader-overlay ${isLoading ? '' : 'hidden'}" id="loader-${idx}"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div>
                         ${(!isLoading && hasUrl) ? `<img src="${item.url}" onload="this.style.opacity=1; document.getElementById('loader-${idx}').classList.add('hidden')" onerror="handleImgError(this, '${item.label}'); document.getElementById('loader-${idx}').classList.add('hidden')" style="opacity:0; transition:opacity 0.3s" onload="this.style.opacity=1">` : (!isLoading ? `<div class="fallback-badge">${item.label}</div>` : '')}
@@ -878,6 +896,7 @@
                         <input type="text" class="prompt-input" value="${item.prompt}" onchange="updatePrompt(${idx}, this.value)" onclick="event.stopPropagation()" placeholder="Prompt Inglese">
                     </div>
                     <div style="display:flex;gap:5px;">
+                        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); toggleItemVisibility(${idx})" title="${isHidden ? 'Mostra' : 'Nascondi'}"><i class="fa-solid ${isHidden ? 'fa-eye-slash' : 'fa-eye'}"></i></button>
                         <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); regenerateItem(${idx})"><i class="fa-solid fa-arrows-rotate"></i></button>
                         <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); document.getElementById('upload-${idx}').click()"><i class="fa-solid fa-folder"></i></button>
                         <input type="file" id="upload-${idx}" class="hidden" accept="image/*" onchange="uploadImage(${idx}, this)">
@@ -885,12 +904,24 @@
                     </div>
                 </div>`;
             }).join('');
+            
+            document.getElementById('editor-list').innerHTML = html;
+
+            // Update Counter
+            const counterText = document.getElementById('counter-text');
+            const total = state.editingItems.length;
+            counterText.innerText = `${enabledCount} / ${total}`;
+            counterText.className = (enabledCount === 20) ? 'count-good' : (enabledCount < 5 ? 'count-bad' : '');
+        }
+        
+        window.toggleItemVisibility = function(idx) {
+            state.editingItems[idx].hidden = !state.editingItems[idx].hidden;
+            renderEditorList();
         }
         
         window.addNewItem = function() {
-            state.editingItems.push({ label: "Nuovo", prompt: "New object", url: null, isCustom: false });
+            state.editingItems.push({ label: "Nuovo", prompt: "New object", url: null, isCustom: false, hidden: false });
             renderEditorList();
-            // Scroll to bottom
             const list = document.getElementById('editor-list');
             setTimeout(() => list.lastElementChild.scrollIntoView({ behavior: "smooth" }), 100);
         };
