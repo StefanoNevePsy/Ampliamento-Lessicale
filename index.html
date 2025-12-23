@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
-    <title>Stimolatore V27 - Scene Explorer</title>
+    <title>Stimolatore V28</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#1e1e2f">
@@ -12,6 +12,7 @@
     <!-- Icons & Fonts -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImciIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiM2MzY2ZjEiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiM4YjVjZjYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjEyMCIgZmlsbD0idXJsKCNnKSIvPjxjaXJjbGUgY3g9IjI1NiIgY3k9IjI1NiIgcj0iMTQwIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMSkiLz48cGF0aCBkPSJNMzYwIDI1NmMwLTU3LjQtNDYuNi0xMDQtMTA0LTEwNHMtMTA0IDQ2LjYtMTA0IDEwNCA0Ni42IDEwNCAxMDQgMTA0YzEyLjggMCAyNS0yLjMgMzYuNC02LjUgMTAuMyA5LjggMjQuNiAxOC41IDQxLjYgMjIuNSAzLjEgMC43IDYuMi0xLjYgNi4yLTQuOCAwLTIuNy0xLjUtNS4yLTMuOS02LjYtMTEuNC02LjctMTguOC0xNi45LTE4LjgtMTYuOSAzMC42LTIzLjIgNTguOS02MS44IDQyLjUtOTEuN3oiIGZpbGw9IiNmZmZmZmYiLz48L3N2Zz4=">
     <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImciIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiM2MzY2ZjEiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiM4YjVjZjYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjEyMCIgZmlsbD0idXJsKCNnKSIvPjxjaXJjbGUgY3g9IjI1NiIgY3k9IjI1NiIgcj0iMTQwIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMSkiLz48cGF0aCBkPSJNMzYwIDI1NmMwLTU3LjQtNDYuNi0xMDQtMTA0LTEwNHMtMTA0IDQ2LjYtMTA0IDEwNCA0Ni42IDEwNCAxMDQgMTA0YzEyLjggMCAyNS0yLjMgMzYuNC02LjUgMTAuMyA5LjggMjQuNiAxOC41IDQxLjYgMjIuNSAzLjEgMC43IDYuMi0xLjYgNi4yLTQuOCAwLTIuNy0xLjUtNS4yLTMuOS02LjYtMTEuNC02LjctMTguOC0xNi45LTE4LjgtMTYuOSAzMC42LTIzLjIgNTguOS02MS44IDQyLjUtOTEuN3oiIGZpbGw9IiNmZmZmZmYiLz48L3N2Zz4=">
+
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;800&display=swap" rel="stylesheet">
     
@@ -168,7 +169,7 @@
     <div class="app-shell">
         <header>
             <div>
-                <h1>Stimolatore V27</h1>
+                <h1>Stimolatore V28</h1>
                 <div class="storage-bar-container">
                     <i class="fa-solid fa-hard-drive"></i>
                     <div class="storage-progress"><div id="storage-fill" class="storage-fill"></div></div>
@@ -197,7 +198,7 @@
 
             <!-- DYNAMIC DROPDOWN -->
             <div class="control-group">
-                <label>Seleziona Set</label>
+                <label>Seleziona Set (Dall'Archivio)</label>
                 <select id="category-select">
                     <option value="" disabled selected>-- Caricamento... --</option>
                 </select>
@@ -435,7 +436,31 @@
                     }
                 });
 
-                document.addEventListener('keydown', (e) => { if (state.ranMode === 'single') { if (e.key === 'ArrowRight') nextRan(); if (e.key === 'ArrowLeft') prevRan(); } });
+                // --- SHORTCUTS LISTENER ---
+                document.addEventListener('keydown', (e) => {
+                    // Check if we are inside an input field to avoid conflicts
+                    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+                    // RAN SHORTCUTS
+                    if (state.ranMode === 'single' && document.getElementById('mode-select').value === 'ran') {
+                        if (e.key === 'ArrowRight') nextRan();
+                        if (e.key === 'ArrowLeft') prevRan();
+                    }
+
+                    // SEARCH & FIND SHORTCUTS
+                    if (document.getElementById('mode-select').value === 'search_find') {
+                        // Backspace / Delete -> Clear All
+                        if (e.key === 'Backspace' || e.key === 'Delete') {
+                            clearMarkers();
+                        }
+                        // Ctrl+Z / Cmd+Z -> Undo Last Marker
+                        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+                            e.preventDefault(); // prevent browser undo
+                            removeLastMarker();
+                        }
+                    }
+                });
+                
                 document.addEventListener('paste', handlePaste);
             } catch(e) { console.error("Init Error", e); }
         };
@@ -777,6 +802,14 @@
         window.clearMarkers = function() {
             const markers = document.querySelectorAll('.marker-pin');
             markers.forEach(m => m.remove());
+        }
+
+        // NEW: Undo Last Marker
+        window.removeLastMarker = function() {
+            const markers = document.querySelectorAll('.marker-pin');
+            if (markers.length > 0) {
+                markers[markers.length - 1].remove();
+            }
         }
 
         // --- UTILS ---
