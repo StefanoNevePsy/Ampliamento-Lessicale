@@ -4,14 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     
-    <title>Stimolatore V26</title>
+    <title>Stimolatore V27 - Scene Explorer</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#1e1e2f">
 
+    <!-- Icons & Fonts -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImciIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiM2MzY2ZjEiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiM4YjVjZjYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjEyMCIgZmlsbD0idXJsKCNnKSIvPjxjaXJjbGUgY3g9IjI1NiIgY3k9IjI1NiIgcj0iMTQwIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMSkiLz48cGF0aCBkPSJNMzYwIDI1NmMwLTU3LjQtNDYuNi0xMDQtMTA0LTEwNHMtMTA0IDQ2LjYtMTA0IDEwNCA0Ni42IDEwNCAxMDQgMTA0YzEyLjggMCAyNS0yLjMgMzYuNC02LjUgMTAuMyA5LjggMjQuNiAxOC41IDQxLjYgMjIuNSAzLjEgMC43IDYuMi0xLjYgNi4yLTQuOCAwLTIuNy0xLjUtNS4yLTMuOS02LjYtMTEuNC02LjctMTguOC0xNi45LTE4LjgtMTYuOSAzMC42LTIzLjIgNTguOS02MS44IDQyLjUtOTEuN3oiIGZpbGw9IiNmZmZmZmYiLz48L3N2Zz4=">
     <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImciIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiM2MzY2ZjEiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiM4YjVjZjYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjEyMCIgZmlsbD0idXJsKCNnKSIvPjxjaXJjbGUgY3g9IjI1NiIgY3k9IjI1NiIgcj0iMTQwIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMSkiLz48cGF0aCBkPSJNMzYwIDI1NmMwLTU3LjQtNDYuNi0xMDQtMTA0LTEwNHMtMTA0IDQ2LjYtMTA0IDEwNCA0Ni42IDEwNCAxMDQgMTA0YzEyLjggMCAyNS0yLjMgMzYuNC02LjUgMTAuMyA5LjggMjQuNiAxOC41IDQxLjYgMjIuNSAzLjEgMC43IDYuMi0xLjYgNi4yLTQuOCAwLTIuNy0xLjUtNS4yLTMuOS02LjYtMTEuNC02LjctMTguOC0xNi45LTE4LjgtMTYuOSAzMC42LTIzLjIgNTguOS02MS44IDQyLjUtOTEuN3oiIGZpbGw9IiNmZmZmZmYiLz48L3N2Zz4=">
-
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;800&display=swap" rel="stylesheet">
     
@@ -32,53 +32,20 @@
         }
 
         * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
-        
-        body {
-            font-family: 'Noto Sans', sans-serif;
-            background: var(--bg-gradient);
-            background-attachment: fixed;
-            color: var(--text-primary);
-            margin: 0; 
-            padding: env(safe-area-inset-top) 10px 10px 10px; 
-            min-height: 100vh;
-            display: flex; flex-direction: column; align-items: center;
-        }
+        body { font-family: 'Noto Sans', sans-serif; background: var(--bg-gradient); background-attachment: fixed; color: var(--text-primary); margin: 0; padding: env(safe-area-inset-top) 10px 10px 10px; min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
 
-        .app-shell {
-            width: 100%; max-width: 1200px;
-            background: var(--glass-bg);
-            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            border: 1px solid var(--glass-border); border-radius: var(--radius);
-            padding: 20px; box-shadow: var(--shadow);
-            display: flex; flex-direction: column; gap: 20px;
-            position: relative; min-height: 85vh;
-        }
+        .app-shell { width: 100%; max-width: 1200px; background: var(--glass-bg); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--glass-border); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 20px; position: relative; min-height: 85vh; }
 
         /* HEADER */
-        header {
-            display: flex; justify-content: space-between; align-items: center;
-            border-bottom: 1px solid var(--glass-border); padding-bottom: 15px;
-        }
+        header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--glass-border); padding-bottom: 15px; }
         h1 { margin: 0; font-size: 1.4rem; font-weight: 800; letter-spacing: -0.5px; }
         .badge-pro { background: var(--accent-color); color: white; padding: 2px 8px; border-radius: 6px; font-size: 0.7rem; vertical-align: middle; }
-        
-        .btn-icon {
-            background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border);
-            color: var(--text-primary); width: 40px; height: 40px; border-radius: 10px;
-            cursor: pointer; display: grid; place-items: center; transition: 0.2s; font-size: 1.1rem; position: relative;
-        }
+        .btn-icon { background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); color: var(--text-primary); width: 40px; height: 40px; border-radius: 10px; cursor: pointer; display: grid; place-items: center; transition: 0.2s; font-size: 1.1rem; position: relative; }
         .btn-icon:hover { background: var(--accent-color); border-color: var(--accent-color); }
-        .badge-count { 
-            position:absolute; top:-5px; right:-5px; background:var(--danger-color); 
-            color:white; font-size:0.7rem; padding:2px 6px; border-radius:10px; 
-        }
+        .badge-count { position:absolute; top:-5px; right:-5px; background:var(--danger-color); color:white; font-size:0.7rem; padding:2px 6px; border-radius:10px; }
 
         /* STORAGE BAR */
-        .storage-bar-container {
-            font-size: 0.75rem; color: var(--text-secondary); display: flex; align-items: center; gap: 10px;
-            background: rgba(0,0,0,0.2); padding: 5px 10px; border-radius: 20px;
-            display: none;
-        }
+        .storage-bar-container { font-size: 0.75rem; color: var(--text-secondary); display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.2); padding: 5px 10px; border-radius: 20px; display: none; }
         @media (min-width: 600px) { .storage-bar-container { display: flex; } }
         .storage-progress { width: 100px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; }
         .storage-fill { height: 100%; background: var(--success-color); width: 0%; transition: width 0.5s; }
@@ -86,17 +53,8 @@
         /* CONTROLS */
         .controls-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
         .control-group { flex: 1; min-width: 150px; }
-        .control-group label {
-            display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary);
-            margin-bottom: 6px; text-transform: uppercase;
-        }
-        select, input[type="text"], input[type="password"] {
-            width: 100%; padding: 12px;
-            background: rgba(0, 0, 0, 0.4);
-            border: 1px solid var(--glass-border);
-            border-radius: 10px; color: white; font-size: 0.95rem;
-            appearance: none; cursor: pointer;
-        }
+        .control-group label { display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; }
+        select, input[type="text"], input[type="password"] { width: 100%; padding: 12px; background: rgba(0, 0, 0, 0.4); border: 1px solid var(--glass-border); border-radius: 10px; color: white; font-size: 0.95rem; appearance: none; cursor: pointer; }
         select:focus, input:focus { border-color: var(--accent-color); }
 
         /* TOGGLE SWITCH */
@@ -109,11 +67,7 @@
 
         /* ACTIONS */
         .actions-row { display: flex; gap: 10px; justify-content: center; padding: 10px 0; border-top: 1px solid var(--glass-border); margin-top: 10px; }
-        .btn {
-            padding: 14px 24px; border-radius: 12px; border: none; font-weight: 700;
-            cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 1rem;
-            transition: transform 0.1s; color: white; flex: 1;
-        }
+        .btn { padding: 14px 24px; border-radius: 12px; border: none; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 1rem; transition: transform 0.1s; color: white; flex: 1; }
         .btn:active { transform: scale(0.96); }
         .btn-primary { background: var(--accent-color); }
         .btn-success { background: var(--success-color); box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3); }
@@ -122,95 +76,39 @@
         .btn-sm { padding: 6px 12px; font-size: 0.85rem; }
 
         /* STAGE */
-        #game-stage {
-            flex: 1; min-height: 400px;
-            background: rgba(0,0,0,0.2);
-            border-radius: var(--radius);
-            position: relative; overflow: hidden;
-            border: 2px dashed var(--glass-border);
-            display: flex; flex-direction: column;
-        }
+        #game-stage { flex: 1; min-height: 400px; background: rgba(0,0,0,0.2); border-radius: var(--radius); position: relative; overflow: hidden; border: 2px dashed var(--glass-border); display: flex; flex-direction: column; }
 
-        /* GRID SYSTEM (Responsive) */
-        .grid-adaptive {
-            display: grid; gap: 15px; width: 100%; max-width: 900px; margin: 0 auto;
-            grid-template-columns: repeat(4, 1fr); 
-        }
-
-        /* GAME UI */
+        /* GAME UI ELEMENTS */
+        .grid-adaptive { display: grid; gap: 15px; width: 100%; max-width: 900px; margin: 0 auto; grid-template-columns: repeat(4, 1fr); }
         .tact-stage { display: flex; justify-content: center; align-items: center; flex: 1; padding: 20px; }
         .tact-card-lg { background: white; padding: 20px; border-radius: 20px; width: 100%; max-width: 500px; text-align: center; display: flex; flex-direction: column; align-items: center; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
         .tact-card-lg img { width: 100%; height: 350px; object-fit: contain; }
         .tact-title { font-size: 2.5rem; color: #333; margin-top: 15px; font-weight: 800; text-transform: uppercase; }
-
         .ran-container { padding: 20px; width: 100%; height: 100%; display: flex; flex-direction: column; }
         .ran-header { display: flex; justify-content: center; gap: 15px; margin-bottom: 20px; }
         .ran-card { background: white; border-radius: 12px; padding: 5px; display: flex; justify-content: center; align-items: center; aspect-ratio: 1; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: transform 0.2s; border: 2px solid transparent;}
         .ran-card img { width: 100%; height: 100%; object-fit: contain; border-radius: 8px; }
         .ran-card:active { transform: scale(0.95); border-color: var(--accent-color); }
-
         .ran-seq-stage { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; }
         .ran-seq-img { height: 50vh; width: auto; max-width: 90%; border-radius: 16px; background: white; padding: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.4); object-fit: contain; }
         .ran-nav-btn { background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.3); color: white; width: 60px; height: 60px; border-radius: 50%; font-size: 1.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
         .ran-nav-btn:hover { background: var(--accent-color); border-color: var(--accent-color); }
         .ran-controls { display: flex; align-items: center; gap: 30px; margin-top: 20px; }
-
-        /* TOMBOLA STYLES */
         .tombola-layout { display: flex; flex: 1; height: 100%; flex-direction: column; overflow: hidden; }
         @media (min-width: 768px) { .tombola-layout { flex-direction: row; } }
-        
-        .tombola-deck { 
-            flex: 0 0 200px;
-            background: rgba(0,0,0,0.3); 
-            padding: 10px; 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            justify-content: flex-start;
-            border-bottom: 1px solid var(--glass-border); 
-            z-index: 10;
-        }
-        @media (min-width: 768px) { 
-            .tombola-deck { 
-                border-right: 1px solid var(--glass-border); 
-                border-bottom: none; 
-                justify-content: center;
-            } 
-        }
-        
+        .tombola-deck { flex: 0 0 200px; background: rgba(0,0,0,0.3); padding: 10px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; border-bottom: 1px solid var(--glass-border); z-index: 10; }
+        @media (min-width: 768px) { .tombola-deck { border-right: 1px solid var(--glass-border); border-bottom: none; justify-content: center; } }
         .tombola-board { flex: 1; padding: 10px; background-color: rgba(0,0,0,0.1); overflow-y: auto; }
-        
-        .target-card-container {
-            width: 140px; 
-            border: 4px solid var(--accent-color);
-            border-radius: 16px;
-            padding: 5px;
-            background: white;
-            box-shadow: 0 0 20px rgba(99, 102, 241, 0.5);
-            animation: pulse-border 2s infinite;
-            margin-bottom: 10px;
-        }
+        .target-card-container { width: 140px; border: 4px solid var(--accent-color); border-radius: 16px; padding: 5px; background: white; box-shadow: 0 0 20px rgba(99, 102, 241, 0.5); animation: pulse-border 2s infinite; margin-bottom: 10px; }
         .target-card-container img { width: 100%; height: auto; border-radius: 8px; }
         .target-label { font-size: 1.2rem; font-weight: 900; color: #333; margin-top: 5px; text-align: center; text-transform: uppercase; }
         .target-hint { font-size: 0.8rem; color: #fff; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; }
-        
-        @keyframes pulse-border {
-            0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7); }
-            70% { box-shadow: 0 0 0 10px rgba(99, 102, 241, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
-        }
-
+        @keyframes pulse-border { 0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(99, 102, 241, 0); } 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); } }
         .card-grid { cursor: pointer; transition: 0.2s; background: white; border-radius: 12px; padding: 5px; position:relative; aspect-ratio: 1; display:flex; align-items:center; justify-content:center;}
         .card-grid img { width: 100%; height: 100%; object-fit: contain; border-radius: 6px; }
         .card-grid.matched { opacity: 0.4; filter: grayscale(100%); pointer-events: none; }
         .card-grid.matched::after { content: '✔'; position: absolute; top:50%; left:50%; transform: translate(-50%, -50%); font-size: 3rem; color: var(--success-color); }
-        
-        /* MEMORY STYLES */
-        .memory-grid { 
-            display: grid; gap: 10px; padding: 20px; 
-            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); 
-            width: 100%; height: 100%; align-content: center; justify-content: center; overflow-y: auto;
-        }
+        .memory-grid { display: grid; gap: 10px; padding: 20px; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); width: 100%; height: 100%; align-content: center; justify-content: center; overflow-y: auto; }
         .memory-card { aspect-ratio: 1; perspective: 1000px; cursor: pointer; position: relative; max-width: 150px; justify-self: center; width:100%;}
         .memory-inner { width: 100%; height: 100%; text-align: center; transition: transform 0.6s; transform-style: preserve-3d; position: relative; }
         .memory-card.flipped .memory-inner { transform: rotateY(180deg); }
@@ -219,6 +117,20 @@
         .memory-front { background: var(--theme-color); color: white; font-size: 2rem; transform: rotateY(0deg); z-index: 2; }
         .memory-back { background: white; transform: rotateY(180deg); padding: 5px; z-index: 1; }
         .memory-back img { width: 100%; height: 100%; object-fit: contain; }
+
+        /* SEARCH & FIND MODE STYLES */
+        .search-find-container { position: relative; width: 100%; height: 100%; overflow: hidden; display: flex; flex-direction: column; }
+        .sf-viewport { flex: 1; overflow: auto; position: relative; background: #333; cursor: crosshair; }
+        .sf-image { min-width: 100%; min-height: 100%; display: block; object-fit: none; /* Allows scrolling */ }
+        .sf-controls { padding: 10px; background: rgba(0,0,0,0.5); display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--glass-border); }
+        
+        .marker-pin {
+            position: absolute; width: 40px; height: 40px; border: 4px solid var(--accent-color); border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3); box-shadow: 0 0 10px var(--accent-color);
+            transform: translate(-50%, -50%); animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            pointer-events: none; z-index: 10;
+        }
+        @keyframes popIn { 0% { transform: translate(-50%, -50%) scale(0); } 100% { transform: translate(-50%, -50%) scale(1); } }
 
         /* MODALS */
         .modal-fs { position: fixed; inset: 0; background: #1e1e2f; z-index: 1000; display: flex; flex-direction: column; transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
@@ -244,22 +156,11 @@
         
         .loader-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.7); display: flex; justify-content: center; align-items: center; color: white; z-index: 5; }
         .fallback-badge { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #eee; color: #333; font-weight: 800; text-align: center; border-radius: 8px; font-size: 1.2rem; padding: 5px; }
-
-        /* FLOATING COUNTER */
-        #editor-counter {
-            position: fixed; bottom: 20px; right: 20px; 
-            background: var(--glass-bg); backdrop-filter: blur(10px);
-            padding: 10px 20px; border-radius: 30px; 
-            border: 1px solid var(--glass-border);
-            font-weight: bold; box-shadow: var(--shadow);
-            z-index: 1500; display: flex; align-items: center; gap: 8px;
-        }
+        
+        #editor-counter { position: fixed; bottom: 20px; right: 20px; background: var(--glass-bg); backdrop-filter: blur(10px); padding: 10px 20px; border-radius: 30px; border: 1px solid var(--glass-border); font-weight: bold; box-shadow: var(--shadow); z-index: 1500; display: flex; align-items: center; gap: 8px; }
         .count-good { color: var(--success-color); }
         .count-bad { color: var(--danger-color); }
-
-        /* UTILS */
         .hidden { display: none !important; }
-        
     </style>
 </head>
 <body>
@@ -267,7 +168,7 @@
     <div class="app-shell">
         <header>
             <div>
-                <h1>Stimolatore V26</h1>
+                <h1>Stimolatore V27</h1>
                 <div class="storage-bar-container">
                     <i class="fa-solid fa-hard-drive"></i>
                     <div class="storage-progress"><div id="storage-fill" class="storage-fill"></div></div>
@@ -290,16 +191,17 @@
                     <option value="ran">RAN (Denominazione Rapida)</option>
                     <option value="tombola">Tombola (Matching)</option>
                     <option value="memory">Memory (Coppie)</option>
+                    <option value="search_find">🔍 Cerca-Trova (Scena)</option>
                 </select>
             </div>
 
             <!-- DYNAMIC DROPDOWN -->
             <div class="control-group">
-                <label>Seleziona Set (Dall'Archivio)</label>
+                <label>Seleziona Set</label>
                 <select id="category-select">
                     <option value="" disabled selected>-- Caricamento... --</option>
                 </select>
-                <input type="text" id="custom-input" class="hidden" placeholder="Es. Strumenti musicali..." style="margin-top:5px;">
+                <input type="text" id="custom-input" class="hidden" placeholder="Es. Parco Giochi..." style="margin-top:5px;">
             </div>
 
             <div class="control-group">
@@ -470,9 +372,16 @@
             // CORPO & EMOZIONI
             { id: "body_parts", cat: "🙂 Corpo & Emozioni", name: "Parti del Corpo", items: [{l:"Testa", p:"Head"}, {l:"Occhio", p:"Eye"}, {l:"Naso", p:"Nose"}, {l:"Bocca", p:"Mouth"}, {l:"Orecchio", p:"Ear"}, {l:"Capelli", p:"Hair"}, {l:"Mano", p:"Hand"}, {l:"Dito", p:"Finger"}, {l:"Braccio", p:"Arm"}, {l:"Gamba", p:"Leg"}, {l:"Piede", p:"Foot"}, {l:"Ginocchio", p:"Knee"}, {l:"Gomito", p:"Elbow"}, {l:"Pancia", p:"Tummy"}, {l:"Schiena", p:"Back body"}, {l:"Collo", p:"Neck"}, {l:"Denti", p:"Teeth"}, {l:"Lingua", p:"Tongue"}, {l:"Unghia", p:"Fingernail"}, {l:"Spalla", p:"Shoulder"}] },
             { id: "emotions", cat: "🙂 Corpo & Emozioni", name: "Emozioni", items: [{l:"Felice", p:"Happy face"}, {l:"Triste", p:"Sad face"}, {l:"Arrabbiato", p:"Angry face"}, {l:"Spaventato", p:"Scared face"}, {l:"Sorpreso", p:"Surprised face"}, {l:"Stanco", p:"Tired face"}, {l:"Annoiato", p:"Bored face"}, {l:"Innamorato", p:"In love face"}, {l:"Confuso", p:"Confused face"}, {l:"Divertito", p:"Amused face"}, {l:"Preoccupato", p:"Worried face"}, {l:"Timido", p:"Shy face"}, {l:"Fiero", p:"Proud face"}, {l:"Disgustato", p:"Disgusted face"}, {l:"Calmo", p:"Calm face"}, {l:"Eccitato", p:"Excited face"}, {l:"Sonno", p:"Sleepy face"}, {l:"Malato", p:"Sick face"}, {l:"Pensieroso", p:"Thinking face"}, {l:"Curioso", p:"Curious face"}] },
-
-            // TRASPORTI
-            { id: "transp_liv1", cat: "🚗 Trasporti", name: "Mezzi Comuni", items: [{l:"Auto", p:"Car"}, {l:"Moto", p:"Motorcycle"}, {l:"Bici", p:"Bicycle"}, {l:"Bus", p:"Bus"}, {l:"Treno", p:"Train"}, {l:"Aereo", p:"Airplane"}, {l:"Nave", p:"Ship"}, {l:"Barca", p:"Boat"}, {l:"Camion", p:"Truck"}, {l:"Taxi", p:"Taxi"}, {l:"Ambulanza", p:"Ambulance"}, {l:"Pompieri", p:"Fire truck"}, {l:"Polizia", p:"Police car"}, {l:"Elicottero", p:"Helicopter"}, {l:"Trattore", p:"Tractor"}, {l:"Scooter", p:"Scooter"}, {l:"Metro", p:"Subway train"}, {l:"Tram", p:"Tram"}, {l:"Razzo", p:"Rocket"}, {l:"Mongolfiera", p:"Hot air balloon"}] }
+            
+            // CLINICAL SCENES (Wimmelbilder)
+            { id: "scene_city", cat: "🔍 Scene (Cerca-Trova)", name: "Città", items: [{l:"Città", p:"Busy city street scene, isometric view, cute style, cars, people, shops, park, detailed, wimmelbilder"}] },
+            { id: "scene_park", cat: "🔍 Scene (Cerca-Trova)", name: "Parco Giochi", items: [{l:"Parco", p:"Playground park scene, kids playing, swings, slides, sandbox, trees, dogs, detailed, wimmelbilder"}] },
+            { id: "scene_farm", cat: "🔍 Scene (Cerca-Trova)", name: "Fattoria", items: [{l:"Fattoria", p:"Farm scene, barn, tractor, animals, cows, pigs, chickens, fields, farmer, detailed, wimmelbilder"}] },
+            { id: "scene_beach", cat: "🔍 Scene (Cerca-Trova)", name: "Spiaggia", items: [{l:"Spiaggia", p:"Beach scene, ocean, sandcastle, umbrellas, people swimming, boats, crabs, sun, detailed, wimmelbilder"}] },
+            { id: "scene_school", cat: "🔍 Scene (Cerca-Trova)", name: "Scuola", items: [{l:"Scuola", p:"School classroom scene, desks, blackboard, students, teacher, books, map, toys, detailed, wimmelbilder"}] },
+            { id: "scene_supermarket", cat: "🔍 Scene (Cerca-Trova)", name: "Supermercato", items: [{l:"Supermercato", p:"Supermarket grocery store scene, shelves, food, carts, cashier, fruits, vegetables, detailed, wimmelbilder"}] },
+            { id: "scene_zoo", cat: "🔍 Scene (Cerca-Trova)", name: "Zoo", items: [{l:"Zoo", p:"Zoo scene, cages, lions, giraffes, monkeys, visitors, paths, trees, ice cream stand, detailed, wimmelbilder"}] },
+            { id: "scene_kitchen", cat: "🔍 Scene (Cerca-Trova)", name: "Cucina Caotica", items: [{l:"Cucina", p:"Messy kitchen scene, pots, pans, food ingredients, chef, sink, fridge, table, cat, detailed, wimmelbilder"}] }
         ];
 
         let state = {
@@ -481,8 +390,9 @@
             saved: [], currentTheme: 'theme-misto', 
             editingSetId: null, editingItems: [], activeEditorIndex: null,
             ranMode: 'grid', ranIndex: 0, 
-            isShuffle: false, // New Shuffle State
-            loadedSetName: "Nessuno"
+            isShuffle: false, 
+            loadedSetName: "Nessuno",
+            searchMarkers: [] // Markers for Scene Mode
         };
 
         // --- GLOBAL UI HELPERS ---
@@ -516,7 +426,15 @@
                 
                 await reloadLibrary(); // This now populates dropdown
                 
-                document.getElementById('category-select').addEventListener('change', (e) => { document.getElementById('custom-input').classList.toggle('hidden', e.target.value !== 'ai_custom'); });
+                document.getElementById('category-select').addEventListener('change', (e) => { 
+                    document.getElementById('custom-input').classList.toggle('hidden', e.target.value !== 'ai_custom'); 
+                    // Auto-switch mode if a Scene set is selected
+                    if (e.target.value.startsWith('scene_')) {
+                        document.getElementById('mode-select').value = 'search_find';
+                        state.ranMode = 'grid'; // reset
+                    }
+                });
+
                 document.addEventListener('keydown', (e) => { if (state.ranMode === 'single') { if (e.key === 'ArrowRight') nextRan(); if (e.key === 'ArrowLeft') prevRan(); } });
                 document.addEventListener('paste', handlePaste);
             } catch(e) { console.error("Init Error", e); }
@@ -528,7 +446,7 @@
                 const countEl = document.getElementById('lib-count');
                 if(countEl) countEl.innerText = state.saved.length;
                 
-                updateDropdown(state.saved); // NEW: Populate dropdown from DB
+                updateDropdown(state.saved); 
 
                 let totalBytes = 0; state.saved.forEach(s => totalBytes += JSON.stringify(s).length);
                 const mb = (totalBytes / (1024 * 1024)).toFixed(1);
@@ -583,7 +501,6 @@
         // --- SESSION ---
         window.startGame = async function() {
             if(state.items.length === 0) {
-                // If nothing loaded, try to load from selection
                 window.generateSession();
                 return;
             }
@@ -620,21 +537,25 @@
                     const rawData = await fetchAI(document.getElementById('custom-input').value, targetCount);
                     state.items = rawData.map(d => ({ label: d.l, prompt: d.p, url: generateUrl(d.p, style), isCustom: false }));
                     state.loadedSetName = "AI Custom";
-                    document.getElementById('btn-save').classList.remove('hidden'); // Enable saving for new AI sets
+                    document.getElementById('btn-save').classList.remove('hidden'); 
                 } 
                 // CASE 2: LOAD FROM DB (Standard flow now)
                 else {
                     const set = state.saved.find(s => s.id === catSelect);
                     if(!set) throw new Error("Set non trovato in archivio");
                     
-                    // Clone items to avoid mutating DB state directly during session
                     state.items = JSON.parse(JSON.stringify(set.items));
                     state.loadedSetName = set.name;
                     
-                    // If user selected specific count (e.g. 9 instead of 20), slice it
-                    let targetCount = gridSizeInput === '20' ? 20 : (parseInt(gridSizeInput) ** 2);
-                    if(targetCount < state.items.length) {
-                        state.items = state.items.slice(0, targetCount);
+                    // Logic for Search & Find: Use ONLY the first item (the big scene)
+                    if (document.getElementById('mode-select').value === 'search_find') {
+                        // Keep full items, but maybe verify only 1 is needed
+                    } else {
+                        // Standard logic: slice count if needed
+                        let targetCount = gridSizeInput === '20' ? 20 : (parseInt(gridSizeInput) ** 2);
+                        if(targetCount < state.items.length) {
+                            state.items = state.items.slice(0, targetCount);
+                        }
                     }
                     
                     // Generate URLs if missing (lazy generation)
@@ -662,6 +583,7 @@
             else if (mode === 'ran') renderRan(items);
             else if (mode === 'tombola') renderTombola(items);
             else if (mode === 'memory') renderMemory(items);
+            else if (mode === 'search_find') renderSearchFind(items);
         }
 
         // --- RENDERERS ---
@@ -774,7 +696,6 @@
             if(useItems.length > 10) useItems = useItems.slice(0, 10); 
             else if(useItems.length < 8) useItems = expandList(useItems, 8); 
 
-            // FISHER-YATES SHUFFLE for real randomness
             let memoryDeck = [...useItems, ...useItems];
             for (let i = memoryDeck.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
@@ -809,13 +730,66 @@
             state.memory.flipped = []; state.memory.lockBoard = false;
         }
 
+        // --- NEW MODE: SEARCH & FIND (SCENE) ---
+        function renderSearchFind(items) {
+            const stage = document.getElementById('game-stage');
+            // Use the first item as the main scene. If randomizing, we pick one.
+            // Since this mode is specific, we assume the Set contains scenes.
+            const scene = items[0]; // Or random if multiple scenes in set
+            state.searchMarkers = [];
+            
+            stage.innerHTML = `
+                <div class="search-find-container">
+                    <div class="sf-controls">
+                        <div style="color:white; font-weight:bold;">${scene.label}</div>
+                        <button class="btn btn-sm btn-danger" onclick="clearMarkers()"><i class="fa-solid fa-eraser"></i> Pulisci</button>
+                    </div>
+                    <div class="sf-viewport" id="sf-viewport" onclick="placeMarker(event)">
+                        <img src="${scene.url || getPlaceholderUrl(scene.label)}" class="sf-image" onerror="handleImgError(this, '${scene.label}')">
+                    </div>
+                </div>
+            `;
+        }
+
+        window.placeMarker = function(e) {
+            const viewport = document.getElementById('sf-viewport');
+            const rect = viewport.getBoundingClientRect();
+            
+            // Calculate position relative to the scrollable content
+            // e.clientX is mouse pos. rect.left is container pos. viewport.scrollLeft is scroll offset.
+            const x = e.clientX - rect.left + viewport.scrollLeft;
+            const y = e.clientY - rect.top + viewport.scrollTop;
+
+            const marker = document.createElement('div');
+            marker.className = 'marker-pin';
+            marker.style.left = x + 'px';
+            marker.style.top = y + 'px';
+            
+            // Allow removing specific marker
+            marker.onclick = function(ev) {
+                ev.stopPropagation();
+                marker.remove();
+            }
+
+            viewport.appendChild(marker);
+        }
+
+        window.clearMarkers = function() {
+            const markers = document.querySelectorAll('.marker-pin');
+            markers.forEach(m => m.remove());
+        }
+
         // --- UTILS ---
         function generateUrl(prompt, style) {
             let s = style === 'mixed' ? ['3d','vector','realistic'][Math.floor(Math.random()*3)] : style;
             let suffix = s==='3d' ? "cute 3d clay" : s==='vector' ? "flat vector icon" : "photo";
+            // For Scene Mode, force high detail
+            if (prompt.includes('wimmelbilder') || prompt.includes('scene')) {
+                 suffix = "highly detailed, isometric view, colorful, wimmelbilder style, Richard Scarry style";
+            }
             const seed = Math.floor(Math.random() * 999999);
-            return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}, ${suffix}, white background?nologo=true&seed=${seed}&width=400&height=400&steps=4`; 
-            // Added steps=4 for speed optimization
+            // Steps reduced to 4 for speed, can be increased for quality
+            return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}, ${suffix}?nologo=true&seed=${seed}&width=1024&height=1024&steps=5`; 
         }
         async function fetchAI(prompt, count) {
             const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${state.apiKey}`, { 
@@ -851,10 +825,7 @@
         window.createEmptySet = () => {
             const cat = prompt("Categoria? (es. 🐶 Animali)"); if(!cat) return;
             const name = prompt("Nome del Set?"); if(!name) return;
-            
-            // Create 20 empty items
             let items = Array(20).fill(null).map((_, i) => ({label: `Oggetto ${i+1}`, prompt: `Object ${i+1}`, url: null, isCustom: false}));
-            
             const newSet = { id: Date.now().toString(), name: name, category: cat, items: items, date: new Date().toLocaleDateString(), isClinical: false };
             DB.saveSet(newSet).then(() => { reloadLibrary(); editSet(newSet.id); });
         };
@@ -907,7 +878,6 @@
             
             document.getElementById('editor-list').innerHTML = html;
 
-            // Update Counter
             const counterText = document.getElementById('counter-text');
             const total = state.editingItems.length;
             counterText.innerText = `${enabledCount} / ${total}`;
@@ -977,7 +947,6 @@
         window.closeEditor = function() { document.getElementById('modal-editor').classList.remove('open'); setTimeout(()=>document.getElementById('modal-editor').style.display='none',300); window.openLibrary(); };
         window.deleteSet = (id) => { if(confirm("Eliminare?")) DB.deleteSet(id).then(() => reloadLibrary()); };
         
-        // LOAD SET (Now called when hitting Start/Load)
         window.loadSet = async (id) => { 
             const all = await DB.getAllSets(); 
             const s = all.find(x => x.id === id); 
@@ -985,9 +954,7 @@
             state.loadedSetName = s.name;
             updateStatusLabel();
             window.closeLibrary(); 
-            
-            // Auto start if called from library button
-            startGame();
+            window.startGame();
         };
         
         window.exportAllSets = async () => { const s = await DB.getAllSets(); downloadJSON(s, `Backup_Full.json`); };
