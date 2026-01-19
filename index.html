@@ -35,7 +35,33 @@
         * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
         body { font-family: 'Noto Sans', sans-serif; background: var(--bg-gradient); background-attachment: fixed; color: var(--text-primary); margin: 0; padding: env(safe-area-inset-top) 10px 10px 10px; min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
 
-        .app-shell { width: 100%; max-width: 1200px; background: var(--glass-bg); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--glass-border); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 20px; position: relative; min-height: 85vh; }
+        /* 1. MODIFICA .app-shell: Rimuoviamo il filtro da qui per non bloccare i tasti */
+        .app-shell { 
+         width: 100%; 
+        max-width: 1200px; 
+        /* background e backdrop-filter spostati su ::before */
+         border: 1px solid var(--glass-border); 
+        border-radius: var(--radius); 
+        padding: 20px; 
+        box-shadow: var(--shadow); 
+        display: flex; 
+        flex-direction: column; 
+        gap: 20px; 
+        position: relative; 
+        min-height: 85vh; 
+        z-index: 1; /* Crea un contesto ordinato pulito */
+        }
+
+        /* 2. AGGIUNGI QUESTO: L'effetto vetro ora vive qui e non blocca più i tasti */
+.app-shell::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: var(--radius);
+    z-index: -1; /* Sta dietro al contenuto */
 
         /* HEADER */
         header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--glass-border); padding-bottom: 15px; }
@@ -131,20 +157,21 @@
             transform: translate(-50%, -50%); animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             pointer-events: none; z-index: 10;
         }
-        /* NUOVI STILI PER TASTI FLOATING E LOCK */
+        /* 3. TASTI FLOATING: Ora funzioneranno correttamente rispetto allo schermo */
 .sf-viewport.scroll-locked { overflow: hidden !important; touch-action: none; }
 
 .sf-floating-controls { 
-    position: fixed; /* CAMBIATO DA absolute A fixed */
-    bottom: 20px;    /* Distanza dal fondo dello schermo */
-    left: 20px;      /* Distanza dal lato sinistro dello schermo */
+    position: fixed; 
+    bottom: 20px; 
+    left: 20px; 
     display: flex; 
     flex-direction: column; 
     gap: 15px; 
-    z-index: 900;    /* Abbastanza alto da stare sopra il gioco, ma sotto i modali (z-1000) */
+    z-index: 2000; /* Alto z-index per stare sopra a tutto */
     pointer-events: auto; 
 }
 
+/* (Il resto dei tasti rimane uguale) */
 .btn-float { 
     width: 60px; height: 60px; border-radius: 50%; 
     background: rgba(30, 30, 50, 0.9); 
