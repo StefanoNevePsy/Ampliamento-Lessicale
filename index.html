@@ -131,6 +131,28 @@
             transform: translate(-50%, -50%); animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             pointer-events: none; z-index: 10;
         }
+        /* NUOVI STILI PER TASTI FLOATING E LOCK */
+.sf-viewport.scroll-locked { overflow: hidden !important; touch-action: none; }
+.sf-floating-controls { 
+    position: absolute; bottom: 30px; left: 20px; 
+    display: flex; flex-direction: column; gap: 15px; 
+    z-index: 100; pointer-events: auto; 
+}
+.btn-float { 
+    width: 60px; height: 60px; border-radius: 50%; 
+    background: rgba(30, 30, 50, 0.9); border: 2px solid var(--glass-border); 
+    color: white; font-size: 1.4rem; cursor: pointer; 
+    backdrop-filter: blur(5px); box-shadow: 0 5px 15px rgba(0,0,0,0.4); 
+    display: flex; align-items: center; justify-content: center; 
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.btn-float:active { transform: scale(0.9); }
+.btn-float.locked { 
+    background: var(--danger-color); 
+    border-color: var(--danger-color); 
+    animation: pulse-lock 2s infinite;
+}
+@keyframes pulse-lock { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
         @keyframes popIn { 0% { transform: translate(-50%, -50%) scale(0); } 100% { transform: translate(-50%, -50%) scale(1); } }
 
         /* MODALS */
@@ -756,25 +778,79 @@
         }
 
         // --- NEW MODE: SEARCH & FIND (SCENE) ---
-        function renderSearchFind(items) {
-            const stage = document.getElementById('game-stage');
-            // Use the first item as the main scene. If randomizing, we pick one.
-            // Since this mode is specific, we assume the Set contains scenes.
-            const scene = items[0]; // Or random if multiple scenes in set
-            state.searchMarkers = [];
+function renderSearchFind(items) {
+    const stage = document.getElementById('game-stage');
+    // Use the first item as the main scene. If randomizing, we pick one.
+    const scene = items[0]; 
+    state.searchMarkers = [];
+    
+    stage.innerHTML = `
+        <div class="search-find-container">
+            <div class="sf-controls">
+                <div style="color:white; font-weight:bold;">${scene.label}</div>
+                <button class="btn btn-sm btn-danger" onclick="clearMarkers()"><i class="fa-solid fa-eraser"></i> Pulisci Tutto</button>
+            </div>
             
-            stage.innerHTML = `
-                <div class="search-find-container">
-                    <div class="sf-controls">
-                        <div style="color:white; font-weight:bold;">${scene.label}</div>
-                        <button class="btn btn-sm btn-danger" onclick="clearMarkers()"><i class="fa-solid fa-eraser"></i> Pulisci</button>
-                    </div>
-                    <div class="sf-viewport" id="sf-viewport" onclick="placeMarker(event)">
-                        <img src="${scene.url || getPlaceholderUrl(scene.label)}" class="sf-image" onerror="handleImgError(this, '${scene.label}')">
-                    </div>
-                </div>
-            `;
-        }
+            <div class="sf-viewport" id="sf-viewport" onclick="placeMarker(event)">
+                <img src="${scene.url || getPlaceholderUrl(scene.label)}" class="sf-image" onerror="handleImgError(this, '${scene.label}')">
+            </div>
+
+            <!-- NUOVI TASTI FLOATING -->
+            <div class="sf-floating-controls">
+                <button class="btn-float" onclick="toggleScrollLock()" id="btn-lock" title="Blocca Scorrimento">
+                    <i class="fa-solid fa-lock-open"></i>
+                </button>
+                <button class="btn-float" onclick="removeLastMarker()" title="Annulla Ultimo">
+                    <i class="fa-solid fa-rotate-left"></i>
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+// NUOVA FUNZIONE: BLOCCO SCROLL
+window.toggleScrollLock = function() {
+    const vp = document.getElementById('sf-viewport');
+    const btn = document.getElementById('btn-lock');
+    const icon = btn.querySelector('i');
+    
+    if (vp.classList.contains('scroll-locked')) {
+        // Sblocca
+        vp.classList.remove('scroll-locked');
+        btn.classList.remove('locked');
+        icon.className = 'fa-solid fa-lock-open';
+    } else {
+        // Blocca
+        vp.classList.add('scroll-locked');
+        btn.classList.add('locked');
+        icon.className = 'fa-solid fa-lock';
+    }
+};
+
+window.placeMarker = function(e) {
+    // Se si clicca sui controlli floating, non mettere il marker (safety check)
+    if(e.target.closest('.sf-floating-controls')) return;
+
+    const viewport = document.getElementById('sf-viewport');
+    const rect = viewport.getBoundingClientRect();
+    
+    // Calculate position relative to the scrollable content
+    const x = e.clientX - rect.left + viewport.scrollLeft;
+    const y = e.clientY - rect.top + viewport.scrollTop;
+
+    const marker = document.createElement('div');
+    marker.className = 'marker-pin';
+    marker.style.left = x + 'px';
+    marker.style.top = y + 'px';
+    
+    // Allow removing specific marker
+    marker.onclick = function(ev) {
+        ev.stopPropagation();
+        marker.remove();
+    }
+
+    viewport.appendChild(marker);
+}
 
         window.placeMarker = function(e) {
             const viewport = document.getElementById('sf-viewport');
