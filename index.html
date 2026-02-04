@@ -1204,6 +1204,55 @@ function renderPatientCharts(patient, sortMode = 'date_desc') {
         window.placeMarker=(e)=>{const vp=document.getElementById('sf-viewport'); const r=vp.getBoundingClientRect(); const m=document.createElement('div'); m.className='marker-pin'; m.style.left=(e.clientX-r.left)+'px'; m.style.top=(e.clientY-r.top)+'px'; m.onclick=(ev)=>{ev.stopPropagation();m.remove();}; vp.appendChild(m);};
         window.removeLastMarker=()=>{const m=document.querySelectorAll('.marker-pin'); if(m.length) m[m.length-1].remove();}; window.clearMarkers=()=>{document.querySelectorAll('.marker-pin').forEach(e=>e.remove());};
         window.toggleGlobalScrollLock=()=>{document.body.classList.toggle('global-locked'); document.getElementById('btn-global-lock').classList.toggle('locked');};
+
+        // --- FIX BACKUP E EXPORT ---
+
+        // Genera nome file con data e ora: Ampliamento_Lessicale_04_02_2026_13_00.json
+        function getTimestampedFilename() {
+            const now = new Date();
+            const d = String(now.getDate()).padStart(2, '0');
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const y = now.getFullYear();
+            const h = String(now.getHours()).padStart(2, '0');
+            const min = String(now.getMinutes()).padStart(2, '0');
+            return `Ampliamento_Lessicale_${d}_${m}_${y}_${h}_${min}.json`;
+        }
+
+        window.exportAllSets = async () => { 
+            try {
+                const s = await DB.getAllSets(); 
+                if (!s || s.length === 0) {
+                    alert("Nessun set da esportare.");
+                    return;
+                }
+                const filename = getTimestampedFilename();
+                downloadJSON(s, filename); 
+            } catch (e) {
+                console.error("Errore export:", e);
+                alert("Errore durante l'esportazione.");
+            }
+        };
+
+        function downloadJSON(data, filename) { 
+            // Crea il file
+            const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'}); 
+            const url = URL.createObjectURL(blob); 
+            
+            // Crea link temporaneo
+            const a = document.createElement('a'); 
+            a.href = url; 
+            a.download = filename; 
+            
+            // FIX CRITICO: Aggiungi al body prima di cliccare (richiesto da Firefox/Chrome recenti)
+            document.body.appendChild(a); 
+            a.click(); 
+            
+            // Pulizia
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 100); 
+        }
     </script>
 </body>
 </html>
