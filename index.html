@@ -27,351 +27,303 @@
             --success-color: #10b981;
             --danger-color: #ef4444;
             --warning-color: #f59e0b;
-            --radius: 16px;
-            --shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
-            --theme-color: #6366f1;
+            --radius: 20px;
+            --shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
         }
 
-        * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; }
-        body { font-family: 'Noto Sans', sans-serif; background: var(--bg-gradient); background-attachment: fixed; color: var(--text-primary); margin: 0; padding: env(safe-area-inset-top) 10px 10px 10px; min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
+        * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; user-select: none; }
+        body { font-family: 'Noto Sans', sans-serif; background: var(--bg-gradient); background-attachment: fixed; color: var(--text-primary); margin: 0; padding: env(safe-area-inset-top) 10px 10px 10px; min-height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        body.global-locked { overflow: hidden !important; touch-action: none; }
 
-        /* 1. MODIFICA .app-shell: Rimuoviamo il filtro da qui per non bloccare i tasti */
+        /* APP SHELL */
         .app-shell { 
-         width: 100%; 
-        max-width: 1200px; 
-        /* background e backdrop-filter spostati su ::before */
-         border: 1px solid var(--glass-border); 
-        border-radius: var(--radius); 
-        padding: 20px; 
-        box-shadow: var(--shadow); 
-        display: flex; 
-        flex-direction: column; 
-        gap: 20px; 
-        position: relative; 
-        min-height: 85vh; 
-        z-index: 1; /* Crea un contesto ordinato pulito */
+            width: 100%; max-width: 1200px; margin: 0 auto;
+            border: 1px solid var(--glass-border); border-radius: var(--radius); padding: 15px; 
+            box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 15px; 
+            position: relative; height: calc(100vh - 20px); z-index: 1; 
         }
-
-        /* 2. AGGIUNGI QUESTO: L'effetto vetro ora vive qui e non blocca più i tasti */
-.app-shell::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: var(--glass-bg);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border-radius: var(--radius);
-    z-index: -1; /* Sta dietro al contenuto */
-    }
+        .app-shell::before {
+            content: ""; position: absolute; inset: 0; background: var(--glass-bg);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border-radius: var(--radius); z-index: -1; 
+        }
 
         /* HEADER */
-        header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--glass-border); padding-bottom: 15px; }
-        h1 { margin: 0; font-size: 1.4rem; font-weight: 800; letter-spacing: -0.5px; }
-        .badge-pro { background: var(--accent-color); color: white; padding: 2px 8px; border-radius: 6px; font-size: 0.7rem; vertical-align: middle; }
-        .btn-icon { background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); color: var(--text-primary); width: 40px; height: 40px; border-radius: 10px; cursor: pointer; display: grid; place-items: center; transition: 0.2s; font-size: 1.1rem; position: relative; }
-        .btn-icon:hover { background: var(--accent-color); border-color: var(--accent-color); }
-        .badge-count { position:absolute; top:-5px; right:-5px; background:var(--danger-color); color:white; font-size:0.7rem; padding:2px 6px; border-radius:10px; }
-
-        /* STORAGE BAR */
-        .storage-bar-container { font-size: 0.75rem; color: var(--text-secondary); display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.2); padding: 5px 10px; border-radius: 20px; display: none; }
-        @media (min-width: 600px) { .storage-bar-container { display: flex; } }
-        .storage-progress { width: 100px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; }
-        .storage-fill { height: 100%; background: var(--success-color); width: 0%; transition: width 0.5s; }
+        header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--glass-border); flex-shrink: 0; }
+        h1 { margin: 0; font-size: 1.1rem; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+        
+        .header-actions { display: flex; gap: 12px; align-items: center; flex-shrink: 0; }
+        
+        .patient-selector-wrapper { position: relative; width: 200px; }
+        .patient-selector-wrapper select { width: 100%; padding: 8px 12px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; color: var(--success-color); font-weight: 600; font-size: 0.9rem; }
+        
+        .btn-icon { background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); color: var(--text-primary); width: 44px; height: 44px; border-radius: 12px; cursor: pointer; display: grid; place-items: center; position: relative; transition: 0.2s; font-size: 1.1rem; flex-shrink: 0; }
+        .btn-icon:active { transform: scale(0.95); }
+        .btn-icon:hover { background: rgba(255,255,255,0.1); border-color: var(--accent-color); }
+        
+        .badge-count { position: absolute; top: -5px; right: -5px; background: var(--danger-color); color: white; font-size: 0.7rem; padding: 2px 6px; border-radius: 10px; border: 2px solid #1e1e2f; font-weight: bold; min-width: 20px; text-align: center; pointer-events: none; }
 
         /* CONTROLS */
-        .controls-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
-        .control-group { flex: 1; min-width: 150px; }
-        .control-group label { display: block; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; }
-        select, input[type="text"], input[type="password"] { width: 100%; padding: 12px; background: rgba(0, 0, 0, 0.4); border: 1px solid var(--glass-border); border-radius: 10px; color: white; font-size: 0.95rem; appearance: none; cursor: pointer; }
-        select:focus, input:focus { border-color: var(--accent-color); }
-
-        /* TOGGLE SWITCH */
-        .toggle-switch { display: flex; align-items: center; gap: 10px; cursor: pointer; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 10px; border: 1px solid var(--glass-border); height: 46px;}
-        .toggle-switch input { display: none; }
-        .toggle-knob { width: 40px; height: 20px; background: #444; border-radius: 20px; position: relative; transition: 0.3s; }
-        .toggle-knob::after { content: ''; position: absolute; left: 2px; top: 2px; width: 16px; height: 16px; background: white; border-radius: 50%; transition: 0.3s; }
-        .toggle-switch input:checked + .toggle-knob { background: var(--success-color); }
-        .toggle-switch input:checked + .toggle-knob::after { left: 22px; }
-
-        /* ACTIONS */
-        .actions-row { display: flex; gap: 10px; justify-content: center; padding: 10px 0; border-top: 1px solid var(--glass-border); margin-top: 10px; }
-        .btn { padding: 14px 24px; border-radius: 12px; border: none; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 1rem; transition: transform 0.1s; color: white; flex: 1; }
-        .btn:active { transform: scale(0.96); }
-        .btn-primary { background: var(--accent-color); }
-        .btn-success { background: var(--success-color); box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3); }
-        .btn-danger { background: var(--danger-color); }
-        .btn-ghost { background: transparent; border: 1px solid var(--glass-border); color: var(--text-secondary); }
-        .btn-sm { padding: 6px 12px; font-size: 0.85rem; }
-
+        .controls-row { display: flex; gap: 8px; align-items: center; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 12px; flex-shrink: 0; flex-wrap: wrap;}
+        .select-wrapper { position: relative; flex: 1; min-width: 120px; }
+        .select-wrapper label { display: block; font-size: 0.6rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 2px; text-transform: uppercase; }
+        select { width: 100%; padding: 10px; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: 8px; color: white; font-size: 0.9rem; font-weight: 600; }
+        
         /* STAGE */
-        #game-stage { flex: 1; min-height: 400px; background: rgba(0,0,0,0.2); border-radius: var(--radius); position: relative; overflow: hidden; border: 2px dashed var(--glass-border); display: flex; flex-direction: column; }
+        #game-stage { flex: 1; background: rgba(0,0,0,0.2); border-radius: 16px; position: relative; overflow: hidden; border: 2px dashed var(--glass-border); display: flex; flex-direction: column; min-height: 0; }
 
-        /* GAME UI ELEMENTS */
-        .grid-adaptive { display: grid; gap: 15px; width: 100%; max-width: 900px; margin: 0 auto; grid-template-columns: repeat(4, 1fr); }
-        .tact-stage { display: flex; justify-content: center; align-items: center; flex: 1; padding: 20px; }
-        .tact-card-lg { background: white; padding: 20px; border-radius: 20px; width: 100%; max-width: 500px; text-align: center; display: flex; flex-direction: column; align-items: center; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
-        .tact-card-lg img { width: 100%; height: 350px; object-fit: contain; }
-        .tact-title { font-size: 2.5rem; color: #333; margin-top: 15px; font-weight: 800; text-transform: uppercase; }
-        .ran-container { padding: 20px; width: 100%; height: 100%; display: flex; flex-direction: column; }
-        .ran-header { display: flex; justify-content: center; gap: 15px; margin-bottom: 20px; }
-        .ran-card { background: white; border-radius: 12px; padding: 5px; display: flex; justify-content: center; align-items: center; aspect-ratio: 1; box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: transform 0.2s; border: 2px solid transparent;}
-        .ran-card img { width: 100%; height: 100%; object-fit: contain; border-radius: 8px; }
-        .ran-card:active { transform: scale(0.95); border-color: var(--accent-color); }
-        .ran-seq-stage { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; }
-        .ran-seq-img { height: 50vh; width: auto; max-width: 90%; border-radius: 16px; background: white; padding: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.4); object-fit: contain; }
-        .ran-nav-btn { background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.3); color: white; width: 60px; height: 60px; border-radius: 50%; font-size: 1.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
-        .ran-nav-btn:hover { background: var(--accent-color); border-color: var(--accent-color); }
-        .ran-controls { display: flex; align-items: center; gap: 30px; margin-top: 20px; }
-        .tombola-layout { display: flex; flex: 1; height: 100%; flex-direction: column; overflow: hidden; }
-        @media (min-width: 768px) { .tombola-layout { flex-direction: row; } }
-        .tombola-deck { flex: 0 0 200px; background: rgba(0,0,0,0.3); padding: 10px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; border-bottom: 1px solid var(--glass-border); z-index: 10; }
-        @media (min-width: 768px) { .tombola-deck { border-right: 1px solid var(--glass-border); border-bottom: none; justify-content: center; } }
-        .tombola-board { flex: 1; padding: 10px; background-color: rgba(0,0,0,0.1); overflow-y: auto; }
-        .target-card-container { width: 140px; border: 4px solid var(--accent-color); border-radius: 16px; padding: 5px; background: white; box-shadow: 0 0 20px rgba(99, 102, 241, 0.5); animation: pulse-border 2s infinite; margin-bottom: 10px; }
-        .target-card-container img { width: 100%; height: auto; border-radius: 8px; }
-        .target-label { font-size: 1.2rem; font-weight: 900; color: #333; margin-top: 5px; text-align: center; text-transform: uppercase; }
-        .target-hint { font-size: 0.8rem; color: #fff; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; }
-        @keyframes pulse-border { 0% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(99, 102, 241, 0); } 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); } }
+        /* MODES */
+        .grid-adaptive { display: grid; gap: 10px; width: 100%; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); align-content: start; }
+        
+        /* RAN */
+        .ran-container { width: 100%; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+        .ran-toolbar { flex-shrink: 0; padding: 10px; display: flex; justify-content: center; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .ran-scroll-area { flex: 1; overflow-y: auto; padding: 10px; }
+        .ran-card { background: white; border-radius: 8px; padding: 4px; aspect-ratio: 1; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .ran-card img { width: 100%; height: 100%; object-fit: contain; }
+        .ran-single-stage { display: flex; flex-direction: column; align-items: center; justify-content: space-between; height: 100%; width: 100%; padding: 10px; overflow: hidden; }
+        .ran-main-img { flex: 1; min-height: 0; width: auto; max-width: 100%; object-fit: contain; border-radius: 12px; background: white; padding: 10px; margin-bottom: 10px; box-shadow: 0 5px 20px rgba(0,0,0,0.3); }
+        .ran-controls-bar { display: flex; align-items: center; gap: 20px; width: 100%; justify-content: center; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 16px; flex-shrink: 0; margin-top: auto; }
+        .ran-btn-nav { width: 60px; height: 60px; border-radius: 50%; background: var(--accent-color); border: none; color: white; font-size: 1.5rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.1s; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        .ran-btn-nav:active { transform: scale(0.95); }
+
+        /* SEARCH & FIND */
+        .search-find-container { width: 100%; height: 100%; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+        .sf-toolbar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 100; background: rgba(0,0,0,0.6); padding: 5px 15px; border-radius: 20px; backdrop-filter: blur(5px); display: flex; gap: 10px; align-items: center; }
+        .sf-viewport { flex: 1; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; background: #222; overflow: hidden; position: relative; cursor: crosshair; }
+        .sf-image { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; display: block; }
+        .marker-pin { position: absolute; width: 40px; height: 40px; border: 4px solid var(--accent-color); border-radius: 50%; background: rgba(255, 255, 255, 0.4); transform: translate(-50%, -50%); pointer-events: auto; z-index: 10; cursor: pointer; }
+
+        /* FLOATING CONTROLS */
+        .global-floating-controls { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column-reverse; gap: 15px; z-index: 9999; pointer-events: none; align-items: flex-end; }
+        .control-row { display: flex; gap: 10px; pointer-events: auto; }
+        .btn-float { width: 60px; height: 60px; border-radius: 18px; background: rgba(30, 30, 50, 0.9); border: 1px solid var(--glass-border); color: white; font-size: 1.4rem; pointer-events: auto; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(0,0,0,0.5); transition: 0.2s; }
+        .btn-float:active { transform: scale(0.9); }
+        .btn-float.locked { background: var(--warning-color); color: #000; animation: pulse 2s infinite; }
+        
+        /* SCORING BUTTONS */
+        .btn-score { width: 60px; height: 60px; border-radius: 50%; border: none; font-size: 1.8rem; color: white; box-shadow: 0 4px 15px rgba(0,0,0,0.4); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.1s; pointer-events: auto; }
+        .btn-score:active { transform: scale(0.9); }
+        .btn-score.success { background: var(--success-color); }
+        .btn-score.fail { background: var(--danger-color); }
+        
+        /* CHART STYLES (CLINICAL) */
+        .chart-wrapper { background: rgba(0,0,0,0.3); border-radius: 12px; padding: 15px; margin-top: 15px; border: 1px solid var(--glass-border); position: relative; }
+        .chart-svg { width: 100%; height: 200px; overflow: visible; }
+        .chart-line { fill: none; stroke: rgba(255,255,255,0.8); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; } /* Bianca sottile */
+        .chart-dot { fill: var(--accent-color); stroke: white; stroke-width: 2; r: 5; cursor: pointer; transition: 0.2s; } /* Nodi visibili */
+        .chart-dot:hover { r: 8; }
+        .threshold-line { stroke: var(--danger-color); stroke-width: 2; stroke-dasharray: 5,5; opacity: 0.7; }
+        
+        .axis-line { stroke: #555; stroke-width: 1; }
+        .axis-text { fill: #888; font-size: 10px; }
+        .grid-line { stroke: rgba(255,255,255,0.05); stroke-width: 1; }
+
+        /* CRITERION BADGE */
+        .criterion-badge { 
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white; padding: 3px 8px; border-radius: 6px; 
+            font-size: 0.7rem; font-weight: bold; text-transform: uppercase; 
+            margin-left: 10px; vertical-align: middle; box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+
+        /* UTILS */
+        .mode-tags { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 5px; }
+        .mode-check { display: flex; align-items: center; gap: 5px; background: rgba(255,255,255,0.05); padding: 5px 10px; border-radius: 20px; border: 1px solid transparent; cursor: pointer; font-size: 0.8rem; }
+        .mode-check.selected { background: rgba(99, 102, 241, 0.2); border-color: var(--accent-color); color: white; }
+        
+        .lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; padding-bottom: 20px; }
+        .lib-card { background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; transition: 0.2s; position: relative; overflow: hidden; cursor: pointer; }
+        .lib-card:hover { border-color: var(--accent-color); background: rgba(255,255,255,0.08); }
+        .lib-card.clinical { border-left: 3px solid var(--success-color); }
+        .lib-preview-grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 2px; height: 120px; border-radius: 8px; overflow: hidden; background: rgba(0,0,0,0.3); margin-bottom: 5px; }
+        .lib-preview-item { width: 100%; height: 100%; object-fit: cover; background: #222; opacity: 0.8; }
+        
+        .tact-stage { display: flex; justify-content: center; align-items: center; flex: 1; padding: 20px; width: 100%; height: 100%; }
+        .tact-card-lg { background: white; padding: 10px; border-radius: 20px; width: 100%; max-width: 600px; height: 100%; max-height: 90vh; text-align: center; display: flex; flex-direction: column; align-items: center; box-shadow: 0 10px 40px rgba(0,0,0,0.5); justify-content: space-between; }
+        .tact-card-lg img { width: 100%; flex: 1; object-fit: contain; border-radius: 10px; max-height: 70vh; }
+        .tact-title { font-size: 2rem; color: #333; margin: 15px 0; font-weight: 800; text-transform: uppercase; }
+
         .card-grid { cursor: pointer; transition: 0.2s; background: white; border-radius: 12px; padding: 5px; position:relative; aspect-ratio: 1; display:flex; align-items:center; justify-content:center;}
         .card-grid img { width: 100%; height: 100%; object-fit: contain; border-radius: 6px; }
-        .card-grid.matched { opacity: 0.4; filter: grayscale(100%); pointer-events: none; }
-        .card-grid.matched::after { content: '✔'; position: absolute; top:50%; left:50%; transform: translate(-50%, -50%); font-size: 3rem; color: var(--success-color); }
-        .memory-grid { display: grid; gap: 10px; padding: 20px; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); width: 100%; height: 100%; align-content: center; justify-content: center; overflow-y: auto; }
-        .memory-card { aspect-ratio: 1; perspective: 1000px; cursor: pointer; position: relative; max-width: 150px; justify-self: center; width:100%;}
-        .memory-inner { width: 100%; height: 100%; text-align: center; transition: transform 0.6s; transform-style: preserve-3d; position: relative; }
-        .memory-card.flipped .memory-inner { transform: rotateY(180deg); }
-        .memory-card.matched { opacity: 0; pointer-events: none; transition: opacity 0.5s; }
-        .memory-front, .memory-back { position: absolute; inset: 0; backface-visibility: hidden; border-radius: 10px; display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
-        .memory-front { background: var(--theme-color); color: white; font-size: 2rem; transform: rotateY(0deg); z-index: 2; }
-        .memory-back { background: white; transform: rotateY(180deg); padding: 5px; z-index: 1; }
-        .memory-back img { width: 100%; height: 100%; object-fit: contain; }
+        .card-grid.matched { opacity: 0.3; filter: grayscale(100%); pointer-events: none; }
 
-        /* SEARCH & FIND MODE STYLES */
-        .search-find-container { position: relative; width: 100%; height: 100%; overflow: hidden; display: flex; flex-direction: column; }
-        .sf-viewport { flex: 1; overflow: auto; position: relative; background: #333; cursor: crosshair; }
-        .sf-image { min-width: 100%; min-height: 100%; display: block; object-fit: none; /* Allows scrolling */ }
-        .sf-controls { padding: 10px; background: rgba(0,0,0,0.5); display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--glass-border); }
-        
-        .marker-pin {
-            position: absolute; width: 40px; height: 40px; border: 4px solid var(--accent-color); border-radius: 50%;
-            background: rgba(255, 255, 255, 0.3); box-shadow: 0 0 10px var(--accent-color);
-            transform: translate(-50%, -50%); animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            pointer-events: none; z-index: 10;
-        }
-        /* 3. TASTI FLOATING: Ora funzioneranno correttamente rispetto allo schermo */
-.sf-viewport.scroll-locked { overflow: hidden !important; touch-action: none; }
-
-.sf-floating-controls { 
-    position: fixed; 
-    bottom: 20px; 
-    right: 20px; 
-    display: flex; 
-    flex-direction: column; 
-    gap: 15px; 
-    z-index: 2000; /* Alto z-index per stare sopra a tutto */
-    pointer-events: auto; 
-}
-
-/* (Il resto dei tasti rimane uguale) */
-.btn-float { 
-    width: 60px; height: 60px; border-radius: 50%; 
-    background: rgba(30, 30, 50, 0.9); 
-    border: 2px solid var(--glass-border); 
-    color: white; font-size: 1.4rem; cursor: pointer; 
-    backdrop-filter: blur(5px); box-shadow: 0 5px 15px rgba(0,0,0,0.4); 
-    display: flex; align-items: center; justify-content: center; 
-    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.btn-float:active { transform: scale(0.9); }
-
-.btn-float.locked { 
-    background: var(--danger-color); 
-    border-color: var(--danger-color); 
-    animation: pulse-lock 2s infinite;
-}
-
-@keyframes pulse-lock { 
-    0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); } 
-    70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); } 
-    100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } 
-}
-
-        /* MODALS */
-        .modal-fs { position: fixed; inset: 0; background: #1e1e2f; z-index: 1000; display: flex; flex-direction: column; transform: translateY(100%); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .modal-fs { position: fixed; inset: 0; background: #1e1e2f; z-index: 10000; display: flex; flex-direction: column; transform: translateY(100%); transition: transform 0.3s; }
         .modal-fs.open { transform: translateY(0); }
-        .modal-header { padding: 20px; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); padding-top: env(safe-area-inset-top); } 
-        .modal-body { flex: 1; overflow-y: auto; padding: 20px; max-width: 1000px; margin: 0 auto; width: 100%; padding-bottom: 80px; position:relative;}
-
-        .lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; }
-        .lib-card { background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: 12px; padding: 15px; transition: 0.2s; display: flex; flex-direction: column; gap: 5px; }
-        .lib-card:hover { background: rgba(255,255,255,0.08); border-color: var(--accent-color); }
-        .lib-card.clinical { border-left: 4px solid var(--success-color); }
-        .lib-title { font-weight:bold; font-size:1.1rem; }
-        .lib-cat { font-size:0.8rem; color:var(--accent-color); text-transform:uppercase; font-weight:bold; }
-        .lib-meta { font-size:0.75rem; color:#aaa; margin-bottom:10px; }
-
-        .editor-item { display: flex; align-items: center; gap: 15px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 10px; margin-bottom: 10px; border: 1px solid transparent; flex-wrap: wrap; cursor: pointer; transition: 0.2s; }
-        .editor-item.disabled { opacity: 0.4; filter: grayscale(100%); background: rgba(0,0,0,0.4); }
-        .editor-item.active-paste { border-color: var(--accent-color); background: rgba(99, 102, 241, 0.2); }
-        .editor-thumb { width: 80px; height: 80px; border-radius: 8px; object-fit: cover; background: #333; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; cursor: zoom-in; }
-        .editor-thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; }
-        .editor-meta { flex: 1; min-width: 200px; }
-        .prompt-input { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid #444; padding: 5px; font-size: 0.8rem; margin-top: 5px; color: #ccc; }
-        
-        .loader-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.7); display: flex; justify-content: center; align-items: center; color: white; z-index: 5; }
-        .fallback-badge { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #eee; color: #333; font-weight: 800; text-align: center; border-radius: 8px; font-size: 1.2rem; padding: 5px; }
-        
-        #editor-counter { position: fixed; bottom: 20px; right: 20px; background: var(--glass-bg); backdrop-filter: blur(10px); padding: 10px 20px; border-radius: 30px; border: 1px solid var(--glass-border); font-weight: bold; box-shadow: var(--shadow); z-index: 1500; display: flex; align-items: center; gap: 8px; }
-        .count-good { color: var(--success-color); }
-        .count-bad { color: var(--danger-color); }
+        .modal-header { padding: 15px; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; background: rgba(0,0,0,0.2); }
+        .modal-body { flex: 1; overflow-y: auto; padding: 15px; }
         .hidden { display: none !important; }
+        .btn { padding: 10px 20px; border-radius: 10px; border: none; font-weight: 700; cursor: pointer; color: white; display: inline-flex; align-items: center; gap: 8px; justify-content: center; }
+        .btn-primary { background: var(--accent-color); }
+        .btn-danger { background: var(--danger-color); }
+        .btn-success { background: var(--success-color); }
+        .btn-ghost { background: transparent; border: 1px solid var(--glass-border); color: var(--text-secondary); }
+        
+        .editor-item { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.05); padding: 8px; border-radius: 8px; margin-bottom: 8px; }
+        .editor-thumb { width: 50px; height: 50px; background: #000; overflow: hidden; border-radius: 6px; } 
+        .editor-thumb img { width: 100%; height: 100%; object-fit: cover; }
+        input[type="text"] { width: 100%; padding: 10px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--glass-border); border-radius: 8px; color: white; }
+        
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(0,0,0,0); } 100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); } }
     </style>
 </head>
 <body>
 
     <div class="app-shell">
         <header>
-            <div>
-                <h1>Ampliamento Lessicale v30</h1>
-                <div class="storage-bar-container">
-                    <i class="fa-solid fa-hard-drive"></i>
-                    <div class="storage-progress"><div id="storage-fill" class="storage-fill"></div></div>
-                    <span id="storage-text">DB</span>
+            <h1><i class="fa-solid fa-brain logo-icon"></i> Stimolatore v34</h1>
+            <div class="header-actions">
+                <!-- SELETTORE PAZIENTE RAPIDO -->
+                <div class="patient-selector-wrapper">
+                    <select id="global-patient-select" onchange="setGlobalPatient(this.value)">
+                        <option value="">-- Ospite --</option>
+                    </select>
                 </div>
-            </div>
-            <div style="display:flex; align-items:center; gap:10px;">
-                <button class="btn-icon" onclick="toggleFullScreen()" title="Schermo Intero"><i class="fa-solid fa-expand" id="fs-icon"></i></button>
-                <button class="btn-icon" onclick="openLibrary()" title="Gestione Archivi"><i class="fa-solid fa-book-open"></i><span id="lib-count" class="badge-count">0</span></button>
-                <button class="btn-icon" onclick="openSettings()" title="API Key"><i class="fa-solid fa-key"></i></button>
+
+                <button class="btn-icon" onclick="openPatients()" title="Gestione Pazienti" style="color:var(--success-color); border-color:rgba(16, 185, 129, 0.3);">
+                    <i class="fa-solid fa-user-doctor"></i>
+                </button>
+                <button class="btn-icon" onclick="openLibrary()" title="Gestione Archivi">
+                    <i class="fa-solid fa-folder-open"></i>
+                    <span id="lib-count" class="badge-count">0</span>
+                </button>
+                <button class="btn-icon" onclick="toggleFullScreen()" title="Schermo Intero">
+                    <i class="fa-solid fa-expand" id="fs-icon"></i>
+                </button>
             </div>
         </header>
 
-        <!-- CONTROLLI PRINCIPALI (SEMPRE VISIBILI) -->
+        <!-- CONTROLLI -->
         <div class="controls-row">
-            <div class="control-group">
-                <label>Modalità</label>
-                <select id="mode-select" onchange="changeMode()">
-                    <option value="tact">TACT (Denominazione)</option>
-                    <option value="ran">RAN (Denominazione Rapida)</option>
+            <div class="select-wrapper">
+                <label><i class="fa-solid fa-gamepad"></i> Attività</label>
+                <select id="mode-select" onchange="filterSetsByMode()">
+                    <option value="tact">TACT (Flashcard)</option>
+                    <option value="ran">RAN (Denominazione)</option>
                     <option value="tombola">Tombola (Matching)</option>
-                    <option value="memory">Memory (Coppie)</option>
-                    <option value="search_find">🔍 Cerca-Trova (Scena)</option>
+                    <option value="memory">Memory</option>
+                    <option value="search_find">Cerca Trova (Scena)</option>
                 </select>
             </div>
 
-            <!-- DYNAMIC DROPDOWN -->
-            <div class="control-group">
-                <label>Seleziona Set (Dall'Archivio)</label>
-                <select id="category-select">
-                    <option value="" disabled selected>-- Caricamento... --</option>
-                </select>
-                <input type="text" id="custom-input" class="hidden" placeholder="Es. Parco Giochi..." style="margin-top:5px;">
-            </div>
-
-            <div class="control-group">
-                <label>Stile</label>
-                <select id="style-select">
-                    <option value="mixed">🔀 Misto</option>
-                    <option value="3d">🧸 3D Clay</option>
-                    <option value="vector">🎨 Icone</option>
-                    <option value="realistic">📷 Foto</option>
+            <div class="select-wrapper" style="flex: 2;">
+                <label><i class="fa-solid fa-layer-group"></i> Set Disponibili</label>
+                <select id="category-select" onchange="loadSelectedSet(this.value)">
+                    <option value="" disabled selected>-- Scegli un Set --</option>
                 </select>
             </div>
 
-            <div class="control-group">
-                <label>N. Stimoli</label>
-                <select id="grid-size">
-                    <option value="20" selected>Tutto il Set (20)</option>
+            <div class="select-wrapper" style="max-width: 100px;">
+                <label>N. Item</label>
+                <select id="grid-size" onchange="window.startGame()">
+                    <option value="20">Tutti</option>
                     <option value="3">9 (3x3)</option>
                     <option value="4">16 (4x4)</option>
-                    <option value="5">25 (5x5)</option>
                 </select>
             </div>
 
-            <!-- Shuffle Toggle -->
-            <label class="toggle-switch" style="margin-top:18px;">
-                <input type="checkbox" id="shuffle-toggle" onchange="updateShuffle(this.checked)">
-                <div class="toggle-knob"></div>
-                <span style="font-size:0.8rem; font-weight:700; color:var(--text-secondary)">Shuffle</span>
-            </label>
-        </div>
-
-        <!-- STATUS BAR -->
-        <div style="text-align:right; font-size:0.8rem; color:var(--text-secondary); border-top:1px solid rgba(255,255,255,0.1); padding-top:5px; margin-top:10px;">
-            Set Attivo: <span id="active-set-label" style="color:white; font-weight:bold;">Nessuno</span>
-        </div>
-
-        <!-- ACTIONS -->
-        <div class="actions-row">
-            <button class="btn btn-primary" onclick="generateSession()">
-                <i class="fa-solid fa-bolt"></i> Carica / Genera
-            </button>
-            <button class="btn btn-success" id="btn-start" onclick="startGame()">
-                <i class="fa-solid fa-play"></i> INIZIA
-            </button>
-            <button class="btn btn-ghost" onclick="openLibrary()">
-                <i class="fa-solid fa-folder-open"></i> Gestione Archivi
-            </button>
-            <button id="btn-save" class="btn btn-ghost hidden" onclick="saveSetFromSession()">
-                <i class="fa-solid fa-floppy-disk"></i>
+            <button class="btn-icon" onclick="startGame()" title="Riavvia Sessione" style="margin-top: 18px; background: var(--accent-color); border:none; color:white;">
+                <i class="fa-solid fa-rotate-right"></i>
             </button>
         </div>
 
-        <!-- STAGE -->
+        <!-- STAGE DI GIOCO -->
         <div id="game-stage">
-            <div style="position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; align-items:center; color:var(--text-secondary);">
-                <i class="fa-solid fa-database" style="font-size:4rem; margin-bottom:20px; opacity:0.3;"></i>
-                <p>Seleziona un set e premi CARICA</p>
+            <div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; color:var(--text-secondary); text-align:center;">
+                <i class="fa-solid fa-shapes" style="font-size:4rem; margin-bottom:20px; opacity:0.2;"></i>
+                <p style="font-size:1.2rem;">Seleziona un'<b>Attività</b> e un <b>Set</b><br>per iniziare la sessione clinica.</p>
             </div>
         </div>
-
     </div>
 
-    <!-- === LIBRARY MODAL (INLINE HIDDEN) === -->
-    <div id="modal-library" class="modal-fs" style="display:none;">
-        <div class="modal-header">
-            <h2>Archivio Locale</h2>
-            <div style="display:flex; gap:10px;">
-                <button class="btn btn-primary btn-sm" onclick="createEmptySet()"><i class="fa-solid fa-plus"></i> Nuovo</button>
-                <button class="btn btn-ghost btn-sm" onclick="exportAllSets()"><i class="fa-solid fa-file-export"></i> Backup</button>
-                <button class="btn btn-ghost btn-sm" onclick="document.getElementById('file-upload').click()"><i class="fa-solid fa-file-import"></i> Import</button>
-                <input type="file" id="file-upload" class="hidden" accept=".json" onchange="importSets(this)">
-                <button class="btn btn-danger btn-sm" onclick="closeLibrary()"><i class="fa-solid fa-xmark"></i></button>
+    <!-- TASTI FLUTTUANTI GLOBALI -->
+    <div class="global-floating-controls">
+        
+        <!-- Riga Scoring (Shortcut: V / X) -->
+        <div id="scoring-controls" class="control-row hidden">
+            <button class="btn-score fail" onclick="recordResponse(false)" title="Risposta Errata (Tasto X)">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div style="background:rgba(0,0,0,0.5); padding:5px 10px; border-radius:10px; color:white; font-size:0.8rem; display:flex; flex-direction:column; align-items:center; justify-content:center; min-width: 60px;">
+                <span id="score-display" style="font-weight:bold; font-size:1.1rem;">0/0</span>
+                <span style="font-size:0.6rem; opacity:0.8; letter-spacing:1px;">SCORE</span>
             </div>
+            <button class="btn-score success" onclick="recordResponse(true)" title="Risposta Corretta (Tasto V)">
+                <i class="fa-solid fa-check"></i>
+            </button>
+        </div>
+
+        <button class="btn-float hidden" id="btn-save-session" onclick="confirmSaveSession()" style="background:#2563eb;" title="Salva Dati">
+            <i class="fa-solid fa-floppy-disk"></i>
+        </button>
+
+        <div class="control-row">
+            <button class="btn-float hidden" id="btn-undo-marker" onclick="removeLastMarker()" title="Annulla Ultimo (Ctrl+Z)">
+                <i class="fa-solid fa-rotate-left"></i>
+            </button>
+            <button class="btn-float" id="btn-global-lock" onclick="toggleGlobalScrollLock()" title="Blocca Schermo">
+                <i class="fa-solid fa-lock-open"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- MODALI (PAZIENTI, LIBRARY, EDITOR) -->
+    <div id="modal-patients" class="modal-fs">
+        <div class="modal-header">
+            <h2><i class="fa-solid fa-chart-line"></i> Cartelle Cliniche</h2>
+            <button class="btn btn-danger" onclick="closePatients()">Chiudi</button>
         </div>
         <div class="modal-body">
+            <div style="display:flex; gap:10px; margin-bottom:20px;">
+                <select id="patient-select" onchange="loadPatientData(this.value)" style="flex:1;">
+                    <option value="">-- Seleziona Paziente --</option>
+                </select>
+                <button class="btn btn-primary" onclick="createNewPatient()">+ Nuovo</button>
+            </div>
+            <div id="patient-dashboard" class="hidden">
+                <h3 id="patient-title">Statistiche</h3>
+                <div id="charts-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-library" class="modal-fs">
+        <div class="modal-header">
+            <h2><i class="fa-solid fa-folder-tree"></i> Archivio Set</h2>
+            <button class="btn btn-danger" onclick="closeLibrary()">Chiudi</button>
+        </div>
+        <div class="modal-body">
+            <div style="display:flex; gap:10px; margin-bottom: 20px; flex-wrap:wrap;">
+                <button class="btn btn-primary" onclick="createEmptySet()"><i class="fa-solid fa-plus"></i> Nuovo Set</button>
+                <button class="btn btn-ghost" onclick="exportAllSets()"><i class="fa-solid fa-file-arrow-down"></i> Backup</button>
+                <button class="btn btn-ghost" onclick="document.getElementById('file-upload').click()"><i class="fa-solid fa-file-arrow-up"></i> Ripristina</button>
+                <input type="file" id="file-upload" class="hidden" accept=".json" onchange="importSets(this)">
+            </div>
             <div id="lib-list" class="lib-grid"></div>
         </div>
     </div>
 
-    <!-- === EDITOR MODAL (INLINE HIDDEN) === -->
-    <div id="modal-editor" class="modal-fs" style="display:none;">
+    <div id="modal-editor" class="modal-fs">
         <div class="modal-header">
-            <h2>Modifica</h2>
+            <h2>Modifica Set</h2>
             <div style="display:flex; gap:10px;">
-                <button class="btn btn-success" onclick="saveEditorChanges()">Salva</button>
-                <button class="btn btn-ghost" onclick="closeEditor()">Esci</button>
+                <button class="btn btn-success" onclick="saveEditorChanges()">Salva & Torna a Lista</button>
+                <button class="btn btn-ghost" onclick="closeEditor()">Annulla</button>
             </div>
         </div>
         <div class="modal-body">
-            <div style="display:flex; gap:10px; margin-bottom:20px;">
-                <input type="text" id="edit-set-name" placeholder="Nome del Set" style="flex:2;">
-                <input type="text" id="edit-set-cat" placeholder="Categoria" style="flex:1;">
+            <div style="background: rgba(0,0,0,0.2); padding:15px; border-radius:12px; margin-bottom:20px;">
+                <label style="font-size:0.8rem; color:#aaa;">Nome del Set</label>
+                <input type="text" id="edit-set-name" style="margin-bottom:10px; font-size:1.2rem; font-weight:bold;">
+                <label style="font-size:0.8rem; color:#aaa;">Modalità Compatibili</label>
+                <div class="mode-tags" id="edit-modes-container"></div>
             </div>
-             <div class="actions-row" style="justify-content: flex-start; margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.1);">
-                 <button class="btn btn-ghost btn-sm" onclick="document.getElementById('bulk-upload').click()"><i class="fa-solid fa-images"></i> Carica Foto...</button>
+            <div style="margin-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:15px;">
+                 <button class="btn btn-ghost" onclick="document.getElementById('bulk-upload').click()"><i class="fa-solid fa-images"></i> Carica Immagini (Bulk)</button>
                  <input type="file" id="bulk-upload" class="hidden" multiple accept="image/*" onchange="bulkUploadImages(this)">
-                 <span style="font-size:0.7rem; color:var(--text-secondary); margin-left:10px;">(Tip: Clicca una riga e usa Ctrl+V per incollare)</span>
             </div>
             <div id="editor-list"></div>
-            <button class="btn btn-primary" style="width:100%; margin-top:20px; padding:15px;" onclick="addNewItem()">
-                <i class="fa-solid fa-plus"></i> Aggiungi Elemento Vuoto
-            </button>
-        </div>
-        <!-- FLOATING COUNTER -->
-        <div id="editor-counter">
-            <i class="fa-solid fa-list-check"></i> <span id="counter-text">0 / 0</span>
+            <button class="btn btn-primary" style="width:100%; margin-top:20px; padding:15px;" onclick="addNewItem()"><i class="fa-solid fa-plus"></i> Aggiungi Carta Vuota</button>
         </div>
     </div>
 
@@ -396,171 +348,126 @@
     <script>
         // --- 0. DB MANAGER ---
         const DB_NAME = 'StimolatoreLessicaleDB';
-        const DB_VERSION = 2; 
-        const STORE_NAME = 'sets';
+        const DB_VERSION = 3; 
+        const STORE_SETS = 'sets';
+        const STORE_PATIENTS = 'patients';
+
         class DB {
-            static async open() { return new Promise((res, rej) => { const r = indexedDB.open(DB_NAME, DB_VERSION); r.onupgradeneeded = e => { const db = e.target.result; if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME, { keyPath: 'id' }); }; r.onsuccess = e => res(e.target.result); r.onerror = e => rej(e.target.error); }); }
-            static async getAllSets() { const db = await DB.open(); return new Promise((res, rej) => { const tx = db.transaction(STORE_NAME, 'readonly'); const r = tx.objectStore(STORE_NAME).getAll(); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
-            static async saveSet(set) { const db = await DB.open(); return new Promise((res, rej) => { const tx = db.transaction(STORE_NAME, 'readwrite'); const r = tx.objectStore(STORE_NAME).put(set); r.onsuccess = () => res(true); r.onerror = () => rej(r.error); }); }
-            static async deleteSet(id) { const db = await DB.open(); return new Promise((res, rej) => { const tx = db.transaction(STORE_NAME, 'readwrite'); const r = tx.objectStore(STORE_NAME).delete(id); r.onsuccess = () => res(true); r.onerror = () => rej(r.error); }); }
+            static async open() { 
+                return new Promise((res, rej) => { 
+                    const r = indexedDB.open(DB_NAME, DB_VERSION); 
+                    r.onupgradeneeded = e => { 
+                        const db = e.target.result; 
+                        if (!db.objectStoreNames.contains(STORE_SETS)) db.createObjectStore(STORE_SETS, { keyPath: 'id' }); 
+                        if (!db.objectStoreNames.contains(STORE_PATIENTS)) db.createObjectStore(STORE_PATIENTS, { keyPath: 'id' });
+                    }; 
+                    r.onsuccess = e => res(e.target.result); 
+                    r.onerror = e => rej(e.target.error); 
+                }); 
+            }
+            // Sets
+            static async getAllSets() { const db = await DB.open(); return new Promise(r => { const tx = db.transaction(STORE_SETS, 'readonly').objectStore(STORE_SETS).getAll(); tx.onsuccess = () => r(tx.result || []); }); }
+            static async saveSet(set) { const db = await DB.open(); return new Promise(r => { const tx = db.transaction(STORE_SETS, 'readwrite').objectStore(STORE_SETS).put(set); tx.onsuccess = () => r(true); }); }
+            static async deleteSet(id) { const db = await DB.open(); return new Promise(r => { const tx = db.transaction(STORE_SETS, 'readwrite').objectStore(STORE_SETS).delete(id); tx.onsuccess = () => r(true); }); }
+            // Patients
+            static async getAllPatients() { const db = await DB.open(); return new Promise(r => { const tx = db.transaction(STORE_PATIENTS, 'readonly').objectStore(STORE_PATIENTS).getAll(); tx.onsuccess = () => r(tx.result || []); }); }
+            static async savePatient(p) { const db = await DB.open(); return new Promise(r => { const tx = db.transaction(STORE_PATIENTS, 'readwrite').objectStore(STORE_PATIENTS).put(p); tx.onsuccess = () => r(true); }); }
         }
 
-        // --- 1. FULL CLINICAL SEED DATA (REFINED) ---
-        const CLINICAL_SEED = [
-            // ANIMALI
-            { id: "anim_liv1", cat: "🐶 Animali", name: "Liv 1 (Bisillabe Piane)", items: [{l:"Cane", p:"Cute dog"}, {l:"Gatto", p:"Cute cat"}, {l:"Topo", p:"Cute mouse"}, {l:"Rana", p:"Green frog"}, {l:"Toro", p:"Bull"}, {l:"Mucca", p:"Cow"}, {l:"Lupo", p:"Wolf"}, {l:"Gufo", p:"Owl"}, {l:"Orso", p:"Bear"}, {l:"Ape", p:"Bee"}, {l:"Gallo", p:"Rooster"}, {l:"Mulo", p:"Donkey"}, {l:"Foca", p:"Seal"}, {l:"Oca", p:"Goose"}, {l:"Lama", p:"Llama"}, {l:"Tordo", p:"Thrush bird"}, {l:"Poni", p:"Pony horse"}, {l:"Ratto", p:"Rat"}, {l:"Volpe", p:"Fox"}, {l:"Renna", p:"Reindeer"}] },
-            { id: "anim_liv2", cat: "🐶 Animali", name: "Liv 2 (Trisillabe/Medie)", items: [{l:"Pecora", p:"Sheep"}, {l:"Gallina", p:"Hen"}, {l:"Cavallo", p:"Horse"}, {l:"Maiale", p:"Pig"}, {l:"Giraffa", p:"Giraffe"}, {l:"Gorilla", p:"Gorilla"}, {l:"Balena", p:"Whale"}, {l:"Delfino", p:"Dolphin"}, {l:"Medusa", p:"Jellyfish"}, {l:"Pinguino", p:"Penguin"}, {l:"Cammello", p:"Camel"}, {l:"Pantera", p:"Panther"}, {l:"Castoro", p:"Beaver"}, {l:"Coniglio", p:"Rabbit"}, {l:"Formica", p:"Ant"}, {l:"Lumaca", p:"Snail"}, {l:"Gazzella", p:"Gazelle"}, {l:"Bisonte", p:"Bison"}, {l:"Canguro", p:"Kangaroo"}, {l:"Koala", p:"Koala"}] },
-            { id: "anim_liv3", cat: "🐶 Animali", name: "Liv 3 (Complesse)", items: [{l:"Coccodrillo", p:"Crocodile"}, {l:"Elefante", p:"Elephant"}, {l:"Ippopotamo", p:"Hippo"}, {l:"Rinoceronte", p:"Rhino"}, {l:"Tartaruga", p:"Turtle"}, {l:"Pipistrello", p:"Bat"}, {l:"Serpente", p:"Snake"}, {l:"Zebra", p:"Zebra"}, {l:"Scoiattolo", p:"Squirrel"}, {l:"Farfalla", p:"Butterfly"}, {l:"Coccinella", p:"Ladybug"}, {l:"Cavalletta", p:"Grasshopper"}, {l:"Scorpione", p:"Scorpion"}, {l:"Dromedario", p:"Dromedary"}, {l:"Pappagallo", p:"Parrot"}, {l:"Fenicottero", p:"Flamingo"}, {l:"Formichiere", p:"Anteater"}, {l:"Armadillo", p:"Armadillo"}, {l:"Camaleonte", p:"Chameleon"}, {l:"Salamandra", p:"Salamander"}] },
-            { id: "anim_sea", cat: "🐶 Animali", name: "Habitat Marino", items: [{l:"Pesce", p:"Fish"}, {l:"Squalo", p:"Shark"}, {l:"Polpo", p:"Octopus"}, {l:"Granchio", p:"Crab"}, {l:"Stella", p:"Starfish"}, {l:"Cavalluccio", p:"Seahorse"}, {l:"Aragosta", p:"Lobster"}, {l:"Gambero", p:"Shrimp"}, {l:"Medusa", p:"Jellyfish"}, {l:"Balena", p:"Whale"}, {l:"Delfino", p:"Dolphin"}, {l:"Orco", p:"Killer whale"}, {l:"Foca", p:"Seal"}, {l:"Tricheco", p:"Walrus"}, {l:"Pinguino", p:"Penguin"}, {l:"Tartaruga", p:"Sea turtle"}, {l:"Razza", p:"Stingray"}, {l:"Corallo", p:"Coral"}, {l:"Conchiglia", p:"Seashell"}, {l:"Gabbiano", p:"Seagull"}] },
-            { id: "anim_farm", cat: "🐶 Animali", name: "Fattoria", items: [{l:"Mucca", p:"Cow"}, {l:"Toro", p:"Bull"}, {l:"Vitello", p:"Calf"}, {l:"Maiale", p:"Pig"}, {l:"Pecora", p:"Sheep"}, {l:"Agnello", p:"Lamb"}, {l:"Capra", p:"Goat"}, {l:"Cavallo", p:"Horse"}, {l:"Asino", p:"Donkey"}, {l:"Mulo", p:"Mule"}, {l:"Gallo", p:"Rooster"}, {l:"Gallina", p:"Hen"}, {l:"Pulcino", p:"Chick"}, {l:"Anatra", p:"Duck"}, {l:"Oca", p:"Goose"}, {l:"Tacchino", p:"Turkey"}, {l:"Coniglio", p:"Rabbit"}, {l:"Cane", p:"Farm dog"}, {l:"Gatto", p:"Farm cat"}, {l:"Topo", p:"Mouse"}] },
-
-            // CIBI
-            { id: "food_liv1", cat: "🍎 Cibi", name: "Liv 1 (Semplici)", items: [{l:"Pane", p:"Bread"}, {l:"Mela", p:"Apple"}, {l:"Pera", p:"Pear"}, {l:"Uva", p:"Grapes"}, {l:"Latte", p:"Milk"}, {l:"Uovo", p:"Egg"}, {l:"Riso", p:"Rice"}, {l:"Kiwi", p:"Kiwi"}, {l:"Torta", p:"Cake"}, {l:"Pizza", p:"Pizza"}, {l:"Noce", p:"Walnut"}, {l:"Fico", p:"Fig"}, {l:"Mais", p:"Corn"}, {l:"Sale", p:"Salt"}, {l:"Pepe", p:"Pepper"}, {l:"Sugo", p:"Tomato sauce"}, {l:"Pasta", p:"Pasta"}, {l:"Kebab", p:"Kebab"}, {l:"Sushi", p:"Sushi"}, {l:"Tè", p:"Tea"}] },
-            { id: "food_liv2", cat: "🍎 Cibi", name: "Liv 2 (Medi)", items: [{l:"Banana", p:"Banana"}, {l:"Carota", p:"Carrot"}, {l:"Patata", p:"Potato"}, {l:"Gelato", p:"Ice cream"}, {l:"Limone", p:"Lemon"}, {l:"Fragola", p:"Strawberry"}, {l:"Ciliegia", p:"Cherry"}, {l:"Arancia", p:"Orange"}, {l:"Pomodoro", p:"Tomato"}, {l:"Formaggio", p:"Cheese"}, {l:"Biscotto", p:"Cookie"}, {l:"Caramella", p:"Candy"}, {l:"Cioccolato", p:"Chocolate"}, {l:"Insalata", p:"Salad"}, {l:"Panino", p:"Sandwich"}, {l:"Salsiccia", p:"Sausage"}, {l:"Wurstel", p:"Hot dog"}, {l:"Ananas", p:"Pineapple"}, {l:"Anguria", p:"Watermelon"}, {l:"Zucchina", p:"Zucchini"}] },
-            { id: "food_fruit", cat: "🍎 Cibi", name: "Frutta e Verdura", items: [{l:"Mela", p:"Apple"}, {l:"Pera", p:"Pear"}, {l:"Banana", p:"Banana"}, {l:"Uva", p:"Grapes"}, {l:"Arancia", p:"Orange"}, {l:"Limone", p:"Lemon"}, {l:"Fragola", p:"Strawberry"}, {l:"Ciliegia", p:"Cherry"}, {l:"Pesca", p:"Peach"}, {l:"Albicocca", p:"Apricot"}, {l:"Carota", p:"Carrot"}, {l:"Patata", p:"Potato"}, {l:"Pomodoro", p:"Tomato"}, {l:"Zucchina", p:"Zucchini"}, {l:"Melanzana", p:"Eggplant"}, {l:"Peperone", p:"Pepper vegetable"}, {l:"Cipolla", p:"Onion"}, {l:"Aglio", p:"Garlic"}, {l:"Insalata", p:"Lettuce"}, {l:"Broccolo", p:"Broccoli"}] },
-            { id: "food_sweet", cat: "🍎 Cibi", name: "Dolci e Colazione", items: [{l:"Torta", p:"Cake"}, {l:"Biscotto", p:"Cookie"}, {l:"Cioccolato", p:"Chocolate"}, {l:"Gelato", p:"Ice cream"}, {l:"Caramella", p:"Candy"}, {l:"Cornetto", p:"Croissant"}, {l:"Muffin", p:"Muffin"}, {l:"Ciambella", p:"Donut"}, {l:"Budino", p:"Pudding"}, {l:"Yogurt", p:"Yogurt"}, {l:"Latte", p:"Milk"}, {l:"Caffè", p:"Coffee cup"}, {l:"Tè", p:"Tea cup"}, {l:"Succo", p:"Juice glass"}, {l:"Miele", p:"Honey jar"}, {l:"Marmellata", p:"Jam jar"}, {l:"Burro", p:"Butter"}, {l:"Cereali", p:"Cereal bowl"}, {l:"Fetta biscottata", p:"Rusk toast"}, {l:"Pancake", p:"Pancake"}] },
-
-            // CASA
-            { id: "home_liv1", cat: "🏠 Casa", name: "Liv 1 (Alta Freq)", items: [{l:"Sole", p:"Sun"}, {l:"Luna", p:"Moon"}, {l:"Casa", p:"House"}, {l:"Letto", p:"Bed"}, {l:"Tubo", p:"Pipe"}, {l:"Muro", p:"Wall"}, {l:"Faro", p:"Lighthouse"}, {l:"Mare", p:"Sea"}, {l:"Vaso", p:"Vase"}, {l:"Dito", p:"Finger"}, {l:"Naso", p:"Nose"}, {l:"Mano", p:"Hand"}, {l:"Piede", p:"Foot"}, {l:"Buca", p:"Hole"}, {l:"Ramo", p:"Branch"}, {l:"Fiore", p:"Flower"}, {l:"Erba", p:"Grass"}, {l:"Fuoco", p:"Fire"}, {l:"Neve", p:"Snow"}, {l:"Nube", p:"Cloud"}] },
-            { id: "home_liv2", cat: "🏠 Casa", name: "Liv 2 (Oggetti)", items: [{l:"Divano", p:"Sofa"}, {l:"Matita", p:"Pencil"}, {l:"Tavolo", p:"Table"}, {l:"Valigia", p:"Suitcase"}, {l:"Bambola", p:"Doll"}, {l:"Collana", p:"Necklace"}, {l:"Cuscino", p:"Pillow"}, {l:"Pentola", p:"Pot"}, {l:"Orologio", p:"Clock"}, {l:"Telefono", p:"Telephone"}, {l:"Forchetta", p:"Fork"}, {l:"Cucchiaio", p:"Spoon"}, {l:"Coltello", p:"Knife"}, {l:"Bicchiere", p:"Glass"}, {l:"Bottiglia", p:"Bottle"}, {l:"Tovaglia", p:"Tablecloth"}, {l:"Poltrona", p:"Armchair"}, {l:"Tappeto", p:"Rug"}, {l:"Finestra", p:"Window"}, {l:"Specchio", p:"Mirror"}] },
-            { id: "home_bath", cat: "🏠 Casa", name: "Bagno e Igiene", items: [{l:"Lavandino", p:"Sink"}, {l:"Vasca", p:"Bathtub"}, {l:"Doccia", p:"Shower"}, {l:"Water", p:"Toilet"}, {l:"Carta igienica", p:"Toilet paper"}, {l:"Spazzolino", p:"Toothbrush"}, {l:"Dentifricio", p:"Toothpaste"}, {l:"Sapone", p:"Soap"}, {l:"Shampoo", p:"Shampoo bottle"}, {l:"Asciugamano", p:"Towel"}, {l:"Pettine", p:"Comb"}, {l:"Spazzola", p:"Hairbrush"}, {l:"Specchio", p:"Mirror"}, {l:"Phon", p:"Hairdryer"}, {l:"Bilancia", p:"Scale"}, {l:"Cesto", p:"Laundry basket"}, {l:"Lavatrice", p:"Washing machine"}, {l:"Rubinetto", p:"Faucet"}, {l:"Spugna", p:"Sponge"}, {l:"Accappatoio", p:"Bathrobe"}] },
-            { id: "home_kitch", cat: "🏠 Casa", name: "Cucina", items: [{l:"Frigo", p:"Fridge"}, {l:"Forno", p:"Oven"}, {l:"Fornello", p:"Stove"}, {l:"Lavastoviglie", p:"Dishwasher"}, {l:"Pentola", p:"Pot"}, {l:"Padella", p:"Pan"}, {l:"Coperchio", p:"Pot lid"}, {l:"Mestolo", p:"Ladle"}, {l:"Coltello", p:"Knife"}, {l:"Forchetta", p:"Fork"}, {l:"Cucchiaio", p:"Spoon"}, {l:"Piatto", p:"Plate"}, {l:"Bicchiere", p:"Glass"}, {l:"Tazza", p:"Mug"}, {l:"Bottiglia", p:"Bottle"}, {l:"Caraffa", p:"Pitcher"}, {l:"Tagliere", p:"Cutting board"}, {l:"Grattugia", p:"Grater"}, {l:"Scolapasta", p:"Colander"}, {l:"Apriscatole", p:"Can opener"}] },
-
-            // ABBIGLIAMENTO
-            { id: "clothes_liv1", cat: "👕 Abbigliamento", name: "Vestiario Base", items: [{l:"Scarpa", p:"Shoe"}, {l:"Maglia", p:"T-shirt"}, {l:"Calza", p:"Sock"}, {l:"Borsa", p:"Bag"}, {l:"Cappello", p:"Hat"}, {l:"Guanto", p:"Glove"}, {l:"Gonna", p:"Skirt"}, {l:"Sciarpa", p:"Scarf"}, {l:"Cintura", p:"Belt"}, {l:"Giacca", p:"Jacket"}, {l:"Pantaloni", p:"Pants"}, {l:"Camicia", p:"Shirt"}, {l:"Cravatta", p:"Tie"}, {l:"Vestito", p:"Dress"}, {l:"Occhiali", p:"Glasses"}, {l:"Anello", p:"Ring"}, {l:"Orecchini", p:"Earrings"}, {l:"Bracciale", p:"Bracelet"}, {l:"Stivale", p:"Boot"}, {l:"Ciabatta", p:"Slipper"}] },
-            { id: "clothes_acc", cat: "👕 Abbigliamento", name: "Accessori", items: [{l:"Orologio", p:"Wristwatch"}, {l:"Collana", p:"Necklace"}, {l:"Anello", p:"Ring"}, {l:"Bracciale", p:"Bracelet"}, {l:"Orecchini", p:"Earrings"}, {l:"Occhiali", p:"Glasses"}, {l:"Cintura", p:"Belt"}, {l:"Borsa", p:"Handbag"}, {l:"Zaino", p:"Backpack"}, {l:"Ombrello", p:"Umbrella"}, {l:"Portafoglio", p:"Wallet"}, {l:"Chiave", p:"Key"}, {l:"Fazzoletto", p:"Handkerchief"}, {l:"Guanti", p:"Gloves"}, {l:"Sciarpa", p:"Scarf"}, {l:"Cappello", p:"Hat"}, {l:"Berretto", p:"Beanie"}, {l:"Cravatta", p:"Tie"}, {l:"Papillon", p:"Bowtie"}, {l:"Spilla", p:"Brooch"}] },
-
-            // VERBI
-            { id: "verbs_liv1", cat: "🏃 Azioni", name: "Verbi Base", items: [{l:"Mangiare", p:"Eating"}, {l:"Bere", p:"Drinking"}, {l:"Dormire", p:"Sleeping"}, {l:"Correre", p:"Running"}, {l:"Lavare", p:"Washing"}, {l:"Giocare", p:"Playing"}, {l:"Leggere", p:"Reading"}, {l:"Scrivere", p:"Writing"}, {l:"Saltare", p:"Jumping"}, {l:"Ridere", p:"Laughing"}, {l:"Piangere", p:"Crying"}, {l:"Nuotare", p:"Swimming"}, {l:"Volare", p:"Flying"}, {l:"Cadere", p:"Falling"}, {l:"Aprire", p:"Opening"}, {l:"Chiudere", p:"Closing"}, {l:"Tagliare", p:"Cutting"}, {l:"Disegnare", p:"Drawing"}, {l:"Cantare", p:"Singing"}, {l:"Ballare", p:"Dancing"}] },
-            { id: "verbs_liv2", cat: "🏃 Azioni", name: "Verbi Movimento", items: [{l:"Camminare", p:"Walking"}, {l:"Salire", p:"Climbing stairs"}, {l:"Scendere", p:"Going down stairs"}, {l:"Lanciare", p:"Throwing ball"}, {l:"Afferrare", p:"Catching ball"}, {l:"Calciare", p:"Kicking ball"}, {l:"Spingere", p:"Pushing"}, {l:"Tirare", p:"Pulling"}, {l:"Sedersi", p:"Sitting down"}, {l:"Alzarsi", p:"Standing up"}, {l:"Abbracciare", p:"Hugging"}, {l:"Baciare", p:"Kissing"}, {l:"Salutare", p:"Waving hello"}, {l:"Indicare", p:"Pointing finger"}, {l:"Toccare", p:"Touching"}, {l:"Guardare", p:"Looking binoculars"}, {l:"Ascoltare", p:"Listening headphones"}, {l:"Annusare", p:"Smelling flower"}, {l:"Assaggiare", p:"Tasting food"}, {l:"Pettinare", p:"Combing hair"}] },
-
-            // CORPO & EMOZIONI
-            { id: "body_parts", cat: "🙂 Corpo & Emozioni", name: "Parti del Corpo", items: [{l:"Testa", p:"Head"}, {l:"Occhio", p:"Eye"}, {l:"Naso", p:"Nose"}, {l:"Bocca", p:"Mouth"}, {l:"Orecchio", p:"Ear"}, {l:"Capelli", p:"Hair"}, {l:"Mano", p:"Hand"}, {l:"Dito", p:"Finger"}, {l:"Braccio", p:"Arm"}, {l:"Gamba", p:"Leg"}, {l:"Piede", p:"Foot"}, {l:"Ginocchio", p:"Knee"}, {l:"Gomito", p:"Elbow"}, {l:"Pancia", p:"Tummy"}, {l:"Schiena", p:"Back body"}, {l:"Collo", p:"Neck"}, {l:"Denti", p:"Teeth"}, {l:"Lingua", p:"Tongue"}, {l:"Unghia", p:"Fingernail"}, {l:"Spalla", p:"Shoulder"}] },
-            { id: "emotions", cat: "🙂 Corpo & Emozioni", name: "Emozioni", items: [{l:"Felice", p:"Happy face"}, {l:"Triste", p:"Sad face"}, {l:"Arrabbiato", p:"Angry face"}, {l:"Spaventato", p:"Scared face"}, {l:"Sorpreso", p:"Surprised face"}, {l:"Stanco", p:"Tired face"}, {l:"Annoiato", p:"Bored face"}, {l:"Innamorato", p:"In love face"}, {l:"Confuso", p:"Confused face"}, {l:"Divertito", p:"Amused face"}, {l:"Preoccupato", p:"Worried face"}, {l:"Timido", p:"Shy face"}, {l:"Fiero", p:"Proud face"}, {l:"Disgustato", p:"Disgusted face"}, {l:"Calmo", p:"Calm face"}, {l:"Eccitato", p:"Excited face"}, {l:"Sonno", p:"Sleepy face"}, {l:"Malato", p:"Sick face"}, {l:"Pensieroso", p:"Thinking face"}, {l:"Curioso", p:"Curious face"}] },
-            
-            // CLINICAL SCENES (Wimmelbilder)
-            { id: "scene_city", cat: "🔍 Scene (Cerca-Trova)", name: "Città", items: [{l:"Città", p:"Busy city street scene, isometric view, cute style, cars, people, shops, park, detailed, wimmelbilder"}] },
-            { id: "scene_park", cat: "🔍 Scene (Cerca-Trova)", name: "Parco Giochi", items: [{l:"Parco", p:"Playground park scene, kids playing, swings, slides, sandbox, trees, dogs, detailed, wimmelbilder"}] },
-            { id: "scene_farm", cat: "🔍 Scene (Cerca-Trova)", name: "Fattoria", items: [{l:"Fattoria", p:"Farm scene, barn, tractor, animals, cows, pigs, chickens, fields, farmer, detailed, wimmelbilder"}] },
-            { id: "scene_beach", cat: "🔍 Scene (Cerca-Trova)", name: "Spiaggia", items: [{l:"Spiaggia", p:"Beach scene, ocean, sandcastle, umbrellas, people swimming, boats, crabs, sun, detailed, wimmelbilder"}] },
-            { id: "scene_school", cat: "🔍 Scene (Cerca-Trova)", name: "Scuola", items: [{l:"Scuola", p:"School classroom scene, desks, blackboard, students, teacher, books, map, toys, detailed, wimmelbilder"}] },
-            { id: "scene_supermarket", cat: "🔍 Scene (Cerca-Trova)", name: "Supermercato", items: [{l:"Supermercato", p:"Supermarket grocery store scene, shelves, food, carts, cashier, fruits, vegetables, detailed, wimmelbilder"}] },
-            { id: "scene_zoo", cat: "🔍 Scene (Cerca-Trova)", name: "Zoo", items: [{l:"Zoo", p:"Zoo scene, cages, lions, giraffes, monkeys, visitors, paths, trees, ice cream stand, detailed, wimmelbilder"}] },
-            { id: "scene_kitchen", cat: "🔍 Scene (Cerca-Trova)", name: "Cucina Caotica", items: [{l:"Cucina", p:"Messy kitchen scene, pots, pans, food ingredients, chef, sink, fridge, table, cat, detailed, wimmelbilder"}] }
-        ];
-
+        // --- STATE ---
+        const MODES_CONFIG = { 'tact': 'TACT', 'ran': 'RAN', 'tombola': 'Tombola', 'memory': 'Memory', 'search_find': 'Cerca-Trova' };
         let state = {
-            apiKey: localStorage.getItem('gemini_key') || '',
             items: [], deck: [], memory: { flipped: [], matched: [], lockBoard: false },
-            saved: [], currentTheme: 'theme-misto', 
-            editingSetId: null, editingItems: [], activeEditorIndex: null,
-            ranMode: 'grid', ranIndex: 0, 
-            isShuffle: false, 
-            loadedSetName: "Nessuno",
-            searchMarkers: [] // Markers for Scene Mode
+            savedSets: [], patients: [],
+            editingSetId: null, editingItems: [],
+            ranMode: 'grid', ranIndex: 0, tactIndex: 0,
+            activeSetId: null, activePatientId: null, 
+            session: { correct: 0, incorrect: 0, total: 0, active: false, itemResults: {} }
         };
-
-        // --- GLOBAL UI HELPERS ---
-        window.openSettings = function() { document.getElementById('modal-settings').style.display = 'flex'; };
-        window.closeSettings = function() { document.getElementById('modal-settings').style.display = 'none'; };
-        window.saveKey = function() { 
-            state.apiKey = document.getElementById('api-key').value; 
-            localStorage.setItem('gemini_key', state.apiKey); 
-            window.closeSettings();
-        };
-        window.updateShuffle = function(val) { state.isShuffle = val; };
 
         // --- INIT ---
         window.onload = async () => {
             try {
-                window.closeSettings();
-                document.getElementById('modal-library').style.display = 'none';
-                document.getElementById('modal-editor').style.display = 'none';
-                document.getElementById('modal-preview').style.display = 'none';
-
-                const existing = await DB.getAllSets();
+                state.savedSets = await DB.getAllSets();
+                state.patients = await DB.getAllPatients();
                 
-                // Seed DB if needed or update existing seed sets
-                for (const seed of CLINICAL_SEED) {
-                    const exists = existing.find(s => s.id === seed.id);
-                    if (!exists) {
-                        const items = seed.items.map(i => ({ label: i.l, prompt: i.p, url: null, isCustom: false }));
-                        await DB.saveSet({ id: seed.id, name: seed.name, category: seed.cat, items: items, theme: 'theme-misto', date: 'Default', isClinical: true });
-                    }
+                if (state.savedSets.length === 0) {
+                    const seed = [{ id: "anim_liv1", name: "Liv 1 (Bisillabe)", cat: "Animali", modes:['tact','ran','memory','tombola'], items: [{l:"Cane",url:null},{l:"Gatto",url:null}] }];
+                    for (const s of seed) await DB.saveSet(s);
+                    state.savedSets = await DB.getAllSets();
                 }
-                
-                await reloadLibrary(); // This now populates dropdown
-                
-                document.getElementById('category-select').addEventListener('change', (e) => { 
-                    document.getElementById('custom-input').classList.toggle('hidden', e.target.value !== 'ai_custom'); 
-                    // Auto-switch mode if a Scene set is selected
-                    if (e.target.value.startsWith('scene_')) {
-                        document.getElementById('mode-select').value = 'search_find';
-                        state.ranMode = 'grid'; // reset
-                    }
-                });
 
-                // --- SHORTCUTS LISTENER ---
-                document.addEventListener('keydown', (e) => {
-                    // Check if we are inside an input field to avoid conflicts
-                    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-
-                    // RAN SHORTCUTS
-                    if (state.ranMode === 'single' && document.getElementById('mode-select').value === 'ran') {
-                        if (e.key === 'ArrowRight') nextRan();
-                        if (e.key === 'ArrowLeft') prevRan();
-                    }
-
-                    // SEARCH & FIND SHORTCUTS
-                    if (document.getElementById('mode-select').value === 'search_find') {
-                        // Backspace / Delete -> Clear All
-                        if (e.key === 'Backspace' || e.key === 'Delete') {
-                            clearMarkers();
-                        }
-                        // Ctrl+Z / Cmd+Z -> Undo Last Marker
-                        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
-                            e.preventDefault(); // prevent browser undo
-                            removeLastMarker();
-                        }
-                    }
-                });
+                const badge = document.getElementById('lib-count');
+                if(badge) badge.innerText = state.savedSets.length;
                 
+                filterSetsByMode();
+                populateGlobalPatientSelect();
+
                 document.addEventListener('paste', handlePaste);
+                document.addEventListener('dragstart', (e) => e.preventDefault());
+                document.addEventListener('keydown', handleShortcuts);
+
             } catch(e) { console.error("Init Error", e); }
         };
 
-        async function reloadLibrary() {
-            try {
-                state.saved = await DB.getAllSets();
-                const countEl = document.getElementById('lib-count');
-                if(countEl) countEl.innerText = state.saved.length;
-                
-                updateDropdown(state.saved); 
-
-                let totalBytes = 0; state.saved.forEach(s => totalBytes += JSON.stringify(s).length);
-                const mb = (totalBytes / (1024 * 1024)).toFixed(1);
-                const fillEl = document.getElementById('storage-fill');
-                if(fillEl) fillEl.style.width = Math.min((totalBytes/(500*1024*1024))*100, 100) + '%';
-                const textEl = document.getElementById('storage-text');
-                if(textEl) textEl.innerText = `${mb} MB`;
-            } catch(e) { console.error("Library Error", e); }
+        // --- GLOBAL PATIENT ---
+        function populateGlobalPatientSelect() {
+            const sel = document.getElementById('global-patient-select');
+            sel.innerHTML = '<option value="">-- Ospite --</option>' + 
+                state.patients.map(p => `<option value="${p.id}" ${state.activePatientId===p.id?'selected':''}>${p.name}</option>`).join('');
         }
+        // --- SELETTORE PAZIENTE (Sostituisci la vecchia setGlobalPatient) ---
+        window.setGlobalPatient = (pid) => { 
+            state.activePatientId = pid || null; 
+            
+            // AGGIUNTA FONDAMENTALE: Ridisegna la lista set per calcolare le coppe del nuovo paziente
+            if (typeof filterSetsByMode === 'function') {
+                filterSetsByMode(); 
+            }
+        };
 
-        // --- NEW DROPDOWN LOGIC ---
+        // --- BLOCCO 1: FILTRI E DROPDOWN (Sostituisci filterSetsByMode e updateDropdown) ---
+        window.filterSetsByMode = function() {
+            const currentMode = document.getElementById('mode-select').value;
+            
+            // Logica di filtraggio rigorosa
+            const compatibleSets = state.savedSets.filter(s => {
+                // Se il set ha i nuovi TAG (modes)
+                if (s.modes && Array.isArray(s.modes) && s.modes.length > 0) {
+                    return s.modes.includes(currentMode);
+                }
+                // Logica Fallback per vecchi set senza tag
+                if (currentMode === 'search_find') {
+                    return s.category && (s.category.includes('Scene') || s.category.includes('Cerca'));
+                } else {
+                    // Escludi le scene dalle altre modalità
+                    return !(s.category && (s.category.includes('Scene') || s.category.includes('Cerca')));
+                }
+            });
+
+            updateDropdown(compatibleSets);
+            
+            // Se il set attualmente attivo non è compatibile, resetta lo stage
+            if(state.activeSetId && !compatibleSets.find(s => s.id === state.activeSetId)) {
+                document.getElementById('game-stage').innerHTML = `
+                    <div style="height:100%; display:flex; justify-content:center; align-items:center; opacity:0.5; flex-direction:column; text-align:center;">
+                        <i class="fa-solid fa-filter-circle-xmark fa-3x" style="margin-bottom:15px"></i>
+                        <p>Il set caricato non è adatto<br>a questa modalità.<br>Scegline un altro.</p>
+                    </div>`;
+                state.items = [];
+                state.activeSetId = null;
+            }
+        };
+
+        // --- AGGIORNAMENTO DROPDOWN CON INDICATORI (Sostituisci updateDropdown) ---
         function updateDropdown(sets) {
             const select = document.getElementById('category-select');
-            select.innerHTML = '<option value="" disabled selected>-- Scegli Set dall\'Archivio --</option>';
-            
-            // Add AI Custom Option first
-            const aiGroup = document.createElement('optgroup');
-            aiGroup.label = "✨ Generazione AI";
-            const aiOpt = document.createElement('option');
-            aiOpt.value = "ai_custom";
-            aiOpt.text = "Prompt Personale (Crea Nuovo)...";
-            aiGroup.appendChild(aiOpt);
-            select.appendChild(aiGroup);
+            const currentMode = document.getElementById('mode-select').value;
+            // Recupera il paziente attivo per controllare il criterio
+            const activePatient = state.activePatientId ? state.patients.find(p => p.id === state.activePatientId) : null;
 
-            // Group by Category
+            select.innerHTML = '<option value="" disabled selected>-- Scegli un Set --</option>';
+
             const categories = {};
             sets.forEach(s => {
                 const cat = s.category || "Altri";
@@ -568,551 +475,735 @@
                 categories[cat].push(s);
             });
 
-            // Create Optgroups
             for(const [catName, catSets] of Object.entries(categories)) {
                 const group = document.createElement('optgroup');
                 group.label = catName;
+                
                 catSets.forEach(s => {
                     const opt = document.createElement('option');
-                    opt.value = s.id; // Value is now the DB ID
-                    opt.text = s.name;
+                    opt.value = s.id;
+                    
+                    // 1. Check Immagini Mancanti (⚠️ Numero)
+                    const missingCount = s.items.filter(i => !i.url).length;
+                    const warningTag = missingCount > 0 ? ` ⚠️${missingCount}` : '';
+
+                    // 2. Check Criterio Raggiunto (🏆)
+                    let trophyTag = '';
+                    if (activePatient && activePatient.history) {
+                        // Filtra la storia per questo set e questa modalità
+                        const sessions = activePatient.history.filter(h => h.setId === s.id && h.mode === currentMode);
+                        // Usa la funzione checkCriterion esistente per verificare i 2 successi consecutivi
+                        if (typeof checkCriterion === 'function' && checkCriterion(sessions)) {
+                            trophyTag = ' 🏆';
+                        }
+                    }
+
+                    // Costruisce il testo: "Nome Set ⚠️2 🏆"
+                    opt.text = `${s.name}${warningTag}${trophyTag}`;
+                    
+                    // Mantiene la selezione attiva se necessario
+                    if (state.activeSetId === s.id) opt.selected = true;
                     group.appendChild(opt);
                 });
                 select.appendChild(group);
             }
         }
 
-        window.toggleFullScreen = function() {
-            if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen();
-            setTimeout(() => { document.getElementById('fs-icon').className = document.fullscreenElement ? 'fa-solid fa-compress' : 'fa-solid fa-expand'; }, 200);
-        };
-
         // --- SESSION ---
-        window.startGame = async function() {
-            if(state.items.length === 0) {
-                window.generateSession();
-                return;
+        window.loadSelectedSet = async (setId) => { const s = state.savedSets.find(x => x.id === setId); if(s) { state.activeSetId = setId; state.items = JSON.parse(JSON.stringify(s.items)); window.startGame(); } };
+
+        window.startGame = () => {
+            if(!state.items.length) return;
+            // Init session con itemResults per tracciare i singoli item
+            state.session = { correct: 0, incorrect: 0, total: 0, active: true, itemResults: {} };
+            updateScoreUI();
+            document.getElementById('scoring-controls').classList.remove('hidden');
+            document.getElementById('btn-save-session').classList.add('hidden');
+
+            let playItems = state.items.filter(i => !i.hidden);
+            const mode = document.getElementById('mode-select').value;
+            const size = parseInt(document.getElementById('grid-size').value);
+            if (mode !== 'search_find') {
+                playItems.sort(() => Math.random() - 0.5); 
+                const limit = size === 20 ? 20 : (size * size); 
+                if (playItems.length > limit) playItems = playItems.slice(0, limit);
             }
+            state.tactIndex = 0; state.ranIndex = 0;
             
-            // Filter out hidden items
-            const activeItems = state.items.filter(i => !i.hidden);
-
-            if (activeItems.length === 0) {
-                alert("Nessun item attivo nel set! Abilitane alcuni dall'editor.");
-                return;
-            }
-
-            let displayItems = [...activeItems];
-            if(state.isShuffle) displayItems.sort(() => Math.random() - 0.5);
-            renderGameMode(document.getElementById('mode-select').value, displayItems);
+            const undoBtn = document.getElementById('btn-undo-marker');
+            if (mode === 'search_find') undoBtn.classList.remove('hidden'); else undoBtn.classList.add('hidden');
+            renderGameMode(mode, playItems);
         };
 
-        // LOAD / GENERATE
-        window.generateSession = async function() {
-            const catSelect = document.getElementById('category-select').value;
-            const style = document.getElementById('style-select').value;
-            const gridSizeInput = document.getElementById('grid-size').value;
-            const stage = document.getElementById('game-stage');
+        // --- SCORING INTELLIGENTE (Fix duplicati) ---
+        window.recordResponse = (isCorrect) => {
+            if (!state.session.active) return;
+            const mode = document.getElementById('mode-select').value;
             
-            if(!catSelect) { alert("Seleziona una categoria."); return; }
-            stage.innerHTML = `<div style="position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; align-items:center; color:var(--text-secondary);"><i class="fa-solid fa-spinner spin fa-3x"></i><p>Caricamento...</p></div>`;
-            document.getElementById('btn-save').classList.add('hidden');
+            // Per TACT e RAN Single, usiamo l'indice attuale come chiave unica
+            if (mode === 'tact' || (mode === 'ran' && state.ranMode === 'single')) {
+                const currentIndex = (mode === 'tact') ? state.tactIndex : state.ranIndex;
+                state.session.itemResults[currentIndex] = isCorrect;
+            } else {
+                // Per griglie o giochi liberi, usiamo timestamp (qui si accumulano, non c'è indice fisso)
+                state.session.itemResults[Date.now()] = isCorrect;
+            }
+            
+            // Ricalcolo esatto dai risultati unici
+            const results = Object.values(state.session.itemResults);
+            state.session.correct = results.filter(v => v === true).length;
+            state.session.incorrect = results.filter(v => v === false).length;
+            state.session.total = results.length; // Totale item valutati univoci
 
+            updateScoreUI();
+            document.getElementById('btn-save-session').classList.remove('hidden');
+        };
+        
+        function updateScoreUI() { document.getElementById('score-display').innerText = `${state.session.correct}`; }
+
+        function handleShortcuts(e) {
+             const mode = document.getElementById('mode-select').value;
+             if (state.session.active && !['INPUT','TEXTAREA'].includes(e.target.tagName)) {
+                 if (e.key.toLowerCase() === 'v') recordResponse(true);
+                 if (e.key.toLowerCase() === 'x') recordResponse(false);
+             }
+             if (mode === 'ran' && state.ranMode === 'single') {
+                 if (e.key === 'ArrowRight') nextRan(); if (e.key === 'ArrowLeft') prevRan();
+             }
+             if (mode === 'search_find') {
+                 if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') removeLastMarker();
+                 if (e.key === 'Delete' || e.key === 'Backspace') clearMarkers();
+             }
+        }
+
+        window.confirmSaveSession = async () => {
+            if(!state.activePatientId) return alert("Seleziona prima un paziente in alto.");
+            const p = state.patients.find(x => x.id === state.activePatientId);
+            const setName = state.savedSets.find(s => s.id === state.activeSetId)?.name || "Set Rimosso";
+            const total = state.session.total;
+            if (total === 0) return; 
+
+            const sessionData = {
+                date: new Date().toISOString(),
+                setId: state.activeSetId,
+                setName: setName,
+                mode: document.getElementById('mode-select').value,
+                correct: state.session.correct,
+                total: total,
+                percentage: Math.round((state.session.correct / total) * 100)
+            };
+            if(!p.history) p.history = []; p.history.push(sessionData);
+            await DB.savePatient(p);
+            
+            const btn = document.getElementById('btn-save-session');
+            btn.innerHTML = '<i class="fa-solid fa-check"></i>'; btn.style.background = 'var(--success-color)';
+            setTimeout(() => { 
+                btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i>'; btn.style.background = '#2563eb';
+                state.session.active = false; document.getElementById('scoring-controls').classList.add('hidden'); btn.classList.add('hidden');
+            }, 1000);
+        };
+        // --- PATIENTS & CHARTS ---
+        window.openPatients = async () => {
+            state.patients = await DB.getAllPatients();
+            const sel = document.getElementById('patient-select');
+            sel.innerHTML = '<option value="">-- Seleziona Paziente --</option>' + state.patients.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+            document.getElementById('modal-patients').classList.add('open');
+        };
+        window.closePatients = () => document.getElementById('modal-patients').classList.remove('open');
+        window.createNewPatient = async () => { const name = prompt("Nome:"); if(name) { await DB.savePatient({id:Date.now().toString(), name:name, history:[]}); window.openPatients(); populateGlobalPatientSelect(); } };
+        window.loadPatientData = (pid) => {
+            if(!pid) return document.getElementById('patient-dashboard').classList.add('hidden');
+            const p = state.patients.find(x => x.id === pid);
+            document.getElementById('patient-title').innerText = `Cartella: ${p.name}`;
+            renderPatientCharts(p); document.getElementById('patient-dashboard').classList.remove('hidden');
+        };
+
+        // Gestione Eliminazione/Modifica Sessione
+        window.deleteSession = async (patientId, sessionIndex) => {
+            if(!confirm("Eliminare questa sessione dai dati?")) return;
+            const p = state.patients.find(x => x.id === patientId);
+            p.history.splice(sessionIndex, 1);
+            await DB.savePatient(p);
+            loadPatientData(patientId); // Ricarica UI
+        };
+
+        // --- MODIFICA SESSIONE CON DATA (Sostituisci la vecchia window.editSession) ---
+        // --- BLOCCO 4: MODIFICA SESSIONE (Sostituisci editSession) ---
+        window.editSession = async (patientId, sessionIndex) => {
+            const p = state.patients.find(x => x.id === patientId);
+            // Recupera la sessione
+            const s = p.history[sessionIndex];
+
+            // 1. DATA
+            const currentDateStr = s.date.substring(0, 10);
+            const newDateStr = prompt("Data (AAAA-MM-GG):", currentDateStr);
+            if(newDateStr === null) return;
+
+            // 2. PUNTEGGIO
+            const newScore = prompt("Punteggio Corretti:", s.correct);
+            if(newScore === null) return;
+            
+            // 3. TOTALE
+            const newTotal = prompt("Totale Item:", s.total);
+            if(newTotal === null) return;
+            
+            // Applica
             try {
-                // CASE 1: AI CUSTOM
-                if (catSelect === 'ai_custom') {
-                    if (!state.apiKey) throw new Error("Serve Chiave API.");
-                    let targetCount = gridSizeInput === '20' ? 20 : (parseInt(gridSizeInput) ** 2);
-                    const rawData = await fetchAI(document.getElementById('custom-input').value, targetCount);
-                    state.items = rawData.map(d => ({ label: d.l, prompt: d.p, url: generateUrl(d.p, style), isCustom: false }));
-                    state.loadedSetName = "AI Custom";
-                    document.getElementById('btn-save').classList.remove('hidden'); 
-                } 
-                // CASE 2: LOAD FROM DB (Standard flow now)
-                else {
-                    const set = state.saved.find(s => s.id === catSelect);
-                    if(!set) throw new Error("Set non trovato in archivio");
-                    
-                    state.items = JSON.parse(JSON.stringify(set.items));
-                    state.loadedSetName = set.name;
-                    
-                    // Logic for Search & Find: Use ONLY the first item (the big scene)
-                    if (document.getElementById('mode-select').value === 'search_find') {
-                        // Keep full items, but maybe verify only 1 is needed
-                    } else {
-                        // Standard logic: slice count if needed
-                        let targetCount = gridSizeInput === '20' ? 20 : (parseInt(gridSizeInput) ** 2);
-                        if(targetCount < state.items.length) {
-                            state.items = state.items.slice(0, targetCount);
-                        }
-                    }
-                    
-                    // Generate URLs if missing (lazy generation)
-                    state.items.forEach(i => {
-                        if(!i.url) i.url = generateUrl(i.prompt, style);
-                    });
-                }
-
-                state.currentTheme = 'theme-misto';
-                updateStatusLabel();
-                window.startGame(); // Auto start
-                
-            } catch (err) {
-                stage.innerHTML = `<div style="color:#ef4444; padding:20px; text-align:center;">${err.message}</div>`;
+                // Preserva l'ora corrente per evitare problemi di fuso orario, cambia solo la data
+                let d = new Date(newDateStr);
+                if (isNaN(d.getTime())) throw "Data invalida";
+                // Ricostruisci l'ISO string mantenendo la data scelta
+                s.date = d.toISOString();
+            } catch(e) {
+                alert("Formato data errato. Usa AAAA-MM-GG");
+                return;
             }
+
+            s.correct = parseInt(newScore);
+            s.total = parseInt(newTotal);
+            s.percentage = Math.round((s.correct / s.total) * 100);
+            
+            await DB.savePatient(p);
+            // Ricarica per vedere il criterio aggiornato
+            loadPatientData(patientId);
         };
 
-        function updateStatusLabel() {
-            document.getElementById('active-set-label').innerText = state.loadedSetName;
-        }
+        // --- BLOCCO 2: GRAFICI, CRITERIO E DATE (Sostituisci renderPatientCharts e checkCriterion) ---
+        
+        // --- FUNZIONI GRAFICI E STORICO (Versione Aggiornata v35) ---
 
-        window.changeMode = function() { if(state.items.length > 0) window.startGame(); };
-        function renderGameMode(mode, items) {
-            if (mode === 'tact') renderTact(items);
-            else if (mode === 'ran') renderRan(items);
-            else if (mode === 'tombola') renderTombola(items);
-            else if (mode === 'memory') renderMemory(items);
-            else if (mode === 'search_find') renderSearchFind(items);
-        }
-
-        // --- RENDERERS ---
-        function getPlaceholderUrl(label) { return `https://placehold.co/400?text=${encodeURIComponent(label)}`; }
-        function handleImgError(img, label) { 
-            img.onerror = null; 
-            img.src = getPlaceholderUrl(label); 
-            img.style.opacity = 1; 
-            if(img.parentElement && img.parentElement.querySelector('.loader-overlay')) {
-                img.parentElement.querySelector('.loader-overlay').classList.add('hidden');
-            }
-        }
-
-        function renderTact(items) {
-            const item = items[Math.floor(Math.random() * items.length)];
-            document.getElementById('game-stage').innerHTML = `
-                <div class="tact-stage"><div class="tact-card-lg">
-                    <img src="${item.url || getPlaceholderUrl(item.label)}" onload="this.style.opacity=1" onerror="handleImgError(this, '${item.label}')" style="opacity:0; transition:opacity 0.3s">
-                    <div class="tact-title">${item.label}</div>
-                    <button class="btn btn-ghost" style="margin:20px;" onclick="startGame()"><i class="fa-solid fa-shuffle"></i> Prossimo</button>
-                </div></div>`;
-        }
-
-        function renderRan(items) {
-            const stage = document.getElementById('game-stage');
-            state.displayItems = items; 
-            stage.innerHTML = `
-                <div class="ran-container">
-                    <div class="ran-header">
-                        <button class="btn btn-sm ${state.ranMode==='grid'?'btn-primary':'btn-ghost'}" onclick="setRanMode('grid')"><i class="fa-solid fa-table-cells"></i> Griglia</button>
-                        <button class="btn btn-sm ${state.ranMode==='single'?'btn-primary':'btn-ghost'}" onclick="setRanMode('single')"><i class="fa-solid fa-image"></i> Sequenza</button>
-                    </div>
-                    <div id="ran-content" style="flex:1; overflow:auto;"></div>
-                </div>`;
-            updateRanContent();
-        }
-        window.setRanMode = function(mode) { state.ranMode = mode; updateRanContent(); };
-        function updateRanContent() {
-            const container = document.getElementById('ran-content');
-            const items = state.displayItems;
-            
-            if (state.ranMode === 'grid') {
-                const count = items.length;
-                let cols = 4;
-                if(count === 20 || count === 25) cols = 5;
-                else if(count === 9) cols = 3;
-                else cols = Math.ceil(Math.sqrt(count));
-
-                let html = `<div class="grid-adaptive" style="grid-template-columns: repeat(${cols}, 1fr);">`;
-                items.forEach(item => {
-                    html += `<div class="ran-card"><img src="${item.url || getPlaceholderUrl(item.label)}" onerror="handleImgError(this, '${item.label}')"></div>`;
-                });
-                html += `</div>`; container.innerHTML = html;
-            } else {
-                if(state.ranIndex >= items.length) state.ranIndex = 0;
-                const item = items[state.ranIndex];
-                container.innerHTML = `
-                    <div class="ran-seq-stage">
-                        <img src="${item.url || getPlaceholderUrl(item.label)}" class="ran-seq-img" onerror="handleImgError(this, '${item.label}')">
-                        <div style="font-size:2rem; font-weight:bold; margin-top:20px;">${item.label}</div>
-                        <div class="ran-controls">
-                            <button class="ran-nav-btn" onclick="prevRan()"><i class="fa-solid fa-arrow-left"></i></button>
-                            <span style="font-size:1.2rem; opacity:0.7;">${state.ranIndex + 1} / ${items.length}</span>
-                            <button class="ran-nav-btn" onclick="nextRan()"><i class="fa-solid fa-arrow-right"></i></button>
-                        </div>
-                    </div>`;
-            }
-        }
-        window.nextRan = function() { if (state.ranIndex < state.displayItems.length - 1) { state.ranIndex++; updateRanContent(); } };
-        window.prevRan = function() { if (state.ranIndex > 0) { state.ranIndex--; updateRanContent(); } };
-
-        function renderTombola(items) {
-            state.deck = [...items].sort(() => Math.random() - 0.5); 
-            const count = items.length;
-            let cols = count === 20 ? 5 : Math.ceil(Math.sqrt(count));
-            document.getElementById('game-stage').innerHTML = `
-            <div class="tombola-layout">
-                <div class="tombola-deck">
-                    <div id="deck-area">${getDeckCardHtml()}</div>
-                </div>
-                <div class="tombola-board">
-                    <div class="grid-adaptive" style="grid-template-columns:repeat(${cols}, 1fr);">
-                        ${items.map((item, idx) => `
-                            <div class="card-grid" id="slot-${idx}" onclick="handleMatchClick(${idx}, '${item.label}')">
-                                <img src="${item.url || getPlaceholderUrl(item.label)}" onerror="handleImgError(this, '${item.label}')">
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-            </div>`;
-        }
-        function getDeckCardHtml() {
-            if (state.deck.length === 0) return `<div style="text-align:center; color:white; font-size:1.5rem;">🎉<br>Finito!</div>`;
-            const current = state.deck[0];
-            return `
-            <div class="target-card-container">
-                <div class="target-hint">TROVA:</div>
-                <img src="${current.url || getPlaceholderUrl(current.label)}" onerror="handleImgError(this, '${current.label}')">
-                <div class="target-label">${current.label}</div>
-            </div>`;
-        }
-        window.handleMatchClick = (idx, label) => {
-            if (state.deck.length === 0 || label !== state.deck[0].label) return;
-            document.getElementById(`slot-${idx}`).classList.add('matched');
-            state.deck.shift(); document.getElementById('deck-area').innerHTML = getDeckCardHtml();
-        };
-
-        function renderMemory(items) {
-            let useItems = items;
-            if(useItems.length > 10) useItems = useItems.slice(0, 10); 
-            else if(useItems.length < 8) useItems = expandList(useItems, 8); 
-
-            let memoryDeck = [...useItems, ...useItems];
-            for (let i = memoryDeck.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [memoryDeck[i], memoryDeck[j]] = [memoryDeck[j], memoryDeck[i]];
-            }
-
-            state.memory = { flipped: [], matched: [], deck: memoryDeck, lockBoard: false };
-            let cols = 5; if (memoryDeck.length === 16) cols = 4;
-            
-            let html = `<div class="memory-grid" style="grid-template-columns: repeat(${cols}, 1fr);">`;
-            memoryDeck.forEach((item, idx) => {
-                html += `<div class="memory-card" id="mem-${idx}" onclick="flipCard(${idx})"><div class="memory-inner"><div class="memory-front"><i class="fa-solid fa-question"></i></div><div class="memory-back"><img src="${item.url || getPlaceholderUrl(item.label)}" onerror="handleImgError(this, '${item.label}')"></div></div></div>`;
-            });
-            html += `</div>`; document.getElementById('game-stage').innerHTML = html;
-        }
-        window.flipCard = (idx) => {
-            if (state.memory.lockBoard || state.memory.flipped.includes(idx) || state.memory.matched.includes(idx)) return;
-            document.getElementById(`mem-${idx}`).classList.add('flipped');
-            state.memory.flipped.push(idx);
-            if (state.memory.flipped.length === 2) { state.memory.lockBoard = true; setTimeout(checkForMatch, 800); }
-        };
-        function checkForMatch() {
-            const [idx1, idx2] = state.memory.flipped;
-            if (state.memory.deck[idx1].label === state.memory.deck[idx2].label) {
-                document.getElementById(`mem-${idx1}`).classList.add('matched');
-                document.getElementById(`mem-${idx2}`).classList.add('matched');
-                state.memory.matched.push(idx1, idx2);
-            } else {
-                document.getElementById(`mem-${idx1}`).classList.remove('flipped');
-                document.getElementById(`mem-${idx2}`).classList.remove('flipped');
-            }
-            state.memory.flipped = []; state.memory.lockBoard = false;
-        }
-
-        // --- NEW MODE: SEARCH & FIND (SCENE) ---
-function renderSearchFind(items) {
-    const stage = document.getElementById('game-stage');
-    // Use the first item as the main scene. If randomizing, we pick one.
-    const scene = items[0]; 
-    state.searchMarkers = [];
-    
-    stage.innerHTML = `
-        <div class="search-find-container">
-            <div class="sf-controls">
-                <div style="color:white; font-weight:bold;">${scene.label}</div>
-                <button class="btn btn-sm btn-danger" onclick="clearMarkers()"><i class="fa-solid fa-eraser"></i> Pulisci Tutto</button>
-            </div>
-            
-            <div class="sf-viewport" id="sf-viewport" onclick="placeMarker(event)">
-                <img src="${scene.url || getPlaceholderUrl(scene.label)}" class="sf-image" onerror="handleImgError(this, '${scene.label}')">
-            </div>
-
-            <!-- NUOVI TASTI FLOATING -->
-            <div class="sf-floating-controls">
-                <button class="btn-float" onclick="toggleScrollLock()" id="btn-lock" title="Blocca Scorrimento">
-                    <i class="fa-solid fa-lock-open"></i>
-                </button>
-                <button class="btn-float" onclick="removeLastMarker()" title="Annulla Ultimo">
-                    <i class="fa-solid fa-rotate-left"></i>
-                </button>
-            </div>
-        </div>
-    `;
+// Helper Data Europea (DD.MM.YYYY)
+function formatDateEU(isoStr) {
+    if(!isoStr) return "--.--.----";
+    const d = new Date(isoStr);
+    if(isNaN(d.getTime())) return isoStr;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}.${month}.${year}`;
 }
 
-// NUOVA FUNZIONE: BLOCCO SCROLL
-window.toggleScrollLock = function() {
-    const vp = document.getElementById('sf-viewport');
-    const btn = document.getElementById('btn-lock');
+// Toggle Espandi/Comprimi Dettagli (FIXED)
+window.toggleChartDetails = (btn) => {
+    // Risale al wrapper principale e cerca la tabella specifica
+    const wrapper = btn.closest('.chart-wrapper');
+    const details = wrapper.querySelector('.chart-details-table'); 
     const icon = btn.querySelector('i');
     
-    if (vp.classList.contains('scroll-locked')) {
-        // Sblocca
-        vp.classList.remove('scroll-locked');
-        btn.classList.remove('locked');
-        icon.className = 'fa-solid fa-lock-open';
+    if (details.style.display === 'none') {
+        details.style.display = 'block';
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-up');
     } else {
-        // Blocca
-        vp.classList.add('scroll-locked');
-        btn.classList.add('locked');
-        icon.className = 'fa-solid fa-lock';
+        details.style.display = 'none';
+        icon.classList.remove('fa-chevron-up');
+        icon.classList.add('fa-chevron-down');
     }
 };
 
-window.placeMarker = function(e) {
-    // Se si clicca sui controlli floating, non mettere il marker (safety check)
-    if(e.target.closest('.sf-floating-controls')) return;
-
-    const viewport = document.getElementById('sf-viewport');
-    const rect = viewport.getBoundingClientRect();
+// Calcolo Criterio (2 successi >90% consecutivi in giorni diversi)
+function checkCriterion(sessions) {
+    if (sessions.length < 2) return false;
+    const sorted = [...sessions].sort((a,b) => new Date(a.date) - new Date(b.date));
+    let consecutive = 0;
+    let lastDateStr = null;
     
-    // Calculate position relative to the scrollable content
-    const x = e.clientX - rect.left + viewport.scrollLeft;
-    const y = e.clientY - rect.top + viewport.scrollTop;
-
-    const marker = document.createElement('div');
-    marker.className = 'marker-pin';
-    marker.style.left = x + 'px';
-    marker.style.top = y + 'px';
-    
-    // Allow removing specific marker
-    marker.onclick = function(ev) {
-        ev.stopPropagation();
-        marker.remove();
+    for (const s of sorted) {
+        const currentDateStr = new Date(s.date).toISOString().split('T')[0];
+        if (s.percentage >= 90) {
+            if (lastDateStr && currentDateStr !== lastDateStr) consecutive++;
+            else if (!lastDateStr) consecutive = 1;
+            lastDateStr = currentDateStr;
+        } else {
+            consecutive = 0;
+            lastDateStr = null;
+        }
+        if (consecutive >= 2) return true;
     }
-
-    viewport.appendChild(marker);
+    return false;
 }
 
-        window.placeMarker = function(e) {
-            const viewport = document.getElementById('sf-viewport');
-            const rect = viewport.getBoundingClientRect();
+// Caricamento Dati Paziente con Iniezione Controlli Ordinamento
+window.loadPatientData = (pid) => {
+    if(!pid) return document.getElementById('patient-dashboard').classList.add('hidden');
+    const p = state.patients.find(x => x.id === pid);
+    document.getElementById('patient-title').innerText = `Cartella: ${p.name}`;
+    
+    // Inietta i controlli di ordinamento se non esistono
+    const container = document.getElementById('patient-dashboard');
+    if (!document.getElementById('chart-sort-controls')) {
+        const controls = document.createElement('div');
+        controls.id = 'chart-sort-controls';
+        controls.style.cssText = "display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-bottom:15px; padding:0 5px;";
+        controls.innerHTML = `
+            <span style="font-size:0.85rem; color:#aaa;"><i class="fa-solid fa-arrow-down-short-wide"></i> Ordina:</span>
+            <select id="sort-select" onchange="updateChartSort(this.value)" style="padding:6px; border-radius:8px; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2); font-size:0.9rem;">
+                <option value="date_desc">Ultima Attività (Recenti)</option>
+                <option value="date_asc">Cronologico (Vecchi)</option>
+                <option value="mode">Per Modalità (es. TACT, RAN)</option>
+                <option value="name">Alfabetico Nome Set</option>
+            </select>
+        `;
+        // Inserisci dopo il titolo
+        const title = document.getElementById('patient-title');
+        title.parentNode.insertBefore(controls, title.nextSibling);
+    }
+    
+    // Renderizza di default per data decrescente
+    renderPatientCharts(p, 'date_desc');
+    document.getElementById('patient-dashboard').classList.remove('hidden');
+};
+
+// Funzione Helper per l'evento onchange
+window.updateChartSort = (sortMode) => {
+    const pid = document.getElementById('patient-select').value;
+    const p = state.patients.find(x => x.id === pid);
+    if(p) renderPatientCharts(p, sortMode);
+};
+
+// Renderizza Grafici con Ordinamento
+function renderPatientCharts(patient, sortMode = 'date_desc') {
+    const container = document.getElementById('charts-container');
+    container.innerHTML = '';
+
+    if(!patient.history || patient.history.length === 0) {
+        container.innerHTML = '<p style="text-align:center; opacity:0.5; padding:20px;">Nessun dato registrato.</p>';
+        return;
+    }
+
+    // 1. Raggruppa i dati
+    const groups = {};
+    patient.history.forEach((h, idx) => {
+        const key = `${h.setName}::${h.mode}`;
+        if(!groups[key]) groups[key] = [];
+        groups[key].push({...h, originalIndex: idx});
+    });
+
+    // 2. Prepara array per ordinamento
+    let chartList = Object.entries(groups).map(([key, sessions]) => {
+        const [setName, modeCode] = key.split('::');
+        // Trova la data più recente in questo gruppo per l'ordinamento
+        const lastDate = Math.max(...sessions.map(s => new Date(s.date).getTime()));
+        return { key, sessions, setName, modeCode, lastDate };
+    });
+
+    // 3. Applica Ordinamento
+    chartList.sort((a, b) => {
+        if (sortMode === 'date_desc') return b.lastDate - a.lastDate;
+        if (sortMode === 'date_asc') return a.lastDate - b.lastDate;
+        if (sortMode === 'mode') return a.modeCode.localeCompare(b.modeCode);
+        if (sortMode === 'name') return a.setName.localeCompare(b.setName);
+        return 0;
+    });
+
+    // 4. Renderizza ogni grafico
+    chartList.forEach(item => {
+        const { sessions, setName, modeCode } = item;
+        const modeName = MODES_CONFIG[modeCode] || modeCode;
+        
+        // Ordina cronologicamente le sessioni PER IL DISEGNO DEL GRAFICO (sempre X: tempo)
+        sessions.sort((a,b) => new Date(a.date) - new Date(b.date));
+        
+        const isMastered = checkCriterion(sessions);
+        
+        const wrapper = document.createElement('div');
+        wrapper.className = 'chart-wrapper';
+        
+        const badgeHtml = isMastered ? 
+            `<span class="criterion-badge" style="background:#10b981; color:white; padding:2px 8px; border-radius:4px; font-size:0.7em; margin-left:10px; vertical-align:middle;">
+                <i class="fa-solid fa-trophy"></i> CRITERIO
+            </span>` : '';
+
+        // Header
+        wrapper.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h4 style="margin:0; color:var(--accent-color); font-size:1rem;">
+                    ${setName} <span style="color:#666; font-size:0.8em;">(${modeName})</span> ${badgeHtml}
+                </h4>
+                <button class="btn-icon" onclick="toggleChartDetails(this)" style="width:30px; height:30px; background:rgba(255,255,255,0.05);" title="Dettagli">
+                    <i class="fa-solid fa-chevron-down"></i>
+                </button>
+            </div>
+        `;
+        
+        // SVG
+        const svgNS = "http://www.w3.org/2000/svg";
+        const svg = document.createElementNS(svgNS, "svg");
+        svg.setAttribute("class", "chart-svg");
+        svg.setAttribute("viewBox", "-10 -10 320 170");
+        
+        // Assi
+        const axisY = document.createElementNS(svgNS, "line"); axisY.setAttribute("x1","20"); axisY.setAttribute("y1","0"); axisY.setAttribute("x2","20"); axisY.setAttribute("y2","130"); axisY.setAttribute("stroke", "#666"); axisY.setAttribute("stroke-width", "1"); svg.appendChild(axisY);
+        const axisX = document.createElementNS(svgNS, "line"); axisX.setAttribute("x1","20"); axisX.setAttribute("y1","130"); axisX.setAttribute("x2","300"); axisX.setAttribute("y2","130"); axisX.setAttribute("stroke", "#666"); axisX.setAttribute("stroke-width", "1"); svg.appendChild(axisX);
+        const line90 = document.createElementNS(svgNS, "line"); line90.setAttribute("x1","20"); line90.setAttribute("x2","300"); line90.setAttribute("y1","13"); line90.setAttribute("y2","13"); line90.setAttribute("class", "threshold-line"); svg.appendChild(line90);
+
+        // Dati
+        const stepX = sessions.length > 1 ? 260 / (sessions.length - 1) : 0;
+        let pathD = "";
+        
+        // Linea (Bianca sottile)
+        sessions.forEach((s, i) => {
+            const x = 20 + (sessions.length > 1 ? i * stepX : 130);
+            const y = 130 - (1.3 * s.percentage);
+            if (i === 0) pathD += `M ${x} ${y}`; else pathD += ` L ${x} ${y}`;
+        });
+        
+        if (sessions.length > 1) {
+            const path = document.createElementNS(svgNS, "path");
+            path.setAttribute("d", pathD); path.setAttribute("fill", "none");
+            path.setAttribute("stroke", "white"); path.setAttribute("stroke-width", "1.5"); path.setAttribute("opacity", "0.6");
+            svg.appendChild(path);
+        }
+
+        // Punti (Sferette)
+        sessions.forEach((s, i) => {
+            const x = 20 + (sessions.length > 1 ? i * stepX : 130);
+            const y = 130 - (1.3 * s.percentage);
+            const dot = document.createElementNS(svgNS, "circle");
+            dot.setAttribute("cx", x); dot.setAttribute("cy", y); dot.setAttribute("r", "5"); dot.setAttribute("fill", "white"); dot.setAttribute("stroke", "var(--accent-color)"); dot.setAttribute("stroke-width", "2");
+            const title = document.createElementNS(svgNS, "title"); title.textContent = `${formatDateEU(s.date)}\nScore: ${s.percentage}% (${s.correct}/${s.total})`; dot.appendChild(title); svg.appendChild(dot);
+            const lbl = document.createElementNS(svgNS, "text"); lbl.setAttribute("x", x); lbl.setAttribute("y", "150"); lbl.setAttribute("text-anchor", "middle"); lbl.setAttribute("fill", "#888"); lbl.setAttribute("font-size", "9");
+            const dObj = new Date(s.date); lbl.textContent = `${dObj.getDate()}/${dObj.getMonth()+1}`; svg.appendChild(lbl);
+        });
+
+        wrapper.appendChild(svg);
+
+        // Tabella Dettagli (Default: Nascosta)
+        const tableContainer = document.createElement('div');
+        tableContainer.className = 'chart-details-table'; // Classe fondamentale per il toggle
+        tableContainer.style.marginTop = "10px";
+        tableContainer.style.display = "none";
+        
+        // Ordine tabella: dal più recente in alto
+        const tableSessions = [...sessions].sort((a,b) => new Date(b.date) - new Date(a.date));
+
+        tableContainer.innerHTML = `
+            <table style="width:100%; font-size:0.85rem; color:#ccc; border-collapse:collapse;">
+                <tr style="border-bottom:1px solid #444; text-align:left; color:#888;">
+                    <th style="padding:5px;">Data</th><th>Score</th><th>%</th><th style="text-align:right;">Azioni</th>
+                </tr>
+                ${tableSessions.map(s => `
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <td style="padding:8px 5px;">${formatDateEU(s.date)}</td>
+                        <td>${s.correct}/${s.total}</td>
+                        <td style="font-weight:bold; color:${s.percentage>=90?'var(--success-color)':'white'}">${s.percentage}%</td>
+                        <td style="text-align:right;">
+                            <button class="btn-icon" style="width:28px; height:28px; font-size:0.8rem; display:inline-flex;" onclick="editSession('${patient.id}', ${s.originalIndex})"><i class="fa-solid fa-pen"></i></button>
+                            <button class="btn-icon" style="width:28px; height:28px; font-size:0.8rem; display:inline-flex; color:var(--danger-color); border-color:rgba(239,68,68,0.3);" onclick="deleteSession('${patient.id}', ${s.originalIndex})"><i class="fa-solid fa-trash"></i></button>
+                        </td>
+                    </tr>
+                `).join('')}
+            </table>
+        `;
+        
+        wrapper.appendChild(tableContainer);
+        container.appendChild(wrapper);
+    });
+}
+
+        // --- EDITOR & UTILS ---
+        // --- FIX TAGGING (Sostituisci editSet, toggleEditMode e saveEditorChanges) ---
+        
+        window.editSet = async (id) => {
+            const set = state.savedSets.find(s => s.id === id);
+            state.editingSetId = id; 
+            state.editingItems = JSON.parse(JSON.stringify(set.items));
+            document.getElementById('edit-set-name').value = set.name;
             
-            // Calculate position relative to the scrollable content
-            // e.clientX is mouse pos. rect.left is container pos. viewport.scrollLeft is scroll offset.
-            const x = e.clientX - rect.left + viewport.scrollLeft;
-            const y = e.clientY - rect.top + viewport.scrollTop;
-
-            const marker = document.createElement('div');
-            marker.className = 'marker-pin';
-            marker.style.left = x + 'px';
-            marker.style.top = y + 'px';
-            
-            // Allow removing specific marker
-            marker.onclick = function(ev) {
-                ev.stopPropagation();
-                marker.remove();
-            }
-
-            viewport.appendChild(marker);
-        }
-
-        window.clearMarkers = function() {
-            const markers = document.querySelectorAll('.marker-pin');
-            markers.forEach(m => m.remove());
-        }
-
-        // NEW: Undo Last Marker
-        window.removeLastMarker = function() {
-            const markers = document.querySelectorAll('.marker-pin');
-            if (markers.length > 0) {
-                markers[markers.length - 1].remove();
-            }
-        }
-
-        // --- UTILS ---
-        function generateUrl(prompt, style) {
-            let s = style === 'mixed' ? ['3d','vector','realistic'][Math.floor(Math.random()*3)] : style;
-            let suffix = s==='3d' ? "cute 3d clay" : s==='vector' ? "flat vector icon" : "photo";
-            // For Scene Mode, force high detail
-            if (prompt.includes('wimmelbilder') || prompt.includes('scene')) {
-                 suffix = "highly detailed, isometric view, colorful, wimmelbilder style, Richard Scarry style";
-            }
-            const seed = Math.floor(Math.random() * 999999);
-            // Steps reduced to 4 for speed, can be increased for quality
-            return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}, ${suffix}?nologo=true&seed=${seed}&width=1024&height=1024&steps=5`; 
-        }
-        async function fetchAI(prompt, count) {
-            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${state.apiKey}`, { 
-                method:'POST', headers:{'Content-Type':'application/json'}, 
-                body: JSON.stringify({ contents:[{parts:[{text:`Genera un JSON array di ${count} oggetti: [{"l":"IT","p":"EN"}]. Topic: ${prompt}`}]}] }) 
-            });
-            const d = await res.json();
-            return JSON.parse(d.candidates[0].content.parts[0].text.replace(/```json|```/g,'').trim());
-        }
-        function expandList(list, target) {
-            let res = [...list]; while (res.length < target) res = res.concat(list);
-            return res.slice(0, target).sort(() => Math.random() - 0.5);
-        }
-
-        // --- LIBRARY & EDITOR ---
-        window.openLibrary = function() { renderLibList(); document.getElementById('modal-library').style.display = 'flex'; requestAnimationFrame(() => document.getElementById('modal-library').classList.add('open')); };
-        window.closeLibrary = function() { document.getElementById('modal-library').classList.remove('open'); setTimeout(()=>document.getElementById('modal-library').style.display='none',300); };
-        function renderLibList() {
-            const container = document.getElementById('lib-list');
-            container.innerHTML = state.saved.map(s => `
-                <div class="lib-card ${s.isClinical ? 'clinical' : ''}">
-                    <div class="lib-title">${s.name}</div>
-                    <div class="lib-cat">${s.category || 'Generale'}</div>
-                    <div class="lib-meta">${s.items.length} items • ${(JSON.stringify(s).length/1024).toFixed(1)} KB</div>
-                    <div style="display:flex; gap:5px; margin-top:auto;">
-                        <button class="btn btn-primary" style="flex:1; padding:8px;" onclick="loadSet('${s.id}')">Carica</button>
-                        <button class="btn btn-ghost" style="padding:8px;" onclick="editSet('${s.id}')"><i class="fa-solid fa-pen"></i></button>
-                        <button class="btn btn-ghost" style="padding:8px;" onclick="exportSingleSet('${s.id}')" title="Esporta"><i class="fa-solid fa-file-export"></i></button>
-                        <button class="btn btn-danger" style="padding:8px;" onclick="deleteSet('${s.id}')"><i class="fa-solid fa-trash"></i></button>
-                    </div>
-                </div>`).join('');
-        }
-        window.createEmptySet = () => {
-            const cat = prompt("Categoria? (es. 🐶 Animali)"); if(!cat) return;
-            const name = prompt("Nome del Set?"); if(!name) return;
-            let items = Array(20).fill(null).map((_, i) => ({label: `Oggetto ${i+1}`, prompt: `Object ${i+1}`, url: null, isCustom: false}));
-            const newSet = { id: Date.now().toString(), name: name, category: cat, items: items, date: new Date().toLocaleDateString(), isClinical: false };
-            DB.saveSet(newSet).then(() => { reloadLibrary(); editSet(newSet.id); });
-        };
-        
-        window.saveSetFromSession = function() {
-            const name = prompt("Nome del Set:"); if (!name) return;
-            const cat = prompt("Categoria (es. AI Custom):");
-            const newSet = { id: Date.now().toString(), name: name, category: cat || "AI", items: state.items, theme: state.currentTheme, date: new Date().toLocaleDateString(), isClinical: false };
-            DB.saveSet(newSet).then(() => { alert("Salvato!"); reloadLibrary(); });
-        };
-        
-        window.editSet = async function(id) {
-            const allSets = await DB.getAllSets(); const set = allSets.find(s => s.id === id); if (!set) return;
-            state.editingSetId = id; state.editingItems = JSON.parse(JSON.stringify(set.items));
-            state.activeEditorIndex = null;
-            document.getElementById('edit-set-name').value = set.name; 
-            document.getElementById('edit-set-cat').value = set.category || "";
-            renderEditorList(); window.closeLibrary(); 
-            document.getElementById('modal-editor').style.display = 'flex'; requestAnimationFrame(()=>document.getElementById('modal-editor').classList.add('open'));
-        };
-        
-        function renderEditorList() {
-            let enabledCount = 0;
-            const html = state.editingItems.map((item, idx) => {
-                const isActive = state.activeEditorIndex === idx ? 'active-paste' : '';
-                const isLoading = item.isLoading === true;
-                const hasUrl = !!item.url;
-                const isHidden = item.hidden === true;
-                if (!isHidden) enabledCount++;
-                
-                return `
-                <div class="editor-item ${isActive} ${isHidden ? 'disabled' : ''}" onclick="selectForPaste(${idx})">
-                    <div class="editor-thumb" onclick="event.stopPropagation(); showPreview('${item.url}')">
-                        <div class="loader-overlay ${isLoading ? '' : 'hidden'}" id="loader-${idx}"><i class="fa-solid fa-spinner fa-spin fa-2x"></i></div>
-                        ${(!isLoading && hasUrl) ? `<img src="${item.url}" onload="this.style.opacity=1; document.getElementById('loader-${idx}').classList.add('hidden')" onerror="handleImgError(this, '${item.label}'); document.getElementById('loader-${idx}').classList.add('hidden')" style="opacity:0; transition:opacity 0.3s" onload="this.style.opacity=1">` : (!isLoading ? `<div class="fallback-badge">${item.label}</div>` : '')}
-                    </div>
-                    <div class="editor-meta">
-                        <input type="text" class="prompt-input" style="font-weight:bold; margin-bottom:5px;" value="${item.label}" onchange="updateLabel(${idx}, this.value)" onclick="event.stopPropagation()" placeholder="Nome">
-                        <input type="text" class="prompt-input" value="${item.prompt}" onchange="updatePrompt(${idx}, this.value)" onclick="event.stopPropagation()" placeholder="Prompt Inglese">
-                    </div>
-                    <div style="display:flex;gap:5px;">
-                        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); toggleItemVisibility(${idx})" title="${isHidden ? 'Mostra' : 'Nascondi'}"><i class="fa-solid ${isHidden ? 'fa-eye-slash' : 'fa-eye'}"></i></button>
-                        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); regenerateItem(${idx})"><i class="fa-solid fa-arrows-rotate"></i></button>
-                        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); document.getElementById('upload-${idx}').click()"><i class="fa-solid fa-folder"></i></button>
-                        <input type="file" id="upload-${idx}" class="hidden" accept="image/*" onchange="uploadImage(${idx}, this)">
-                        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); removeEditorItem(${idx})"><i class="fa-solid fa-minus"></i></button>
-                    </div>
+            // Genera i checkbox con l'attributo data-mode corretto
+            document.getElementById('edit-modes-container').innerHTML = Object.keys(MODES_CONFIG).map(k => {
+                const isChecked = set.modes ? set.modes.includes(k) : true;
+                return `<div class="mode-check ${isChecked?'selected':''}" data-mode="${k}" onclick="toggleEditMode(this)">
+                    <i class="fa-solid ${isChecked?'fa-check-square':'fa-square'}"></i> ${MODES_CONFIG[k]}
                 </div>`;
             }).join('');
             
-            document.getElementById('editor-list').innerHTML = html;
-
-            const counterText = document.getElementById('counter-text');
-            const total = state.editingItems.length;
-            counterText.innerText = `${enabledCount} / ${total}`;
-            counterText.className = (enabledCount === 20) ? 'count-good' : (enabledCount < 5 ? 'count-bad' : '');
-        }
-        
-        window.toggleItemVisibility = function(idx) {
-            state.editingItems[idx].hidden = !state.editingItems[idx].hidden;
-            renderEditorList();
-        }
-        
-        window.addNewItem = function() {
-            state.editingItems.push({ label: "Nuovo", prompt: "New object", url: null, isCustom: false, hidden: false });
-            renderEditorList();
-            const list = document.getElementById('editor-list');
-            setTimeout(() => list.lastElementChild.scrollIntoView({ behavior: "smooth" }), 100);
+            renderEditorList(); 
+            document.getElementById('modal-library').classList.remove('open'); 
+            document.getElementById('modal-editor').classList.add('open');
         };
 
-        window.selectForPaste = (idx) => { state.activeEditorIndex = idx; renderEditorList(); };
-        window.showPreview = (url) => { if(!url || url.includes('placehold')) return; document.getElementById('preview-img').src = url; document.getElementById('modal-preview').style.display='flex'; };
+        window.toggleEditMode = (el) => { 
+            el.classList.toggle('selected'); 
+            const i = el.querySelector('i'); 
+            i.className = el.classList.contains('selected') ? 'fa-solid fa-check-square' : 'fa-solid fa-square'; 
+        };
         
+        window.saveEditorChanges = () => {
+            const modes = []; 
+            // FIX: Legge direttamente l'attributo data-mode invece dell'indice
+            document.querySelectorAll('#edit-modes-container .mode-check.selected').forEach(el => {
+                modes.push(el.dataset.mode);
+            });
+            
+            DB.getAllSets().then(all => {
+                const s = all.find(x => x.id === state.editingSetId);
+                if(s) { 
+                    s.name = document.getElementById('edit-set-name').value; 
+                    s.items = state.editingItems; 
+                    s.modes = modes;
+                    DB.saveSet(s).then(() => { 
+                        reloadLibrary(); // Ricarica la libreria per vedere le modifiche
+                        document.getElementById('modal-editor').classList.remove('open'); 
+                        document.getElementById('modal-library').classList.add('open'); 
+                    });
+                }
+            });
+        };
+        
+        // --- HELPERS (Library & Renderers) ---
+
+        // --- FIX LIBRERIA (Inserisci questo blocco verso la fine dello script, prima di renderGameMode) ---
+        
+        // --- BLOCCO 3: HELPERS LIBRERIA (Sostituisci openLibrary, reloadLibrary, renderLibList, loadSet) ---
+        
+        window.openLibrary = async () => { 
+            await reloadLibrary(); 
+            document.getElementById('modal-library').classList.add('open'); 
+        };
+        
+        window.closeLibrary = () => document.getElementById('modal-library').classList.remove('open');
+
+        window.reloadLibrary = async () => { 
+            state.savedSets = await DB.getAllSets(); 
+            renderLibList(); 
+            // Aggiorniamo anche la tendina principale per riflettere eventuali modifiche
+            if(typeof filterSetsByMode === 'function') filterSetsByMode();
+        };
+
+        // --- LIBRERIA AVANZATA (Sostituisci renderLibList) ---
+        function renderLibList() {
+            const container = document.getElementById('lib-list');
+            if(!container) return;
+            
+            if(state.savedSets.length === 0) {
+                container.innerHTML = '<p style="grid-column:1/-1; text-align:center; opacity:0.5;">Nessun set in archivio.</p>';
+                return;
+            }
+
+            container.innerHTML = state.savedSets.map(s => {
+                // Genera Anteprima (Prime 4 immagini valide)
+                const previews = s.items.filter(i => i.url).slice(0, 4);
+                let previewHtml = '';
+                
+                if (previews.length > 0) {
+                    previewHtml = `<div class="lib-preview-grid" style="display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:2px; height:120px; border-radius:8px; overflow:hidden; background:rgba(0,0,0,0.3); margin-bottom:8px;">
+                        ${previews.map(i => `<img src="${i.url}" style="width:100%; height:100%; object-fit:cover;">`).join('')}
+                        ${previews.length < 4 ? Array(4 - previews.length).fill('<div style="background:rgba(255,255,255,0.05);"></div>').join('') : ''}
+                    </div>`;
+                } else {
+                    previewHtml = `<div style="height:120px; background:rgba(0,0,0,0.2); border-radius:8px; display:flex; align-items:center; justify-content:center; color:#666; font-size:0.8rem; margin-bottom:8px; flex-direction:column; gap:5px;">
+                        <i class="fa-solid fa-image fa-2x" style="opacity:0.3"></i>
+                        <span>No Img</span>
+                    </div>`;
+                }
+
+                // Check Immagini Mancanti
+                const missingCount = s.items.filter(i => !i.url).length;
+                const warningHtml = missingCount > 0 
+                    ? `<div style="color:var(--warning-color); font-size:0.75rem; background:rgba(245, 158, 11, 0.1); padding:4px 8px; border-radius:6px; margin-top:5px; display:flex; align-items:center; gap:5px;">
+                        <i class="fa-solid fa-triangle-exclamation"></i> ${missingCount} immagini mancanti
+                       </div>` 
+                    : '';
+
+                return `
+                <div class="lib-card ${s.isClinical ? 'clinical' : ''}">
+                    ${previewHtml}
+                    <div class="lib-title" style="font-weight:bold; font-size:1rem;">${s.name}</div>
+                    <div class="lib-cat" style="color:var(--text-secondary); font-size:0.8rem;">${s.category || 'Generale'}</div>
+                    <div style="font-size:0.8rem; color:#aaa; margin-top:2px;">${s.items.length} items</div>
+                    ${warningHtml}
+                    
+                    <div style="display:flex; gap:5px; margin-top:10px;">
+                        <button class="btn btn-primary" style="flex:1; padding:6px;" onclick="loadSet('${s.id}')" title="Carica">
+                            <i class="fa-solid fa-play"></i>
+                        </button>
+                        <button class="btn btn-ghost" style="padding:6px 12px;" onclick="editSet('${s.id}')" title="Modifica">
+                            <i class="fa-solid fa-pen"></i>
+                        </button>
+                        <button class="btn btn-ghost" style="padding:6px 12px;" onclick="exportSingleSet('${s.id}')" title="Esporta">
+                            <i class="fa-solid fa-file-export"></i>
+                        </button>
+                        <button class="btn btn-danger" style="padding:6px 12px;" onclick="deleteSet('${s.id}')" title="Elimina">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        window.loadSet = async (id) => {
+            const s = state.savedSets.find(x => x.id === id);
+            if(s) {
+                state.activeSetId = id;
+                state.items = JSON.parse(JSON.stringify(s.items));
+                
+                // Aggiorna il selettore visivo
+                const select = document.getElementById('category-select');
+                if(select) select.value = id;
+                
+                window.closeLibrary();
+                window.startGame();
+            }
+        };
+        window.createEmptySet = () => { const name = prompt("Nome del nuovo Set?"); if(!name) return; const newSet = { id: Date.now().toString(), name: name, category: "Personale", items: [], date: new Date().toLocaleDateString(), isClinical: false }; DB.saveSet(newSet).then(() => { window.location.reload(); }); };
+        window.deleteSet = (id) => { if(confirm("Eliminare definitivamente?")) DB.deleteSet(id).then(() => window.location.reload()); };
+        
+        // --- FIX EDITOR: GESTIONE IMMAGINI, CLICK E PASTE ---
+
+// --- EDITOR COMPLETO (Render, Upload, Toggle, Paste, Actions) ---
+
+        // 1. RENDERIZZA LISTA (Con Occhio, Upload, Selezione e Counter)
+        function renderEditorList() {
+            const container = document.getElementById('editor-list');
+            if (!container) return;
+
+            // Calcolo Item Attivi per il counter
+            const totalItems = state.editingItems.length;
+            const activeItems = state.editingItems.filter(i => !i.hidden).length;
+            
+            // Inseriamo il counter prima della lista (o aggiorniamo un elemento esistente se c'è)
+            // Per semplicità, lo prepariamo come stringa HTML e lo uniamo alla lista
+            // (In una versione più raffinata potremmo avere un div dedicato nell'HTML statico, ma questo funziona bene)
+            const counterHtml = `
+                <div style="position:sticky; top:0; z-index:10; background:#1e1e2f; padding:10px; margin-bottom:10px; border-bottom:1px solid var(--glass-border); display:flex; justify-content:space-between; align-items:center; color:#ccc; font-size:0.9rem;">
+                    <span><i class="fa-solid fa-list-ol"></i> Item Attivi: <b style="color:${activeItems >= 20 ? 'var(--success-color)' : 'var(--warning-color)'}">${activeItems}</b> / ${totalItems}</span>
+                    <span style="font-size:0.8rem; opacity:0.7;">(Target RAN: ~20)</span>
+                </div>
+            `;
+
+            const listHtml = state.editingItems.map((item, idx) => {
+                const isSelected = state.activeEditorIndex === idx;
+                const activeStyle = isSelected ? 'border:1px solid var(--accent-color); background:rgba(99, 102, 241, 0.1);' : 'border:1px solid transparent;';
+                const opacityStyle = item.hidden ? 'opacity: 0.6;' : 'opacity: 1;';
+
+                return `
+                <div class="editor-item" style="${activeStyle} ${opacityStyle} transition:0.2s; cursor:pointer;" onclick="setActiveItem(${idx})">
+                    
+                    <!-- Immagine: Clicca per caricare -->
+                    <div class="editor-thumb" style="cursor:pointer; position:relative;" onclick="triggerItemUpload(${idx}); event.stopPropagation();" title="Clicca per caricare">
+                        <img src="${item.url || getPlaceholderUrl(item.label)}" style="width:100%; height:100%; object-fit:cover; pointer-events:none;">
+                        <div style="position:absolute; inset:0; background:rgba(0,0,0,0.3); display:flex; justify-content:center; align-items:center; opacity:0; hover:opacity:1;">
+                            <i class="fa-solid fa-camera" style="color:white;"></i>
+                        </div>
+                    </div>
+                    
+                    <!-- Input -->
+                    <div style="flex:1">
+                        <input type="text" value="${item.label}" 
+                            onchange="state.editingItems[${idx}].label=this.value" 
+                            onfocus="setActiveItem(${idx})" 
+                            placeholder="Etichetta"
+                            style="${item.hidden ? 'text-decoration:line-through; color:#888;' : ''}">
+                    </div>
+                    
+                    <!-- Tasto Mostra/Nascondi -->
+                    <button class="btn btn-ghost" style="padding:10px;" onclick="toggleItemVisibility(${idx}); event.stopPropagation();" title="${item.hidden ? 'Mostra' : 'Nascondi'}">
+                        <i class="fa-solid ${item.hidden ? 'fa-eye-slash' : 'fa-eye'}" style="${item.hidden ? 'color:#888' : 'color:var(--success-color)'}"></i>
+                    </button>
+
+                    <!-- Tasto Rimuovi -->
+                    <button class="btn btn-danger" style="padding:10px;" onclick="state.editingItems.splice(${idx},1); renderEditorList(); event.stopPropagation();">
+                        <i class="fa-solid fa-minus"></i>
+                    </button>
+                </div>`;
+            }).join('');
+
+            container.innerHTML = counterHtml + listHtml;
+        }
+
+        // 2. AZIONI EDITOR (Aggiungi, Chiudi, Toggle)
+        window.addNewItem = () => { 
+            state.editingItems.push({ label: 'Nuovo', url: null, hidden: false }); 
+            renderEditorList(); 
+            // Scrolla in fondo
+            setTimeout(() => {
+                const list = document.getElementById('editor-list');
+                list.scrollTop = list.scrollHeight;
+            }, 100);
+        };
+
+        window.closeEditor = () => {
+            document.getElementById('modal-editor').classList.remove('open');
+            document.getElementById('modal-library').classList.add('open'); // Torna alla libreria
+        };
+
+        window.toggleItemVisibility = (idx) => {
+            state.editingItems[idx].hidden = !state.editingItems[idx].hidden;
+            renderEditorList();
+        };
+
+        window.setActiveItem = (index) => {
+            state.activeEditorIndex = index;
+            renderEditorList();
+        };
+
+        // 3. UPLOAD & PASTE
+        window.triggerItemUpload = (index) => {
+            state.activeEditorIndex = index;
+            let input = document.createElement('input');
+            input.type = 'file'; input.accept = 'image/*'; input.style.display = 'none';
+            input.onchange = (e) => {
+                if (e.target.files[0]) {
+                    const r = new FileReader();
+                    r.onload = (ev) => { state.editingItems[index].url = ev.target.result; renderEditorList(); };
+                    r.readAsDataURL(e.target.files[0]);
+                }
+            };
+            document.body.appendChild(input); input.click(); setTimeout(() => document.body.removeChild(input), 1000);
+        };
+
         async function handlePaste(e) {
-            if (document.getElementById('modal-editor').style.display === 'none') return;
-            if (state.activeEditorIndex === null) return;
+            if (!document.getElementById('modal-editor').classList.contains('open')) return;
+            if (state.activeEditorIndex === null || state.activeEditorIndex === undefined) return;
             const items = (e.clipboardData || e.originalEvent.clipboardData).items;
             for (const item of items) {
                 if (item.type.indexOf('image') === 0) {
+                    e.preventDefault();
                     const blob = item.getAsFile();
-                    const compressed = await compressImage(blob);
-                    state.editingItems[state.activeEditorIndex].url = compressed;
-                    state.editingItems[state.activeEditorIndex].isCustom = true;
-                    renderEditorList();
-                    break; 
+                    const r = new FileReader();
+                    r.onload = (event) => {
+                        state.editingItems[state.activeEditorIndex].url = event.target.result;
+                        renderEditorList();
+                    };
+                    r.readAsDataURL(blob);
                 }
             }
-        };
+        }
 
-        window.updateLabel = (idx, val) => { state.editingItems[idx].label = val; };
-        window.updatePrompt = (idx, val) => { state.editingItems[idx].prompt = val; };
-        window.removeEditorItem = (idx) => { state.editingItems.splice(idx, 1); renderEditorList(); };
-        window.regenerateItem = (idx) => {
-            state.editingItems[idx].isLoading = true; renderEditorList(); 
-            const newUrl = generateUrl(state.editingItems[idx].prompt, document.getElementById('style-select').value);
-            const img = new Image();
-            img.onload = () => { state.editingItems[idx].url = newUrl; state.editingItems[idx].isCustom = false; state.editingItems[idx].isLoading = false; renderEditorList(); };
-            img.onerror = () => { state.editingItems[idx].isLoading = false; renderEditorList(); };
-            img.src = newUrl;
-        };
-        function compressImage(file) { return new Promise((res) => { const r = new FileReader(); r.onload = e => { const i = new Image(); i.onload = () => { const c = document.createElement('canvas'); let w=i.width, h=i.height; if(w>800){h*=800/w;w=800;} c.width=w; c.height=h; c.getContext('2d').drawImage(i,0,0,w,h); res(c.toDataURL('image/jpeg', 0.6)); }; i.src = e.target.result; }; r.readAsDataURL(file); }); }
-        window.uploadImage = async (idx, input) => { const f = input.files[0]; if(!f) return; state.editingItems[idx].url = await compressImage(f); state.editingItems[idx].isCustom = true; renderEditorList(); };
-        window.bulkUploadImages = async (input) => { for(let f of input.files) { state.editingItems.push({ label: f.name.split('.')[0], prompt: f.name.split('.')[0], url: await compressImage(f), isCustom: true }); } renderEditorList(); };
+        function renderGameMode(mode, items) {
+             const stage = document.getElementById('game-stage'); stage.innerHTML = '';
+             if (mode === 'tact') renderTact(items, stage); else if (mode === 'ran') renderRan(items, stage);
+             else if (mode === 'tombola') renderTombola(items, stage); else if (mode === 'memory') renderMemory(items, stage);
+             else if (mode === 'search_find') renderSearchFind(items, stage);
+        }
+        function getPlaceholderUrl(label) { return `https://placehold.co/600x600?text=${encodeURIComponent(label)}`; }
+        function handleImgError(img, label) { img.onerror = null; img.src = getPlaceholderUrl(label); }
         
-        window.saveEditorChanges = function() {
-            const newName = document.getElementById('edit-set-name').value;
-            const newCat = document.getElementById('edit-set-cat').value;
-            DB.getAllSets().then(all => { 
-                const s = all.find(x => x.id === state.editingSetId); 
-                if(s) { 
-                    s.name = newName; 
-                    s.category = newCat || "Generale";
-                    s.items = state.editingItems; 
-                    if(s.isClinical){s.isClinical=false; s.name+=" (Mod)";} 
-                    DB.saveSet(s).then(() => { alert("Salvato!"); window.closeEditor(); reloadLibrary(); }); 
-                } 
-            });
-        };
-        window.closeEditor = function() { document.getElementById('modal-editor').classList.remove('open'); setTimeout(()=>document.getElementById('modal-editor').style.display='none',300); window.openLibrary(); };
-        window.deleteSet = (id) => { if(confirm("Eliminare?")) DB.deleteSet(id).then(() => reloadLibrary()); };
-        
-        window.loadSet = async (id) => { 
-            const all = await DB.getAllSets(); 
-            const s = all.find(x => x.id === id); 
-            state.items = s.items; 
-            state.loadedSetName = s.name;
-            updateStatusLabel();
-            window.closeLibrary(); 
-            window.startGame();
-        };
-        
-        window.exportAllSets = async () => { const s = await DB.getAllSets(); downloadJSON(s, `Backup_Full.json`); };
-        window.exportSingleSet = async (id) => { const all = await DB.getAllSets(); const s = all.find(x => x.id === id); if(s) downloadJSON([s], `Set_${s.name}.json`); };
-        function downloadJSON(d, n) { const b = new Blob([JSON.stringify(d)], {type:'application/json'}); const u = URL.createObjectURL(b); const a = document.createElement('a'); a.href=u; a.download=n; document.body.appendChild(a); a.click(); setTimeout(()=>URL.revokeObjectURL(u),100); }
-        window.importSets = (input) => { const r = new FileReader(); r.onload = async e => { try { const d = JSON.parse(e.target.result); for(const s of d) await DB.saveSet(s); reloadLibrary(); alert("Importato!"); } catch(err){alert("Errore");} }; r.readAsText(input.files[0]); };
-
+        function renderTact(items, stage) {
+            state.tactIndex = 0; // Reset index
+            const showCard = () => {
+                const item = items[state.tactIndex];
+                stage.innerHTML = `<div class="tact-stage" onclick="window.nextTact()"><div class="tact-card-lg"><img src="${item.url || getPlaceholderUrl(item.label)}" onerror="handleImgError(this, '${item.label}')"><div class="tact-title">${item.label}</div><div style="font-size:0.9rem; color:#888;">${state.tactIndex + 1} / ${items.length}</div></div></div>`;
+            };
+            window.nextTact = () => { state.tactIndex = (state.tactIndex + 1) % items.length; showCard(); }; showCard();
+        }
+        function renderRan(items, stage) { 
+            state.ranDisplayItems = items; if(state.ranIndex>=items.length) state.ranIndex=0; 
+            stage.innerHTML=`<div class="ran-container"><div class="ran-toolbar"><button class="btn btn-sm btn-ghost" onclick="toggleRanMode()"><i class="fa-solid ${state.ranMode==='grid'?'fa-film':'fa-table-cells'}"></i> ${state.ranMode==='grid'?'Passa a Sequenza':'Passa a Griglia'}</button></div><div id="ran-content" style="flex:1; overflow:hidden;"></div></div>`; updateRanContent(); 
+        }
+        window.toggleRanMode=()=>{state.ranMode=state.ranMode==='grid'?'single':'grid'; updateRanContent();};
+        function updateRanContent(){ const c=document.getElementById('ran-content'); const i=state.ranDisplayItems; if(state.ranMode==='grid'){ let cols=Math.ceil(Math.sqrt(i.length)); if(i.length<=9)cols=3; else if(i.length<=16)cols=4;else cols=5; let h=`<div class="ran-scroll-area"><div class="grid-adaptive" style="grid-template-columns:repeat(${cols},1fr);">`; i.forEach(x=>{h+=`<div class="ran-card"><img src="${x.url||getPlaceholderUrl(x.label)}" onerror="handleImgError(this,'${x.label}')"></div>`}); h+=`</div></div>`; c.innerHTML=h; } else { const x=i[state.ranIndex]; c.innerHTML=`<div class="ran-single-stage"><div style="flex:1; display:flex; flex-direction:column; justify-content:center; width:100%; overflow:hidden;"><img src="${x.url||getPlaceholderUrl(x.label)}" class="ran-main-img" onerror="handleImgError(this,'${x.label}')"><h2 style="text-align:center;">${x.label}</h2></div><div class="ran-controls-bar"><button class="ran-btn-nav" onclick="prevRan()"><i class="fa-solid fa-arrow-left"></i></button><div class="ran-counter">${state.ranIndex+1}/${i.length}</div><button class="ran-btn-nav" onclick="nextRan()"><i class="fa-solid fa-arrow-right"></i></button></div></div>`; } }
+        window.nextRan=()=>{if(state.ranIndex<state.ranDisplayItems.length-1){state.ranIndex++;updateRanContent();}}; window.prevRan=()=>{if(state.ranIndex>0){state.ranIndex--;updateRanContent();}};
+        function renderTombola(items, stage) { state.deck = [...items].sort(() => Math.random() - 0.5); const cols = Math.ceil(Math.sqrt(items.length)); stage.innerHTML = `<div style="display:flex; height:100%; flex-direction:column;"><div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10;"><div style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">Trova:</div><div id="deck-target" style="background:white; padding:5px; border-radius:8px; display:flex; align-items:center; gap:10px;">${getDeckHtml()}</div></div><div style="flex:1; overflow-y:auto; padding:10px;"><div class="grid-adaptive" style="grid-template-columns:repeat(${cols}, 1fr);">${items.map((item, idx) => `<div class="card-grid" id="slot-${idx}" onclick="handleMatchClick(${idx}, '${item.label}')"><img src="${item.url || getPlaceholderUrl(item.label)}" onerror="handleImgError(this, '${item.label}')"></div>`).join('')}</div></div></div>`; }
+        function getDeckHtml() { if (state.deck.length === 0) return `<span>🎉 FINITO!</span>`; const c = state.deck[0]; return `<img src="${c.url||getPlaceholderUrl(c.label)}" style="width:40px; height:40px; object-fit:contain;"> <span style="color:#333; font-weight:bold; padding-right:10px;">${c.label}</span>`; }
+        window.handleMatchClick = (idx, label) => { if (state.deck.length === 0 || label !== state.deck[0].label) return; document.getElementById(`slot-${idx}`).classList.add('matched'); state.deck.shift(); document.getElementById('deck-target').innerHTML = getDeckHtml(); };
+        function renderMemory(items, stage) { let useItems = items.length > 10 ? items.slice(0, 10) : items; let deck = [...useItems, ...useItems].sort(() => Math.random() - 0.5); state.memory = { flipped: [], matched: [], deck: deck, lockBoard: false }; const cols = Math.ceil(Math.sqrt(deck.length)); stage.innerHTML = `<div style="padding:10px; height:100%; overflow-y:auto;"><div class="grid-adaptive" style="grid-template-columns: repeat(${cols}, 1fr);">${deck.map((item, idx) => `<div class="card-grid" id="mem-${idx}" onclick="flipCard(${idx})" style="background:var(--accent-color);"><div class="mem-content" style="display:none; width:100%; height:100%;"><img src="${item.url || getPlaceholderUrl(item.label)}" style="width:100%; height:100%; object-fit:contain; background:white; border-radius:6px;" onerror="handleImgError(this, '${item.label}')"></div><i class="fa-solid fa-question icon-back" style="color:white; font-size:2rem;"></i></div>`).join('')}</div></div>`; }
+        window.flipCard = (idx) => { if (state.memory.lockBoard || state.memory.flipped.includes(idx) || state.memory.matched.includes(idx)) return; const card = document.getElementById(`mem-${idx}`); card.querySelector('.mem-content').style.display = 'block'; card.querySelector('.icon-back').style.display = 'none'; card.style.background = 'white'; state.memory.flipped.push(idx); if (state.memory.flipped.length === 2) { state.memory.lockBoard = true; const [i1, i2] = state.memory.flipped; if (state.memory.deck[i1].label === state.memory.deck[i2].label) { state.memory.matched.push(i1, i2); state.memory.flipped = []; state.memory.lockBoard = false; document.getElementById(`mem-${i1}`).classList.add('matched'); document.getElementById(`mem-${i2}`).classList.add('matched'); } else { setTimeout(() => { [i1, i2].forEach(i => { const c = document.getElementById(`mem-${i}`); c.querySelector('.mem-content').style.display = 'none'; c.querySelector('.icon-back').style.display = 'block'; c.style.background = 'var(--accent-color)'; }); state.memory.flipped = []; state.memory.lockBoard = false; }, 1000); } } };
+        function renderSearchFind(items,stage){const s=items[0]; stage.innerHTML=`<div class="search-find-container"><div class="sf-toolbar"><span style="color:white;font-weight:bold;">${s.label}</span><button class="btn btn-sm btn-danger" onclick="clearMarkers()"><i class="fa-solid fa-eraser"></i> Pulisci</button></div><div class="sf-viewport" id="sf-viewport" onclick="placeMarker(event)"><img src="${s.url||getPlaceholderUrl(s.label)}" class="sf-image" onerror="handleImgError(this,'${s.label}')"></div></div>`;}
+        window.placeMarker=(e)=>{const vp=document.getElementById('sf-viewport'); const r=vp.getBoundingClientRect(); const m=document.createElement('div'); m.className='marker-pin'; m.style.left=(e.clientX-r.left)+'px'; m.style.top=(e.clientY-r.top)+'px'; m.onclick=(ev)=>{ev.stopPropagation();m.remove();}; vp.appendChild(m);};
+        window.removeLastMarker=()=>{const m=document.querySelectorAll('.marker-pin'); if(m.length) m[m.length-1].remove();}; window.clearMarkers=()=>{document.querySelectorAll('.marker-pin').forEach(e=>e.remove());};
+        window.toggleGlobalScrollLock=()=>{document.body.classList.toggle('global-locked'); document.getElementById('btn-global-lock').classList.toggle('locked');};
     </script>
 </body>
 </html>
