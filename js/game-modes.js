@@ -158,10 +158,38 @@ function getDeckHtml() {
 }
 
 window.handleMatchClick = (idx, label) => {
-    if (state.deck.length === 0 || label !== state.deck[0].label) return;
-    document.getElementById(`slot-${idx}`).classList.add('matched');
-    state.deck.shift();
-    document.getElementById('deck-target').innerHTML = getDeckHtml();
+    if (state.deck.length === 0) return;
+    const cardEl = document.getElementById(`slot-${idx}`);
+    if (cardEl.classList.contains('matched')) return;
+
+    const isCorrect = label === state.deck[0].label;
+
+    if (isCorrect) {
+        cardEl.classList.add('matched');
+        cardEl.style.border = '4px solid var(--success-color)';
+        cardEl.style.boxShadow = '0 0 15px rgba(16,185,129,0.4)';
+        state.deck.shift();
+        document.getElementById('deck-target').innerHTML = getDeckHtml();
+    } else {
+        cardEl.style.border = '4px solid var(--danger-color)';
+        cardEl.style.boxShadow = '0 0 15px rgba(239,68,68,0.4)';
+        setTimeout(() => {
+            cardEl.style.border = '';
+            cardEl.style.boxShadow = '';
+        }, 600);
+    }
+
+    // Auto-score in session
+    if (state.session.active) {
+        const key = `tombola_${Date.now()}`;
+        state.session.itemResults[key] = isCorrect;
+        const results = Object.values(state.session.itemResults);
+        state.session.correct = results.filter(v => v === true).length;
+        state.session.incorrect = results.filter(v => v === false).length;
+        state.session.total = results.length;
+        updateScoreUI();
+        document.getElementById('btn-save-session').classList.remove('hidden');
+    }
 };
 
 // --- MEMORY ---
@@ -223,9 +251,7 @@ window.flipCard = (idx) => {
     }
 };
 
-// --- POOL RANDOM ---
-// Picks random items from all sets matching the selected tags,
-// then renders them as TACT-style flashcards
+// --- POOL RANDOM (Grid, infinite batching) ---
 function renderPoolRandom(items, stage) {
     if (!items || items.length === 0) {
         stage.innerHTML = `
@@ -236,43 +262,51 @@ function renderPoolRandom(items, stage) {
         return;
     }
 
-    state.tactIndex = 0;
+    const numStimuli = parseInt(document.getElementById('num-stimuli').value) || 0;
+    state.poolAllItems = [...items];
+    state.poolBatchSize = numStimuli > 0 ? Math.min(numStimuli, items.length) : items.length;
 
-    const showCard = () => {
-        const item = items[state.tactIndex];
-        const status = state.session.itemResults ? state.session.itemResults[state.tactIndex] : undefined;
-        const feedbackClass = status === true ? 'feedback-success' : (status === false ? 'feedback-fail' : '');
-
-        stage.innerHTML = `
-        <div class="tact-stage" onclick="window.nextPoolCard()">
-            <div class="tact-card-lg">
-                <img src="${item.url || getPlaceholderUrl(item.label)}"
-                     class="${feedbackClass}"
-                     style="transition:0.3s;"
-                     onerror="handleImgError(this, '${item.label}')">
-                <div class="tact-title">${item.label}</div>
-                <div style="font-size:0.8rem; color:#888; display:flex; gap:8px; align-items:center; justify-content:center; flex-wrap:wrap;">
-                    <span>${state.tactIndex + 1} / ${items.length}</span>
-                    ${(item.sourceTags || []).map(t =>
-                        `<span style="background:rgba(139,92,246,0.2); color:#a78bfa; padding:1px 8px; border-radius:10px; font-size:0.7rem;">${t}</span>`
-                    ).join('')}
-                </div>
-            </div>
-        </div>`;
-    };
-
-    window.nextPoolCard = () => {
-        state.tactIndex = (state.tactIndex + 1) % items.length;
-        showCard();
-    };
-    showCard();
+    showPoolBatch(stage);
 }
 
-// --- INTRUSO ---
-// Shows 3 items from the same tag + 1 intruder from a different tag.
-// The player must identify the intruder.
+function showPoolBatch(stage) {
+    state.poolAllItems.sort(() => Math.random() - 0.5);
+    const batch = state.poolAllItems.slice(0, state.poolBatchSize);
+    const cols = Math.ceil(Math.sqrt(batch.length));
+    const rows = Math.ceil(batch.length / cols);
+
+    stage.innerHTML = `
+    <div style="display:flex; height:100%; flex-direction:column;">
+        <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
+            <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
+                <i class="fa-solid fa-shuffle"></i> Pool Random
+            </span>
+            <span style="color:var(--text-secondary); font-size:0.75rem;">${batch.length} stimoli</span>
+            <button class="btn btn-sm btn-primary" onclick="nextPoolBatch()" style="padding:4px 12px; font-size:0.75rem;">
+                <i class="fa-solid fa-forward"></i> Avanti
+            </button>
+        </div>
+        <div style="flex:1; min-height:0; padding:10px; display:grid;
+                    grid-template-columns:repeat(${cols}, 1fr);
+                    grid-template-rows:repeat(${rows}, minmax(80px, 1fr));
+                    gap:10px; overflow-y:auto;">
+            ${batch.map((item) => `
+                <div class="card-grid" style="aspect-ratio:unset; height:auto; min-height:0; min-width:0; overflow:hidden;">
+                    <img src="${item.url || getPlaceholderUrl(item.label)}"
+                         style="max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain;"
+                         onerror="handleImgError(this, '${item.label}')">
+                </div>
+            `).join('')}
+        </div>
+    </div>`;
+}
+
+window.nextPoolBatch = () => {
+    showPoolBatch(document.getElementById('game-stage'));
+};
+
+// --- INTRUSO (infinite rounds, variable card count) ---
 function renderIntruso(items, stage) {
-    // items is ignored - we build rounds from tags
     const tags = state.selectedPoolTags;
     if (tags.length < 2) {
         stage.innerHTML = `
@@ -283,74 +317,60 @@ function renderIntruso(items, stage) {
         return;
     }
 
-    // Build rounds
-    const numStimuli = parseInt(document.getElementById('num-stimuli').value) || 10;
-    const rounds = buildIntrusoRounds(tags, numStimuli);
+    const numStimuli = parseInt(document.getElementById('num-stimuli').value) || 0;
+    state.intrusoCardsPerRound = numStimuli > 0 ? Math.max(numStimuli, 3) : 4;
+    state.intrusoRound = 0;
 
-    if (rounds.length === 0) {
+    const round = generateIntrusoRound(tags, state.intrusoCardsPerRound);
+    if (!round) {
         stage.innerHTML = `
             <div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; opacity:0.5; text-align:center; padding:20px;">
                 <i class="fa-solid fa-circle-xmark fa-3x" style="margin-bottom:15px;"></i>
-                <p>Non ci sono abbastanza item con immagini<br>per generare le domande Intruso.</p>
+                <p>Non ci sono abbastanza item con immagini<br>per generare le domande Intruso con ${state.intrusoCardsPerRound} carte.<br>Prova con meno stimoli o aggiungi item.</p>
             </div>`;
         return;
     }
 
-    state.intrusoRounds = rounds;
-    state.intrusoRound = 0;
-    showIntrusoRound(stage);
+    showIntrusoRound(stage, round);
 }
 
-function buildIntrusoRounds(tags, count) {
-    const rounds = [];
-    // Collect items per tag
+function generateIntrusoRound(tags, cardsPerRound) {
+    const targetCount = cardsPerRound - 1;
     const tagItems = {};
-    tags.forEach(tag => {
-        tagItems[tag] = getItemsByTag(tag);
-    });
+    tags.forEach(tag => { tagItems[tag] = getItemsByTag(tag); });
 
-    // Filter tags with enough items
-    const validTags = tags.filter(t => tagItems[t].length >= 3);
+    const validTags = tags.filter(t => tagItems[t].length >= targetCount);
     const distractorTags = tags.filter(t => tagItems[t].length >= 1);
+    if (validTags.length === 0 || distractorTags.length < 2) return null;
 
-    if (validTags.length === 0 || distractorTags.length < 2) return [];
+    const targetTag = validTags[Math.floor(Math.random() * validTags.length)];
+    const otherTags = distractorTags.filter(t => t !== targetTag);
+    if (otherTags.length === 0) return null;
+    const intruderTag = otherTags[Math.floor(Math.random() * otherTags.length)];
 
-    for (let i = 0; i < count; i++) {
-        // Pick a random "target" tag
-        const targetTag = validTags[Math.floor(Math.random() * validTags.length)];
-        // Pick a different tag for the intruder
-        const otherTags = distractorTags.filter(t => t !== targetTag);
-        if (otherTags.length === 0) continue;
-        const intruderTag = otherTags[Math.floor(Math.random() * otherTags.length)];
+    const shuffledTargets = [...tagItems[targetTag]].sort(() => Math.random() - 0.5);
+    const targets = shuffledTargets.slice(0, targetCount);
+    if (targets.length < targetCount) return null;
 
-        // Pick 3 random items from target tag
-        const shuffledTargets = [...tagItems[targetTag]].sort(() => Math.random() - 0.5);
-        const targets = shuffledTargets.slice(0, 3);
-        if (targets.length < 3) continue;
+    const targetLabels = new Set(targets.map(t => t.label));
+    const validIntruders = tagItems[intruderTag].filter(item => !targetLabels.has(item.label));
+    if (validIntruders.length === 0) return null;
+    const intruder = validIntruders[Math.floor(Math.random() * validIntruders.length)];
 
-        // Pick 1 random item from intruder tag (different label from targets)
-        const targetLabels = new Set(targets.map(t => t.label));
-        const validIntruders = tagItems[intruderTag].filter(item => !targetLabels.has(item.label));
-        if (validIntruders.length === 0) continue;
-        const intruder = validIntruders[Math.floor(Math.random() * validIntruders.length)];
+    const cards = [...targets.map(t => ({ ...t, isIntruder: false, tag: targetTag })),
+                   { ...intruder, isIntruder: true, tag: intruderTag }];
+    cards.sort(() => Math.random() - 0.5);
 
-        // Combine and shuffle positions
-        const cards = [...targets.map(t => ({ ...t, isIntruder: false, tag: targetTag })),
-                       { ...intruder, isIntruder: true, tag: intruderTag }];
-        cards.sort(() => Math.random() - 0.5);
-
-        rounds.push({ targetTag, intruderTag, cards });
-    }
-
-    return rounds;
+    return { targetTag, intruderTag, cards };
 }
 
-function showIntrusoRound(stage) {
-    const round = state.intrusoRounds[state.intrusoRound];
+function showIntrusoRound(stage, round) {
     if (!round) return;
-
-    const total = state.intrusoRounds.length;
+    state.currentIntrusoRound = round;
     const current = state.intrusoRound + 1;
+    const totalCards = round.cards.length;
+    const cols = totalCards <= 2 ? totalCards : Math.ceil(Math.sqrt(totalCards));
+    const rows = Math.ceil(totalCards / cols);
 
     stage.innerHTML = `
     <div style="display:flex; height:100%; flex-direction:column;">
@@ -359,11 +379,11 @@ function showIntrusoRound(stage) {
             <span style="background:rgba(139,92,246,0.2); color:#a78bfa; padding:2px 10px; border-radius:10px; font-size:0.75rem;">
                 Categoria: ${round.targetTag}
             </span>
-            <span style="color:var(--text-secondary); font-size:0.8rem;">${current}/${total}</span>
+            <span style="color:var(--text-secondary); font-size:0.8rem;">Round ${current}</span>
         </div>
         <div style="flex:1; min-height:0; padding:10px; display:grid;
-                    grid-template-columns:repeat(2, 1fr);
-                    grid-template-rows:repeat(2, minmax(80px, 1fr));
+                    grid-template-columns:repeat(${cols}, 1fr);
+                    grid-template-rows:repeat(${rows}, minmax(80px, 1fr));
                     gap:10px; overflow-y:auto;">
             ${round.cards.map((card, idx) => `
                 <div class="card-grid" id="intruso-${idx}"
@@ -380,23 +400,20 @@ function showIntrusoRound(stage) {
 
 window.handleIntrusoClick = (idx) => {
     if (!state.session.active) return;
-    const round = state.intrusoRounds[state.intrusoRound];
+    const round = state.currentIntrusoRound;
     if (!round) return;
 
     const card = round.cards[idx];
     const cardEl = document.getElementById(`intruso-${idx}`);
 
     if (card.isIntruder) {
-        // Correct! This is the intruder
         cardEl.style.border = '4px solid var(--success-color)';
         cardEl.style.boxShadow = '0 0 20px rgba(16,185,129,0.5)';
         state.session.itemResults[state.intrusoRound] = true;
     } else {
-        // Wrong! Not the intruder
         cardEl.style.border = '4px solid var(--danger-color)';
         cardEl.style.boxShadow = '0 0 20px rgba(239,68,68,0.5)';
         state.session.itemResults[state.intrusoRound] = false;
-        // Highlight the actual intruder
         round.cards.forEach((c, i) => {
             if (c.isIntruder) {
                 const el = document.getElementById(`intruso-${i}`);
@@ -406,7 +423,6 @@ window.handleIntrusoClick = (idx) => {
         });
     }
 
-    // Update score
     const results = Object.values(state.session.itemResults);
     state.session.correct = results.filter(v => v === true).length;
     state.session.incorrect = results.filter(v => v === false).length;
@@ -414,22 +430,12 @@ window.handleIntrusoClick = (idx) => {
     updateScoreUI();
     document.getElementById('btn-save-session').classList.remove('hidden');
 
-    // Move to next round after delay
+    // Generate next round after delay (infinite)
     setTimeout(() => {
         state.intrusoRound++;
-        if (state.intrusoRound < state.intrusoRounds.length) {
-            showIntrusoRound(document.getElementById('game-stage'));
-        } else {
-            // All rounds done
-            const stage = document.getElementById('game-stage');
-            const pct = state.session.total > 0 ? Math.round((state.session.correct / state.session.total) * 100) : 0;
-            stage.innerHTML = `
-                <div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:20px;">
-                    <i class="fa-solid fa-flag-checkered fa-3x" style="margin-bottom:15px; color:var(--accent-color);"></i>
-                    <h2 style="margin:10px 0;">Sessione Completata!</h2>
-                    <p style="font-size:1.5rem; font-weight:bold; color:${pct >= 90 ? 'var(--success-color)' : 'white'};">${pct}%</p>
-                    <p style="color:var(--text-secondary);">${state.session.correct} / ${state.session.total} corretti</p>
-                </div>`;
+        const nextRound = generateIntrusoRound(state.selectedPoolTags, state.intrusoCardsPerRound);
+        if (nextRound) {
+            showIntrusoRound(document.getElementById('game-stage'), nextRound);
         }
     }, 1200);
 };
@@ -741,7 +747,6 @@ function showCategorizzazioneItem(stage) {
     const idx = state.catIndex;
 
     if (idx >= items.length) {
-        // All done
         const pct = state.session.total > 0 ? Math.round((state.session.correct / state.session.total) * 100) : 0;
         stage.innerHTML = `
             <div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:20px;">
@@ -755,9 +760,8 @@ function showCategorizzazioneItem(stage) {
 
     const item = items[idx];
     const total = items.length;
-
-    // Generate color palette for tags
     const tagColors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
+    const tagImgs = getAllTagImages();
 
     stage.innerHTML = `
     <div style="display:flex; height:100%; flex-direction:column;">
@@ -767,19 +771,20 @@ function showCategorizzazioneItem(stage) {
             </span>
             <span style="color:var(--text-secondary); font-size:0.8rem;">${idx + 1}/${total}</span>
         </div>
-        <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; min-height:0;">
-            <div id="cat-card" style="background:white; border-radius:16px; padding:10px; max-width:300px; width:100%; max-height:60%; display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 10px 40px rgba(0,0,0,0.5); transition:0.3s;">
+        <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:15px; min-height:0;">
+            <div id="cat-card" style="background:white; border-radius:16px; padding:8px; max-width:200px; width:100%; max-height:45%; display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 10px 40px rgba(0,0,0,0.5); transition:0.3s;">
                 <img src="${item.url || getPlaceholderUrl(item.label)}"
-                     style="max-width:100%; max-height:80%; object-fit:contain; border-radius:8px;"
+                     style="max-width:100%; max-height:85%; object-fit:contain; border-radius:8px;"
                      onerror="handleImgError(this, '${item.label}')">
-                <div style="font-size:1.2rem; color:#333; font-weight:800; margin-top:8px; text-transform:uppercase;">${item.label}</div>
+                <div style="font-size:0.9rem; color:#333; font-weight:800; margin-top:4px; text-transform:uppercase;">${item.label}</div>
             </div>
         </div>
-        <div style="padding:15px; display:flex; gap:10px; flex-wrap:wrap; justify-content:center; background:rgba(0,0,0,0.2); border-top:1px solid #ffffff10; flex-shrink:0;">
+        <div style="padding:15px 10px; display:flex; gap:12px; flex-wrap:wrap; justify-content:center; background:rgba(0,0,0,0.2); border-top:1px solid #ffffff10; flex-shrink:0;">
             ${tags.map((tag, i) => `
                 <button class="btn" onclick="handleCatChoice('${tag}')"
-                    style="background:${tagColors[i % tagColors.length]}; padding:12px 20px; font-size:1rem; border-radius:12px; min-width:100px; text-transform:capitalize;">
-                    ${tag}
+                    style="background:${tagColors[i % tagColors.length]}; padding:15px 20px; font-size:1.1rem; border-radius:16px; min-width:120px; min-height:80px; text-transform:capitalize; display:flex; flex-direction:column; align-items:center; gap:6px;">
+                    ${tagImgs[tag] ? `<img src="${tagImgs[tag]}" style="width:48px; height:48px; object-fit:contain; border-radius:8px; background:rgba(255,255,255,0.3);">` : ''}
+                    <span>${tag}</span>
                 </button>
             `).join('')}
         </div>

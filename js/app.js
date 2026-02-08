@@ -207,13 +207,10 @@ window.startGame = () => {
         document.getElementById('btn-save-session').classList.add('hidden');
         document.getElementById('btn-undo-marker').classList.add('hidden');
 
-        // For pool_random: collect items from tags, shuffle, limit
+        // For pool_random: collect all items from tags (renderer handles batch size)
         if (mode === 'pool_random') {
             let poolItems = getItemsByTags(state.selectedPoolTags);
             poolItems.sort(() => Math.random() - 0.5);
-            if (numStimuli > 0 && poolItems.length > numStimuli) {
-                poolItems = poolItems.slice(0, numStimuli);
-            }
             state.activeSetId = 'pool_' + state.selectedPoolTags.join('_');
             renderGameMode(mode, poolItems);
         }

@@ -36,9 +36,12 @@ function renderTagEditor(tags) {
     const container = document.getElementById('edit-tags-container');
     if (!container) return;
 
+    const tagImgs = getAllTagImages();
     const chipsHtml = editingTags.map((tag, i) =>
-        `<span class="tag-chip">
+        `<span class="tag-chip" style="display:inline-flex; align-items:center; gap:4px;">
+            ${tagImgs[tag] ? `<img src="${tagImgs[tag]}" style="width:18px; height:18px; object-fit:cover; border-radius:3px;">` : ''}
             ${tag}
+            <span onclick="uploadTagImage('${tag}')" title="Immagine tag" style="cursor:pointer; opacity:0.6; font-size:0.8em;"><i class="fa-solid fa-camera"></i></span>
             <span class="remove-tag" onclick="removeEditTag(${i})"><i class="fa-solid fa-xmark"></i></span>
         </span>`
     ).join('');
@@ -82,6 +85,26 @@ window.addEditTag = (tag) => {
 window.removeEditTag = (index) => {
     editingTags.splice(index, 1);
     renderTagEditor(editingTags);
+};
+
+window.uploadTagImage = (tag) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.style.display = 'none';
+    input.onchange = (e) => {
+        if (e.target.files[0]) {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                setTagImage(tag, ev.target.result);
+                renderTagEditor(editingTags);
+            };
+            reader.readAsDataURL(e.target.files[0]);
+        }
+    };
+    document.body.appendChild(input);
+    input.click();
+    setTimeout(() => document.body.removeChild(input), 1000);
 };
 
 // --- SAVE EDITOR ---

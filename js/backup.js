@@ -51,11 +51,12 @@ window.exportAllSets = async () => {
         }
 
         const fullBackup = {
-            version: 2,
+            version: 3,
             timestamp: new Date().toISOString(),
             device: navigator.userAgent,
             sets: sets || [],
-            patients: patients || []
+            patients: patients || [],
+            tagImages: getAllTagImages()
         };
 
         const dateStr = new Date().toLocaleDateString('it-IT').replace(/\//g, '-');
@@ -99,6 +100,12 @@ window.importSets = (input) => {
                 }
                 if (data.patients && Array.isArray(data.patients)) {
                     for (const p of data.patients) { await DB.savePatient(p); patientsCount++; }
+                }
+                // Restore tag images if present
+                if (data.tagImages && typeof data.tagImages === 'object') {
+                    const existing = getAllTagImages();
+                    const merged = { ...existing, ...data.tagImages };
+                    localStorage.setItem('tagImages', JSON.stringify(merged));
                 }
             }
             // Old format (array of sets)

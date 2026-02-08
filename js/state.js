@@ -34,6 +34,11 @@ let state = {
     // Intruso state
     intrusoRound: 0,
     intrusoRounds: [],
+    intrusoCardsPerRound: 4,
+    currentIntrusoRound: null,
+    // Pool Random state
+    poolAllItems: [],
+    poolBatchSize: 0,
     // Sequenze state
     sequenzeItems: [],
     sequenzeSelected: [],
@@ -41,6 +46,25 @@ let state = {
     catItems: [],
     catIndex: 0
 };
+
+// --- TAG IMAGE HELPERS (stored in localStorage) ---
+function getTagImage(tag) {
+    try { return JSON.parse(localStorage.getItem('tagImages') || '{}')[tag] || null; }
+    catch(e) { return null; }
+}
+
+function setTagImage(tag, dataUrl) {
+    try {
+        const map = JSON.parse(localStorage.getItem('tagImages') || '{}');
+        map[tag] = dataUrl;
+        localStorage.setItem('tagImages', JSON.stringify(map));
+    } catch(e) { console.error('Error saving tag image:', e); }
+}
+
+function getAllTagImages() {
+    try { return JSON.parse(localStorage.getItem('tagImages') || '{}'); }
+    catch(e) { return {}; }
+}
 
 // Collect all unique tags from existing sets
 function refreshAllTags() {
