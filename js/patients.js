@@ -45,6 +45,22 @@ window.createNewPatient = async () => {
     }
 };
 
+// --- RENAME PATIENT ---
+window.renamePatient = async (patientId) => {
+    const p = state.patients.find(x => x.id === patientId);
+    if (!p) return;
+    const newName = prompt("Nuovo nome:", p.name);
+    if (!newName || newName.trim() === '' || newName.trim() === p.name) return;
+    p.name = newName.trim();
+    await DB.savePatient(p);
+    state.patients = await DB.getAllPatients();
+    populateGlobalPatientSelect();
+    const sel = document.getElementById('patient-select');
+    sel.innerHTML = '<option value="">-- Seleziona Paziente --</option>' +
+        state.patients.map(pt => `<option value="${pt.id}" ${pt.id === patientId ? 'selected' : ''}>${pt.name}</option>`).join('');
+    document.getElementById('patient-title').innerText = `Cartella: ${p.name}`;
+};
+
 // --- DELETE PATIENT ---
 window.deletePatient = async (patientId) => {
     if (!confirm("Eliminare definitivamente questo paziente e tutti i suoi dati?")) return;
@@ -175,15 +191,28 @@ window.loadPatientData = (pid) => {
         title.parentNode.insertBefore(controls, title.nextSibling);
     }
 
-    // Add delete patient button if not already present
+    // Add rename + delete patient buttons if not already present
+    if (!document.getElementById('btn-rename-patient')) {
+        const renameBtn = document.createElement('button');
+        renameBtn.id = 'btn-rename-patient';
+        renameBtn.className = 'btn btn-ghost';
+        renameBtn.style.cssText = 'margin-left:10px; padding:6px 12px; font-size:0.85rem;';
+        renameBtn.innerHTML = '<i class="fa-solid fa-pen"></i> Rinomina';
+        renameBtn.onclick = () => renamePatient(pid);
+        document.getElementById('patient-title').parentNode.insertBefore(renameBtn, document.getElementById('patient-title').nextSibling);
+    } else {
+        document.getElementById('btn-rename-patient').onclick = () => renamePatient(pid);
+    }
+
     if (!document.getElementById('btn-delete-patient')) {
         const deleteBtn = document.createElement('button');
         deleteBtn.id = 'btn-delete-patient';
         deleteBtn.className = 'btn btn-danger';
         deleteBtn.style.cssText = 'margin-left:10px; padding:6px 12px; font-size:0.85rem;';
-        deleteBtn.innerHTML = '<i class="fa-solid fa-user-minus"></i> Elimina Paziente';
+        deleteBtn.innerHTML = '<i class="fa-solid fa-user-minus"></i> Elimina';
         deleteBtn.onclick = () => deletePatient(pid);
-        document.getElementById('patient-title').parentNode.insertBefore(deleteBtn, document.getElementById('patient-title').nextSibling);
+        const renameBtn = document.getElementById('btn-rename-patient');
+        renameBtn.parentNode.insertBefore(deleteBtn, renameBtn.nextSibling);
     } else {
         document.getElementById('btn-delete-patient').onclick = () => deletePatient(pid);
     }

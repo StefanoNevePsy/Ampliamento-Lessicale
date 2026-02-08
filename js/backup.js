@@ -10,8 +10,23 @@ function getTimestampedFilename() {
     return `Ampliamento_Lessicale_${d}_${m}_${y}_${h}_${min}.json`;
 }
 
-function downloadJSON(data, filename) {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+async function downloadJSON(data, filename) {
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+
+    // Try Web Share API first (works on Android/Capacitor)
+    try {
+        const file = new File([blob], filename, { type: 'application/json' });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({ title: 'Backup Stimolatore', files: [file] });
+            return;
+        }
+    } catch (e) {
+        // Share was cancelled or not supported, fall through to download
+        if (e.name === 'AbortError') return; // User cancelled share
+    }
+
+    // Fallback: <a> download (works on desktop browsers)
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -47,7 +62,7 @@ window.exportAllSets = async () => {
         const timeStr = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }).replace(/:/g, '-');
         const filename = `Backup_Stimolatore_${dateStr}_${timeStr}.json`;
 
-        downloadJSON(fullBackup, filename);
+        await downloadJSON(fullBackup, filename);
     } catch (e) {
         console.error("Errore export:", e);
         alert("Errore durante l'esportazione: " + e.message);
@@ -59,7 +74,7 @@ window.exportSingleSet = async (id) => {
     const set = state.savedSets.find(s => s.id === id);
     if (!set) return;
     const filename = `Set_${set.name.replace(/\s+/g, '_')}_${getTimestampedFilename()}`;
-    downloadJSON(set, filename);
+    await downloadJSON(set, filename);
 };
 
 // Import (supports old array format and new object format)

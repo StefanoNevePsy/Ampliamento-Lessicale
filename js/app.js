@@ -46,7 +46,7 @@ window.onload = async () => {
 };
 
 // --- SET FILTERING & DROPDOWN ---
-const POOL_MODES = ['pool_random', 'intruso'];
+const POOL_MODES = ['pool_random', 'intruso', 'categorizzazione'];
 
 window.filterSetsByMode = function () {
     const currentMode = document.getElementById('mode-select').value;
@@ -220,6 +220,11 @@ window.startGame = () => {
         // For intruso: the renderer handles its own item building
         else if (mode === 'intruso') {
             state.activeSetId = 'intruso_' + state.selectedPoolTags.join('_');
+            renderGameMode(mode, []);
+        }
+        // For categorizzazione: the renderer handles its own item building
+        else if (mode === 'categorizzazione') {
+            state.activeSetId = 'cat_' + state.selectedPoolTags.join('_');
             renderGameMode(mode, []);
         }
         return;

@@ -6,7 +6,10 @@ const MODES_CONFIG = {
     'memory': 'Memory',
     'search_find': 'Cerca-Trova',
     'pool_random': 'Pool Random',
-    'intruso': 'Intruso'
+    'intruso': 'Intruso',
+    'topologia': 'Topologia',
+    'sequenze': 'Sequenze',
+    'categorizzazione': 'Categorizzazione'
 };
 
 let state = {
@@ -30,7 +33,13 @@ let state = {
     selectedPoolTags: [],
     // Intruso state
     intrusoRound: 0,
-    intrusoRounds: []
+    intrusoRounds: [],
+    // Sequenze state
+    sequenzeItems: [],
+    sequenzeSelected: [],
+    // Categorizzazione state
+    catItems: [],
+    catIndex: 0
 };
 
 // Collect all unique tags from existing sets
