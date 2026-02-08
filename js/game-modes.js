@@ -73,8 +73,15 @@ function updateRanContent() {
     if (state.ranMode === 'grid') {
         let cols = Math.ceil(Math.sqrt(i.length));
         if (i.length <= 9) cols = 3; else if (i.length <= 16) cols = 4; else cols = 5;
-        let h = `<div class="ran-scroll-area"><div class="grid-adaptive" style="grid-template-columns:repeat(${cols},1fr);">`;
-        i.forEach(x => { h += `<div class="ran-card"><img src="${x.url || getPlaceholderUrl(x.label)}" onerror="handleImgError(this,'${x.label}')"></div>`; });
+        const rows = Math.ceil(i.length / cols);
+        const needsScroll = rows > 5;
+        const gridStyle = needsScroll
+            ? `grid-template-columns:repeat(${cols},1fr);`
+            : `grid-template-columns:repeat(${cols},1fr); grid-template-rows:repeat(${rows},1fr); height:100%;`;
+        const areaStyle = needsScroll ? 'ran-scroll-area' : '';
+        let h = `<div class="${areaStyle}" style="height:100%; padding:10px; ${needsScroll ? 'overflow-y:auto;' : 'overflow:hidden;'} min-height:0;">`;
+        h += `<div class="grid-adaptive" style="${gridStyle} align-content:stretch;">`;
+        i.forEach(x => { h += `<div class="ran-card" style="${needsScroll ? '' : 'aspect-ratio:auto; max-height:100%;'}"><img src="${x.url || getPlaceholderUrl(x.label)}" onerror="handleImgError(this,'${x.label}')"></div>`; });
         h += `</div></div>`;
         c.innerHTML = h;
     } else {
@@ -107,18 +114,25 @@ window.prevRan = () => { if (state.ranIndex > 0) { state.ranIndex--; updateRanCo
 function renderTombola(items, stage) {
     state.deck = [...items].sort(() => Math.random() - 0.5);
     const cols = Math.ceil(Math.sqrt(items.length));
+    const rows = Math.ceil(items.length / cols);
+    // If few items, fill the space; if many, allow scroll
+    const needsScroll = rows > 5;
+    const gridStyle = needsScroll
+        ? `grid-template-columns:repeat(${cols}, 1fr);`
+        : `grid-template-columns:repeat(${cols}, 1fr); grid-template-rows:repeat(${rows}, 1fr); height:100%;`;
+
     stage.innerHTML = `
         <div style="display:flex; height:100%; flex-direction:column;">
-            <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10;">
+            <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0;">
                 <div style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">Trova:</div>
                 <div id="deck-target" style="background:white; padding:5px; border-radius:8px; display:flex; align-items:center; gap:10px;">
                     ${getDeckHtml()}
                 </div>
             </div>
-            <div style="flex:1; overflow-y:auto; padding:10px;">
-                <div class="grid-adaptive" style="grid-template-columns:repeat(${cols}, 1fr);">
+            <div style="flex:1; ${needsScroll ? 'overflow-y:auto;' : 'overflow:hidden;'} padding:10px; min-height:0;">
+                <div class="grid-adaptive" style="${gridStyle} align-content:stretch;">
                     ${items.map((item, idx) => `
-                        <div class="card-grid" id="slot-${idx}" onclick="handleMatchClick(${idx}, '${item.label}')">
+                        <div class="card-grid" id="slot-${idx}" onclick="handleMatchClick(${idx}, '${item.label}')" style="aspect-ratio:auto; max-height:100%;">
                             <img src="${item.url || getPlaceholderUrl(item.label)}" onerror="handleImgError(this, '${item.label}')">
                         </div>
                     `).join('')}
@@ -146,11 +160,17 @@ function renderMemory(items, stage) {
     let deck = [...useItems, ...useItems].sort(() => Math.random() - 0.5);
     state.memory = { flipped: [], matched: [], deck: deck, lockBoard: false };
     const cols = Math.ceil(Math.sqrt(deck.length));
+    const rows = Math.ceil(deck.length / cols);
+    const needsScroll = rows > 5;
+    const gridStyle = needsScroll
+        ? `grid-template-columns: repeat(${cols}, 1fr);`
+        : `grid-template-columns: repeat(${cols}, 1fr); grid-template-rows: repeat(${rows}, 1fr); height:100%;`;
+
     stage.innerHTML = `
-        <div style="padding:10px; height:100%; overflow-y:auto;">
-            <div class="grid-adaptive" style="grid-template-columns: repeat(${cols}, 1fr);">
+        <div style="padding:10px; height:100%; ${needsScroll ? 'overflow-y:auto;' : 'overflow:hidden;'} min-height:0;">
+            <div class="grid-adaptive" style="${gridStyle} align-content:stretch;">
                 ${deck.map((item, idx) => `
-                    <div class="card-grid" id="mem-${idx}" onclick="flipCard(${idx})" style="background:var(--accent-color);">
+                    <div class="card-grid" id="mem-${idx}" onclick="flipCard(${idx})" style="background:var(--accent-color); aspect-ratio:auto; max-height:100%;">
                         <div class="mem-content" style="display:none; width:100%; height:100%;">
                             <img src="${item.url || getPlaceholderUrl(item.label)}" style="width:100%; height:100%; object-fit:contain; background:white; border-radius:6px;" onerror="handleImgError(this, '${item.label}')">
                         </div>

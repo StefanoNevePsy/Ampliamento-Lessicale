@@ -47,7 +47,8 @@ h1 { margin: 0; font-size: 1.1rem; font-weight: 800; display: flex; align-items:
 .header-actions { display: flex; gap: 12px; align-items: center; flex-shrink: 0; }
 
 .patient-selector-wrapper { position: relative; width: 200px; }
-.patient-selector-wrapper select { width: 100%; padding: 8px 12px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; color: var(--success-color); font-weight: 600; font-size: 0.9rem; }
+.patient-selector-wrapper select { width: 100%; padding: 8px 12px; background: #1e2a2f; border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; color: var(--success-color); font-weight: 600; font-size: 0.9rem; }
+.patient-selector-wrapper select option { background: #1e2a2f; color: var(--text-primary); }
 
 .btn-icon { background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); color: var(--text-primary); width: 44px; height: 44px; border-radius: 12px; cursor: pointer; display: grid; place-items: center; position: relative; transition: 0.2s; font-size: 1.1rem; flex-shrink: 0; }
 .btn-icon:active { transform: scale(0.95); }
@@ -59,7 +60,9 @@ h1 { margin: 0; font-size: 1.1rem; font-weight: 800; display: flex; align-items:
 .controls-row { display: flex; gap: 8px; align-items: center; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 12px; flex-shrink: 0; flex-wrap: wrap;}
 .select-wrapper { position: relative; flex: 1; min-width: 120px; }
 .select-wrapper label { display: block; font-size: 0.6rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 2px; text-transform: uppercase; }
-select { width: 100%; padding: 10px; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: 8px; color: white; font-size: 0.9rem; font-weight: 600; }
+select { width: 100%; padding: 10px; background: #2a2a40; border: 1px solid var(--glass-border); border-radius: 8px; color: white; font-size: 0.9rem; font-weight: 600; }
+select option { background: #2a2a40; color: white; }
+select optgroup { background: #1e1e2f; color: var(--text-secondary); }
 
 /* STAGE */
 #game-stage { flex: 1; background: rgba(0,0,0,0.2); border-radius: 16px; position: relative; overflow: hidden; border: 2px dashed var(--glass-border); display: flex; flex-direction: column; min-height: 0; }
