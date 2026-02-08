@@ -35,12 +35,21 @@
         body { font-family: 'Noto Sans', sans-serif; background: var(--bg-gradient); background-attachment: fixed; color: var(--text-primary); margin: 0; padding: env(safe-area-inset-top) 10px 10px 10px; min-height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
         body.global-locked { overflow: hidden !important; touch-action: none; }
 
-        /* APP SHELL */
+        /* 1. Allarga l'interfaccia su PC (Rimosso limite 1200px) */
         .app-shell { 
-            width: 100%; max-width: 1200px; margin: 0 auto;
-            border: 1px solid var(--glass-border); border-radius: var(--radius); padding: 15px; 
-            box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 15px; 
-            position: relative; height: calc(100vh - 20px); z-index: 1; 
+            width: 100%; 
+            max-width: 98vw; /* Usa quasi tutta la larghezza disponibile */
+            margin: 0 auto;
+            border: 1px solid var(--glass-border); 
+            border-radius: var(--radius); 
+            padding: 15px; 
+            box-shadow: var(--shadow); 
+            display: flex; 
+            flex-direction: column; 
+            gap: 15px; 
+            position: relative; 
+            height: calc(100vh - 20px); 
+            z-index: 1; 
         }
         .app-shell::before {
             content: ""; position: absolute; inset: 0; background: var(--glass-bg);
@@ -162,24 +171,60 @@
         .editor-item { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.05); padding: 8px; border-radius: 8px; margin-bottom: 8px; }
         .editor-thumb { width: 50px; height: 50px; background: #000; overflow: hidden; border-radius: 6px; } 
         .editor-thumb img { width: 100%; height: 100%; object-fit: cover; }
+         /* 2. Fix Feedback Verde (Rimosso l'ingrandimento che causava overflow) */
+        .feedback-success { 
+            border: 6px solid var(--success-color) !important; 
+            box-shadow: 0 0 25px rgba(16, 185, 129, 0.6) !important; 
+            transform: none !important; /* Mantiene la dimensione originale */
+            box-sizing: border-box; /* Assicura che il bordo stia "dentro" le misure */
+        }
+
+        .feedback-fail { 
+            border: 6px solid var(--danger-color) !important; 
+            box-shadow: 0 0 25px rgba(239, 68, 68, 0.6) !important; 
+            transform: scale(0.96); /* Riduce leggermente per enfatizzare l'errore */
+            filter: grayscale(0.5);
+        }
+
+        /* Stili per Marker (Cerca Trova) */
+        .marker-pin.success { 
+            background: var(--success-color) !important; 
+            border-color: white !important; 
+            box-shadow: 0 0 15px var(--success-color);
+        }
+        .marker-pin.fail { 
+            background: var(--danger-color) !important; 
+            border-color: white !important; 
+            box-shadow: 0 0 15px var(--danger-color);
+        }
+        .marker-pin.success::after { content: '✓'; color: white; }
+        .marker-pin.fail::after { content: '✕'; color: white; }
         input[type="text"] { width: 100%; padding: 10px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--glass-border); border-radius: 8px; color: white; }
         
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(0,0,0,0); } 100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); } }
+
     </style>
 </head>
 <body>
 
     <div class="app-shell">
         <header>
-            <h1><i class="fa-solid fa-brain logo-icon"></i> Stimolatore v34</h1>
+            <h1><i class="fa-solid fa-brain logo-icon"></i> Stimolatore v37</h1>
+            
             <div class="header-actions">
-                <!-- SELETTORE PAZIENTE RAPIDO -->
+                <!-- TASTO INFO -->
+                <button class="btn-icon" onclick="window.openInstructions()" title="Manuale Utente" style="z-index:100; position:relative; border-color:var(--accent-color); color:var(--accent-color);">
+                    <i class="fa-solid fa-info"></i>
+                </button>
+
+                <!-- SELETTORE PAZIENTE -->
                 <div class="patient-selector-wrapper">
                     <select id="global-patient-select" onchange="setGlobalPatient(this.value)">
                         <option value="">-- Ospite --</option>
                     </select>
                 </div>
 
+                <!-- ALTRI TASTI -->
                 <button class="btn-icon" onclick="openPatients()" title="Gestione Pazienti" style="color:var(--success-color); border-color:rgba(16, 185, 129, 0.3);">
                     <i class="fa-solid fa-user-doctor"></i>
                 </button>
@@ -311,6 +356,7 @@
                 <button class="btn btn-ghost" onclick="closeEditor()">Annulla</button>
             </div>
         </div>
+        
         <div class="modal-body">
             <div style="background: rgba(0,0,0,0.2); padding:15px; border-radius:12px; margin-bottom:20px;">
                 <label style="font-size:0.8rem; color:#aaa;">Nome del Set</label>
@@ -343,6 +389,122 @@
     <!-- === PREVIEW MODAL (INLINE HIDDEN) === -->
     <div id="modal-preview" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index: 2000; justify-content: center; align-items: center; padding: 20px;" onclick="this.style.display='none'">
         <img id="preview-img" src="" alt="" style="max-width:100%; max-height:100%; border-radius:12px;">
+    </div>
+
+    <!-- MODALE ISTRUZIONI (Layout a Griglia) -->
+    <div id="modal-instructions" class="modal-fs">
+        <div class="modal-header">
+            <h2><i class="fa-solid fa-book-open"></i> Guida Utente</h2>
+            <button class="btn btn-danger" onclick="closeInstructions()">Chiudi</button>
+        </div>
+        <div class="modal-body" style="padding: 20px; max-width: 1100px; margin: 0 auto; color: #e2e8f0;">
+            
+            <!-- Intro Card -->
+            <div style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(99, 102, 241, 0.05) 100%); padding: 20px; border-radius: 16px; margin-bottom: 30px; border: 1px solid rgba(99, 102, 241, 0.2); display: flex; gap: 20px; align-items: center;">
+                <div style="font-size: 2.5rem; color: var(--accent-color); padding: 0 10px;"><i class="fa-solid fa-brain"></i></div>
+                <div>
+                    <h3 style="margin: 0 0 10px 0; color: white;">Stimolatore Clinico v37</h3>
+                    <p style="margin: 0; opacity: 0.8;">Piattaforma per la riabilitazione neuropsicologica e il potenziamento cognitivo. Gestisci pazienti, crea set personalizzati e monitora i progressi con strumenti clinici avanzati.</p>
+                </div>
+            </div>
+
+            <!-- Griglia Istruzioni -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+
+                <!-- 1. PAZIENTI -->
+                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--success-color);">
+                    <h3 style="margin-top: 0; color: var(--success-color); display: flex; align-items: center; gap: 10px;">
+                        <i class="fa-solid fa-user-doctor"></i> Gestione Pazienti
+                    </h3>
+                    <ul style="padding-left: 20px; line-height: 1.6;">
+                        <li>
+                            <strong>Selettore Rapido:</strong> In alto a destra trovi il menu a tendina.
+                            <br><span style="font-size: 0.85em; opacity: 0.7;">Seleziona "Ospite" per sessioni senza salvataggio.</span>
+                        </li>
+                        <li>
+                            <strong>Cartella Clinica:</strong> Clicca <i class="fa-solid fa-user-doctor"></i> per gestire l'anagrafica.
+                        </li>
+                        <li>
+                            <strong>Grafici & Storico:</strong> Visualizza l'andamento per ogni attività.
+                            <br><i class="fa-solid fa-trophy" style="color: #fbbf24;"></i> <strong>Criterio (Mastery):</strong> Assegnato automaticamente dopo 2 sessioni consecutive con >90% di correttezza in giorni diversi.
+                        </li>
+                        <li>
+                            <strong>Editing Dati:</strong> Espandi i grafici (<i class="fa-solid fa-chevron-down"></i>) per correggere errori di inserimento o date.
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- 2. ATTIVITÀ -->
+                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--accent-color);">
+                    <h3 style="margin-top: 0; color: var(--accent-color); display: flex; align-items: center; gap: 10px;">
+                        <i class="fa-solid fa-gamepad"></i> Modalità
+                    </h3>
+                    <ul style="padding-left: 20px; line-height: 1.6;">
+                        <li><strong>TACT:</strong> Flashcards sequenziali per denominazione pura.</li>
+                        <li><strong>RAN (Velocità):</strong> Denominazione rapida.
+                            <br><span style="font-size: 0.85em; opacity: 0.7;">Usa il tasto <i class="fa-solid fa-table-cells"></i> per passare da vista Griglia a Sequenza.</span>
+                        </li>
+                        <li><strong>Tombola:</strong> Matching visivo. Trova l'immagine target nella griglia.</li>
+                        <li><strong>Memory:</strong> Gioco di memoria per funzioni esecutive.</li>
+                        <li><strong>Cerca Trova:</strong> Esplorazione visiva su scene. Tocca per marcare i bersagli.</li>
+                    </ul>
+                </div>
+
+                <!-- 3. SESSIONE -->
+                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--warning-color);">
+                    <h3 style="margin-top: 0; color: var(--warning-color); display: flex; align-items: center; gap: 10px;">
+                        <i class="fa-solid fa-stopwatch"></i> Sessione & Scoring
+                    </h3>
+                    <ul style="padding-left: 20px; line-height: 1.6;">
+                        <li>
+                            <strong>Valutazione:</strong> Usa i tasti a schermo o la tastiera.
+                            <br><span style="color: var(--success-color);"><b>V</b></span> = Corretto (Tasto 'V')
+                            <br><span style="color: var(--danger-color);"><b>X</b></span> = Errato (Tasto 'X')
+                        </li>
+                        <li>
+                            <strong>Feedback:</strong> L'immagine si borda di verde/rosso per feedback immediato.
+                        </li>
+                        <li>
+                            <strong>Child Lock <i class="fa-solid fa-lock-open"></i>:</strong> Blocca lo scroll per evitare tocchi accidentali.
+                        </li>
+                        <li>
+                            <strong>Salvataggio <i class="fa-solid fa-floppy-disk"></i>:</strong> Salva i dati nella cartella del paziente attivo.
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- 4. LIBRERIA -->
+                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid #a855f7;">
+                    <h3 style="margin-top: 0; color: #a855f7; display: flex; align-items: center; gap: 10px;">
+                        <i class="fa-solid fa-folder-open"></i> Editor & Libreria
+                    </h3>
+                    <ul style="padding-left: 20px; line-height: 1.6;">
+                        <li>
+                            <strong>Creazione:</strong> Crea set personalizzati caricando le tue immagini.
+                        </li>
+                        <li>
+                            <strong>Caricamento Rapido:</strong>
+                            <br>- Clicca sull'icona fotocamera <i class="fa-solid fa-camera"></i>.
+                            <br>- <b>Ctrl+V</b> su una riga per incollare dagli appunti.
+                            <br>- <b>Bulk:</b> Carica intere cartelle in una volta.
+                        </li>
+                        <li>
+                            <strong>Indicatori Libreria:</strong>
+                            <br>⚠️ = Immagini mancanti nel set.
+                            <br>🏆 = Criterio raggiunto dal paziente attivo.
+                        </li>
+                        <li>
+                            <strong>Backup Completo:</strong> Esporta un unico file contenente <b>tutti</b> i Set e le Cartelle Pazienti.
+                        </li>
+                    </ul>
+                </div>
+
+            </div>
+            
+            <div style="text-align: center; margin-top: 40px; color: #666; font-size: 0.8rem;">
+                Design e Sviluppo per uso Professionale - v37
+            </div>
+        </div>
     </div>
 
     <script>
@@ -535,25 +697,48 @@
             renderGameMode(mode, playItems);
         };
 
-        // --- SCORING INTELLIGENTE (Fix duplicati) ---
+        // --- 1. SCORING CON FEEDBACK VISIVO (Sostituisci recordResponse) ---
         window.recordResponse = (isCorrect) => {
             if (!state.session.active) return;
             const mode = document.getElementById('mode-select').value;
             
-            // Per TACT e RAN Single, usiamo l'indice attuale come chiave unica
+            // Logica Punteggio
             if (mode === 'tact' || (mode === 'ran' && state.ranMode === 'single')) {
                 const currentIndex = (mode === 'tact') ? state.tactIndex : state.ranIndex;
                 state.session.itemResults[currentIndex] = isCorrect;
+                
+                // APPLICA FEEDBACK VISIVO IMMEDIATO (IMMAGINI)
+                const targetImg = document.querySelector('.tact-card-lg img, .ran-main-img');
+                if(targetImg) {
+                    targetImg.classList.remove('feedback-success', 'feedback-fail');
+                    void targetImg.offsetWidth; // Trigger reflow per animazione
+                    targetImg.classList.add(isCorrect ? 'feedback-success' : 'feedback-fail');
+                }
+
+            } else if (mode === 'search_find') {
+                // Per cerca trova, usiamo un ID basato sul timestamp del marker o l'ultimo aggiunto
+                const markers = document.querySelectorAll('.marker-pin');
+                if(markers.length > 0) {
+                    const lastMarker = markers[markers.length - 1];
+                    // Assegnamo un ID unico al marker se non ce l'ha, per tracciarlo
+                    if(!lastMarker.dataset.id) lastMarker.dataset.id = Date.now();
+                    
+                    state.session.itemResults[lastMarker.dataset.id] = isCorrect;
+                    
+                    // APPLICA FEEDBACK (MARKER)
+                    lastMarker.classList.remove('success', 'fail');
+                    lastMarker.classList.add(isCorrect ? 'success' : 'fail');
+                }
             } else {
-                // Per griglie o giochi liberi, usiamo timestamp (qui si accumulano, non c'è indice fisso)
+                // Giochi griglia (Tombola/Memory): feedback generico o non applicabile singolarmente
                 state.session.itemResults[Date.now()] = isCorrect;
             }
             
-            // Ricalcolo esatto dai risultati unici
+            // Ricalcolo totali
             const results = Object.values(state.session.itemResults);
             state.session.correct = results.filter(v => v === true).length;
             state.session.incorrect = results.filter(v => v === false).length;
-            state.session.total = results.length; // Totale item valutati univoci
+            state.session.total = results.length;
 
             updateScoreUI();
             document.getElementById('btn-save-session').classList.remove('hidden');
@@ -1180,20 +1365,74 @@ function renderPatientCharts(patient, sortMode = 'date_desc') {
         function getPlaceholderUrl(label) { return `https://placehold.co/600x600?text=${encodeURIComponent(label)}`; }
         function handleImgError(img, label) { img.onerror = null; img.src = getPlaceholderUrl(label); }
         
+        // --- 2. AGGIORNAMENTO RENDERERS (Per mantenere il colore navigando) ---
+
+        // Sostituisci renderTact
         function renderTact(items, stage) {
-            state.tactIndex = 0; // Reset index
+            // Se arriviamo qui da un cambio modalità, reset index, altrimenti mantieni
+            if(state.tactIndex === undefined) state.tactIndex = 0;
+            
             const showCard = () => {
                 const item = items[state.tactIndex];
-                stage.innerHTML = `<div class="tact-stage" onclick="window.nextTact()"><div class="tact-card-lg"><img src="${item.url || getPlaceholderUrl(item.label)}" onerror="handleImgError(this, '${item.label}')"><div class="tact-title">${item.label}</div><div style="font-size:0.9rem; color:#888;">${state.tactIndex + 1} / ${items.length}</div></div></div>`;
+                // Recupera stato precedente se esiste
+                const status = state.session.itemResults ? state.session.itemResults[state.tactIndex] : undefined;
+                const feedbackClass = status === true ? 'feedback-success' : (status === false ? 'feedback-fail' : '');
+
+                stage.innerHTML = `
+                <div class="tact-stage" onclick="window.nextTact()">
+                    <div class="tact-card-lg">
+                        <img src="${item.url || getPlaceholderUrl(item.label)}" 
+                             class="${feedbackClass}" 
+                             style="transition:0.3s;"
+                             onerror="handleImgError(this, '${item.label}')">
+                        <div class="tact-title">${item.label}</div>
+                        <div style="font-size:0.9rem; color:#888;">${state.tactIndex + 1} / ${items.length}</div>
+                    </div>
+                </div>`;
             };
-            window.nextTact = () => { state.tactIndex = (state.tactIndex + 1) % items.length; showCard(); }; showCard();
+            window.nextTact = () => { state.tactIndex = (state.tactIndex + 1) % items.length; showCard(); }; 
+            showCard();
         }
         function renderRan(items, stage) { 
             state.ranDisplayItems = items; if(state.ranIndex>=items.length) state.ranIndex=0; 
             stage.innerHTML=`<div class="ran-container"><div class="ran-toolbar"><button class="btn btn-sm btn-ghost" onclick="toggleRanMode()"><i class="fa-solid ${state.ranMode==='grid'?'fa-film':'fa-table-cells'}"></i> ${state.ranMode==='grid'?'Passa a Sequenza':'Passa a Griglia'}</button></div><div id="ran-content" style="flex:1; overflow:hidden;"></div></div>`; updateRanContent(); 
         }
         window.toggleRanMode=()=>{state.ranMode=state.ranMode==='grid'?'single':'grid'; updateRanContent();};
-        function updateRanContent(){ const c=document.getElementById('ran-content'); const i=state.ranDisplayItems; if(state.ranMode==='grid'){ let cols=Math.ceil(Math.sqrt(i.length)); if(i.length<=9)cols=3; else if(i.length<=16)cols=4;else cols=5; let h=`<div class="ran-scroll-area"><div class="grid-adaptive" style="grid-template-columns:repeat(${cols},1fr);">`; i.forEach(x=>{h+=`<div class="ran-card"><img src="${x.url||getPlaceholderUrl(x.label)}" onerror="handleImgError(this,'${x.label}')"></div>`}); h+=`</div></div>`; c.innerHTML=h; } else { const x=i[state.ranIndex]; c.innerHTML=`<div class="ran-single-stage"><div style="flex:1; display:flex; flex-direction:column; justify-content:center; width:100%; overflow:hidden;"><img src="${x.url||getPlaceholderUrl(x.label)}" class="ran-main-img" onerror="handleImgError(this,'${x.label}')"><h2 style="text-align:center;">${x.label}</h2></div><div class="ran-controls-bar"><button class="ran-btn-nav" onclick="prevRan()"><i class="fa-solid fa-arrow-left"></i></button><div class="ran-counter">${state.ranIndex+1}/${i.length}</div><button class="ran-btn-nav" onclick="nextRan()"><i class="fa-solid fa-arrow-right"></i></button></div></div>`; } }
+        // Sostituisci updateRanContent (Solo la parte visualizzazione, la logica next/prev è invariata)
+        function updateRanContent(){ 
+            const c=document.getElementById('ran-content'); 
+            const i=state.ranDisplayItems; 
+            
+            if(state.ranMode==='grid'){ 
+                let cols=Math.ceil(Math.sqrt(i.length)); 
+                if(i.length<=9)cols=3; else if(i.length<=16)cols=4;else cols=5; 
+                let h=`<div class="ran-scroll-area"><div class="grid-adaptive" style="grid-template-columns:repeat(${cols},1fr);">`; 
+                i.forEach(x=>{h+=`<div class="ran-card"><img src="${x.url||getPlaceholderUrl(x.label)}" onerror="handleImgError(this,'${x.label}')"></div>`}); 
+                h+=`</div></div>`; c.innerHTML=h; 
+            } else { 
+                const x=i[state.ranIndex]; 
+                
+                // Recupera stato feedback
+                const status = state.session.itemResults ? state.session.itemResults[state.ranIndex] : undefined;
+                const feedbackClass = status === true ? 'feedback-success' : (status === false ? 'feedback-fail' : '');
+
+                c.innerHTML=`
+                <div class="ran-single-stage">
+                    <div style="flex:1; display:flex; flex-direction:column; justify-content:center; width:100%; overflow:hidden;">
+                        <img src="${x.url||getPlaceholderUrl(x.label)}" 
+                             class="ran-main-img ${feedbackClass}" 
+                             style="transition:0.3s;"
+                             onerror="handleImgError(this,'${x.label}')">
+                        <h2 style="text-align:center;">${x.label}</h2>
+                    </div>
+                    <div class="ran-controls-bar">
+                        <button class="ran-btn-nav" onclick="prevRan()"><i class="fa-solid fa-arrow-left"></i></button>
+                        <div class="ran-counter">${state.ranIndex+1}/${i.length}</div>
+                        <button class="ran-btn-nav" onclick="nextRan()"><i class="fa-solid fa-arrow-right"></i></button>
+                    </div>
+                </div>`; 
+            } 
+        }
         window.nextRan=()=>{if(state.ranIndex<state.ranDisplayItems.length-1){state.ranIndex++;updateRanContent();}}; window.prevRan=()=>{if(state.ranIndex>0){state.ranIndex--;updateRanContent();}};
         function renderTombola(items, stage) { state.deck = [...items].sort(() => Math.random() - 0.5); const cols = Math.ceil(Math.sqrt(items.length)); stage.innerHTML = `<div style="display:flex; height:100%; flex-direction:column;"><div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10;"><div style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">Trova:</div><div id="deck-target" style="background:white; padding:5px; border-radius:8px; display:flex; align-items:center; gap:10px;">${getDeckHtml()}</div></div><div style="flex:1; overflow-y:auto; padding:10px;"><div class="grid-adaptive" style="grid-template-columns:repeat(${cols}, 1fr);">${items.map((item, idx) => `<div class="card-grid" id="slot-${idx}" onclick="handleMatchClick(${idx}, '${item.label}')"><img src="${item.url || getPlaceholderUrl(item.label)}" onerror="handleImgError(this, '${item.label}')"></div>`).join('')}</div></div></div>`; }
         function getDeckHtml() { if (state.deck.length === 0) return `<span>🎉 FINITO!</span>`; const c = state.deck[0]; return `<img src="${c.url||getPlaceholderUrl(c.label)}" style="width:40px; height:40px; object-fit:contain;"> <span style="color:#333; font-weight:bold; padding-right:10px;">${c.label}</span>`; }
@@ -1218,41 +1457,243 @@ function renderPatientCharts(patient, sortMode = 'date_desc') {
             return `Ampliamento_Lessicale_${d}_${m}_${y}_${h}_${min}.json`;
         }
 
+        // --- SISTEMA DI BACKUP E RIPRISTINO (COMPLETO v36) ---
+
+        // 1. ESPORTAZIONE (Set + Pazienti)
         window.exportAllSets = async () => { 
             try {
-                const s = await DB.getAllSets(); 
-                if (!s || s.length === 0) {
-                    alert("Nessun set da esportare.");
+                const sets = await DB.getAllSets();
+                const patients = await DB.getAllPatients();
+                
+                if ((!sets || sets.length === 0) && (!patients || patients.length === 0)) {
+                    alert("Nessun dato da esportare.");
                     return;
                 }
-                const filename = getTimestampedFilename();
-                downloadJSON(s, filename); 
+
+                // Creiamo un oggetto "Backup Completo"
+                const fullBackup = {
+                    version: 2,
+                    timestamp: new Date().toISOString(),
+                    device: navigator.userAgent,
+                    sets: sets || [],
+                    patients: patients || []
+                };
+                
+                // Nome file con data e ora: "Backup_Stimolatore_2023-10-25_14-30.json"
+                const dateStr = new Date().toLocaleDateString('it-IT').replace(/\//g, '-');
+                const timeStr = new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'}).replace(/:/g, '-');
+                const filename = `Backup_Stimolatore_${dateStr}_${timeStr}.json`;
+                
+                downloadJSON(fullBackup, filename); 
             } catch (e) {
                 console.error("Errore export:", e);
-                alert("Errore durante l'esportazione.");
+                alert("Errore durante l'esportazione: " + e.message);
             }
         };
 
         function downloadJSON(data, filename) { 
-            // Crea il file
             const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'}); 
             const url = URL.createObjectURL(blob); 
-            
-            // Crea link temporaneo
             const a = document.createElement('a'); 
             a.href = url; 
             a.download = filename; 
-            
-            // FIX CRITICO: Aggiungi al body prima di cliccare (richiesto da Firefox/Chrome recenti)
-            document.body.appendChild(a); 
+            document.body.appendChild(a); // Necessario per Firefox/Android
             a.click(); 
-            
-            // Pulizia
             setTimeout(() => {
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
             }, 100); 
         }
+
+        // 2. IMPORTAZIONE (Fix Android + Supporto Pazienti)
+        window.importSets = (input) => { 
+            // Controllo file
+            if (!input.files || !input.files[0]) return;
+            const file = input.files[0];
+
+            const reader = new FileReader();
+            
+            reader.onload = async (e) => { 
+                try { 
+                    const jsonContent = e.target.result;
+                    const data = JSON.parse(jsonContent);
+                    
+                    let setsCount = 0;
+                    let patientsCount = 0;
+
+                    // CASO A: Backup Nuovo (Oggetto con versione)
+                    if (data.version && (data.sets || data.patients)) {
+                        if (data.sets && Array.isArray(data.sets)) {
+                            for(const s of data.sets) { await DB.saveSet(s); setsCount++; }
+                        }
+                        if (data.patients && Array.isArray(data.patients)) {
+                            for(const p of data.patients) { await DB.savePatient(p); patientsCount++; }
+                        }
+                    } 
+                    // CASO B: Backup Vecchio (Solo Array di Set)
+                    else if (Array.isArray(data)) {
+                        for(const s of data) { 
+                            // Controllo minimo di integrità
+                            if(s.id && s.items) { await DB.saveSet(s); setsCount++; }
+                        }
+                    }
+                    else {
+                        throw new Error("Formato file non riconosciuto.");
+                    }
+                    
+                    alert(`✅ Ripristino completato!\n\n📦 Set importati: ${setsCount}\n👤 Pazienti importati: ${patientsCount}`);
+                    window.location.reload(); // Ricarica per aggiornare l'interfaccia
+                    
+                } catch(err) {
+                    console.error(err);
+                    alert("❌ Errore importazione: " + err.message);
+                } 
+            };
+            
+            reader.onerror = () => {
+                alert("❌ Errore di lettura file. Verifica i permessi dell'app.");
+            };
+
+            // Avvia la lettura
+            reader.readAsText(file); 
+            
+            // Resetta l'input per permettere di ricaricare lo stesso file se necessario
+            input.value = ''; 
+        };
+        // --- INTEGRAZIONE S PEN (Samsung/Android) ---
+// Incolla questo blocco alla fine del tuo script JS
+
+let sPenClickCount = 0;
+let sPenTimer = null;
+
+// Ascolta l'evento personalizzato lanciato da MainActivity.java
+window.addEventListener('sPenNativeEvent', (event) => {
+    try {
+        // Debug approfondito: Logghiamo tutto per capire cosa arriva dal Java
+        console.log("S Pen Event Received. Detail Type:", typeof event.detail, "Value:", event.detail);
+
+        let data = null;
+
+        // TENTATIVO 1: Controllo event.detail (Standard Capacitor)
+        if (event.detail !== undefined && event.detail !== null) {
+            if (typeof event.detail === 'object') {
+                // Caso A: Capacitor ha già convertito in oggetto
+                data = event.detail;
+            } else if (typeof event.detail === 'string') {
+                // Caso B: È una stringa JSON
+                // Controllo preventivo per evitare l'errore "undefined"
+                if (event.detail.trim() === "undefined" || event.detail.trim() === "") {
+                    console.warn("Dati evento vuoti o 'undefined'");
+                    return; 
+                }
+                
+                try {
+                    data = JSON.parse(event.detail);
+                } catch (e) {
+                    console.warn("JSON Parse fallito, provo parsing manuale:", event.detail);
+                    // Fallback estremo: cerchiamo la parola chiave "down"
+                    if (event.detail.includes("down")) data = { action: "down" };
+                }
+            }
+        } 
+        // TENTATIVO 2: Fallback su event.data (alcune versioni bridge)
+        else if (event.data) {
+             data = (typeof event.data === 'string') ? JSON.parse(event.data) : event.data;
+        }
+
+        // Verifica finale dei dati
+        if (data && data.action === 'down') {
+            console.log("Azione S Pen Rilevata: DOWN");
+            handleSPenInput();
+        } else {
+            // Se arriviamo qui, l'evento c'è ma non ha l'azione 'down' o i dati sono illeggibili
+            console.log("Evento ignorato o dati non validi:", data);
+        }
+
+    } catch (e) {
+        console.error("Errore S Pen Event Critico:", e);
+    }
+});
+
+function handleSPenInput() {
+    // Logica per distinguere Singolo Click (V) da Doppio Click (X)
+    sPenClickCount++;
+    
+    if (sPenClickCount === 1) {
+        // Avvia un timer breve (300ms) per aspettare un eventuale secondo click
+        sPenTimer = setTimeout(() => {
+            // Se il timer scade senza un secondo click -> SINGOLO CLICK
+            sPenClickCount = 0;
+            if (isSessionActive()) {
+                recordResponse(true); // V (Verde)
+                // Feedback tattile (vibrazione leggera) se supportato
+                if (navigator.vibrate) navigator.vibrate(50);
+            }
+        }, 300); 
+    } else {
+        // Se arriva un secondo click prima che il timer scada -> DOPPIO CLICK
+        clearTimeout(sPenTimer);
+        sPenClickCount = 0;
+        
+        if (isSessionActive()) {
+            recordResponse(false); // X (Rosso)
+            if (navigator.vibrate) navigator.vibrate([50, 50, 50]); // Vibrazione doppia
+        }
+    }
+}
+
+// Helper per verificare se siamo in gioco
+function isSessionActive() {
+    return typeof state !== 'undefined' && state.session && state.session.active;
+}
+// --- GESTIONE MODALE ISTRUZIONI ---
+
+// Definizione sicura delle funzioni globali
+window.openInstructions = function() {
+    const modal = document.getElementById('modal-instructions');
+    if (modal) {
+        modal.classList.add('open');
+    } else {
+        console.error("Modale istruzioni non trovato!");
+    }
+};
+
+window.closeInstructions = function() {
+    const modal = document.getElementById('modal-instructions');
+    if (modal) {
+        modal.classList.remove('open');
+    }
+};
+
+// Listener per chiudere cliccando fuori (opzionale ma utile)
+document.addEventListener('click', function(event) {
+    const modal = document.getElementById('modal-instructions');
+    if (event.target === modal) {
+        window.closeInstructions();
+    }
+});
+
+// Force Linker: Assicura che il tasto info funzioni
+        document.addEventListener('DOMContentLoaded', () => {
+            // Trova il tasto info (quello con l'icona fa-info)
+            const infoBtns = document.querySelectorAll('.fa-info');
+            
+            infoBtns.forEach(icon => {
+                const btn = icon.closest('button');
+                if (btn) {
+                    btn.onclick = (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const modal = document.getElementById('modal-instructions');
+                        if (modal) {
+                            modal.classList.add('open');
+                        } else {
+                            alert("Errore: Il codice HTML del modale istruzioni non è stato trovato nella pagina.");
+                        }
+                    };
+                }
+            });
+        });
     </script>
 </body>
 </html>
