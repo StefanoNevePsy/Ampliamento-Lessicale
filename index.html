@@ -60,14 +60,27 @@
                     <option value="tombola">Tombola (Matching)</option>
                     <option value="memory">Memory</option>
                     <option value="search_find">Cerca Trova (Scena)</option>
+                    <optgroup label="Pool da Tag">
+                        <option value="pool_random">Pool Random</option>
+                        <option value="intruso">Intruso</option>
+                    </optgroup>
                 </select>
             </div>
 
-            <div class="select-wrapper" style="flex: 2;">
+            <!-- Set selector (hidden for pool modes) -->
+            <div class="select-wrapper" style="flex: 2;" id="set-selector-wrapper">
                 <label><i class="fa-solid fa-layer-group"></i> Set Disponibili</label>
                 <select id="category-select" onchange="loadSelectedSet(this.value)">
                     <option value="" disabled selected>-- Scegli un Set --</option>
                 </select>
+            </div>
+
+            <!-- Tag selector (shown for pool modes) -->
+            <div class="select-wrapper hidden" style="flex: 2;" id="tag-selector-wrapper">
+                <label><i class="fa-solid fa-tags"></i> Seleziona Tag</label>
+                <div id="pool-tag-selector" style="display:flex; gap:6px; flex-wrap:wrap; padding:6px; background:rgba(0,0,0,0.2); border-radius:8px; min-height:40px; align-items:center;">
+                    <span style="color:var(--text-secondary); font-size:0.8rem;">Scegli un'attivit&agrave; Pool...</span>
+                </div>
             </div>
 
             <!-- STIMULUS COUNT SELECTOR (Phase 1.b) -->

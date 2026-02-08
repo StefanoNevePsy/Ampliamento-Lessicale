@@ -46,8 +46,27 @@ window.onload = async () => {
 };
 
 // --- SET FILTERING & DROPDOWN ---
+const POOL_MODES = ['pool_random', 'intruso'];
+
 window.filterSetsByMode = function () {
     const currentMode = document.getElementById('mode-select').value;
+    const isPoolMode = POOL_MODES.includes(currentMode);
+
+    // Toggle set selector vs tag selector visibility
+    const setWrapper = document.getElementById('set-selector-wrapper');
+    const tagWrapper = document.getElementById('tag-selector-wrapper');
+    if (setWrapper && tagWrapper) {
+        if (isPoolMode) {
+            setWrapper.classList.add('hidden');
+            tagWrapper.classList.remove('hidden');
+            renderPoolTagSelector();
+        } else {
+            setWrapper.classList.remove('hidden');
+            tagWrapper.classList.add('hidden');
+        }
+    }
+
+    if (isPoolMode) return; // Pool modes don't use set dropdown
 
     const compatibleSets = state.savedSets.filter(s => {
         if (s.modes && Array.isArray(s.modes) && s.modes.length > 0) {
@@ -73,6 +92,44 @@ window.filterSetsByMode = function () {
         state.items = [];
         state.activeSetId = null;
     }
+};
+
+// --- POOL TAG SELECTOR ---
+function renderPoolTagSelector() {
+    const container = document.getElementById('pool-tag-selector');
+    if (!container) return;
+
+    if (state.allTags.length === 0) {
+        container.innerHTML = '<span style="color:var(--text-secondary); font-size:0.8rem;">Nessun tag disponibile. Assegna tag ai set dall\'Editor.</span>';
+        return;
+    }
+
+    // Count items per tag for display
+    const tagCounts = {};
+    state.allTags.forEach(tag => {
+        tagCounts[tag] = getItemsByTag(tag).length;
+    });
+
+    container.innerHTML = state.allTags.map(tag => {
+        const isSelected = state.selectedPoolTags.includes(tag);
+        const count = tagCounts[tag];
+        return `<span class="tag-chip" style="cursor:pointer; font-size:0.75rem; padding:4px 10px;
+                    ${isSelected ? 'background:rgba(99,102,241,0.3); border-color:var(--accent-color); color:white;' : ''}"
+                    onclick="togglePoolTag('${tag}')">
+                    ${isSelected ? '<i class="fa-solid fa-check" style="font-size:0.6rem;"></i> ' : ''}${tag}
+                    <span style="opacity:0.6; font-size:0.65rem;">(${count})</span>
+                </span>`;
+    }).join('');
+}
+
+window.togglePoolTag = (tag) => {
+    const idx = state.selectedPoolTags.indexOf(tag);
+    if (idx >= 0) {
+        state.selectedPoolTags.splice(idx, 1);
+    } else {
+        state.selectedPoolTags.push(tag);
+    }
+    renderPoolTagSelector();
 };
 
 // --- DROPDOWN WITH INDICATORS ---
@@ -129,6 +186,46 @@ window.loadSelectedSet = async (setId) => {
 
 // --- START GAME ---
 window.startGame = () => {
+    const mode = document.getElementById('mode-select').value;
+    const isPoolMode = POOL_MODES.includes(mode);
+    const numStimuli = parseInt(document.getElementById('num-stimuli').value);
+
+    // For pool modes, build items from selected tags
+    if (isPoolMode) {
+        if (state.selectedPoolTags.length === 0) {
+            document.getElementById('game-stage').innerHTML = `
+                <div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; opacity:0.5; text-align:center; padding:20px;">
+                    <i class="fa-solid fa-tags fa-3x" style="margin-bottom:15px;"></i>
+                    <p>Seleziona almeno un <b>tag</b> dal selettore<br>per avviare la modalit&agrave; ${MODES_CONFIG[mode]}.</p>
+                </div>`;
+            return;
+        }
+
+        state.session = { correct: 0, incorrect: 0, total: 0, active: true, itemResults: {} };
+        updateScoreUI();
+        document.getElementById('scoring-controls').classList.remove('hidden');
+        document.getElementById('btn-save-session').classList.add('hidden');
+        document.getElementById('btn-undo-marker').classList.add('hidden');
+
+        // For pool_random: collect items from tags, shuffle, limit
+        if (mode === 'pool_random') {
+            let poolItems = getItemsByTags(state.selectedPoolTags);
+            poolItems.sort(() => Math.random() - 0.5);
+            if (numStimuli > 0 && poolItems.length > numStimuli) {
+                poolItems = poolItems.slice(0, numStimuli);
+            }
+            state.activeSetId = 'pool_' + state.selectedPoolTags.join('_');
+            renderGameMode(mode, poolItems);
+        }
+        // For intruso: the renderer handles its own item building
+        else if (mode === 'intruso') {
+            state.activeSetId = 'intruso_' + state.selectedPoolTags.join('_');
+            renderGameMode(mode, []);
+        }
+        return;
+    }
+
+    // Standard modes: require loaded items
     if (!state.items.length) return;
 
     state.session = { correct: 0, incorrect: 0, total: 0, active: true, itemResults: {} };
@@ -137,12 +234,9 @@ window.startGame = () => {
     document.getElementById('btn-save-session').classList.add('hidden');
 
     let playItems = state.items.filter(i => !i.hidden);
-    const mode = document.getElementById('mode-select').value;
-    const numStimuli = parseInt(document.getElementById('num-stimuli').value);
 
     if (mode !== 'search_find') {
         playItems.sort(() => Math.random() - 0.5);
-        // Apply stimulus count limit
         if (numStimuli > 0 && playItems.length > numStimuli) {
             playItems = playItems.slice(0, numStimuli);
         }
@@ -225,7 +319,13 @@ function handleShortcuts(e) {
 window.confirmSaveSession = async () => {
     if (!state.activePatientId) return alert("Seleziona prima un paziente in alto.");
     const p = state.patients.find(x => x.id === state.activePatientId);
-    const setName = state.savedSets.find(s => s.id === state.activeSetId)?.name || "Set Rimosso";
+    const mode = document.getElementById('mode-select').value;
+    let setName;
+    if (POOL_MODES.includes(mode)) {
+        setName = 'Pool: ' + state.selectedPoolTags.join(', ');
+    } else {
+        setName = state.savedSets.find(s => s.id === state.activeSetId)?.name || "Set Rimosso";
+    }
     const total = state.session.total;
     if (total === 0) return;
 
