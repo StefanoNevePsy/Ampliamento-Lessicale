@@ -147,6 +147,9 @@ window.loadPatientData = (pid) => {
             <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem;" onclick="renamePatient('${pid}')">
                 <i class="fa-solid fa-pen"></i> Rinomina
             </button>
+            <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(16,185,129,0.3); color:var(--success-color);" onclick="exportPatientExcel('${pid}')">
+                <i class="fa-solid fa-file-excel"></i> Esporta Excel
+            </button>
             <button class="btn btn-danger" style="padding:6px 12px; font-size:0.85rem;" onclick="deletePatient('${pid}')">
                 <i class="fa-solid fa-user-minus"></i> Elimina
             </button>
@@ -637,3 +640,114 @@ window.toggleActivityDetails = (btn) => {
         icon.classList.replace('fa-chevron-up', 'fa-chevron-down');
     }
 };
+
+// ============================================================
+// --- EXCEL EXPORT ---
+// ============================================================
+window.exportPatientExcel = (pid) => {
+    const p = state.patients.find(x => x.id === pid);
+    if (!p || !p.history || p.history.length === 0) return alert("Nessun dato da esportare.");
+
+    const sorted = [...p.history].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // Build HTML table (Excel-compatible .xls format)
+    let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:spreadsheet" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8">
+<style>
+td, th { border: 1px solid #ccc; padding: 4px 8px; font-family: Arial; font-size: 11px; }
+th { background: #4472c4; color: white; font-weight: bold; }
+.pct-high { background: #c6efce; color: #006100; }
+.pct-low { background: #ffc7ce; color: #9c0006; }
+</style></head><body>`;
+
+    // SHEET 1: All Sessions
+    html += `<table><caption>${p.name} - Tutte le Sessioni</caption>`;
+    html += `<tr><th>Data</th><th>Ora</th><th>Attivit&agrave;</th><th>Modalit&agrave;</th><th>Tipo</th><th>Corrette</th><th>Prompt</th><th>Totale</th><th>%</th></tr>`;
+
+    sorted.forEach(s => {
+        const d = new Date(s.date);
+        const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+        const timeStr = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        const modeName = MODES_CONFIG[s.mode] || s.mode;
+        const typeLabel = s.sessionType === 'timedelay' ? `Time Delay (${s.timeDelaySeconds || '?'}s)` : (s.sessionType === 'independent' ? 'Indipendente' : '-');
+        const pctClass = s.percentage >= 90 ? 'pct-high' : (s.percentage < 50 ? 'pct-low' : '');
+        const prompts = s.prompts || s.rawP || '-';
+
+        html += `<tr><td>${dateStr}</td><td>${timeStr}</td><td>${s.setName}</td><td>${modeName}</td><td>${typeLabel}</td><td>${s.correct}</td><td>${prompts}</td><td>${s.total}</td><td class="${pctClass}">${s.percentage}%</td></tr>`;
+    });
+    html += `</table><br>`;
+
+    // SHEET 2: Daily Summary
+    html += `<table><caption>${p.name} - Riepilogo Giornaliero</caption>`;
+    html += `<tr><th>Data</th><th>LU Totali</th><th>LU Corrette</th><th>% Media</th><th>N. Attivit&agrave;</th></tr>`;
+
+    const byDate = {};
+    sorted.forEach(s => {
+        const dk = getDateKey(s.date);
+        if (!byDate[dk]) byDate[dk] = [];
+        byDate[dk].push(s);
+    });
+
+    Object.entries(byDate).sort(([a],[b]) => a.localeCompare(b)).forEach(([dk, sessions]) => {
+        const totalLU = sessions.reduce((acc, s) => acc + s.total, 0);
+        const totalCorrect = sessions.reduce((acc, s) => acc + s.correct, 0);
+        const avgPct = totalLU > 0 ? Math.round((totalCorrect / totalLU) * 100) : 0;
+        const d = new Date(dk);
+        const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+        const pctClass = avgPct >= 90 ? 'pct-high' : (avgPct < 50 ? 'pct-low' : '');
+        html += `<tr><td>${dateStr}</td><td>${totalLU}</td><td>${totalCorrect}</td><td class="${pctClass}">${avgPct}%</td><td>${sessions.length}</td></tr>`;
+    });
+    html += `</table><br>`;
+
+    // SHEET 3: Per-Activity Summary
+    html += `<table><caption>${p.name} - Riepilogo per Attivit&agrave;</caption>`;
+    html += `<tr><th>Attivit&agrave;</th><th>Modalit&agrave;</th><th>N. Sessioni</th><th>Ultima Data</th><th>Ultima %</th><th>Media %</th><th>Criterio</th></tr>`;
+
+    const byActivity = {};
+    sorted.forEach(s => {
+        const key = `${s.setName}__${s.mode}`;
+        if (!byActivity[key]) byActivity[key] = [];
+        byActivity[key].push(s);
+    });
+
+    Object.entries(byActivity).forEach(([key, sessions]) => {
+        const [name, mode] = key.split('__');
+        const modeName = MODES_CONFIG[mode] || mode;
+        const last = sessions[sessions.length - 1];
+        const avgPct = Math.round(sessions.reduce((a, s) => a + s.percentage, 0) / sessions.length);
+        const hasCriterion = checkCriterion(sessions);
+        const lastD = new Date(last.date);
+        const lastDateStr = `${String(lastD.getDate()).padStart(2,'0')}/${String(lastD.getMonth()+1).padStart(2,'0')}/${lastD.getFullYear()}`;
+
+        html += `<tr><td>${name}</td><td>${modeName}</td><td>${sessions.length}</td><td>${lastDateStr}</td><td>${last.percentage}%</td><td>${avgPct}%</td><td>${hasCriterion ? 'RAGGIUNTO' : '-'}</td></tr>`;
+    });
+    html += `</table>`;
+
+    html += `</body></html>`;
+
+    // Download as .xls file
+    const blob = new Blob(['\uFEFF' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const safeName = p.name.replace(/[^a-zA-Z0-9\u00C0-\u024F]/g, '_');
+    const fileName = `${safeName}_report_${new Date().toISOString().split('T')[0]}.xls`;
+
+    // Use Web Share API if available (Android), otherwise download link
+    if (typeof Capacitor !== 'undefined' && navigator.share) {
+        const file = new File([blob], fileName, { type: 'application/vnd.ms-excel' });
+        navigator.share({ files: [file], title: `Report ${p.name}` }).catch(() => {
+            downloadBlob(url, fileName);
+        });
+    } else {
+        downloadBlob(url, fileName);
+    }
+};
+
+function downloadBlob(url, fileName) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
