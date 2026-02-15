@@ -3,13 +3,17 @@ const MODES_CONFIG = {
     'tact': 'TACT',
     'ran': 'RAN',
     'tombola': 'Tombola',
+    'tombola_sonora': 'Tombola Sonora',
     'memory': 'Memory',
     'search_find': 'Cerca-Trova',
+    'intraverbal_scenari': 'Intraverbal-Scenari',
     'pool_random': 'Pool Random',
+    'pool_intraverbal': 'Pool Intraverbal',
     'intruso': 'Intruso',
     'topologia': 'Topologia',
     'sequenze': 'Sequenze',
-    'categorizzazione': 'Categorizzazione'
+    'categorizzazione': 'Categorizzazione',
+    'zoom': 'Zoom'
 };
 
 let state = {
@@ -44,7 +48,10 @@ let state = {
     sequenzeSelected: [],
     // Categorizzazione state
     catItems: [],
-    catIndex: 0
+    catIndex: 0,
+    // Zoom state
+    zoomRevealed: false,
+    zoomIndex: 0
 };
 
 // --- TAG IMAGE HELPERS (stored in localStorage) ---
@@ -64,6 +71,23 @@ function setTagImage(tag, dataUrl) {
 function getAllTagImages() {
     try { return JSON.parse(localStorage.getItem('tagImages') || '{}'); }
     catch(e) { return {}; }
+}
+
+// --- CUSTOM SESSION NAMES (stored in localStorage) ---
+function getRecentSessionNames() {
+    try { return JSON.parse(localStorage.getItem('sessionNames') || '[]'); }
+    catch(e) { return []; }
+}
+
+function saveCustomSessionName(name) {
+    if (!name || !name.trim()) return;
+    try {
+        let names = getRecentSessionNames();
+        names = names.filter(n => n !== name.trim());
+        names.unshift(name.trim());
+        if (names.length > 20) names = names.slice(0, 20);
+        localStorage.setItem('sessionNames', JSON.stringify(names));
+    } catch(e) { console.error('Error saving session name:', e); }
 }
 
 // Collect all unique tags from existing sets

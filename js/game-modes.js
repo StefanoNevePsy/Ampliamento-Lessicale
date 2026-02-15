@@ -17,13 +17,15 @@ function renderGameMode(mode, items) {
     if (mode === 'tact') renderTact(items, stage);
     else if (mode === 'ran') renderRan(items, stage);
     else if (mode === 'tombola') renderTombola(items, stage);
+    else if (mode === 'tombola_sonora') renderTombolaSonora(items, stage);
     else if (mode === 'memory') renderMemory(items, stage);
-    else if (mode === 'search_find') renderSearchFind(items, stage);
-    else if (mode === 'pool_random') renderPoolRandom(items, stage);
+    else if (mode === 'search_find' || mode === 'intraverbal_scenari') renderSearchFind(items, stage);
+    else if (mode === 'pool_random' || mode === 'pool_intraverbal') renderPoolRandom(items, stage);
     else if (mode === 'intruso') renderIntruso(items, stage);
     else if (mode === 'topologia') renderTopologia(items, stage);
     else if (mode === 'sequenze') renderSequenze(items, stage);
     else if (mode === 'categorizzazione') renderCategorizzazione(items, stage);
+    else if (mode === 'zoom') renderZoom(items, stage);
 }
 
 // --- TACT ---
@@ -189,6 +191,7 @@ window.handleMatchClick = (idx, label) => {
         state.session.total = results.length;
         updateScoreUI();
         document.getElementById('btn-save-session').classList.remove('hidden');
+        if (typeof showSessionNameInput === 'function') showSessionNameInput();
     }
 };
 
@@ -698,6 +701,7 @@ window.checkSequenze = () => {
         });
         updateScoreUI();
         document.getElementById('btn-save-session').classList.remove('hidden');
+        if (typeof showSessionNameInput === 'function') showSessionNameInput();
     }
 };
 
@@ -854,4 +858,190 @@ window.removeLastMarker = () => {
 
 window.clearMarkers = () => {
     document.querySelectorAll('.marker-pin').forEach(e => e.remove());
+};
+
+// --- TOMBOLA SONORA (Audio matching) ---
+function renderTombolaSonora(items, stage) {
+    // Filter items that have audio
+    const audioItems = items.filter(i => i.audio);
+    if (audioItems.length === 0) {
+        stage.innerHTML = `
+            <div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; opacity:0.5; text-align:center; padding:20px;">
+                <i class="fa-solid fa-volume-xmark fa-3x" style="margin-bottom:15px;"></i>
+                <p>Nessun item con audio trovato in questo set.<br>Aggiungi file audio agli item nell'Editor<br>(icona <i class="fa-solid fa-music"></i>).</p>
+            </div>`;
+        return;
+    }
+
+    state.deck = [...audioItems].sort(() => Math.random() - 0.5);
+    const cols = Math.ceil(Math.sqrt(audioItems.length));
+    const rows = Math.ceil(audioItems.length / cols);
+
+    stage.innerHTML = `
+        <div style="display:flex; height:100%; flex-direction:column;">
+            <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0;">
+                <div style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
+                    <i class="fa-solid fa-music"></i> Ascolta e Trova:
+                </div>
+                <button id="btn-play-audio" class="btn btn-primary" onclick="playCurrentAudio()" style="padding:8px 20px; border-radius:20px; font-size:0.9rem;">
+                    <i class="fa-solid fa-play"></i> Riproduci
+                </button>
+                <span id="audio-remaining" style="color:var(--text-secondary); font-size:0.75rem;">${state.deck.length} rimasti</span>
+            </div>
+            <div style="flex:1; min-height:0; padding:10px; display:grid;
+                        grid-template-columns:repeat(${cols}, 1fr);
+                        grid-template-rows:repeat(${rows}, minmax(80px, 1fr));
+                        gap:10px; overflow-y:auto;">
+                ${audioItems.map((item, idx) => `
+                    <div class="card-grid" id="audio-slot-${idx}"
+                         onclick="handleAudioMatchClick(${idx}, '${item.label.replace(/'/g, "\\'")}')"
+                         style="aspect-ratio:unset; height:auto; min-height:0; min-width:0; overflow:hidden;">
+                        <img src="${item.url || getPlaceholderUrl(item.label)}"
+                             style="max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain;"
+                             onerror="handleImgError(this, '${item.label}')">
+                    </div>
+                `).join('')}
+            </div>
+        </div>`;
+
+    // Auto-play first audio after a short delay
+    setTimeout(() => playCurrentAudio(), 500);
+}
+
+window.playCurrentAudio = () => {
+    if (state.deck.length === 0) return;
+    const current = state.deck[0];
+    if (current.audio) {
+        if (window._currentAudio) { window._currentAudio.pause(); }
+        window._currentAudio = new Audio(current.audio);
+        window._currentAudio.play().catch(e => console.warn('Audio play failed:', e));
+        const btn = document.getElementById('btn-play-audio');
+        if (btn) {
+            btn.innerHTML = '<i class="fa-solid fa-volume-high"></i> ...';
+            window._currentAudio.onended = () => { btn.innerHTML = '<i class="fa-solid fa-play"></i> Riproduci'; };
+        }
+    }
+};
+
+window.handleAudioMatchClick = (idx, label) => {
+    if (state.deck.length === 0) return;
+    const cardEl = document.getElementById(`audio-slot-${idx}`);
+    if (cardEl.classList.contains('matched')) return;
+
+    const isCorrect = label === state.deck[0].label;
+
+    if (isCorrect) {
+        cardEl.classList.add('matched');
+        cardEl.style.border = '4px solid var(--success-color)';
+        cardEl.style.boxShadow = '0 0 15px rgba(16,185,129,0.4)';
+        state.deck.shift();
+        const remaining = document.getElementById('audio-remaining');
+        if (remaining) remaining.textContent = state.deck.length > 0 ? state.deck.length + ' rimasti' : 'FINITO!';
+        // Play next audio after delay
+        if (state.deck.length > 0) {
+            setTimeout(() => playCurrentAudio(), 800);
+        }
+    } else {
+        cardEl.style.border = '4px solid var(--danger-color)';
+        cardEl.style.boxShadow = '0 0 15px rgba(239,68,68,0.4)';
+        setTimeout(() => {
+            cardEl.style.border = '';
+            cardEl.style.boxShadow = '';
+        }, 600);
+    }
+
+    if (state.session.active) {
+        const key = `tombola_sonora_${Date.now()}`;
+        state.session.itemResults[key] = isCorrect;
+        const results = Object.values(state.session.itemResults);
+        state.session.correct = results.filter(v => v === true).length;
+        state.session.incorrect = results.filter(v => v === false).length;
+        state.session.total = results.length;
+        updateScoreUI();
+        document.getElementById('btn-save-session').classList.remove('hidden');
+        if (typeof showSessionNameInput === 'function') showSessionNameInput();
+    }
+};
+
+// --- ZOOM (Part-to-whole guessing) ---
+function renderZoom(items, stage) {
+    const zoomItems = items.filter(i => i.url);
+    if (zoomItems.length === 0) {
+        stage.innerHTML = `
+            <div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; opacity:0.5; text-align:center; padding:20px;">
+                <i class="fa-solid fa-magnifying-glass fa-3x" style="margin-bottom:15px;"></i>
+                <p>Nessun item con immagine trovato.</p>
+            </div>`;
+        return;
+    }
+
+    state.zoomIndex = 0;
+    state.zoomRevealed = false;
+    state.zoomItems = zoomItems.sort(() => Math.random() - 0.5);
+    showZoomItem(stage);
+}
+
+function showZoomItem(stage) {
+    const items = state.zoomItems;
+    const idx = state.zoomIndex;
+
+    if (idx >= items.length) {
+        const pct = state.session.total > 0 ? Math.round((state.session.correct / state.session.total) * 100) : 0;
+        stage.innerHTML = `
+            <div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:20px;">
+                <i class="fa-solid fa-flag-checkered fa-3x" style="margin-bottom:15px; color:var(--accent-color);"></i>
+                <h2 style="margin:10px 0;">Zoom Completato!</h2>
+                <p style="font-size:1.5rem; font-weight:bold; color:${pct >= 90 ? 'var(--success-color)' : 'white'};">${pct}%</p>
+                <p style="color:var(--text-secondary);">${state.session.correct} / ${state.session.total} corretti</p>
+            </div>`;
+        return;
+    }
+
+    const item = items[idx];
+    state.zoomRevealed = false;
+
+    // Default zoom area: center 30% of image, or use custom if defined
+    const area = item.zoomArea || { x: 35, y: 35, w: 30, h: 30 };
+
+    stage.innerHTML = `
+    <div style="display:flex; height:100%; flex-direction:column;">
+        <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
+            <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
+                <i class="fa-solid fa-magnifying-glass"></i> Cos'&egrave;?
+            </span>
+            <span style="color:var(--text-secondary); font-size:0.8rem;">${idx + 1}/${items.length}</span>
+        </div>
+        <div id="zoom-display" style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; min-height:0; cursor:pointer;" onclick="revealZoom()">
+            <div id="zoom-image-container" style="position:relative; max-width:90%; max-height:70%; overflow:hidden; border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,0.5); background:white;">
+                <img id="zoom-img" src="${item.url}" style="display:block; width:100%; height:auto; transform-origin:${area.x + area.w/2}% ${area.y + area.h/2}%; transform:scale(${Math.round(100/area.w * 2.5)}); transition:transform 0.8s ease;" onerror="handleImgError(this, '${item.label}')">
+            </div>
+            <div id="zoom-label" style="margin-top:15px; font-size:1.5rem; font-weight:800; color:white; text-transform:uppercase; opacity:0; transition:opacity 0.5s;">${item.label}</div>
+            <div id="zoom-hint" style="margin-top:10px; color:var(--text-secondary); font-size:0.85rem;">
+                <i class="fa-solid fa-hand-pointer"></i> Tocca per rivelare
+            </div>
+        </div>
+        <div style="padding:10px; display:flex; gap:10px; justify-content:center; background:rgba(0,0,0,0.2); border-top:1px solid #ffffff10; flex-shrink:0;">
+            <button class="btn btn-primary" onclick="nextZoomItem()" style="padding:10px 30px;">
+                <i class="fa-solid fa-forward"></i> Avanti
+            </button>
+        </div>
+    </div>`;
+}
+
+window.revealZoom = () => {
+    if (state.zoomRevealed) return;
+    state.zoomRevealed = true;
+
+    const img = document.getElementById('zoom-img');
+    const label = document.getElementById('zoom-label');
+    const hint = document.getElementById('zoom-hint');
+
+    if (img) img.style.transform = 'scale(1)';
+    if (label) label.style.opacity = '1';
+    if (hint) hint.style.display = 'none';
+};
+
+window.nextZoomItem = () => {
+    state.zoomIndex++;
+    showZoomItem(document.getElementById('game-stage'));
 };

@@ -46,7 +46,7 @@ window.onload = async () => {
 };
 
 // --- SET FILTERING & DROPDOWN ---
-const POOL_MODES = ['pool_random', 'intruso', 'categorizzazione'];
+const POOL_MODES = ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione'];
 
 window.filterSetsByMode = function () {
     const currentMode = document.getElementById('mode-select').value;
@@ -70,10 +70,12 @@ window.filterSetsByMode = function () {
 
     const compatibleSets = state.savedSets.filter(s => {
         if (s.modes && Array.isArray(s.modes) && s.modes.length > 0) {
-            return s.modes.includes(currentMode);
+            // intraverbal_scenari uses same sets as search_find
+            const checkMode = currentMode === 'intraverbal_scenari' ? 'search_find' : currentMode;
+            return s.modes.includes(checkMode) || s.modes.includes(currentMode);
         }
         // Fallback for old sets without mode tags
-        if (currentMode === 'search_find') {
+        if (currentMode === 'search_find' || currentMode === 'intraverbal_scenari') {
             return s.category && (s.category.includes('Scene') || s.category.includes('Cerca'));
         } else {
             return !(s.category && (s.category.includes('Scene') || s.category.includes('Cerca')));
@@ -207,11 +209,11 @@ window.startGame = () => {
         document.getElementById('btn-save-session').classList.add('hidden');
         document.getElementById('btn-undo-marker').classList.add('hidden');
 
-        // For pool_random: collect all items from tags (renderer handles batch size)
-        if (mode === 'pool_random') {
+        // For pool_random / pool_intraverbal: collect all items from tags
+        if (mode === 'pool_random' || mode === 'pool_intraverbal') {
             let poolItems = getItemsByTags(state.selectedPoolTags);
             poolItems.sort(() => Math.random() - 0.5);
-            state.activeSetId = 'pool_' + state.selectedPoolTags.join('_');
+            state.activeSetId = (mode === 'pool_intraverbal' ? 'pool_iv_' : 'pool_') + state.selectedPoolTags.join('_');
             renderGameMode(mode, poolItems);
         }
         // For intruso: the renderer handles its own item building
@@ -237,7 +239,7 @@ window.startGame = () => {
 
     let playItems = state.items.filter(i => !i.hidden);
 
-    if (mode !== 'search_find') {
+    if (mode !== 'search_find' && mode !== 'intraverbal_scenari') {
         playItems.sort(() => Math.random() - 0.5);
         if (numStimuli > 0 && playItems.length > numStimuli) {
             playItems = playItems.slice(0, numStimuli);
@@ -246,7 +248,7 @@ window.startGame = () => {
 
     // Grid size (for visual layout in grids)
     const gridSize = parseInt(document.getElementById('grid-size').value);
-    if (mode !== 'search_find' && gridSize !== 20) {
+    if (mode !== 'search_find' && mode !== 'intraverbal_scenari' && gridSize !== 20) {
         const gridLimit = gridSize * gridSize;
         if (playItems.length > gridLimit) playItems = playItems.slice(0, gridLimit);
     }
@@ -255,7 +257,7 @@ window.startGame = () => {
     state.ranIndex = 0;
 
     const undoBtn = document.getElementById('btn-undo-marker');
-    if (mode === 'search_find') undoBtn.classList.remove('hidden'); else undoBtn.classList.add('hidden');
+    if (mode === 'search_find' || mode === 'intraverbal_scenari') undoBtn.classList.remove('hidden'); else undoBtn.classList.add('hidden');
     renderGameMode(mode, playItems);
 };
 
@@ -274,7 +276,7 @@ window.recordResponse = (isCorrect) => {
             void targetImg.offsetWidth;
             targetImg.classList.add(isCorrect ? 'feedback-success' : 'feedback-fail');
         }
-    } else if (mode === 'search_find') {
+    } else if (mode === 'search_find' || mode === 'intraverbal_scenari') {
         const markers = document.querySelectorAll('.marker-pin');
         if (markers.length > 0) {
             const lastMarker = markers[markers.length - 1];
@@ -294,6 +296,7 @@ window.recordResponse = (isCorrect) => {
 
     updateScoreUI();
     document.getElementById('btn-save-session').classList.remove('hidden');
+    if (typeof showSessionNameInput === 'function') showSessionNameInput();
 };
 
 function updateScoreUI() {
@@ -311,7 +314,7 @@ function handleShortcuts(e) {
         if (e.key === 'ArrowRight') nextRan();
         if (e.key === 'ArrowLeft') prevRan();
     }
-    if (mode === 'search_find') {
+    if (mode === 'search_find' || mode === 'intraverbal_scenari') {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') removeLastMarker();
         if (e.key === 'Delete' || e.key === 'Backspace') clearMarkers();
     }
@@ -322,20 +325,28 @@ window.confirmSaveSession = async () => {
     if (!state.activePatientId) return alert("Seleziona prima un paziente in alto.");
     const p = state.patients.find(x => x.id === state.activePatientId);
     const mode = document.getElementById('mode-select').value;
-    let setName;
+    let defaultName;
     if (POOL_MODES.includes(mode)) {
-        setName = 'Pool: ' + state.selectedPoolTags.join(', ');
+        defaultName = 'Pool: ' + state.selectedPoolTags.join(', ');
     } else {
-        setName = state.savedSets.find(s => s.id === state.activeSetId)?.name || "Set Rimosso";
+        defaultName = state.savedSets.find(s => s.id === state.activeSetId)?.name || "Set Rimosso";
     }
     const total = state.session.total;
     if (total === 0) return;
+
+    // Custom session name: use input field value if available
+    const nameInput = document.getElementById('session-name-input');
+    let customName = nameInput ? nameInput.value.trim() : '';
+    const setName = customName || defaultName;
+
+    // Save custom name for future suggestions
+    if (customName) saveCustomSessionName(customName);
 
     const sessionData = {
         date: new Date().toISOString(),
         setId: state.activeSetId,
         setName: setName,
-        mode: document.getElementById('mode-select').value,
+        mode: mode,
         correct: state.session.correct,
         total: total,
         percentage: Math.round((state.session.correct / total) * 100)
@@ -347,13 +358,31 @@ window.confirmSaveSession = async () => {
     const btn = document.getElementById('btn-save-session');
     btn.innerHTML = '<i class="fa-solid fa-check"></i>';
     btn.style.background = 'var(--success-color)';
+    if (nameInput) nameInput.value = '';
     setTimeout(() => {
         btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i>';
         btn.style.background = '#2563eb';
         state.session.active = false;
         document.getElementById('scoring-controls').classList.add('hidden');
         btn.classList.add('hidden');
+        const sessionNameWrapper = document.getElementById('session-name-wrapper');
+        if (sessionNameWrapper) sessionNameWrapper.classList.add('hidden');
     }, 1000);
+};
+
+// Show session name input when session becomes saveable
+window.showSessionNameInput = () => {
+    const wrapper = document.getElementById('session-name-wrapper');
+    if (wrapper) {
+        wrapper.classList.remove('hidden');
+        // Update datalist with recent names
+        const datalist = document.getElementById('session-names-list');
+        if (datalist) {
+            datalist.innerHTML = getRecentSessionNames()
+                .map(n => `<option value="${n}">`)
+                .join('');
+        }
+    }
 };
 
 // --- LIBRARY ---

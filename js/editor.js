@@ -150,6 +150,9 @@ function renderEditorList() {
         const activeStyle = isSelected ? 'border:1px solid var(--accent-color); background:rgba(99, 102, 241, 0.1);' : 'border:1px solid transparent;';
         const opacityStyle = item.hidden ? 'opacity: 0.6;' : 'opacity: 1;';
 
+        const hasAudio = item.audio ? '<i class="fa-solid fa-volume-high" style="color:var(--success-color); font-size:0.6rem;"></i>' : '';
+        const hasZoom = item.zoomArea ? '<i class="fa-solid fa-crop" style="color:var(--warning-color); font-size:0.6rem;"></i>' : '';
+
         return `
         <div class="editor-item" style="${activeStyle} ${opacityStyle} transition:0.2s; cursor:pointer;" onclick="setActiveItem(${idx})">
             <div class="editor-thumb" style="cursor:pointer; position:relative;" onclick="triggerItemUpload(${idx}); event.stopPropagation();" title="Clicca per caricare">
@@ -164,11 +167,18 @@ function renderEditorList() {
                     onfocus="setActiveItem(${idx})"
                     placeholder="Etichetta"
                     style="${item.hidden ? 'text-decoration:line-through; color:#888;' : ''}">
+                <div style="display:flex; gap:2px; margin-top:2px;">${hasAudio}${hasZoom}</div>
             </div>
-            <button class="btn btn-ghost" style="padding:10px;" onclick="toggleItemVisibility(${idx}); event.stopPropagation();" title="${item.hidden ? 'Mostra' : 'Nascondi'}">
+            <button class="btn btn-ghost" style="padding:6px;" onclick="triggerAudioUpload(${idx}); event.stopPropagation();" title="Carica Audio">
+                <i class="fa-solid fa-music" style="font-size:0.8rem; ${item.audio ? 'color:var(--success-color)' : 'opacity:0.4'}"></i>
+            </button>
+            <button class="btn btn-ghost" style="padding:6px;" onclick="openZoomEditor(${idx}); event.stopPropagation();" title="Imposta Area Zoom">
+                <i class="fa-solid fa-crop" style="font-size:0.8rem; ${item.zoomArea ? 'color:var(--warning-color)' : 'opacity:0.4'}"></i>
+            </button>
+            <button class="btn btn-ghost" style="padding:6px;" onclick="toggleItemVisibility(${idx}); event.stopPropagation();" title="${item.hidden ? 'Mostra' : 'Nascondi'}">
                 <i class="fa-solid ${item.hidden ? 'fa-eye-slash' : 'fa-eye'}" style="${item.hidden ? 'color:#888' : 'color:var(--success-color)'}"></i>
             </button>
-            <button class="btn btn-danger" style="padding:10px;" onclick="state.editingItems.splice(${idx},1); renderEditorList(); event.stopPropagation();">
+            <button class="btn btn-danger" style="padding:6px;" onclick="state.editingItems.splice(${idx},1); renderEditorList(); event.stopPropagation();">
                 <i class="fa-solid fa-minus"></i>
             </button>
         </div>`;
@@ -234,6 +244,150 @@ window.bulkUploadImages = (input) => {
     });
 
     input.value = '';
+};
+
+// --- AUDIO UPLOAD ---
+window.triggerAudioUpload = (index) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'audio/*';
+    input.style.display = 'none';
+    input.onchange = (e) => {
+        if (e.target.files[0]) {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                state.editingItems[index].audio = ev.target.result;
+                renderEditorList();
+            };
+            reader.readAsDataURL(e.target.files[0]);
+        }
+    };
+    document.body.appendChild(input);
+    input.click();
+    setTimeout(() => document.body.removeChild(input), 1000);
+};
+
+// --- ZOOM AREA EDITOR ---
+window.openZoomEditor = (index) => {
+    const item = state.editingItems[index];
+    if (!item.url) {
+        alert("Carica prima un'immagine per questo item.");
+        return;
+    }
+
+    // Create modal overlay
+    const modal = document.createElement('div');
+    modal.id = 'zoom-area-modal';
+    modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:20000; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px;';
+
+    const currentArea = item.zoomArea || null;
+
+    modal.innerHTML = `
+        <div style="color:white; margin-bottom:15px; text-align:center;">
+            <h3 style="margin:0 0 5px 0;"><i class="fa-solid fa-crop"></i> Definisci Area Zoom</h3>
+            <p style="margin:0; opacity:0.7; font-size:0.85rem;">Trascina sull'immagine per selezionare l'area da zoomare</p>
+        </div>
+        <div id="zoom-editor-container" style="position:relative; max-width:90vw; max-height:60vh; display:inline-block; cursor:crosshair; touch-action:none;">
+            <img id="zoom-editor-img" src="${item.url}" style="max-width:90vw; max-height:60vh; display:block; border-radius:8px; user-select:none;" draggable="false">
+            <div id="zoom-selection-rect" style="position:absolute; border:3px dashed #f59e0b; background:rgba(245,158,11,0.15); display:none; pointer-events:none;"></div>
+            ${currentArea ? `<div id="zoom-existing-rect" style="position:absolute; border:2px solid #10b981; background:rgba(16,185,129,0.15); left:${currentArea.x}%; top:${currentArea.y}%; width:${currentArea.w}%; height:${currentArea.h}%; pointer-events:none;"></div>` : ''}
+        </div>
+        <div style="display:flex; gap:10px; margin-top:15px;">
+            <button id="zoom-save-btn" class="btn btn-success" style="padding:10px 20px;" ${currentArea ? '' : 'disabled style="padding:10px 20px; opacity:0.5;"'}>
+                <i class="fa-solid fa-check"></i> Salva Area
+            </button>
+            ${currentArea ? '<button class="btn btn-danger" style="padding:10px 20px;" onclick="clearZoomArea(' + index + ')"><i class="fa-solid fa-trash"></i> Rimuovi</button>' : ''}
+            <button class="btn btn-ghost" style="padding:10px 20px;" onclick="closeZoomEditor()">
+                <i class="fa-solid fa-xmark"></i> Annulla
+            </button>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Setup drag selection
+    const container = document.getElementById('zoom-editor-container');
+    const img = document.getElementById('zoom-editor-img');
+    const rect = document.getElementById('zoom-selection-rect');
+    let startX = 0, startY = 0, isDragging = false;
+    let selArea = currentArea ? { ...currentArea } : null;
+
+    const getRelPos = (e) => {
+        const touch = e.touches ? e.touches[0] : e;
+        const r = img.getBoundingClientRect();
+        return {
+            x: Math.max(0, Math.min(100, ((touch.clientX - r.left) / r.width) * 100)),
+            y: Math.max(0, Math.min(100, ((touch.clientY - r.top) / r.height) * 100))
+        };
+    };
+
+    const onStart = (e) => {
+        e.preventDefault();
+        isDragging = true;
+        const pos = getRelPos(e);
+        startX = pos.x;
+        startY = pos.y;
+        rect.style.display = 'block';
+        const existing = document.getElementById('zoom-existing-rect');
+        if (existing) existing.style.display = 'none';
+    };
+
+    const onMove = (e) => {
+        if (!isDragging) return;
+        e.preventDefault();
+        const pos = getRelPos(e);
+        const left = Math.min(startX, pos.x);
+        const top = Math.min(startY, pos.y);
+        const width = Math.abs(pos.x - startX);
+        const height = Math.abs(pos.y - startY);
+        rect.style.left = left + '%';
+        rect.style.top = top + '%';
+        rect.style.width = width + '%';
+        rect.style.height = height + '%';
+        selArea = { x: Math.round(left), y: Math.round(top), w: Math.round(width), h: Math.round(height) };
+    };
+
+    const onEnd = () => {
+        isDragging = false;
+        if (selArea && selArea.w > 2 && selArea.h > 2) {
+            const saveBtn = document.getElementById('zoom-save-btn');
+            if (saveBtn) { saveBtn.disabled = false; saveBtn.style.opacity = '1'; }
+        }
+    };
+
+    container.addEventListener('mousedown', onStart);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onEnd);
+    container.addEventListener('touchstart', onStart, { passive: false });
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
+
+    document.getElementById('zoom-save-btn').onclick = () => {
+        if (selArea && selArea.w > 2 && selArea.h > 2) {
+            state.editingItems[index].zoomArea = selArea;
+            closeZoomEditor();
+            renderEditorList();
+        }
+    };
+
+    window._zoomEditorCleanup = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onEnd);
+        document.removeEventListener('touchmove', onMove);
+        document.removeEventListener('touchend', onEnd);
+    };
+};
+
+window.clearZoomArea = (index) => {
+    delete state.editingItems[index].zoomArea;
+    closeZoomEditor();
+    renderEditorList();
+};
+
+window.closeZoomEditor = () => {
+    if (window._zoomEditorCleanup) { window._zoomEditorCleanup(); window._zoomEditorCleanup = null; }
+    const modal = document.getElementById('zoom-area-modal');
+    if (modal) modal.remove();
 };
 
 // --- PASTE HANDLER ---

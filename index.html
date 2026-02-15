@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 
-    <title>Ampliamento Lessicale v37</title>
+    <title>Ampliamento Lessicale v40</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#1e1e2f">
@@ -21,7 +21,7 @@
 
     <div class="app-shell">
         <header>
-            <h1><i class="fa-solid fa-brain logo-icon"></i> Stimolatore v37</h1>
+            <h1><i class="fa-solid fa-brain logo-icon"></i> Stimolatore v40</h1>
 
             <div class="header-actions">
                 <!-- INFO BUTTON -->
@@ -58,14 +58,18 @@
                     <option value="tact">TACT (Flashcard)</option>
                     <option value="ran">RAN (Denominazione)</option>
                     <option value="tombola">Tombola (Matching)</option>
+                    <option value="tombola_sonora">Tombola Sonora (Audio)</option>
                     <option value="memory">Memory</option>
                     <option value="search_find">Cerca Trova (Scena)</option>
+                    <option value="intraverbal_scenari">Intraverbal-Scenari</option>
+                    <option value="zoom">Zoom (Indovina)</option>
                     <optgroup label="Avanzate">
                         <option value="topologia">Topologia (Drag&amp;Drop)</option>
                         <option value="sequenze">Sequenze (Ordina)</option>
                     </optgroup>
                     <optgroup label="Pool da Tag">
                         <option value="pool_random">Pool Random</option>
+                        <option value="pool_intraverbal">Pool Intraverbal</option>
                         <option value="intruso">Intruso</option>
                         <option value="categorizzazione">Categorizzazione</option>
                     </optgroup>
@@ -142,6 +146,11 @@
             <button class="btn-score success" onclick="recordResponse(true)" title="Risposta Corretta (Tasto V)">
                 <i class="fa-solid fa-check"></i>
             </button>
+        </div>
+
+        <div id="session-name-wrapper" class="hidden" style="pointer-events:auto; display:flex; align-items:center; gap:6px;">
+            <input type="text" id="session-name-input" list="session-names-list" placeholder="Nome sessione (opzionale)" style="padding:8px 12px; border-radius:12px; background:rgba(30,30,50,0.95); border:1px solid var(--glass-border); color:white; font-size:0.8rem; width:200px; backdrop-filter:blur(8px);">
+            <datalist id="session-names-list"></datalist>
         </div>
 
         <button class="btn-float hidden" id="btn-save-session" onclick="confirmSaveSession()" style="background:#2563eb;" title="Salva Dati">
@@ -259,7 +268,7 @@
             <div style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(99, 102, 241, 0.05) 100%); padding: 20px; border-radius: 16px; margin-bottom: 30px; border: 1px solid rgba(99, 102, 241, 0.2); display: flex; gap: 20px; align-items: center;">
                 <div style="font-size: 2.5rem; color: var(--accent-color); padding: 0 10px;"><i class="fa-solid fa-brain"></i></div>
                 <div>
-                    <h3 style="margin: 0 0 10px 0; color: white;">Stimolatore Clinico v37</h3>
+                    <h3 style="margin: 0 0 10px 0; color: white;">Stimolatore Clinico v40</h3>
                     <p style="margin: 0; opacity: 0.8;">Piattaforma per la riabilitazione neuropsicologica e il potenziamento cognitivo. Gestisci pazienti, crea set personalizzati e monitora i progressi con strumenti clinici avanzati.</p>
                 </div>
             </div>
@@ -289,11 +298,15 @@
                         <li><strong>TACT:</strong> Flashcards sequenziali per denominazione pura.</li>
                         <li><strong>RAN (Velocit&agrave;):</strong> Denominazione rapida.<br><span style="font-size: 0.85em; opacity: 0.7;">Usa il tasto <i class="fa-solid fa-table-cells"></i> per passare da vista Griglia a Sequenza.</span></li>
                         <li><strong>Tombola:</strong> Matching visivo. Trova l'immagine target nella griglia. Scoring automatico.</li>
+                        <li><strong>Tombola Sonora:</strong> Ascolta un suono e tocca la carta corrispondente. Richiede audio negli item (<i class="fa-solid fa-music"></i> nell'editor).</li>
                         <li><strong>Memory:</strong> Gioco di memoria per funzioni esecutive.</li>
                         <li><strong>Cerca Trova:</strong> Esplorazione visiva su scene. Tocca per marcare i bersagli.</li>
+                        <li><strong>Intraverbal-Scenari:</strong> Come Cerca Trova, ma con dati tracciati separatamente per uso intraverbale/scenari.</li>
+                        <li><strong>Zoom:</strong> Un'immagine viene mostrata zoomata su un dettaglio. Il bambino deve indovinare l'intera immagine. Area zoom definibile nell'editor (<i class="fa-solid fa-crop"></i>).</li>
                         <li><strong>Topologia:</strong> Trascina le immagini per disporle spazialmente. Scoring manuale.</li>
                         <li><strong>Sequenze:</strong> Tocca le immagini nell'ordine corretto (1, 2, 3...). Premi Verifica per controllare.</li>
                         <li><strong>Pool Random:</strong> Griglia di stimoli casuali dai tag selezionati. N. Stimoli = carte a schermo. Avanza all'infinito.</li>
+                        <li><strong>Pool Intraverbal:</strong> Come Pool Random, ma con dati tracciati separatamente per uso intraverbale.</li>
                         <li><strong>Intruso:</strong> Trova l'intruso! N. Stimoli = carte per round. Round infiniti. Richiede 2+ tag.</li>
                         <li><strong>Categorizzazione:</strong> Assegna ogni immagine alla categoria corretta. I pulsanti mostrano le immagini dei tag. Richiede 2+ tag.</li>
                     </ul>
@@ -308,7 +321,7 @@
                         <li><strong>Valutazione:</strong> Usa i tasti a schermo o la tastiera.<br><span style="color: var(--success-color);"><b>V</b></span> = Corretto (Tasto 'V')<br><span style="color: var(--danger-color);"><b>X</b></span> = Errato (Tasto 'X')</li>
                         <li><strong>N. Stimoli:</strong> Scegli quanti stimoli presentare (3, 4, 6, 8... o Tutti).</li>
                         <li><strong>Child Lock <i class="fa-solid fa-lock-open"></i>:</strong> Blocca lo scroll per evitare tocchi accidentali.</li>
-                        <li><strong>Salvataggio <i class="fa-solid fa-floppy-disk"></i>:</strong> Salva i dati nella cartella del paziente attivo.</li>
+                        <li><strong>Salvataggio <i class="fa-solid fa-floppy-disk"></i>:</strong> Salva i dati nella cartella del paziente attivo.<br><span style="font-size: 0.85em; opacity: 0.7;">Puoi inserire un nome personalizzato nella casella di testo. Se vuoto, usa il nome del set/modalit&agrave;.</span></li>
                     </ul>
                 </div>
 
@@ -321,13 +334,15 @@
                         <li><strong>Creazione:</strong> Crea set personalizzati caricando le tue immagini.</li>
                         <li><strong>Tag Semantici:</strong> Assegna tag (es. "animali", "verbi") per organizzare i set e abilitare le future modalit&agrave; Pool e Intruso.</li>
                         <li><strong>Caricamento Rapido:</strong><br>- Clicca sull'icona fotocamera <i class="fa-solid fa-camera"></i>.<br>- <b>Ctrl+V</b> su una riga per incollare dagli appunti.<br>- <b>Bulk:</b> Carica intere cartelle in una volta.</li>
+                        <li><strong>Audio (<i class="fa-solid fa-music"></i>):</strong> Carica file audio per ogni item (usato in Tombola Sonora).</li>
+                        <li><strong>Zoom Area (<i class="fa-solid fa-crop"></i>):</strong> Definisci l'area di zoom per la modalit&agrave; Zoom trascinando sull'immagine.</li>
                         <li><strong>Backup Completo:</strong> Esporta un unico file contenente <b>tutti</b> i Set e le Cartelle Pazienti.</li>
                     </ul>
                 </div>
             </div>
 
             <div style="text-align: center; margin-top: 40px; color: #666; font-size: 0.8rem;">
-                Design e Sviluppo per uso Professionale - v39
+                Design e Sviluppo per uso Professionale - v40
             </div>
         </div>
     </div>
