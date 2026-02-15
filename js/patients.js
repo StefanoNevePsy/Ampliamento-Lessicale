@@ -237,28 +237,39 @@ function renderOverviewTab(patient) {
     });
 
     const lastSession = [...history].sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+    const numDays = dates.length;
     const totalSessions = history.length;
     const totalLUAll = history.reduce((sum, s) => sum + s.total, 0);
     const correctLUAll = history.reduce((sum, s) => sum + s.correct, 0);
-    const avgPct = totalSessions > 0 ? Math.round((correctLUAll / totalLUAll) * 100) : 0;
+
+    // Daily averages
+    const avgSessionsPerDay = numDays > 0 ? (totalSessions / numDays).toFixed(1) : 0;
+    const avgCorrectPerDay = numDays > 0 ? Math.round(correctLUAll / numDays) : 0;
+    const avgTotalPerDay = numDays > 0 ? Math.round(totalLUAll / numDays) : 0;
+    const dailyPcts = dailyData.map(d => d.totalLU > 0 ? (d.correctLU / d.totalLU) * 100 : 0);
+    const avgDailyPct = dailyPcts.length > 0 ? Math.round(dailyPcts.reduce((a, b) => a + b, 0) / dailyPcts.length) : 0;
 
     let html = `
     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:10px; margin-bottom:20px;">
         <div style="background:rgba(99,102,241,0.15); padding:12px; border-radius:12px; text-align:center; border:1px solid rgba(99,102,241,0.3);">
-            <div style="font-size:1.5rem; font-weight:800; color:var(--accent-color);">${totalSessions}</div>
-            <div style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase;">Sessioni</div>
+            <div style="font-size:1.5rem; font-weight:800; color:var(--accent-color);">${avgSessionsPerDay}</div>
+            <div style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase;">Sessioni/Giorno</div>
+            <div style="font-size:0.6rem; color:#666; margin-top:2px;">${totalSessions} tot. in ${numDays}g</div>
         </div>
         <div style="background:rgba(16,185,129,0.15); padding:12px; border-radius:12px; text-align:center; border:1px solid rgba(16,185,129,0.3);">
-            <div style="font-size:1.5rem; font-weight:800; color:var(--success-color);">${correctLUAll}</div>
-            <div style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase;">LU Corrette</div>
+            <div style="font-size:1.5rem; font-weight:800; color:var(--success-color);">${avgCorrectPerDay}</div>
+            <div style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase;">LU Corrette/Giorno</div>
+            <div style="font-size:0.6rem; color:#666; margin-top:2px;">${correctLUAll} totali</div>
         </div>
         <div style="background:rgba(245,158,11,0.15); padding:12px; border-radius:12px; text-align:center; border:1px solid rgba(245,158,11,0.3);">
-            <div style="font-size:1.5rem; font-weight:800; color:var(--warning-color);">${totalLUAll}</div>
-            <div style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase;">LU Totali</div>
+            <div style="font-size:1.5rem; font-weight:800; color:var(--warning-color);">${avgTotalPerDay}</div>
+            <div style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase;">LU Totali/Giorno</div>
+            <div style="font-size:0.6rem; color:#666; margin-top:2px;">${totalLUAll} totali</div>
         </div>
         <div style="background:rgba(139,92,246,0.15); padding:12px; border-radius:12px; text-align:center; border:1px solid rgba(139,92,246,0.3);">
-            <div style="font-size:1.5rem; font-weight:800; color:#a78bfa;">${avgPct}%</div>
-            <div style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase;">Media</div>
+            <div style="font-size:1.5rem; font-weight:800; color:#a78bfa;">${avgDailyPct}%</div>
+            <div style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase;">Media Giornaliera</div>
+            <div style="font-size:0.6rem; color:#666; margin-top:2px;">${numDays} giornate</div>
         </div>
     </div>`;
 
@@ -359,15 +370,29 @@ function renderDailyLUChart(dailyData) {
         lbl.textContent = `${dObj.getDate()}/${dObj.getMonth() + 1}`;
         svg.appendChild(lbl);
 
-        // Count label on top
+        // Count label on top (total LU)
         const countLbl = document.createElementNS(svgNS, "text");
         countLbl.setAttribute("x", x + barWidth / 2);
         countLbl.setAttribute("y", chartHeight - totalH - 4);
         countLbl.setAttribute("text-anchor", "middle");
         countLbl.setAttribute("fill", "#aaa");
         countLbl.setAttribute("font-size", "8");
+        countLbl.setAttribute("font-weight", "bold");
         countLbl.textContent = d.totalLU;
         svg.appendChild(countLbl);
+
+        // Percentage label at green/red boundary
+        const pct = d.totalLU > 0 ? Math.round((d.correctLU / d.totalLU) * 100) : 0;
+        const pctY = chartHeight - correctH - 2;
+        const pctLbl = document.createElementNS(svgNS, "text");
+        pctLbl.setAttribute("x", x + barWidth + 3);
+        pctLbl.setAttribute("y", pctY + 3);
+        pctLbl.setAttribute("text-anchor", "start");
+        pctLbl.setAttribute("fill", "var(--success-color)");
+        pctLbl.setAttribute("font-size", "7");
+        pctLbl.setAttribute("font-weight", "bold");
+        pctLbl.textContent = pct + '%';
+        svg.appendChild(pctLbl);
     });
 
     // Legend
