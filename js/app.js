@@ -342,37 +342,114 @@ function handleShortcuts(e) {
 // --- SAVE SESSION ---
 window.confirmSaveSession = async () => {
     if (!state.activePatientId) return alert("Seleziona prima un paziente in alto.");
+    const total = state.session.total;
+    if (total === 0) return;
+
+    // Show session type modal
+    const modal = document.getElementById('modal-session-type');
+    modal.style.display = 'flex';
+
+    // Compute raw counts for the summary
+    const results = Object.values(state.session.itemResults);
+    const rawV = results.filter(v => v === true).length;
+    const rawP = results.filter(v => v === 'prompt').length;
+    const rawX = results.filter(v => v === false).length;
+    state._pendingSave = { rawV, rawP, rawX, total: rawV + rawP + rawX };
+
+    // Reset to independent
+    document.querySelector('input[name="session-type-radio"][value="independent"]').checked = true;
+    updateSessionTypeUI();
+};
+
+window.updateSessionTypeUI = () => {
+    const type = document.querySelector('input[name="session-type-radio"]:checked').value;
+    const tdRow = document.getElementById('timedelay-seconds-row');
+    const indLabel = document.getElementById('type-ind-label');
+    const tdLabel = document.getElementById('type-td-label');
+    const summary = document.getElementById('session-type-summary');
+
+    tdRow.style.display = type === 'timedelay' ? 'block' : 'none';
+    indLabel.style.borderColor = type === 'independent' ? 'var(--accent-color)' : 'transparent';
+    tdLabel.style.borderColor = type === 'timedelay' ? 'var(--accent-color)' : 'transparent';
+
+    const s = state._pendingSave;
+    if (!s) return;
+
+    if (type === 'independent') {
+        // P counts as X
+        const eff = s.rawV;
+        const pct = s.total > 0 ? Math.round((eff / s.total) * 100) : 0;
+        summary.innerHTML = `<b>Riepilogo:</b> V:${s.rawV} P:${s.rawP} X:${s.rawX}<br>` +
+            `Conteggio finale: <span style="color:var(--success-color);">${eff} corrette</span> / ${s.total} (${pct}%)<br>` +
+            `<span style="font-size:0.75rem; opacity:0.7;">P(${s.rawP}) contati come errori</span>`;
+    } else {
+        // P and V = correct, X = reclassified as P
+        const eff = s.rawV + s.rawP;
+        const pct = s.total > 0 ? Math.round((eff / s.total) * 100) : 0;
+        summary.innerHTML = `<b>Riepilogo:</b> V:${s.rawV} P:${s.rawP} X:${s.rawX}<br>` +
+            `Conteggio finale: <span style="color:var(--success-color);">${eff} corrette</span> / ${s.total} (${pct}%)<br>` +
+            `<span style="font-size:0.75rem; opacity:0.7;">X(${s.rawX}) riclassificati come prompt</span>`;
+    }
+};
+
+window.closeSessionTypeModal = () => {
+    document.getElementById('modal-session-type').style.display = 'none';
+    state._pendingSave = null;
+};
+
+window.doSaveSession = async () => {
     const p = state.patients.find(x => x.id === state.activePatientId);
     const mode = document.getElementById('mode-select').value;
+    const type = document.querySelector('input[name="session-type-radio"]:checked').value;
+    const s = state._pendingSave;
+    if (!s || !p) return;
+
     let defaultName;
     if (POOL_MODES.includes(mode)) {
         defaultName = 'Pool: ' + state.selectedPoolTags.join(', ');
     } else {
-        defaultName = state.savedSets.find(s => s.id === state.activeSetId)?.name || "Set Rimosso";
+        defaultName = state.savedSets.find(ss => ss.id === state.activeSetId)?.name || "Set Rimosso";
     }
-    const total = state.session.total;
-    if (total === 0) return;
 
-    // Custom session name: use input field value if available
     const nameInput = document.getElementById('session-name-input');
     let customName = nameInput ? nameInput.value.trim() : '';
     const setName = customName || defaultName;
-
-    // Save custom name for future suggestions
     if (customName) saveCustomSessionName(customName);
+
+    let correct, total;
+    total = s.total;
+
+    if (type === 'independent') {
+        correct = s.rawV; // P counts as X (incorrect)
+    } else {
+        correct = s.rawV + s.rawP; // P and V = correct, X = reclassified as P
+    }
 
     const sessionData = {
         date: new Date().toISOString(),
         setId: state.activeSetId,
         setName: setName,
         mode: mode,
-        correct: state.session.correct,
+        correct: correct,
+        prompts: s.rawP,
         total: total,
-        percentage: Math.round((state.session.correct / total) * 100)
+        percentage: Math.round((correct / total) * 100),
+        sessionType: type,
+        rawV: s.rawV,
+        rawP: s.rawP,
+        rawX: s.rawX
     };
+
+    if (type === 'timedelay') {
+        sessionData.timeDelaySeconds = parseInt(document.getElementById('timedelay-seconds').value) || 5;
+    }
+
     if (!p.history) p.history = [];
     p.history.push(sessionData);
     await DB.savePatient(p);
+
+    // Close modal and show success
+    closeSessionTypeModal();
 
     const btn = document.getElementById('btn-save-session');
     btn.innerHTML = '<i class="fa-solid fa-check"></i>';
