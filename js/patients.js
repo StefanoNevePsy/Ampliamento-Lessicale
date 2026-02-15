@@ -309,16 +309,20 @@ function renderDailyLUChart(dailyData) {
     if (!chartContainer) return;
 
     const maxLU = Math.max(...dailyData.map(d => d.totalLU), 1);
+    const topPad = 18; // space for count labels above tallest bar
     const chartHeight = 150;
     const barWidth = Math.max(30, Math.min(50, 600 / dailyData.length));
     const chartWidth = Math.max(300, dailyData.length * (barWidth + 8) + 40);
+    const svgH = topPad + chartHeight + 30;
 
     const svgNS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(svgNS, "svg");
-    svg.setAttribute("viewBox", `0 0 ${chartWidth} ${chartHeight + 30}`);
+    svg.setAttribute("viewBox", `0 0 ${chartWidth} ${svgH}`);
     svg.setAttribute("width", chartWidth);
-    svg.setAttribute("height", chartHeight + 30);
+    svg.setAttribute("height", svgH);
     svg.style.minWidth = chartWidth + 'px';
+
+    const bY = topPad; // base offset for all bar y-coords
 
     dailyData.forEach((d, i) => {
         const x = 20 + i * (barWidth + 8);
@@ -331,7 +335,7 @@ function renderDailyLUChart(dailyData) {
         if (incorrectH > 0) {
             const incorrectBar = document.createElementNS(svgNS, "rect");
             incorrectBar.setAttribute("x", x);
-            incorrectBar.setAttribute("y", chartHeight - totalH);
+            incorrectBar.setAttribute("y", bY + chartHeight - totalH);
             incorrectBar.setAttribute("width", barWidth);
             incorrectBar.setAttribute("height", incorrectH);
             incorrectBar.setAttribute("fill", "var(--danger-color)");
@@ -347,7 +351,7 @@ function renderDailyLUChart(dailyData) {
         if (correctH > 0) {
             const correctBar = document.createElementNS(svgNS, "rect");
             correctBar.setAttribute("x", x);
-            correctBar.setAttribute("y", chartHeight - correctH);
+            correctBar.setAttribute("y", bY + chartHeight - correctH);
             correctBar.setAttribute("width", barWidth);
             correctBar.setAttribute("height", correctH);
             correctBar.setAttribute("fill", "var(--success-color)");
@@ -362,7 +366,7 @@ function renderDailyLUChart(dailyData) {
         // Date label
         const lbl = document.createElementNS(svgNS, "text");
         lbl.setAttribute("x", x + barWidth / 2);
-        lbl.setAttribute("y", chartHeight + 15);
+        lbl.setAttribute("y", bY + chartHeight + 15);
         lbl.setAttribute("text-anchor", "middle");
         lbl.setAttribute("fill", "#888");
         lbl.setAttribute("font-size", "8");
@@ -373,20 +377,19 @@ function renderDailyLUChart(dailyData) {
         // Count label on top (total LU)
         const countLbl = document.createElementNS(svgNS, "text");
         countLbl.setAttribute("x", x + barWidth / 2);
-        countLbl.setAttribute("y", chartHeight - totalH - 4);
+        countLbl.setAttribute("y", bY + chartHeight - totalH - 4);
         countLbl.setAttribute("text-anchor", "middle");
         countLbl.setAttribute("fill", "#aaa");
-        countLbl.setAttribute("font-size", "8");
+        countLbl.setAttribute("font-size", "9");
         countLbl.setAttribute("font-weight", "bold");
         countLbl.textContent = d.totalLU;
         svg.appendChild(countLbl);
 
         // Percentage label at green/red boundary
         const pct = d.totalLU > 0 ? Math.round((d.correctLU / d.totalLU) * 100) : 0;
-        const pctY = chartHeight - correctH - 2;
         const pctLbl = document.createElementNS(svgNS, "text");
         pctLbl.setAttribute("x", x + barWidth + 3);
-        pctLbl.setAttribute("y", pctY + 3);
+        pctLbl.setAttribute("y", bY + chartHeight - correctH + 3);
         pctLbl.setAttribute("text-anchor", "start");
         pctLbl.setAttribute("fill", "var(--success-color)");
         pctLbl.setAttribute("font-size", "7");
@@ -396,7 +399,7 @@ function renderDailyLUChart(dailyData) {
     });
 
     // Legend
-    const legendY = chartHeight + 24;
+    const legendY = bY + chartHeight + 24;
     const legCorrect = document.createElementNS(svgNS, "rect");
     legCorrect.setAttribute("x", "20"); legCorrect.setAttribute("y", legendY);
     legCorrect.setAttribute("width", "10"); legCorrect.setAttribute("height", "6");
