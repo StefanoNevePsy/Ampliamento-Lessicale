@@ -1314,7 +1314,7 @@ window.saveQuadernoSession = async () => {
             if (type === 'independent') {
                 correct = rawV; // P counts as X
             } else {
-                correct = rawV + rawP; // P and V correct, X as P
+                correct = rawV; // Time Delay: only V = correct, X+P = prompted
             }
 
             totalLU += total;

@@ -393,11 +393,12 @@ window.updateSessionTypeUI = () => {
             `Conteggio finale: <span style="color:var(--success-color);">${eff} corrette</span> / ${s.total} (${pct}%)<br>` +
             `<span style="font-size:0.75rem; opacity:0.7;">P(${s.rawP}) contati come errori</span>`;
     } else {
-        // P and V = correct, X = reclassified as P
-        const eff = s.rawV + s.rawP;
+        // Time Delay: only V = correct, X reclassified as P (prompted)
+        const eff = s.rawV;
+        const prompted = s.rawP + s.rawX;
         const pct = s.total > 0 ? Math.round((eff / s.total) * 100) : 0;
         summary.innerHTML = `<b>Riepilogo:</b> V:${s.rawV} P:${s.rawP} X:${s.rawX}<br>` +
-            `Conteggio finale: <span style="color:var(--success-color);">${eff} corrette</span> / ${s.total} (${pct}%)<br>` +
+            `Conteggio finale: <span style="color:var(--success-color);">${eff} corrette</span>, <span style="color:var(--warning-color);">${prompted} promptate</span> / ${s.total} (${pct}%)<br>` +
             `<span style="font-size:0.75rem; opacity:0.7;">X(${s.rawX}) riclassificati come prompt</span>`;
     }
 };
@@ -432,7 +433,7 @@ window.doSaveSession = async () => {
     if (type === 'independent') {
         correct = s.rawV; // P counts as X (incorrect)
     } else {
-        correct = s.rawV + s.rawP; // P and V = correct, X = reclassified as P
+        correct = s.rawV; // Time Delay: only V = correct, X+P = prompted
     }
 
     const sessionData = {
