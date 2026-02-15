@@ -776,18 +776,18 @@ function showCategorizzazioneItem(stage) {
             <span style="color:var(--text-secondary); font-size:0.8rem;">${idx + 1}/${total}</span>
         </div>
         <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:15px; min-height:0;">
-            <div id="cat-card" style="background:white; border-radius:16px; padding:8px; max-width:200px; width:100%; max-height:45%; display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 10px 40px rgba(0,0,0,0.5); transition:0.3s;">
+            <div id="cat-card" style="background:white; border-radius:16px; padding:10px; max-width:300px; width:100%; max-height:55%; display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 10px 40px rgba(0,0,0,0.5); transition:0.3s;">
                 <img src="${item.url || getPlaceholderUrl(item.label)}"
                      style="max-width:100%; max-height:85%; object-fit:contain; border-radius:8px;"
                      onerror="handleImgError(this, '${item.label}')">
-                <div style="font-size:0.9rem; color:#333; font-weight:800; margin-top:4px; text-transform:uppercase;">${item.label}</div>
+                <div style="font-size:1rem; color:#333; font-weight:800; margin-top:6px; text-transform:uppercase;">${item.label}</div>
             </div>
         </div>
         <div style="padding:15px 10px; display:flex; gap:12px; flex-wrap:wrap; justify-content:center; background:rgba(0,0,0,0.2); border-top:1px solid #ffffff10; flex-shrink:0;">
             ${tags.map((tag, i) => `
                 <button class="btn" onclick="handleCatChoice('${tag}')"
-                    style="background:${tagColors[i % tagColors.length]}; padding:15px 20px; font-size:1.1rem; border-radius:16px; min-width:120px; min-height:80px; text-transform:capitalize; display:flex; flex-direction:column; align-items:center; gap:6px;">
-                    ${tagImgs[tag] ? `<img src="${tagImgs[tag]}" style="width:48px; height:48px; object-fit:contain; border-radius:8px; background:rgba(255,255,255,0.3);">` : ''}
+                    style="background:${tagColors[i % tagColors.length]}; padding:15px 25px; font-size:1.2rem; border-radius:16px; min-width:140px; min-height:100px; text-transform:capitalize; display:flex; flex-direction:column; align-items:center; gap:8px;">
+                    ${tagImgs[tag] ? `<img src="${tagImgs[tag]}" style="width:64px; height:64px; object-fit:contain; border-radius:10px; background:rgba(255,255,255,0.3);">` : ''}
                     <span>${tag}</span>
                 </button>
             `).join('')}
