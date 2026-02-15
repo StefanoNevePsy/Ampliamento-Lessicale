@@ -371,38 +371,6 @@
         </div>
     </div>
 
-    <!-- MODAL: SESSION TYPE SELECTION -->
-    <div id="modal-session-type" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:2000; justify-content:center; align-items:center;">
-        <div style="background:#1e1e2f; padding:25px; border-radius:20px; width:90%; max-width:380px; border:1px solid var(--glass-border);">
-            <h3 style="margin-top:0; display:flex; align-items:center; gap:10px;"><i class="fa-solid fa-clipboard-check"></i> Tipo Sessione</h3>
-            <div style="display:flex; flex-direction:column; gap:10px; margin:15px 0;">
-                <label id="type-ind-label" style="display:flex; align-items:center; gap:10px; padding:12px; background:rgba(0,0,0,0.2); border-radius:10px; cursor:pointer; border:2px solid var(--accent-color);">
-                    <input type="radio" name="session-type-radio" value="independent" checked onchange="updateSessionTypeUI()" style="width:18px; height:18px; flex-shrink:0;">
-                    <div>
-                        <div style="font-weight:bold;">Indipendente</div>
-                        <div style="font-size:0.8rem; color:var(--text-secondary);">V = corretta, X = errata, P = conta come X</div>
-                    </div>
-                </label>
-                <label id="type-td-label" style="display:flex; align-items:center; gap:10px; padding:12px; background:rgba(0,0,0,0.2); border-radius:10px; cursor:pointer; border:2px solid transparent;">
-                    <input type="radio" name="session-type-radio" value="timedelay" onchange="updateSessionTypeUI()" style="width:18px; height:18px; flex-shrink:0;">
-                    <div>
-                        <div style="font-weight:bold;">Time Delay</div>
-                        <div style="font-size:0.8rem; color:var(--text-secondary);">P e V = corrette, X = conta come P</div>
-                    </div>
-                </label>
-            </div>
-            <div id="timedelay-seconds-row" style="display:none; margin-bottom:15px;">
-                <label style="font-size:0.8rem; color:#aaa;">Secondi Time Delay</label>
-                <input type="number" id="timedelay-seconds" value="5" min="1" max="30" style="width:100%; padding:8px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white;">
-            </div>
-            <div id="session-type-summary" style="font-size:0.85rem; color:var(--text-secondary); margin-bottom:12px; padding:10px; background:rgba(0,0,0,0.2); border-radius:8px;"></div>
-            <div style="display:flex; gap:8px;">
-                <button class="btn btn-success" onclick="doSaveSession()" style="flex:1;"><i class="fa-solid fa-floppy-disk"></i> Salva</button>
-                <button class="btn btn-ghost" onclick="closeSessionTypeModal()">Annulla</button>
-            </div>
-        </div>
-    </div>
-
     <!-- MODAL: FIREBASE SETTINGS -->
     <div id="modal-firebase" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:2000; justify-content:center; align-items:center;">
         <div style="background:#1e1e2f; padding:25px; border-radius:20px; width:90%; max-width:420px; border:1px solid var(--glass-border);">

@@ -1124,33 +1124,61 @@ window.loadQuadernoList = (name) => {
 // ============================================================
 // QUADERNO GENERALE
 // ============================================================
+function getQuadernoSessionType() {
+    const sel = document.getElementById('quaderno-session-type');
+    return sel ? sel.value : 'independent';
+}
+
+function getQuadernoTDSeconds() {
+    const input = document.getElementById('quaderno-td-seconds');
+    return input ? (parseInt(input.value) || 5) : 5;
+}
+
+window.onQuadernoTypeChange = () => {
+    const type = getQuadernoSessionType();
+    const tdWrap = document.getElementById('quaderno-td-seconds-wrap');
+    if (tdWrap) tdWrap.style.display = type === 'timedelay' ? '' : 'none';
+    // Re-render rows to update buttons
+    const content = document.getElementById('quaderno-content');
+    if (state._quadernoType === 'general') renderQuadernoGeneral(content);
+    else renderQuadernoTask(content);
+};
+
 function renderQuadernoGeneral(container) {
     const rows = state._quadernoRows || [];
     const savedNames = getSavedQuadernoLists().filter(l => l.type !== 'task').map(l => l.name);
+    const qType = getQuadernoSessionType();
 
     container.innerHTML = `
     <div style="width:100%; max-width:700px; margin:0 auto;">
-        <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center;">
+        <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
             <input type="text" id="quaderno-name-input" value="${state._quadernoName || ''}" placeholder="Nome lista (es. Seduta 15 Feb)"
                 list="quaderno-names-list"
-                style="flex:1; padding:8px 12px; border-radius:8px; font-size:0.9rem;">
+                style="flex:1; min-width:150px; padding:8px 12px; border-radius:8px; font-size:0.9rem;">
             <datalist id="quaderno-names-list">
                 ${savedNames.map(n => `<option value="${n}">`).join('')}
             </datalist>
         </div>
 
         <div id="quaderno-rows-list">
-            ${rows.map((row, i) => renderQuadernoRow(row, i)).join('')}
+            ${rows.map((row, i) => renderQuadernoRow(row, i, qType)).join('')}
         </div>
 
-        <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
+        <div style="display:flex; gap:6px; margin-top:10px; align-items:center; flex-wrap:wrap;">
             <input type="text" id="quaderno-new-activity" placeholder="Nome attivit&agrave;..."
                 list="quaderno-activity-names"
                 onkeydown="if(event.key==='Enter')addQuadernoRow()"
-                style="flex:1; padding:10px; border-radius:8px; font-size:0.9rem;">
+                style="flex:1; min-width:120px; padding:10px; border-radius:8px; font-size:0.9rem;">
             <datalist id="quaderno-activity-names">
                 ${getUsedActivityNames().map(n => `<option value="${n}">`).join('')}
             </datalist>
+            <select id="quaderno-session-type" onchange="onQuadernoTypeChange()" style="padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.85rem;">
+                <option value="independent" ${qType === 'independent' ? 'selected' : ''}>Indipendente</option>
+                <option value="timedelay" ${qType === 'timedelay' ? 'selected' : ''}>Time Delay</option>
+            </select>
+            <span id="quaderno-td-seconds-wrap" style="${qType === 'timedelay' ? '' : 'display:none;'}">
+                <input type="number" id="quaderno-td-seconds" value="${state._quadernoTDSeconds || 5}" min="1" max="30" style="width:55px; padding:8px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.85rem; text-align:center;" placeholder="sec">
+            </span>
             <button class="btn btn-primary" onclick="addQuadernoRow()" style="padding:10px 16px;">
                 <i class="fa-solid fa-plus"></i>
             </button>
@@ -1167,12 +1195,28 @@ function renderQuadernoGeneral(container) {
     </div>`;
 }
 
-function renderQuadernoRow(row, idx) {
+function renderQuadernoRow(row, idx, sessionType) {
     const res = row.results || [];
     const xCount = res.filter(r => r === false).length;
     const pCount = res.filter(r => r === 'prompt').length;
     const vCount = res.filter(r => r === true).length;
     const total = res.length;
+    const isTD = sessionType === 'timedelay';
+
+    // Independent: X + V, Time Delay: P + V
+    const leftBtn = isTD ? `
+            <div style="display:flex; flex-direction:column; align-items:center; gap:3px;">
+                <span style="font-size:0.75rem; font-weight:bold; color:var(--warning-color);">${pCount}</span>
+                <button onclick="addQuadernoLU(${idx}, 'prompt')" style="width:50px; height:50px; border-radius:50%; border:2px solid var(--warning-color); background:rgba(245,158,11,0.15); color:var(--warning-color); cursor:pointer; font-size:1rem; font-weight:800; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
+                    P
+                </button>
+            </div>` : `
+            <div style="display:flex; flex-direction:column; align-items:center; gap:3px;">
+                <span style="font-size:0.75rem; font-weight:bold; color:var(--danger-color);">${xCount}</span>
+                <button onclick="addQuadernoLU(${idx}, false)" style="width:50px; height:50px; border-radius:50%; border:2px solid var(--danger-color); background:rgba(239,68,68,0.15); color:var(--danger-color); cursor:pointer; font-size:1.2rem; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>`;
 
     return `
     <div style="display:flex; flex-direction:column; gap:6px; padding:12px 14px; margin-bottom:8px; background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); border-radius:14px; transition:0.2s;">
@@ -1187,18 +1231,7 @@ function renderQuadernoRow(row, idx) {
             </button>
         </div>
         <div style="display:flex; gap:10px; justify-content:center; align-items:stretch;">
-            <div style="display:flex; flex-direction:column; align-items:center; gap:3px;">
-                <span style="font-size:0.75rem; font-weight:bold; color:var(--danger-color);">${xCount}</span>
-                <button onclick="addQuadernoLU(${idx}, false)" style="width:50px; height:50px; border-radius:50%; border:2px solid var(--danger-color); background:rgba(239,68,68,0.15); color:var(--danger-color); cursor:pointer; font-size:1.2rem; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-            <div style="display:flex; flex-direction:column; align-items:center; gap:3px;">
-                <span style="font-size:0.75rem; font-weight:bold; color:var(--warning-color);">${pCount}</span>
-                <button onclick="addQuadernoLU(${idx}, 'prompt')" style="width:50px; height:50px; border-radius:50%; border:2px solid var(--warning-color); background:rgba(245,158,11,0.15); color:var(--warning-color); cursor:pointer; font-size:1rem; font-weight:800; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
-                    P
-                </button>
-            </div>
+            ${leftBtn}
             <div style="display:flex; flex-direction:column; align-items:center; gap:3px;">
                 <span style="font-size:0.75rem; font-weight:bold; color:var(--success-color);">${vCount}</span>
                 <button onclick="addQuadernoLU(${idx}, true)" style="width:50px; height:50px; border-radius:50%; border:2px solid var(--success-color); background:rgba(16,185,129,0.15); color:var(--success-color); cursor:pointer; font-size:1.2rem; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
@@ -1276,90 +1309,58 @@ function getUsedActivityNames() {
     return [...names].sort();
 }
 
-// Save quaderno: show session type modal, then save each row as separate activity
+// Save quaderno: uses dropdown type, no modal needed
 window.saveQuadernoSession = async () => {
     if (!state.activePatientId) return alert("Seleziona prima un paziente.");
     const rows = state._quadernoType === 'task' ? state._quadernoSteps : state._quadernoRows;
     const scoredRows = rows.filter(r => r.results && r.results.length > 0);
     if (scoredRows.length === 0) return alert("Nessun LU registrato.");
 
-    // Compute totals for summary
-    let totalV = 0, totalP = 0, totalX = 0;
+    const p = state.patients.find(x => x.id === state.activePatientId);
+    if (!p) return;
+
+    const type = getQuadernoSessionType();
+    const tdSeconds = getQuadernoTDSeconds();
+
+    if (!p.history) p.history = [];
+    const now = new Date().toISOString();
+    let totalLU = 0, totalCorrect = 0;
+
     scoredRows.forEach(row => {
         const res = row.results;
-        totalV += res.filter(v => v === true).length;
-        totalP += res.filter(v => v === 'prompt').length;
-        totalX += res.filter(v => v === false).length;
+        const rawV = res.filter(v => v === true).length;
+        const rawP = res.filter(v => v === 'prompt').length;
+        const rawX = res.filter(v => v === false).length;
+        const total = rawV + rawP + rawX;
+        if (total === 0) return;
+
+        const correct = rawV; // In both modes, only V = correct
+
+        totalLU += total;
+        totalCorrect += correct;
+
+        const sessionData = {
+            date: now,
+            setId: 'quaderno_' + row.name.replace(/\s+/g, '_').toLowerCase() + '_' + Date.now(),
+            setName: row.name,
+            mode: state._quadernoType === 'task' ? 'quaderno_task' : 'quaderno',
+            correct: correct,
+            prompts: rawP,
+            total: total,
+            percentage: Math.round((correct / total) * 100),
+            sessionType: type,
+            rawV: rawV,
+            rawP: rawP,
+            rawX: rawX
+        };
+        if (type === 'timedelay') {
+            sessionData.timeDelaySeconds = tdSeconds;
+        }
+        p.history.push(sessionData);
     });
 
-    state._pendingSave = { rawV: totalV, rawP: totalP, rawX: totalX, total: totalV + totalP + totalX };
-    state._pendingQuadernoSave = scoredRows;
-
-    // Show session type modal
-    const modal = document.getElementById('modal-session-type');
-    modal.style.display = 'flex';
-    document.querySelector('input[name="session-type-radio"][value="independent"]').checked = true;
-    updateSessionTypeUI();
-
-    // Override doSaveSession temporarily for quaderno
-    window._originalDoSave = window.doSaveSession;
-    window.doSaveSession = async () => {
-        const p = state.patients.find(x => x.id === state.activePatientId);
-        const type = document.querySelector('input[name="session-type-radio"]:checked').value;
-        if (!p) return;
-
-        if (!p.history) p.history = [];
-        const now = new Date().toISOString();
-        let totalLU = 0, totalCorrect = 0;
-
-        state._pendingQuadernoSave.forEach(row => {
-            const res = row.results;
-            const rawV = res.filter(v => v === true).length;
-            const rawP = res.filter(v => v === 'prompt').length;
-            const rawX = res.filter(v => v === false).length;
-            const total = rawV + rawP + rawX;
-            if (total === 0) return;
-
-            let correct;
-            if (type === 'independent') {
-                correct = rawV; // P counts as X
-            } else {
-                correct = rawV; // Time Delay: only V = correct, X+P = prompted
-            }
-
-            totalLU += total;
-            totalCorrect += correct;
-
-            const sessionData = {
-                date: now,
-                setId: 'quaderno_' + row.name.replace(/\s+/g, '_').toLowerCase() + '_' + Date.now(),
-                setName: row.name,
-                mode: state._quadernoType === 'task' ? 'quaderno_task' : 'quaderno',
-                correct: correct,
-                prompts: rawP,
-                total: total,
-                percentage: Math.round((correct / total) * 100),
-                sessionType: type,
-                rawV: rawV,
-                rawP: rawP,
-                rawX: rawX
-            };
-            if (type === 'timedelay') {
-                sessionData.timeDelaySeconds = parseInt(document.getElementById('timedelay-seconds').value) || 5;
-            }
-            p.history.push(sessionData);
-        });
-
-        await DB.savePatient(p);
-        closeSessionTypeModal();
-        state._pendingQuadernoSave = null;
-
-        // Restore original doSaveSession
-        window.doSaveSession = window._originalDoSave;
-        delete window._originalDoSave;
-
-        alert(`Sessione salvata!\n${state._pendingSave.total} LU, ${totalCorrect} corrette (${Math.round((totalCorrect/totalLU)*100)}%)`);
-    };
+    await DB.savePatient(p);
+    alert(`Sessione salvata!\n${totalLU} LU, ${totalCorrect} corrette (${totalLU > 0 ? Math.round((totalCorrect/totalLU)*100) : 0}%)`);
 };
 
 // Save quaderno template for reuse
@@ -1399,13 +1400,14 @@ window.saveQuadernoTemplate = () => {
 function renderQuadernoTask(container) {
     const steps = state._quadernoSteps || [];
     const savedNames = getSavedQuadernoLists().filter(l => l.type === 'task').map(l => l.name);
+    const qType = getQuadernoSessionType();
 
     container.innerHTML = `
     <div style="width:100%; max-width:700px; margin:0 auto;">
-        <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center;">
+        <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
             <input type="text" id="quaderno-name-input" value="${state._quadernoName || ''}" placeholder="Nome Task Analysis (es. Memory - Procedura)"
                 list="quaderno-task-names-list"
-                style="flex:1; padding:8px 12px; border-radius:8px; font-size:0.9rem;">
+                style="flex:1; min-width:150px; padding:8px 12px; border-radius:8px; font-size:0.9rem;">
             <datalist id="quaderno-task-names-list">
                 ${savedNames.map(n => `<option value="${n}">`).join('')}
             </datalist>
@@ -1413,24 +1415,30 @@ function renderQuadernoTask(container) {
 
         <!-- Legend -->
         <div style="display:flex; gap:12px; margin-bottom:10px; font-size:0.75rem; color:var(--text-secondary); justify-content:center;">
-            <span><span style="color:var(--danger-color);">X</span> = Errore</span>
-            <span><span style="color:var(--warning-color);">P</span> = Prompt</span>
+            ${qType === 'independent' ? '<span><span style="color:var(--danger-color);">X</span> = Errore</span>' : '<span><span style="color:var(--warning-color);">P</span> = Prompt</span>'}
             <span><span style="color:var(--success-color);">V</span> = Corretto</span>
             <span><span style="color:#888;">N/A</span> = Non Applicabile</span>
         </div>
 
         <div id="quaderno-steps-list">
-            ${steps.map((step, i) => renderQuadernoTaskStep(step, i)).join('')}
+            ${steps.map((step, i) => renderQuadernoTaskStep(step, i, qType)).join('')}
         </div>
 
-        <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
+        <div style="display:flex; gap:6px; margin-top:10px; align-items:center; flex-wrap:wrap;">
             <input type="text" id="quaderno-new-step" placeholder="Nuovo passaggio..."
                 list="quaderno-step-names"
                 onkeydown="if(event.key==='Enter')addQuadernoStep()"
-                style="flex:1; padding:10px; border-radius:8px; font-size:0.9rem;">
+                style="flex:1; min-width:120px; padding:10px; border-radius:8px; font-size:0.9rem;">
             <datalist id="quaderno-step-names">
                 ${getUsedActivityNames().map(n => `<option value="${n}">`).join('')}
             </datalist>
+            <select id="quaderno-session-type" onchange="onQuadernoTypeChange()" style="padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.85rem;">
+                <option value="independent" ${qType === 'independent' ? 'selected' : ''}>Indipendente</option>
+                <option value="timedelay" ${qType === 'timedelay' ? 'selected' : ''}>Time Delay</option>
+            </select>
+            <span id="quaderno-td-seconds-wrap" style="${qType === 'timedelay' ? '' : 'display:none;'}">
+                <input type="number" id="quaderno-td-seconds" value="${state._quadernoTDSeconds || 5}" min="1" max="30" style="width:55px; padding:8px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.85rem; text-align:center;" placeholder="sec">
+            </span>
             <button class="btn btn-primary" onclick="addQuadernoStep()" style="padding:10px 16px;">
                 <i class="fa-solid fa-plus"></i>
             </button>
@@ -1447,13 +1455,29 @@ function renderQuadernoTask(container) {
     </div>`;
 }
 
-function renderQuadernoTaskStep(step, idx) {
+function renderQuadernoTaskStep(step, idx, sessionType) {
     const res = step.results || [];
     const xCount = res.filter(r => r === false).length;
     const pCount = res.filter(r => r === 'prompt').length;
     const vCount = res.filter(r => r === true).length;
     const naCount = res.filter(r => r === 'na').length;
     const total = res.length;
+    const isTD = sessionType === 'timedelay';
+
+    // Independent: X + V + N/A, Time Delay: P + V + N/A
+    const leftBtn = isTD ? `
+            <div style="display:flex; flex-direction:column; align-items:center; gap:3px;">
+                <span style="font-size:0.75rem; font-weight:bold; color:var(--warning-color);">${pCount}</span>
+                <button onclick="addQuadernoLU(${idx}, 'prompt')" style="width:48px; height:48px; border-radius:50%; border:2px solid var(--warning-color); background:rgba(245,158,11,0.15); color:var(--warning-color); cursor:pointer; font-size:0.95rem; font-weight:800; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
+                    P
+                </button>
+            </div>` : `
+            <div style="display:flex; flex-direction:column; align-items:center; gap:3px;">
+                <span style="font-size:0.75rem; font-weight:bold; color:var(--danger-color);">${xCount}</span>
+                <button onclick="addQuadernoLU(${idx}, false)" style="width:48px; height:48px; border-radius:50%; border:2px solid var(--danger-color); background:rgba(239,68,68,0.15); color:var(--danger-color); cursor:pointer; font-size:1.1rem; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>`;
 
     return `
     <div style="display:flex; flex-direction:column; gap:6px; padding:12px 14px; margin-bottom:8px; background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); border-radius:14px; transition:0.2s;">
@@ -1469,18 +1493,7 @@ function renderQuadernoTaskStep(step, idx) {
             </button>
         </div>
         <div style="display:flex; gap:10px; justify-content:center; align-items:stretch;">
-            <div style="display:flex; flex-direction:column; align-items:center; gap:3px;">
-                <span style="font-size:0.75rem; font-weight:bold; color:var(--danger-color);">${xCount}</span>
-                <button onclick="addQuadernoLU(${idx}, false)" style="width:48px; height:48px; border-radius:50%; border:2px solid var(--danger-color); background:rgba(239,68,68,0.15); color:var(--danger-color); cursor:pointer; font-size:1.1rem; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-            <div style="display:flex; flex-direction:column; align-items:center; gap:3px;">
-                <span style="font-size:0.75rem; font-weight:bold; color:var(--warning-color);">${pCount}</span>
-                <button onclick="addQuadernoLU(${idx}, 'prompt')" style="width:48px; height:48px; border-radius:50%; border:2px solid var(--warning-color); background:rgba(245,158,11,0.15); color:var(--warning-color); cursor:pointer; font-size:0.95rem; font-weight:800; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
-                    P
-                </button>
-            </div>
+            ${leftBtn}
             <div style="display:flex; flex-direction:column; align-items:center; gap:3px;">
                 <span style="font-size:0.75rem; font-weight:bold; color:var(--success-color);">${vCount}</span>
                 <button onclick="addQuadernoLU(${idx}, true)" style="width:48px; height:48px; border-radius:50%; border:2px solid var(--success-color); background:rgba(16,185,129,0.15); color:var(--success-color); cursor:pointer; font-size:1.1rem; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
