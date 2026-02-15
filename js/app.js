@@ -341,13 +341,44 @@ function updateScoreUI() {
     }
 }
 
+// --- SESSION TYPE SELECTOR ---
+window.onSessionTypeChange = () => {
+    const type = document.getElementById('session-type-select').value;
+    const tdWrapper = document.getElementById('td-seconds-wrapper');
+    const btnX = document.getElementById('btn-score-x');
+    const btnP = document.getElementById('btn-score-p');
+
+    if (type === 'timedelay') {
+        tdWrapper.style.display = '';
+        // Time Delay: show P + V, hide X
+        if (btnX) btnX.style.display = 'none';
+        if (btnP) btnP.style.display = '';
+    } else {
+        tdWrapper.style.display = 'none';
+        // Independent: show X + V, hide P
+        if (btnX) btnX.style.display = '';
+        if (btnP) btnP.style.display = 'none';
+    }
+};
+
+function getSelectedSessionType() {
+    const sel = document.getElementById('session-type-select');
+    return sel ? sel.value : 'independent';
+}
+
+function getSelectedTDSeconds() {
+    const input = document.getElementById('td-seconds-ctrl');
+    return input ? (parseInt(input.value) || 5) : 5;
+}
+
 // --- KEYBOARD SHORTCUTS ---
 function handleShortcuts(e) {
     const mode = document.getElementById('mode-select').value;
     if (state.session.active && !['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
+        const type = getSelectedSessionType();
         if (e.key.toLowerCase() === 'v') recordResponse(true);
-        if (e.key.toLowerCase() === 'x') recordResponse(false);
-        if (e.key.toLowerCase() === 'p') recordResponse('prompt');
+        if (type === 'independent' && e.key.toLowerCase() === 'x') recordResponse(false);
+        if (type === 'timedelay' && e.key.toLowerCase() === 'p') recordResponse('prompt');
     }
     if (mode === 'ran' && state.ranMode === 'single') {
         if (e.key === 'ArrowRight') nextRan();
@@ -359,71 +390,22 @@ function handleShortcuts(e) {
     }
 }
 
-// --- SAVE SESSION ---
+// --- SAVE SESSION (uses dropdown type, no modal) ---
 window.confirmSaveSession = async () => {
     if (!state.activePatientId) return alert("Seleziona prima un paziente in alto.");
     const total = state.session.total;
     if (total === 0) return;
 
-    // Show session type modal
-    const modal = document.getElementById('modal-session-type');
-    modal.style.display = 'flex';
+    const p = state.patients.find(x => x.id === state.activePatientId);
+    const mode = document.getElementById('mode-select').value;
+    const type = getSelectedSessionType();
+    if (!p) return;
 
-    // Compute raw counts for the summary
     const results = Object.values(state.session.itemResults);
     const rawV = results.filter(v => v === true).length;
     const rawP = results.filter(v => v === 'prompt').length;
     const rawX = results.filter(v => v === false).length;
-    state._pendingSave = { rawV, rawP, rawX, total: rawV + rawP + rawX };
-
-    // Reset to independent
-    document.querySelector('input[name="session-type-radio"][value="independent"]').checked = true;
-    updateSessionTypeUI();
-};
-
-window.updateSessionTypeUI = () => {
-    const type = document.querySelector('input[name="session-type-radio"]:checked').value;
-    const tdRow = document.getElementById('timedelay-seconds-row');
-    const indLabel = document.getElementById('type-ind-label');
-    const tdLabel = document.getElementById('type-td-label');
-    const summary = document.getElementById('session-type-summary');
-
-    tdRow.style.display = type === 'timedelay' ? 'block' : 'none';
-    indLabel.style.borderColor = type === 'independent' ? 'var(--accent-color)' : 'transparent';
-    tdLabel.style.borderColor = type === 'timedelay' ? 'var(--accent-color)' : 'transparent';
-
-    const s = state._pendingSave;
-    if (!s) return;
-
-    if (type === 'independent') {
-        // P counts as X
-        const eff = s.rawV;
-        const pct = s.total > 0 ? Math.round((eff / s.total) * 100) : 0;
-        summary.innerHTML = `<b>Riepilogo:</b> V:${s.rawV} P:${s.rawP} X:${s.rawX}<br>` +
-            `Conteggio finale: <span style="color:var(--success-color);">${eff} corrette</span> / ${s.total} (${pct}%)<br>` +
-            `<span style="font-size:0.75rem; opacity:0.7;">P(${s.rawP}) contati come errori</span>`;
-    } else {
-        // Time Delay: only V = correct, X reclassified as P (prompted)
-        const eff = s.rawV;
-        const prompted = s.rawP + s.rawX;
-        const pct = s.total > 0 ? Math.round((eff / s.total) * 100) : 0;
-        summary.innerHTML = `<b>Riepilogo:</b> V:${s.rawV} P:${s.rawP} X:${s.rawX}<br>` +
-            `Conteggio finale: <span style="color:var(--success-color);">${eff} corrette</span>, <span style="color:var(--warning-color);">${prompted} promptate</span> / ${s.total} (${pct}%)<br>` +
-            `<span style="font-size:0.75rem; opacity:0.7;">X(${s.rawX}) riclassificati come prompt</span>`;
-    }
-};
-
-window.closeSessionTypeModal = () => {
-    document.getElementById('modal-session-type').style.display = 'none';
-    state._pendingSave = null;
-};
-
-window.doSaveSession = async () => {
-    const p = state.patients.find(x => x.id === state.activePatientId);
-    const mode = document.getElementById('mode-select').value;
-    const type = document.querySelector('input[name="session-type-radio"]:checked').value;
-    const s = state._pendingSave;
-    if (!s || !p) return;
+    const rawTotal = rawV + rawP + rawX;
 
     let defaultName;
     if (POOL_MODES.includes(mode)) {
@@ -437,14 +419,7 @@ window.doSaveSession = async () => {
     const setName = customName || defaultName;
     if (customName) saveCustomSessionName(customName);
 
-    let correct, total;
-    total = s.total;
-
-    if (type === 'independent') {
-        correct = s.rawV; // P counts as X (incorrect)
-    } else {
-        correct = s.rawV; // Time Delay: only V = correct, X+P = prompted
-    }
+    const correct = rawV; // In both modes, only V = correct
 
     const sessionData = {
         date: new Date().toISOString(),
@@ -452,25 +427,22 @@ window.doSaveSession = async () => {
         setName: setName,
         mode: mode,
         correct: correct,
-        prompts: s.rawP,
-        total: total,
-        percentage: Math.round((correct / total) * 100),
+        prompts: rawP,
+        total: rawTotal,
+        percentage: Math.round((correct / rawTotal) * 100),
         sessionType: type,
-        rawV: s.rawV,
-        rawP: s.rawP,
-        rawX: s.rawX
+        rawV: rawV,
+        rawP: rawP,
+        rawX: rawX
     };
 
     if (type === 'timedelay') {
-        sessionData.timeDelaySeconds = parseInt(document.getElementById('timedelay-seconds').value) || 5;
+        sessionData.timeDelaySeconds = getSelectedTDSeconds();
     }
 
     if (!p.history) p.history = [];
     p.history.push(sessionData);
     await DB.savePatient(p);
-
-    // Close modal and show success
-    closeSessionTypeModal();
 
     const btn = document.getElementById('btn-save-session');
     btn.innerHTML = '<i class="fa-solid fa-check"></i>';

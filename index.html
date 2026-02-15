@@ -122,6 +122,19 @@
                 </select>
             </div>
 
+            <div class="select-wrapper" style="max-width: 140px;">
+                <label><i class="fa-solid fa-clipboard-check"></i> Tipo</label>
+                <select id="session-type-select" onchange="onSessionTypeChange()">
+                    <option value="independent">Indipendente</option>
+                    <option value="timedelay">Time Delay</option>
+                </select>
+            </div>
+
+            <div class="select-wrapper" id="td-seconds-wrapper" style="max-width: 70px; display:none;">
+                <label>Sec TD</label>
+                <input type="number" id="td-seconds-ctrl" value="5" min="1" max="30" style="padding:8px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.9rem; width:100%; text-align:center;">
+            </div>
+
             <button class="btn-icon" onclick="startGame()" title="Riavvia Sessione" style="margin-top: 18px; background: var(--accent-color); border:none; color:white;">
                 <i class="fa-solid fa-rotate-right"></i>
             </button>
@@ -140,10 +153,10 @@
     <div class="global-floating-controls">
         <!-- Scoring -->
         <div id="scoring-controls" class="control-row hidden">
-            <button class="btn-score fail" onclick="recordResponse(false)" title="Risposta Errata (Tasto X)">
+            <button id="btn-score-x" class="btn-score fail" onclick="recordResponse(false)" title="Risposta Errata (Tasto X)">
                 <i class="fa-solid fa-xmark"></i>
             </button>
-            <button class="btn-score prompt" onclick="recordResponse('prompt')" title="Prompt (Tasto P)">
+            <button id="btn-score-p" class="btn-score prompt" onclick="recordResponse('prompt')" title="Prompt (Tasto P)" style="display:none;">
                 P
             </button>
             <div style="background:rgba(0,0,0,0.5); padding:5px 10px; border-radius:10px; color:white; font-size:0.8rem; display:flex; flex-direction:column; align-items:center; justify-content:center; min-width: 60px;">
