@@ -1260,10 +1260,20 @@ window.removeQuadernoRow = (idx) => {
 
 function getUsedActivityNames() {
     const names = new Set();
+    // From saved quaderno templates
     getSavedQuadernoLists().forEach(l => {
         l.items.forEach(item => names.add(item.name));
     });
-    return [...names];
+    // From active patient's history (setName from quaderno sessions)
+    if (state.activePatientId) {
+        const p = state.patients.find(x => x.id === state.activePatientId);
+        if (p && p.history) {
+            p.history.forEach(h => {
+                if (h.setName) names.add(h.setName);
+            });
+        }
+    }
+    return [...names].sort();
 }
 
 // Save quaderno: show session type modal, then save each row as separate activity
