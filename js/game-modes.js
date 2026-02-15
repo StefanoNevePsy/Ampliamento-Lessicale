@@ -1266,47 +1266,90 @@ function getUsedActivityNames() {
     return [...names];
 }
 
-// Save quaderno: each row becomes a SEPARATE session entry in patient history
+// Save quaderno: show session type modal, then save each row as separate activity
 window.saveQuadernoSession = async () => {
     if (!state.activePatientId) return alert("Seleziona prima un paziente.");
-    const p = state.patients.find(x => x.id === state.activePatientId);
     const rows = state._quadernoType === 'task' ? state._quadernoSteps : state._quadernoRows;
     const scoredRows = rows.filter(r => r.results && r.results.length > 0);
     if (scoredRows.length === 0) return alert("Nessun LU registrato.");
 
-    if (!p.history) p.history = [];
-    const now = new Date().toISOString();
-
-    let totalLU = 0;
-    let totalCorrect = 0;
-
+    // Compute totals for summary
+    let totalV = 0, totalP = 0, totalX = 0;
     scoredRows.forEach(row => {
         const res = row.results;
-        const correct = res.filter(v => v === true).length;
-        const prompts = res.filter(v => v === 'prompt').length;
-        const incorrect = res.filter(v => v === false).length;
-        const total = correct + prompts + incorrect; // exclude 'na'
-
-        if (total === 0) return;
-
-        totalLU += total;
-        totalCorrect += correct;
-
-        const sessionData = {
-            date: now,
-            setId: 'quaderno_' + row.name.replace(/\s+/g, '_').toLowerCase() + '_' + Date.now(),
-            setName: row.name,
-            mode: state._quadernoType === 'task' ? 'quaderno_task' : 'quaderno',
-            correct: correct,
-            prompts: prompts,
-            total: total,
-            percentage: Math.round((correct / total) * 100)
-        };
-        p.history.push(sessionData);
+        totalV += res.filter(v => v === true).length;
+        totalP += res.filter(v => v === 'prompt').length;
+        totalX += res.filter(v => v === false).length;
     });
 
-    await DB.savePatient(p);
-    alert(`Sessione salvata!\n${scoredRows.length} attivit\u00E0, ${totalCorrect}/${totalLU} LU corrette`);
+    state._pendingSave = { rawV: totalV, rawP: totalP, rawX: totalX, total: totalV + totalP + totalX };
+    state._pendingQuadernoSave = scoredRows;
+
+    // Show session type modal
+    const modal = document.getElementById('modal-session-type');
+    modal.style.display = 'flex';
+    document.querySelector('input[name="session-type-radio"][value="independent"]').checked = true;
+    updateSessionTypeUI();
+
+    // Override doSaveSession temporarily for quaderno
+    window._originalDoSave = window.doSaveSession;
+    window.doSaveSession = async () => {
+        const p = state.patients.find(x => x.id === state.activePatientId);
+        const type = document.querySelector('input[name="session-type-radio"]:checked').value;
+        if (!p) return;
+
+        if (!p.history) p.history = [];
+        const now = new Date().toISOString();
+        let totalLU = 0, totalCorrect = 0;
+
+        state._pendingQuadernoSave.forEach(row => {
+            const res = row.results;
+            const rawV = res.filter(v => v === true).length;
+            const rawP = res.filter(v => v === 'prompt').length;
+            const rawX = res.filter(v => v === false).length;
+            const total = rawV + rawP + rawX;
+            if (total === 0) return;
+
+            let correct;
+            if (type === 'independent') {
+                correct = rawV; // P counts as X
+            } else {
+                correct = rawV + rawP; // P and V correct, X as P
+            }
+
+            totalLU += total;
+            totalCorrect += correct;
+
+            const sessionData = {
+                date: now,
+                setId: 'quaderno_' + row.name.replace(/\s+/g, '_').toLowerCase() + '_' + Date.now(),
+                setName: row.name,
+                mode: state._quadernoType === 'task' ? 'quaderno_task' : 'quaderno',
+                correct: correct,
+                prompts: rawP,
+                total: total,
+                percentage: Math.round((correct / total) * 100),
+                sessionType: type,
+                rawV: rawV,
+                rawP: rawP,
+                rawX: rawX
+            };
+            if (type === 'timedelay') {
+                sessionData.timeDelaySeconds = parseInt(document.getElementById('timedelay-seconds').value) || 5;
+            }
+            p.history.push(sessionData);
+        });
+
+        await DB.savePatient(p);
+        closeSessionTypeModal();
+        state._pendingQuadernoSave = null;
+
+        // Restore original doSaveSession
+        window.doSaveSession = window._originalDoSave;
+        delete window._originalDoSave;
+
+        alert(`Sessione salvata!\n${state._pendingSave.total} LU, ${totalCorrect} corrette (${Math.round((totalCorrect/totalLU)*100)}%)`);
+    };
 };
 
 // Save quaderno template for reuse
