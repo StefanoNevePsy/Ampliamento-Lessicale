@@ -788,7 +788,7 @@ function showCategorizzazioneItem(stage) {
             ${tags.map((tag, i) => `
                 <button class="btn" onclick="handleCatChoice('${tag}')"
                     style="background:${tagColors[i % tagColors.length]}; padding:15px 25px; font-size:1.2rem; border-radius:16px; min-width:140px; min-height:100px; text-transform:capitalize; display:flex; flex-direction:column; align-items:center; gap:8px;">
-                    ${tagImgs[tag] ? `<img src="${tagImgs[tag]}" style="width:64px; height:64px; object-fit:contain; border-radius:10px; background:rgba(255,255,255,0.3);">` : ''}
+                    ${tagImgs[tag.toLowerCase().trim()] ? `<img src="${tagImgs[tag.toLowerCase().trim()]}" style="width:64px; height:64px; object-fit:contain; border-radius:10px; background:rgba(255,255,255,0.3);">` : ''}
                     <span>${tag}</span>
                 </button>
             `).join('')}

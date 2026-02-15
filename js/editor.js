@@ -32,14 +32,14 @@ window.toggleEditMode = (el) => {
 let editingTags = [];
 
 function renderTagEditor(tags) {
-    editingTags = [...(tags || [])];
+    editingTags = [...(tags || [])].map(t => t.toLowerCase().trim());
     const container = document.getElementById('edit-tags-container');
     if (!container) return;
 
     const tagImgs = getAllTagImages();
     const chipsHtml = editingTags.map((tag, i) =>
         `<span class="tag-chip" style="display:inline-flex; align-items:center; gap:4px;">
-            ${tagImgs[tag] ? `<img src="${tagImgs[tag]}" style="width:18px; height:18px; object-fit:cover; border-radius:3px;">` : ''}
+            ${tagImgs[tag.toLowerCase().trim()] ? `<img src="${tagImgs[tag.toLowerCase().trim()]}" style="width:18px; height:18px; object-fit:cover; border-radius:3px;">` : ''}
             ${tag}
             <span onclick="uploadTagImage('${tag}')" title="Immagine tag" style="cursor:pointer; opacity:0.6; font-size:0.8em;"><i class="fa-solid fa-camera"></i></span>
             <span class="remove-tag" onclick="removeEditTag(${i})"><i class="fa-solid fa-xmark"></i></span>

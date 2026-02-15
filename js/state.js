@@ -130,8 +130,9 @@ function refreshAllTags() {
 // Get all items from sets that have a specific tag, with images only
 function getItemsByTag(tag) {
     const items = [];
+    const tagLower = tag.toLowerCase().trim();
     state.savedSets.forEach(s => {
-        if (s.tags && s.tags.includes(tag)) {
+        if (s.tags && s.tags.some(t => t.toLowerCase().trim() === tagLower)) {
             s.items.forEach(item => {
                 if (item.url && !item.hidden) {
                     items.push({ ...item, sourceSet: s.name, sourceTag: tag });
@@ -146,14 +147,14 @@ function getItemsByTag(tag) {
 function getItemsByTags(tags) {
     const items = [];
     const seen = new Set();
+    const tagsLower = tags.map(t => t.toLowerCase().trim());
     state.savedSets.forEach(s => {
-        if (s.tags && s.tags.some(t => tags.includes(t))) {
+        if (s.tags && s.tags.some(t => tagsLower.includes(t.toLowerCase().trim()))) {
             s.items.forEach(item => {
                 const key = `${item.label}__${item.url}`;
                 if (item.url && !item.hidden && !seen.has(key)) {
                     seen.add(key);
-                    // Collect which tags this item belongs to
-                    const matchingTags = s.tags.filter(t => tags.includes(t));
+                    const matchingTags = s.tags.filter(t => tagsLower.includes(t.toLowerCase().trim()));
                     items.push({ ...item, sourceSet: s.name, sourceTags: matchingTags });
                 }
             });

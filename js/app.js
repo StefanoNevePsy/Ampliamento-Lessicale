@@ -20,6 +20,8 @@ window.onload = async () => {
         }
 
         // Migrate old label field: some old items used 'l' instead of 'label'
+        // Migrate old tag case: normalize tags to lowercase
+        let needsSave = false;
         state.savedSets.forEach(set => {
             if (set.items) {
                 set.items.forEach(item => {
@@ -28,6 +30,14 @@ window.onload = async () => {
                         delete item.l;
                     }
                 });
+            }
+            if (set.tags && Array.isArray(set.tags)) {
+                const lowered = set.tags.map(t => t.toLowerCase().trim());
+                if (set.tags.some((t, i) => t !== lowered[i])) {
+                    set.tags = lowered;
+                    needsSave = true;
+                    DB.saveSet(set);
+                }
             }
         });
 
