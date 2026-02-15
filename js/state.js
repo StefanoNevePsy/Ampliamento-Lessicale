@@ -56,14 +56,15 @@ let state = {
 
 // --- TAG IMAGE HELPERS (stored in localStorage) ---
 function getTagImage(tag) {
-    try { return JSON.parse(localStorage.getItem('tagImages') || '{}')[tag] || null; }
+    try { return JSON.parse(localStorage.getItem('tagImages') || '{}')[tag.toLowerCase().trim()] || null; }
     catch(e) { return null; }
 }
 
 function setTagImage(tag, dataUrl) {
     try {
+        const key = tag.toLowerCase().trim();
         const map = JSON.parse(localStorage.getItem('tagImages') || '{}');
-        map[tag] = dataUrl;
+        map[key] = dataUrl;
         localStorage.setItem('tagImages', JSON.stringify(map));
     } catch(e) { console.error('Error saving tag image:', e); }
 }
