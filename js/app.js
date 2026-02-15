@@ -62,6 +62,8 @@ window.filterSetsByMode = function () {
     const currentMode = document.getElementById('mode-select').value;
     const isPoolMode = POOL_MODES.includes(currentMode);
 
+    const isQuaderno = currentMode === 'quaderno';
+
     // Toggle set selector vs tag selector visibility
     const setWrapper = document.getElementById('set-selector-wrapper');
     const tagWrapper = document.getElementById('tag-selector-wrapper');
@@ -70,13 +72,21 @@ window.filterSetsByMode = function () {
             setWrapper.classList.add('hidden');
             tagWrapper.classList.remove('hidden');
             renderPoolTagSelector();
+        } else if (isQuaderno) {
+            setWrapper.classList.add('hidden');
+            tagWrapper.classList.add('hidden');
         } else {
             setWrapper.classList.remove('hidden');
             tagWrapper.classList.add('hidden');
         }
     }
 
-    if (isPoolMode) return; // Pool modes don't use set dropdown
+    // Quaderno and Pool modes don't use set dropdown
+    if (isPoolMode || isQuaderno) {
+        // Auto-start quaderno when switching to it
+        if (isQuaderno) window.startGame();
+        return;
+    }
 
     const compatibleSets = state.savedSets.filter(s => {
         if (s.modes && Array.isArray(s.modes) && s.modes.length > 0) {
