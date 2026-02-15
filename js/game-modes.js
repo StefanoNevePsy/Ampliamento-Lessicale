@@ -1088,13 +1088,11 @@ window.openQuadernoSheet = (type) => {
     if (!content) return;
 
     if (type === 'general') {
-        // Quaderno Generale: rows of activities with X / Prompt / V
         state._quadernoType = 'general';
         state._quadernoRows = [];
         state._quadernoName = '';
         renderQuadernoGeneral(content);
     } else if (type === 'task') {
-        // Task Analysis: operationalized steps
         state._quadernoType = 'task';
         state._quadernoSteps = [];
         state._quadernoName = '';
@@ -1114,11 +1112,11 @@ window.loadQuadernoList = (name) => {
 
     if (list.type === 'task') {
         state._quadernoType = 'task';
-        state._quadernoSteps = list.items.map(item => ({ ...item, result: null }));
+        state._quadernoSteps = list.items.map(item => ({ ...item, results: [] }));
         renderQuadernoTask(content);
     } else {
         state._quadernoType = 'general';
-        state._quadernoRows = list.items.map(item => ({ ...item, result: null }));
+        state._quadernoRows = list.items.map(item => ({ ...item, results: [] }));
         renderQuadernoGeneral(content);
     }
 };
@@ -1131,7 +1129,7 @@ function renderQuadernoGeneral(container) {
     const savedNames = getSavedQuadernoLists().filter(l => l.type !== 'task').map(l => l.name);
 
     container.innerHTML = `
-    <div style="width:100%; max-width:600px; margin:0 auto;">
+    <div style="width:100%; max-width:700px; margin:0 auto;">
         <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center;">
             <input type="text" id="quaderno-name-input" value="${state._quadernoName || ''}" placeholder="Nome lista (es. Seduta 15 Feb)"
                 list="quaderno-names-list"
@@ -1170,52 +1168,84 @@ function renderQuadernoGeneral(container) {
 }
 
 function renderQuadernoRow(row, idx) {
-    const bgColor = row.result === true ? 'rgba(16,185,129,0.15)' :
-                    row.result === false ? 'rgba(239,68,68,0.15)' :
-                    row.result === 'prompt' ? 'rgba(245,158,11,0.15)' :
-                    'rgba(255,255,255,0.05)';
-    const borderColor = row.result === true ? 'var(--success-color)' :
-                        row.result === false ? 'var(--danger-color)' :
-                        row.result === 'prompt' ? 'var(--warning-color)' :
-                        'var(--glass-border)';
+    const res = row.results || [];
+    const xCount = res.filter(r => r === false).length;
+    const pCount = res.filter(r => r === 'prompt').length;
+    const vCount = res.filter(r => r === true).length;
+    const total = res.length;
 
     return `
-    <div style="display:flex; align-items:center; gap:8px; padding:8px; margin-bottom:6px; background:${bgColor}; border:1px solid ${borderColor}; border-radius:10px; transition:0.2s;">
-        <span style="flex:1; font-size:0.95rem; font-weight:600;">${row.name}</span>
-        <button onclick="setQuadernoResult(${idx}, false)" style="width:36px; height:36px; border-radius:50%; border:2px solid var(--danger-color); background:${row.result === false ? 'var(--danger-color)' : 'transparent'}; color:${row.result === false ? 'white' : 'var(--danger-color)'}; cursor:pointer; font-size:1rem; display:flex; align-items:center; justify-content:center;">
-            <i class="fa-solid fa-xmark"></i>
-        </button>
-        <button onclick="setQuadernoResult(${idx}, 'prompt')" style="width:36px; height:36px; border-radius:50%; border:2px solid var(--warning-color); background:${row.result === 'prompt' ? 'var(--warning-color)' : 'transparent'}; color:${row.result === 'prompt' ? 'white' : 'var(--warning-color)'}; cursor:pointer; font-size:0.8rem; font-weight:bold; display:flex; align-items:center; justify-content:center;">
-            P
-        </button>
-        <button onclick="setQuadernoResult(${idx}, true)" style="width:36px; height:36px; border-radius:50%; border:2px solid var(--success-color); background:${row.result === true ? 'var(--success-color)' : 'transparent'}; color:${row.result === true ? 'white' : 'var(--success-color)'}; cursor:pointer; font-size:1rem; display:flex; align-items:center; justify-content:center;">
-            <i class="fa-solid fa-check"></i>
-        </button>
-        <button onclick="removeQuadernoRow(${idx})" style="width:28px; height:28px; border:none; background:transparent; color:#666; cursor:pointer; font-size:0.8rem;">
-            <i class="fa-solid fa-trash"></i>
-        </button>
+    <div style="display:flex; flex-direction:column; gap:6px; padding:12px 14px; margin-bottom:8px; background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); border-radius:14px; transition:0.2s;">
+        <div style="display:flex; align-items:center; gap:8px;">
+            <span style="flex:1; font-size:1.05rem; font-weight:700;">${row.name}</span>
+            <span style="background:rgba(99,102,241,0.2); color:var(--accent-color); padding:3px 10px; border-radius:8px; font-size:0.85rem; font-weight:bold; min-width:35px; text-align:center;" title="Totale LU">${total}</span>
+            <button onclick="undoQuadernoResult(${idx})" style="width:34px; height:34px; border-radius:10px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.05); color:var(--text-secondary); cursor:pointer; font-size:0.85rem; display:flex; align-items:center; justify-content:center;" title="Annulla ultimo" ${total === 0 ? 'disabled style="opacity:0.3; width:34px; height:34px; border-radius:10px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.05); color:var(--text-secondary); cursor:default; font-size:0.85rem; display:flex; align-items:center; justify-content:center;"' : ''}>
+                <i class="fa-solid fa-rotate-left"></i>
+            </button>
+            <button onclick="removeQuadernoRow(${idx})" style="width:34px; height:34px; border-radius:10px; border:none; background:transparent; color:#666; cursor:pointer; font-size:0.85rem; display:flex; align-items:center; justify-content:center;" title="Rimuovi riga">
+                <i class="fa-solid fa-trash"></i>
+            </button>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:center; align-items:stretch;">
+            <div style="display:flex; flex-direction:column; align-items:center; gap:3px;">
+                <span style="font-size:0.75rem; font-weight:bold; color:var(--danger-color);">${xCount}</span>
+                <button onclick="addQuadernoLU(${idx}, false)" style="width:50px; height:50px; border-radius:50%; border:2px solid var(--danger-color); background:rgba(239,68,68,0.15); color:var(--danger-color); cursor:pointer; font-size:1.2rem; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:3px;">
+                <span style="font-size:0.75rem; font-weight:bold; color:var(--warning-color);">${pCount}</span>
+                <button onclick="addQuadernoLU(${idx}, 'prompt')" style="width:50px; height:50px; border-radius:50%; border:2px solid var(--warning-color); background:rgba(245,158,11,0.15); color:var(--warning-color); cursor:pointer; font-size:1rem; font-weight:800; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
+                    P
+                </button>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:3px;">
+                <span style="font-size:0.75rem; font-weight:bold; color:var(--success-color);">${vCount}</span>
+                <button onclick="addQuadernoLU(${idx}, true)" style="width:50px; height:50px; border-radius:50%; border:2px solid var(--success-color); background:rgba(16,185,129,0.15); color:var(--success-color); cursor:pointer; font-size:1.2rem; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
+                    <i class="fa-solid fa-check"></i>
+                </button>
+            </div>
+        </div>
     </div>`;
 }
+
+// Add a LU to a quaderno row (append, not toggle)
+window.addQuadernoLU = (idx, result) => {
+    if (state._quadernoType === 'general') {
+        if (!state._quadernoRows[idx].results) state._quadernoRows[idx].results = [];
+        state._quadernoRows[idx].results.push(result);
+        renderQuadernoGeneral(document.getElementById('quaderno-content'));
+    } else {
+        if (!state._quadernoSteps[idx].results) state._quadernoSteps[idx].results = [];
+        state._quadernoSteps[idx].results.push(result);
+        renderQuadernoTask(document.getElementById('quaderno-content'));
+    }
+};
+
+// Undo last LU from a quaderno row
+window.undoQuadernoResult = (idx) => {
+    if (state._quadernoType === 'general') {
+        const res = state._quadernoRows[idx].results;
+        if (res && res.length > 0) {
+            res.pop();
+            renderQuadernoGeneral(document.getElementById('quaderno-content'));
+        }
+    } else {
+        const res = state._quadernoSteps[idx].results;
+        if (res && res.length > 0) {
+            res.pop();
+            renderQuadernoTask(document.getElementById('quaderno-content'));
+        }
+    }
+};
 
 window.addQuadernoRow = () => {
     const input = document.getElementById('quaderno-new-activity');
     const name = input.value.trim();
     if (!name) return;
-    state._quadernoRows.push({ name, result: null });
+    state._quadernoRows.push({ name, results: [] });
     input.value = '';
     renderQuadernoGeneral(document.getElementById('quaderno-content'));
-};
-
-window.setQuadernoResult = (idx, result) => {
-    if (state._quadernoType === 'general') {
-        const current = state._quadernoRows[idx].result;
-        state._quadernoRows[idx].result = (current === result) ? null : result;
-        renderQuadernoGeneral(document.getElementById('quaderno-content'));
-    } else {
-        const current = state._quadernoSteps[idx].result;
-        state._quadernoSteps[idx].result = (current === result) ? null : result;
-        renderQuadernoTask(document.getElementById('quaderno-content'));
-    }
 };
 
 window.removeQuadernoRow = (idx) => {
@@ -1236,38 +1266,47 @@ function getUsedActivityNames() {
     return [...names];
 }
 
-// Save quaderno as a patient session
+// Save quaderno: each row becomes a SEPARATE session entry in patient history
 window.saveQuadernoSession = async () => {
     if (!state.activePatientId) return alert("Seleziona prima un paziente.");
     const p = state.patients.find(x => x.id === state.activePatientId);
     const rows = state._quadernoType === 'task' ? state._quadernoSteps : state._quadernoRows;
-    const scored = rows.filter(r => r.result !== null && r.result !== 'na');
-    if (scored.length === 0) return alert("Nessun item con punteggio.");
+    const scoredRows = rows.filter(r => r.results && r.results.length > 0);
+    if (scoredRows.length === 0) return alert("Nessun LU registrato.");
 
-    const correct = scored.filter(r => r.result === true).length;
-    const total = scored.length;
-    const nameInput = document.getElementById('quaderno-name-input');
-    const sessionNameField = document.getElementById('session-name-input');
-    const listName = nameInput ? nameInput.value.trim() : '';
-    const customSessionName = sessionNameField ? sessionNameField.value.trim() : '';
-    const setName = customSessionName || listName || 'Quaderno';
-
-    if (customSessionName) saveCustomSessionName(customSessionName);
-
-    const sessionData = {
-        date: new Date().toISOString(),
-        setId: 'quaderno_' + Date.now(),
-        setName: setName,
-        mode: state._quadernoType === 'task' ? 'quaderno_task' : 'quaderno',
-        correct: correct,
-        total: total,
-        percentage: Math.round((correct / total) * 100)
-    };
     if (!p.history) p.history = [];
-    p.history.push(sessionData);
-    await DB.savePatient(p);
+    const now = new Date().toISOString();
 
-    alert(`Sessione salvata!\n${correct}/${total} (${sessionData.percentage}%)`);
+    let totalLU = 0;
+    let totalCorrect = 0;
+
+    scoredRows.forEach(row => {
+        const res = row.results;
+        const correct = res.filter(v => v === true).length;
+        const prompts = res.filter(v => v === 'prompt').length;
+        const incorrect = res.filter(v => v === false).length;
+        const total = correct + prompts + incorrect; // exclude 'na'
+
+        if (total === 0) return;
+
+        totalLU += total;
+        totalCorrect += correct;
+
+        const sessionData = {
+            date: now,
+            setId: 'quaderno_' + row.name.replace(/\s+/g, '_').toLowerCase() + '_' + Date.now(),
+            setName: row.name,
+            mode: state._quadernoType === 'task' ? 'quaderno_task' : 'quaderno',
+            correct: correct,
+            prompts: prompts,
+            total: total,
+            percentage: Math.round((correct / total) * 100)
+        };
+        p.history.push(sessionData);
+    });
+
+    await DB.savePatient(p);
+    alert(`Sessione salvata!\n${scoredRows.length} attivit\u00E0, ${totalCorrect}/${totalLU} LU corrette`);
 };
 
 // Save quaderno template for reuse
@@ -1286,7 +1325,6 @@ window.saveQuadernoTemplate = () => {
     };
     saveQuadernoList(list);
     alert(`Lista "${name}" salvata!`);
-    // Refresh the load dropdown
     renderQuaderno(document.getElementById('game-stage'));
     // Re-open the current sheet with data
     if (state._quadernoType === 'task') {
@@ -1310,7 +1348,7 @@ function renderQuadernoTask(container) {
     const savedNames = getSavedQuadernoLists().filter(l => l.type === 'task').map(l => l.name);
 
     container.innerHTML = `
-    <div style="width:100%; max-width:600px; margin:0 auto;">
+    <div style="width:100%; max-width:700px; margin:0 auto;">
         <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center;">
             <input type="text" id="quaderno-name-input" value="${state._quadernoName || ''}" placeholder="Nome Task Analysis (es. Memory - Procedura)"
                 list="quaderno-task-names-list"
@@ -1357,36 +1395,52 @@ function renderQuadernoTask(container) {
 }
 
 function renderQuadernoTaskStep(step, idx) {
-    const bgColor = step.result === true ? 'rgba(16,185,129,0.15)' :
-                    step.result === false ? 'rgba(239,68,68,0.15)' :
-                    step.result === 'prompt' ? 'rgba(245,158,11,0.15)' :
-                    step.result === 'na' ? 'rgba(128,128,128,0.1)' :
-                    'rgba(255,255,255,0.05)';
-    const borderColor = step.result === true ? 'var(--success-color)' :
-                        step.result === false ? 'var(--danger-color)' :
-                        step.result === 'prompt' ? 'var(--warning-color)' :
-                        step.result === 'na' ? '#666' :
-                        'var(--glass-border)';
+    const res = step.results || [];
+    const xCount = res.filter(r => r === false).length;
+    const pCount = res.filter(r => r === 'prompt').length;
+    const vCount = res.filter(r => r === true).length;
+    const naCount = res.filter(r => r === 'na').length;
+    const total = res.length;
 
     return `
-    <div style="display:flex; align-items:center; gap:6px; padding:8px; margin-bottom:5px; background:${bgColor}; border:1px solid ${borderColor}; border-radius:10px; transition:0.2s;">
-        <span style="width:22px; height:22px; border-radius:50%; background:rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center; font-size:0.7rem; font-weight:bold; color:var(--text-secondary); flex-shrink:0;">${idx + 1}</span>
-        <span style="flex:1; font-size:0.9rem; font-weight:600; ${step.result === 'na' ? 'text-decoration:line-through; opacity:0.5;' : ''}">${step.name}</span>
-        <button onclick="setQuadernoResult(${idx}, false)" style="width:32px; height:32px; border-radius:50%; border:2px solid var(--danger-color); background:${step.result === false ? 'var(--danger-color)' : 'transparent'}; color:${step.result === false ? 'white' : 'var(--danger-color)'}; cursor:pointer; font-size:0.9rem; display:flex; align-items:center; justify-content:center;">
-            <i class="fa-solid fa-xmark"></i>
-        </button>
-        <button onclick="setQuadernoResult(${idx}, 'prompt')" style="width:32px; height:32px; border-radius:50%; border:2px solid var(--warning-color); background:${step.result === 'prompt' ? 'var(--warning-color)' : 'transparent'}; color:${step.result === 'prompt' ? 'white' : 'var(--warning-color)'}; cursor:pointer; font-size:0.75rem; font-weight:bold; display:flex; align-items:center; justify-content:center;">
-            P
-        </button>
-        <button onclick="setQuadernoResult(${idx}, true)" style="width:32px; height:32px; border-radius:50%; border:2px solid var(--success-color); background:${step.result === true ? 'var(--success-color)' : 'transparent'}; color:${step.result === true ? 'white' : 'var(--success-color)'}; cursor:pointer; font-size:0.9rem; display:flex; align-items:center; justify-content:center;">
-            <i class="fa-solid fa-check"></i>
-        </button>
-        <button onclick="setQuadernoResult(${idx}, 'na')" style="width:32px; height:32px; border-radius:8px; border:1px solid #666; background:${step.result === 'na' ? '#666' : 'transparent'}; color:${step.result === 'na' ? 'white' : '#888'}; cursor:pointer; font-size:0.6rem; font-weight:bold; display:flex; align-items:center; justify-content:center;">
-            N/A
-        </button>
-        <button onclick="removeQuadernoRow(${idx})" style="width:24px; height:24px; border:none; background:transparent; color:#555; cursor:pointer; font-size:0.7rem;">
-            <i class="fa-solid fa-trash"></i>
-        </button>
+    <div style="display:flex; flex-direction:column; gap:6px; padding:12px 14px; margin-bottom:8px; background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); border-radius:14px; transition:0.2s;">
+        <div style="display:flex; align-items:center; gap:8px;">
+            <span style="width:26px; height:26px; border-radius:50%; background:rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center; font-size:0.8rem; font-weight:bold; color:var(--text-secondary); flex-shrink:0;">${idx + 1}</span>
+            <span style="flex:1; font-size:1.05rem; font-weight:700;">${step.name}</span>
+            <span style="background:rgba(99,102,241,0.2); color:var(--accent-color); padding:3px 10px; border-radius:8px; font-size:0.85rem; font-weight:bold; min-width:35px; text-align:center;" title="Totale LU">${total}</span>
+            <button onclick="undoQuadernoResult(${idx})" style="width:34px; height:34px; border-radius:10px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.05); color:var(--text-secondary); cursor:pointer; font-size:0.85rem; display:flex; align-items:center; justify-content:center;" title="Annulla ultimo" ${total === 0 ? 'disabled style="opacity:0.3; width:34px; height:34px; border-radius:10px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.05); color:var(--text-secondary); cursor:default; font-size:0.85rem; display:flex; align-items:center; justify-content:center;"' : ''}>
+                <i class="fa-solid fa-rotate-left"></i>
+            </button>
+            <button onclick="removeQuadernoRow(${idx})" style="width:34px; height:34px; border-radius:10px; border:none; background:transparent; color:#666; cursor:pointer; font-size:0.85rem; display:flex; align-items:center; justify-content:center;" title="Rimuovi riga">
+                <i class="fa-solid fa-trash"></i>
+            </button>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:center; align-items:stretch;">
+            <div style="display:flex; flex-direction:column; align-items:center; gap:3px;">
+                <span style="font-size:0.75rem; font-weight:bold; color:var(--danger-color);">${xCount}</span>
+                <button onclick="addQuadernoLU(${idx}, false)" style="width:48px; height:48px; border-radius:50%; border:2px solid var(--danger-color); background:rgba(239,68,68,0.15); color:var(--danger-color); cursor:pointer; font-size:1.1rem; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:3px;">
+                <span style="font-size:0.75rem; font-weight:bold; color:var(--warning-color);">${pCount}</span>
+                <button onclick="addQuadernoLU(${idx}, 'prompt')" style="width:48px; height:48px; border-radius:50%; border:2px solid var(--warning-color); background:rgba(245,158,11,0.15); color:var(--warning-color); cursor:pointer; font-size:0.95rem; font-weight:800; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
+                    P
+                </button>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:3px;">
+                <span style="font-size:0.75rem; font-weight:bold; color:var(--success-color);">${vCount}</span>
+                <button onclick="addQuadernoLU(${idx}, true)" style="width:48px; height:48px; border-radius:50%; border:2px solid var(--success-color); background:rgba(16,185,129,0.15); color:var(--success-color); cursor:pointer; font-size:1.1rem; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
+                    <i class="fa-solid fa-check"></i>
+                </button>
+            </div>
+            <div style="display:flex; flex-direction:column; align-items:center; gap:3px;">
+                <span style="font-size:0.75rem; font-weight:bold; color:#888;">${naCount}</span>
+                <button onclick="addQuadernoLU(${idx}, 'na')" style="width:48px; height:48px; border-radius:12px; border:1px solid #666; background:${naCount > 0 ? 'rgba(128,128,128,0.2)' : 'transparent'}; color:#888; cursor:pointer; font-size:0.65rem; font-weight:bold; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
+                    N/A
+                </button>
+            </div>
+        </div>
     </div>`;
 }
 
@@ -1394,7 +1448,7 @@ window.addQuadernoStep = () => {
     const input = document.getElementById('quaderno-new-step');
     const name = input.value.trim();
     if (!name) return;
-    state._quadernoSteps.push({ name, result: null });
+    state._quadernoSteps.push({ name, results: [] });
     input.value = '';
     renderQuadernoTask(document.getElementById('quaderno-content'));
 };
