@@ -26,6 +26,7 @@ function renderGameMode(mode, items) {
     else if (mode === 'sequenze') renderSequenze(items, stage);
     else if (mode === 'categorizzazione') renderCategorizzazione(items, stage);
     else if (mode === 'zoom') renderZoom(items, stage);
+    else if (mode === 'quaderno') renderQuaderno(stage);
 }
 
 // --- TACT ---
@@ -1044,4 +1045,356 @@ window.revealZoom = () => {
 window.nextZoomItem = () => {
     state.zoomIndex++;
     showZoomItem(document.getElementById('game-stage'));
+};
+
+// ============================================================
+// --- QUADERNO (Manual scoring + Task Analysis) ---
+// ============================================================
+function renderQuaderno(stage) {
+    const savedLists = getSavedQuadernoLists();
+
+    stage.innerHTML = `
+    <div style="height:100%; display:flex; flex-direction:column; overflow:hidden;">
+        <!-- Quaderno Header -->
+        <div style="padding:12px; background:rgba(0,0,0,0.2); border-bottom:1px solid #ffffff10; flex-shrink:0;">
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <button class="btn btn-primary" onclick="openQuadernoSheet('general')" style="padding:8px 16px; font-size:0.9rem;">
+                    <i class="fa-solid fa-clipboard-list"></i> Quaderno Generale
+                </button>
+                <button class="btn btn-ghost" onclick="openQuadernoSheet('task')" style="padding:8px 16px; font-size:0.9rem; border-color:var(--warning-color); color:var(--warning-color);">
+                    <i class="fa-solid fa-list-check"></i> Task Analysis
+                </button>
+                ${savedLists.length > 0 ? `
+                    <select id="quaderno-load-select" onchange="loadQuadernoList(this.value)" style="padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.85rem; max-width:200px;">
+                        <option value="">-- Carica Lista Salvata --</option>
+                        ${savedLists.map(l => `<option value="${l.name}">${l.name} (${l.type === 'task' ? 'Task' : 'Generale'})</option>`).join('')}
+                    </select>
+                ` : ''}
+            </div>
+        </div>
+        <!-- Content area -->
+        <div id="quaderno-content" style="flex:1; overflow-y:auto; padding:15px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--text-secondary);">
+            <i class="fa-solid fa-book-open fa-3x" style="margin-bottom:15px; opacity:0.3;"></i>
+            <p style="text-align:center;">Scegli <b>Quaderno Generale</b> per registrare attivit&agrave; manuali<br>
+            o <b>Task Analysis</b> per sequenze operazionalizzate.</p>
+            ${savedLists.length > 0 ? '<p style="font-size:0.8rem; opacity:0.6;">Oppure carica una lista salvata dal menu sopra.</p>' : ''}
+        </div>
+    </div>`;
+}
+
+// --- Open a new Quaderno sheet ---
+window.openQuadernoSheet = (type) => {
+    const content = document.getElementById('quaderno-content');
+    if (!content) return;
+
+    if (type === 'general') {
+        // Quaderno Generale: rows of activities with X / Prompt / V
+        state._quadernoType = 'general';
+        state._quadernoRows = [];
+        state._quadernoName = '';
+        renderQuadernoGeneral(content);
+    } else if (type === 'task') {
+        // Task Analysis: operationalized steps
+        state._quadernoType = 'task';
+        state._quadernoSteps = [];
+        state._quadernoName = '';
+        renderQuadernoTask(content);
+    }
+};
+
+// --- Load saved list ---
+window.loadQuadernoList = (name) => {
+    if (!name) return;
+    const lists = getSavedQuadernoLists();
+    const list = lists.find(l => l.name === name);
+    if (!list) return;
+
+    const content = document.getElementById('quaderno-content');
+    state._quadernoName = list.name;
+
+    if (list.type === 'task') {
+        state._quadernoType = 'task';
+        state._quadernoSteps = list.items.map(item => ({ ...item, result: null }));
+        renderQuadernoTask(content);
+    } else {
+        state._quadernoType = 'general';
+        state._quadernoRows = list.items.map(item => ({ ...item, result: null }));
+        renderQuadernoGeneral(content);
+    }
+};
+
+// ============================================================
+// QUADERNO GENERALE
+// ============================================================
+function renderQuadernoGeneral(container) {
+    const rows = state._quadernoRows || [];
+    const savedNames = getSavedQuadernoLists().filter(l => l.type !== 'task').map(l => l.name);
+
+    container.innerHTML = `
+    <div style="width:100%; max-width:600px; margin:0 auto;">
+        <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center;">
+            <input type="text" id="quaderno-name-input" value="${state._quadernoName || ''}" placeholder="Nome lista (es. Seduta 15 Feb)"
+                list="quaderno-names-list"
+                style="flex:1; padding:8px 12px; border-radius:8px; font-size:0.9rem;">
+            <datalist id="quaderno-names-list">
+                ${savedNames.map(n => `<option value="${n}">`).join('')}
+            </datalist>
+        </div>
+
+        <div id="quaderno-rows-list">
+            ${rows.map((row, i) => renderQuadernoRow(row, i)).join('')}
+        </div>
+
+        <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
+            <input type="text" id="quaderno-new-activity" placeholder="Nome attivit&agrave;..."
+                list="quaderno-activity-names"
+                onkeydown="if(event.key==='Enter')addQuadernoRow()"
+                style="flex:1; padding:10px; border-radius:8px; font-size:0.9rem;">
+            <datalist id="quaderno-activity-names">
+                ${getUsedActivityNames().map(n => `<option value="${n}">`).join('')}
+            </datalist>
+            <button class="btn btn-primary" onclick="addQuadernoRow()" style="padding:10px 16px;">
+                <i class="fa-solid fa-plus"></i>
+            </button>
+        </div>
+
+        <div style="display:flex; gap:8px; margin-top:15px; justify-content:center;">
+            <button class="btn btn-success" onclick="saveQuadernoSession()" style="padding:10px 20px;">
+                <i class="fa-solid fa-floppy-disk"></i> Salva Sessione
+            </button>
+            <button class="btn btn-ghost" onclick="saveQuadernoTemplate()" style="padding:10px 20px;">
+                <i class="fa-solid fa-bookmark"></i> Salva Lista
+            </button>
+        </div>
+    </div>`;
+}
+
+function renderQuadernoRow(row, idx) {
+    const bgColor = row.result === true ? 'rgba(16,185,129,0.15)' :
+                    row.result === false ? 'rgba(239,68,68,0.15)' :
+                    row.result === 'prompt' ? 'rgba(245,158,11,0.15)' :
+                    'rgba(255,255,255,0.05)';
+    const borderColor = row.result === true ? 'var(--success-color)' :
+                        row.result === false ? 'var(--danger-color)' :
+                        row.result === 'prompt' ? 'var(--warning-color)' :
+                        'var(--glass-border)';
+
+    return `
+    <div style="display:flex; align-items:center; gap:8px; padding:8px; margin-bottom:6px; background:${bgColor}; border:1px solid ${borderColor}; border-radius:10px; transition:0.2s;">
+        <span style="flex:1; font-size:0.95rem; font-weight:600;">${row.name}</span>
+        <button onclick="setQuadernoResult(${idx}, false)" style="width:36px; height:36px; border-radius:50%; border:2px solid var(--danger-color); background:${row.result === false ? 'var(--danger-color)' : 'transparent'}; color:${row.result === false ? 'white' : 'var(--danger-color)'}; cursor:pointer; font-size:1rem; display:flex; align-items:center; justify-content:center;">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+        <button onclick="setQuadernoResult(${idx}, 'prompt')" style="width:36px; height:36px; border-radius:50%; border:2px solid var(--warning-color); background:${row.result === 'prompt' ? 'var(--warning-color)' : 'transparent'}; color:${row.result === 'prompt' ? 'white' : 'var(--warning-color)'}; cursor:pointer; font-size:0.8rem; font-weight:bold; display:flex; align-items:center; justify-content:center;">
+            P
+        </button>
+        <button onclick="setQuadernoResult(${idx}, true)" style="width:36px; height:36px; border-radius:50%; border:2px solid var(--success-color); background:${row.result === true ? 'var(--success-color)' : 'transparent'}; color:${row.result === true ? 'white' : 'var(--success-color)'}; cursor:pointer; font-size:1rem; display:flex; align-items:center; justify-content:center;">
+            <i class="fa-solid fa-check"></i>
+        </button>
+        <button onclick="removeQuadernoRow(${idx})" style="width:28px; height:28px; border:none; background:transparent; color:#666; cursor:pointer; font-size:0.8rem;">
+            <i class="fa-solid fa-trash"></i>
+        </button>
+    </div>`;
+}
+
+window.addQuadernoRow = () => {
+    const input = document.getElementById('quaderno-new-activity');
+    const name = input.value.trim();
+    if (!name) return;
+    state._quadernoRows.push({ name, result: null });
+    input.value = '';
+    renderQuadernoGeneral(document.getElementById('quaderno-content'));
+};
+
+window.setQuadernoResult = (idx, result) => {
+    if (state._quadernoType === 'general') {
+        const current = state._quadernoRows[idx].result;
+        state._quadernoRows[idx].result = (current === result) ? null : result;
+        renderQuadernoGeneral(document.getElementById('quaderno-content'));
+    } else {
+        const current = state._quadernoSteps[idx].result;
+        state._quadernoSteps[idx].result = (current === result) ? null : result;
+        renderQuadernoTask(document.getElementById('quaderno-content'));
+    }
+};
+
+window.removeQuadernoRow = (idx) => {
+    if (state._quadernoType === 'general') {
+        state._quadernoRows.splice(idx, 1);
+        renderQuadernoGeneral(document.getElementById('quaderno-content'));
+    } else {
+        state._quadernoSteps.splice(idx, 1);
+        renderQuadernoTask(document.getElementById('quaderno-content'));
+    }
+};
+
+function getUsedActivityNames() {
+    const names = new Set();
+    getSavedQuadernoLists().forEach(l => {
+        l.items.forEach(item => names.add(item.name));
+    });
+    return [...names];
+}
+
+// Save quaderno as a patient session
+window.saveQuadernoSession = async () => {
+    if (!state.activePatientId) return alert("Seleziona prima un paziente.");
+    const p = state.patients.find(x => x.id === state.activePatientId);
+    const rows = state._quadernoType === 'task' ? state._quadernoSteps : state._quadernoRows;
+    const scored = rows.filter(r => r.result !== null && r.result !== 'na');
+    if (scored.length === 0) return alert("Nessun item con punteggio.");
+
+    const correct = scored.filter(r => r.result === true).length;
+    const total = scored.length;
+    const nameInput = document.getElementById('quaderno-name-input');
+    const sessionNameField = document.getElementById('session-name-input');
+    const listName = nameInput ? nameInput.value.trim() : '';
+    const customSessionName = sessionNameField ? sessionNameField.value.trim() : '';
+    const setName = customSessionName || listName || 'Quaderno';
+
+    if (customSessionName) saveCustomSessionName(customSessionName);
+
+    const sessionData = {
+        date: new Date().toISOString(),
+        setId: 'quaderno_' + Date.now(),
+        setName: setName,
+        mode: state._quadernoType === 'task' ? 'quaderno_task' : 'quaderno',
+        correct: correct,
+        total: total,
+        percentage: Math.round((correct / total) * 100)
+    };
+    if (!p.history) p.history = [];
+    p.history.push(sessionData);
+    await DB.savePatient(p);
+
+    alert(`Sessione salvata!\n${correct}/${total} (${sessionData.percentage}%)`);
+};
+
+// Save quaderno template for reuse
+window.saveQuadernoTemplate = () => {
+    const nameInput = document.getElementById('quaderno-name-input');
+    const name = nameInput ? nameInput.value.trim() : '';
+    if (!name) return alert("Inserisci un nome per la lista.");
+
+    const rows = state._quadernoType === 'task' ? state._quadernoSteps : state._quadernoRows;
+    if (rows.length === 0) return alert("Aggiungi almeno un'attivit\u00E0.");
+
+    const list = {
+        name: name,
+        type: state._quadernoType,
+        items: rows.map(r => ({ name: r.name }))
+    };
+    saveQuadernoList(list);
+    alert(`Lista "${name}" salvata!`);
+    // Refresh the load dropdown
+    renderQuaderno(document.getElementById('game-stage'));
+    // Re-open the current sheet with data
+    if (state._quadernoType === 'task') {
+        openQuadernoSheet('task');
+        state._quadernoName = name;
+        state._quadernoSteps = rows;
+        renderQuadernoTask(document.getElementById('quaderno-content'));
+    } else {
+        openQuadernoSheet('general');
+        state._quadernoName = name;
+        state._quadernoRows = rows;
+        renderQuadernoGeneral(document.getElementById('quaderno-content'));
+    }
+};
+
+// ============================================================
+// QUADERNO TASK ANALYSIS
+// ============================================================
+function renderQuadernoTask(container) {
+    const steps = state._quadernoSteps || [];
+    const savedNames = getSavedQuadernoLists().filter(l => l.type === 'task').map(l => l.name);
+
+    container.innerHTML = `
+    <div style="width:100%; max-width:600px; margin:0 auto;">
+        <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center;">
+            <input type="text" id="quaderno-name-input" value="${state._quadernoName || ''}" placeholder="Nome Task Analysis (es. Memory - Procedura)"
+                list="quaderno-task-names-list"
+                style="flex:1; padding:8px 12px; border-radius:8px; font-size:0.9rem;">
+            <datalist id="quaderno-task-names-list">
+                ${savedNames.map(n => `<option value="${n}">`).join('')}
+            </datalist>
+        </div>
+
+        <!-- Legend -->
+        <div style="display:flex; gap:12px; margin-bottom:10px; font-size:0.75rem; color:var(--text-secondary); justify-content:center;">
+            <span><span style="color:var(--danger-color);">X</span> = Errore</span>
+            <span><span style="color:var(--warning-color);">P</span> = Prompt</span>
+            <span><span style="color:var(--success-color);">V</span> = Corretto</span>
+            <span><span style="color:#888;">N/A</span> = Non Applicabile</span>
+        </div>
+
+        <div id="quaderno-steps-list">
+            ${steps.map((step, i) => renderQuadernoTaskStep(step, i)).join('')}
+        </div>
+
+        <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
+            <input type="text" id="quaderno-new-step" placeholder="Nuovo passaggio..."
+                list="quaderno-step-names"
+                onkeydown="if(event.key==='Enter')addQuadernoStep()"
+                style="flex:1; padding:10px; border-radius:8px; font-size:0.9rem;">
+            <datalist id="quaderno-step-names">
+                ${getUsedActivityNames().map(n => `<option value="${n}">`).join('')}
+            </datalist>
+            <button class="btn btn-primary" onclick="addQuadernoStep()" style="padding:10px 16px;">
+                <i class="fa-solid fa-plus"></i>
+            </button>
+        </div>
+
+        <div style="display:flex; gap:8px; margin-top:15px; justify-content:center;">
+            <button class="btn btn-success" onclick="saveQuadernoSession()" style="padding:10px 20px;">
+                <i class="fa-solid fa-floppy-disk"></i> Salva Sessione
+            </button>
+            <button class="btn btn-ghost" onclick="saveQuadernoTemplate()" style="padding:10px 20px;">
+                <i class="fa-solid fa-bookmark"></i> Salva Lista
+            </button>
+        </div>
+    </div>`;
+}
+
+function renderQuadernoTaskStep(step, idx) {
+    const bgColor = step.result === true ? 'rgba(16,185,129,0.15)' :
+                    step.result === false ? 'rgba(239,68,68,0.15)' :
+                    step.result === 'prompt' ? 'rgba(245,158,11,0.15)' :
+                    step.result === 'na' ? 'rgba(128,128,128,0.1)' :
+                    'rgba(255,255,255,0.05)';
+    const borderColor = step.result === true ? 'var(--success-color)' :
+                        step.result === false ? 'var(--danger-color)' :
+                        step.result === 'prompt' ? 'var(--warning-color)' :
+                        step.result === 'na' ? '#666' :
+                        'var(--glass-border)';
+
+    return `
+    <div style="display:flex; align-items:center; gap:6px; padding:8px; margin-bottom:5px; background:${bgColor}; border:1px solid ${borderColor}; border-radius:10px; transition:0.2s;">
+        <span style="width:22px; height:22px; border-radius:50%; background:rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center; font-size:0.7rem; font-weight:bold; color:var(--text-secondary); flex-shrink:0;">${idx + 1}</span>
+        <span style="flex:1; font-size:0.9rem; font-weight:600; ${step.result === 'na' ? 'text-decoration:line-through; opacity:0.5;' : ''}">${step.name}</span>
+        <button onclick="setQuadernoResult(${idx}, false)" style="width:32px; height:32px; border-radius:50%; border:2px solid var(--danger-color); background:${step.result === false ? 'var(--danger-color)' : 'transparent'}; color:${step.result === false ? 'white' : 'var(--danger-color)'}; cursor:pointer; font-size:0.9rem; display:flex; align-items:center; justify-content:center;">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+        <button onclick="setQuadernoResult(${idx}, 'prompt')" style="width:32px; height:32px; border-radius:50%; border:2px solid var(--warning-color); background:${step.result === 'prompt' ? 'var(--warning-color)' : 'transparent'}; color:${step.result === 'prompt' ? 'white' : 'var(--warning-color)'}; cursor:pointer; font-size:0.75rem; font-weight:bold; display:flex; align-items:center; justify-content:center;">
+            P
+        </button>
+        <button onclick="setQuadernoResult(${idx}, true)" style="width:32px; height:32px; border-radius:50%; border:2px solid var(--success-color); background:${step.result === true ? 'var(--success-color)' : 'transparent'}; color:${step.result === true ? 'white' : 'var(--success-color)'}; cursor:pointer; font-size:0.9rem; display:flex; align-items:center; justify-content:center;">
+            <i class="fa-solid fa-check"></i>
+        </button>
+        <button onclick="setQuadernoResult(${idx}, 'na')" style="width:32px; height:32px; border-radius:8px; border:1px solid #666; background:${step.result === 'na' ? '#666' : 'transparent'}; color:${step.result === 'na' ? 'white' : '#888'}; cursor:pointer; font-size:0.6rem; font-weight:bold; display:flex; align-items:center; justify-content:center;">
+            N/A
+        </button>
+        <button onclick="removeQuadernoRow(${idx})" style="width:24px; height:24px; border:none; background:transparent; color:#555; cursor:pointer; font-size:0.7rem;">
+            <i class="fa-solid fa-trash"></i>
+        </button>
+    </div>`;
+}
+
+window.addQuadernoStep = () => {
+    const input = document.getElementById('quaderno-new-step');
+    const name = input.value.trim();
+    if (!name) return;
+    state._quadernoSteps.push({ name, result: null });
+    input.value = '';
+    renderQuadernoTask(document.getElementById('quaderno-content'));
 };

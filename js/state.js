@@ -13,7 +13,9 @@ const MODES_CONFIG = {
     'topologia': 'Topologia',
     'sequenze': 'Sequenze',
     'categorizzazione': 'Categorizzazione',
-    'zoom': 'Zoom'
+    'zoom': 'Zoom',
+    'quaderno': 'Quaderno',
+    'quaderno_task': 'Task Analysis'
 };
 
 let state = {
@@ -89,6 +91,29 @@ function saveCustomSessionName(name) {
         if (names.length > 20) names = names.slice(0, 20);
         localStorage.setItem('sessionNames', JSON.stringify(names));
     } catch(e) { console.error('Error saving session name:', e); }
+}
+
+// --- QUADERNO HELPERS (stored in localStorage) ---
+function getSavedQuadernoLists() {
+    try { return JSON.parse(localStorage.getItem('quadernoLists') || '[]'); }
+    catch(e) { return []; }
+}
+
+function saveQuadernoList(list) {
+    try {
+        let lists = getSavedQuadernoLists();
+        const existingIdx = lists.findIndex(l => l.name === list.name);
+        if (existingIdx >= 0) lists[existingIdx] = list;
+        else lists.unshift(list);
+        localStorage.setItem('quadernoLists', JSON.stringify(lists));
+    } catch(e) { console.error('Error saving quaderno list:', e); }
+}
+
+function deleteQuadernoList(name) {
+    try {
+        let lists = getSavedQuadernoLists().filter(l => l.name !== name);
+        localStorage.setItem('quadernoLists', JSON.stringify(lists));
+    } catch(e) { console.error('Error deleting quaderno list:', e); }
 }
 
 // Collect all unique tags from existing sets

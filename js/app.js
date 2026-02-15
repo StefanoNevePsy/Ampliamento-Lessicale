@@ -229,6 +229,15 @@ window.startGame = () => {
         return;
     }
 
+    // Quaderno mode: no items needed, just render
+    if (mode === 'quaderno') {
+        state.session = { correct: 0, incorrect: 0, total: 0, active: true, itemResults: {} };
+        document.getElementById('scoring-controls').classList.add('hidden');
+        document.getElementById('btn-save-session').classList.add('hidden');
+        renderGameMode(mode, []);
+        return;
+    }
+
     // Standard modes: require loaded items
     if (!state.items.length) return;
 

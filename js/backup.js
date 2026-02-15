@@ -51,12 +51,14 @@ window.exportAllSets = async () => {
         }
 
         const fullBackup = {
-            version: 3,
+            version: 4,
             timestamp: new Date().toISOString(),
             device: navigator.userAgent,
             sets: sets || [],
             patients: patients || [],
-            tagImages: getAllTagImages()
+            tagImages: getAllTagImages(),
+            quadernoLists: getSavedQuadernoLists(),
+            sessionNames: getRecentSessionNames()
         };
 
         const dateStr = new Date().toLocaleDateString('it-IT').replace(/\//g, '-');
@@ -106,6 +108,21 @@ window.importSets = (input) => {
                     const existing = getAllTagImages();
                     const merged = { ...existing, ...data.tagImages };
                     localStorage.setItem('tagImages', JSON.stringify(merged));
+                }
+                // Restore quaderno lists if present
+                if (data.quadernoLists && Array.isArray(data.quadernoLists)) {
+                    const existing = getSavedQuadernoLists();
+                    const existingNames = new Set(existing.map(l => l.name));
+                    data.quadernoLists.forEach(l => {
+                        if (!existingNames.has(l.name)) existing.push(l);
+                    });
+                    localStorage.setItem('quadernoLists', JSON.stringify(existing));
+                }
+                // Restore session names if present
+                if (data.sessionNames && Array.isArray(data.sessionNames)) {
+                    const existing = getRecentSessionNames();
+                    const merged = [...new Set([...existing, ...data.sessionNames])].slice(0, 30);
+                    localStorage.setItem('sessionNames', JSON.stringify(merged));
                 }
             }
             // Old format (array of sets)
