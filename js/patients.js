@@ -98,7 +98,7 @@ window.editSession = async (patientId, sessionIndex) => {
     loadPatientData(patientId);
 };
 
-// --- HELPER ---
+// --- HELPERS ---
 function formatDateEU(isoStr) {
     if (!isoStr) return "--.--.----";
     const d = new Date(isoStr);
@@ -108,6 +108,17 @@ function formatDateEU(isoStr) {
 
 function getDateKey(isoStr) {
     return new Date(isoStr).toISOString().split('T')[0];
+}
+
+function getSessionTypeGroup(s) {
+    if (s.sessionType === 'timedelay') return 'timedelay';
+    if (s.sessionType === 'independent') return 'independent';
+    return 'independent'; // legacy sessions without type treated as independent
+}
+
+function getSessionTypeLabel(typeGroup) {
+    if (typeGroup === 'timedelay') return 'Time Delay';
+    return 'Indipendente';
 }
 
 // --- CRITERION CHECK ---
@@ -137,8 +148,6 @@ window.loadPatientData = (pid) => {
 
     document.getElementById('patient-title').innerText = `Cartella: ${p.name}`;
     const container = document.getElementById('charts-container');
-
-    // Build the entire dashboard
     container.innerHTML = '';
 
     // Patient action buttons
@@ -205,15 +214,13 @@ window.switchReportTab = (tab, pid) => {
 };
 
 // ============================================================
-// TAB 1: PANORAMICA - Daily LU chart + last session summary
+// TAB 1: PANORAMICA
 // ============================================================
 function renderOverviewTab(patient) {
     const content = document.getElementById('report-content');
     if (!content) return;
 
     const history = patient.history;
-
-    // Group by date
     const byDate = {};
     history.forEach(h => {
         const dk = getDateKey(h.date);
@@ -226,20 +233,16 @@ function renderOverviewTab(patient) {
         const sessions = byDate[dk];
         const totalLU = sessions.reduce((sum, s) => sum + s.total, 0);
         const correctLU = sessions.reduce((sum, s) => sum + s.correct, 0);
-        return { date: dk, totalLU, correctLU, sessions: sessions.length };
+        return { date: dk, totalLU, correctLU, incorrectLU: totalLU - correctLU, sessions: sessions.length };
     });
 
-    // Last session
     const lastSession = [...history].sort((a, b) => new Date(b.date) - new Date(a.date))[0];
-
-    // Summary stats
     const totalSessions = history.length;
     const totalLUAll = history.reduce((sum, s) => sum + s.total, 0);
     const correctLUAll = history.reduce((sum, s) => sum + s.correct, 0);
     const avgPct = totalSessions > 0 ? Math.round((correctLUAll / totalLUAll) * 100) : 0;
 
     let html = `
-    <!-- Summary Cards -->
     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:10px; margin-bottom:20px;">
         <div style="background:rgba(99,102,241,0.15); padding:12px; border-radius:12px; text-align:center; border:1px solid rgba(99,102,241,0.3);">
             <div style="font-size:1.5rem; font-weight:800; color:var(--accent-color);">${totalSessions}</div>
@@ -259,7 +262,6 @@ function renderOverviewTab(patient) {
         </div>
     </div>`;
 
-    // Daily LU Chart (bar chart)
     if (dailyData.length > 0) {
         html += `
         <div class="chart-wrapper" style="margin-bottom:20px;">
@@ -270,7 +272,6 @@ function renderOverviewTab(patient) {
         </div>`;
     }
 
-    // Last session
     if (lastSession) {
         const modeName = MODES_CONFIG[lastSession.mode] || lastSession.mode;
         html += `
@@ -288,13 +289,10 @@ function renderOverviewTab(patient) {
     }
 
     content.innerHTML = html;
-
-    // Render the daily LU bar chart
-    if (dailyData.length > 0) {
-        renderDailyLUChart(dailyData);
-    }
+    if (dailyData.length > 0) renderDailyLUChart(dailyData);
 }
 
+// --- Daily LU Bar Chart (green correct, red incorrect) ---
 function renderDailyLUChart(dailyData) {
     const chartContainer = document.getElementById('daily-lu-chart');
     if (!chartContainer) return;
@@ -315,33 +313,40 @@ function renderDailyLUChart(dailyData) {
         const x = 20 + i * (barWidth + 8);
         const totalH = (d.totalLU / maxLU) * chartHeight;
         const correctH = (d.correctLU / maxLU) * chartHeight;
+        const incorrectH = totalH - correctH;
+        const tooltip = `${formatDateEU(d.date + 'T00:00:00')}\nTotali: ${d.totalLU}\nCorrette: ${d.correctLU}\nErrate: ${d.incorrectLU}\nSessioni: ${d.sessions}`;
 
-        // Total bar (background)
-        const totalBar = document.createElementNS(svgNS, "rect");
-        totalBar.setAttribute("x", x);
-        totalBar.setAttribute("y", chartHeight - totalH);
-        totalBar.setAttribute("width", barWidth);
-        totalBar.setAttribute("height", totalH);
-        totalBar.setAttribute("fill", "rgba(255,255,255,0.15)");
-        totalBar.setAttribute("rx", "4");
-        const title1 = document.createElementNS(svgNS, "title");
-        title1.textContent = `${formatDateEU(d.date + 'T00:00:00')}\nTotali: ${d.totalLU}\nCorrette: ${d.correctLU}\nSessioni: ${d.sessions}`;
-        totalBar.appendChild(title1);
-        svg.appendChild(totalBar);
+        // Incorrect bar (red, top portion)
+        if (incorrectH > 0) {
+            const incorrectBar = document.createElementNS(svgNS, "rect");
+            incorrectBar.setAttribute("x", x);
+            incorrectBar.setAttribute("y", chartHeight - totalH);
+            incorrectBar.setAttribute("width", barWidth);
+            incorrectBar.setAttribute("height", incorrectH);
+            incorrectBar.setAttribute("fill", "var(--danger-color)");
+            incorrectBar.setAttribute("opacity", "0.6");
+            incorrectBar.setAttribute("rx", "4");
+            const t1 = document.createElementNS(svgNS, "title");
+            t1.textContent = tooltip;
+            incorrectBar.appendChild(t1);
+            svg.appendChild(incorrectBar);
+        }
 
-        // Correct bar (foreground)
-        const correctBar = document.createElementNS(svgNS, "rect");
-        correctBar.setAttribute("x", x);
-        correctBar.setAttribute("y", chartHeight - correctH);
-        correctBar.setAttribute("width", barWidth);
-        correctBar.setAttribute("height", correctH);
-        correctBar.setAttribute("fill", "var(--success-color)");
-        correctBar.setAttribute("opacity", "0.7");
-        correctBar.setAttribute("rx", "4");
-        const title2 = document.createElementNS(svgNS, "title");
-        title2.textContent = title1.textContent;
-        correctBar.appendChild(title2);
-        svg.appendChild(correctBar);
+        // Correct bar (green, bottom portion)
+        if (correctH > 0) {
+            const correctBar = document.createElementNS(svgNS, "rect");
+            correctBar.setAttribute("x", x);
+            correctBar.setAttribute("y", chartHeight - correctH);
+            correctBar.setAttribute("width", barWidth);
+            correctBar.setAttribute("height", correctH);
+            correctBar.setAttribute("fill", "var(--success-color)");
+            correctBar.setAttribute("opacity", "0.7");
+            correctBar.setAttribute("rx", "4");
+            const t2 = document.createElementNS(svgNS, "title");
+            t2.textContent = tooltip;
+            correctBar.appendChild(t2);
+            svg.appendChild(correctBar);
+        }
 
         // Date label
         const lbl = document.createElementNS(svgNS, "text");
@@ -377,22 +382,22 @@ function renderDailyLUChart(dailyData) {
     legCText.setAttribute("fill", "#888"); legCText.setAttribute("font-size", "8");
     legCText.textContent = "Corrette";
     svg.appendChild(legCText);
-    const legTotal = document.createElementNS(svgNS, "rect");
-    legTotal.setAttribute("x", "80"); legTotal.setAttribute("y", legendY);
-    legTotal.setAttribute("width", "10"); legTotal.setAttribute("height", "6");
-    legTotal.setAttribute("fill", "rgba(255,255,255,0.15)"); legTotal.setAttribute("rx", "2");
-    svg.appendChild(legTotal);
-    const legTText = document.createElementNS(svgNS, "text");
-    legTText.setAttribute("x", "94"); legTText.setAttribute("y", legendY + 6);
-    legTText.setAttribute("fill", "#888"); legTText.setAttribute("font-size", "8");
-    legTText.textContent = "Totali";
-    svg.appendChild(legTText);
+    const legIncorrect = document.createElementNS(svgNS, "rect");
+    legIncorrect.setAttribute("x", "80"); legIncorrect.setAttribute("y", legendY);
+    legIncorrect.setAttribute("width", "10"); legIncorrect.setAttribute("height", "6");
+    legIncorrect.setAttribute("fill", "var(--danger-color)"); legIncorrect.setAttribute("opacity", "0.6"); legIncorrect.setAttribute("rx", "2");
+    svg.appendChild(legIncorrect);
+    const legIText = document.createElementNS(svgNS, "text");
+    legIText.setAttribute("x", "94"); legIText.setAttribute("y", legendY + 6);
+    legIText.setAttribute("fill", "#888"); legIText.setAttribute("font-size", "8");
+    legIText.textContent = "Errate";
+    svg.appendChild(legIText);
 
     chartContainer.appendChild(svg);
 }
 
 // ============================================================
-// TAB 2: GIORNATE - Date-based expandable view
+// TAB 2: GIORNATE - Date-based view with expandable activities
 // ============================================================
 function renderDatesTab(patient) {
     const content = document.getElementById('report-content');
@@ -409,7 +414,7 @@ function renderDatesTab(patient) {
     const dates = Object.keys(byDate).sort().reverse();
 
     let html = '';
-    dates.forEach((dk, dateIdx) => {
+    dates.forEach((dk) => {
         const sessions = byDate[dk];
         const totalLU = sessions.reduce((sum, s) => sum + s.total, 0);
         const correctLU = sessions.reduce((sum, s) => sum + s.correct, 0);
@@ -429,29 +434,28 @@ function renderDatesTab(patient) {
                 </div>
             </div>
             <div class="date-detail-panel" style="display:none; padding:0 15px 12px; border-top:1px solid rgba(255,255,255,0.05);">
-                <table style="width:100%; font-size:0.85rem; color:#ccc; border-collapse:collapse; margin-top:8px;">
-                    <tr style="border-bottom:1px solid #333; color:#888; font-size:0.75rem; text-transform:uppercase;">
-                        <th style="padding:5px; text-align:left;">Attivit&agrave;</th>
-                        <th style="text-align:left;">Set/Nome</th>
-                        <th style="text-align:center;">Score</th>
-                        <th style="text-align:center;">%</th>
-                        <th style="text-align:right;">Azioni</th>
-                    </tr>
-                    ${sessions.map(s => {
-                        const modeName = MODES_CONFIG[s.mode] || s.mode;
-                        return `
-                        <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
-                            <td style="padding:8px 5px;"><span style="background:rgba(99,102,241,0.15); padding:2px 8px; border-radius:6px; font-size:0.75rem; color:var(--accent-color);">${modeName}</span></td>
-                            <td style="padding:8px 5px; max-width:140px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.setName}</td>
-                            <td style="text-align:center;">${s.correct}/${s.total}</td>
-                            <td style="text-align:center; font-weight:bold; color:${s.percentage >= 90 ? 'var(--success-color)' : 'white'};">${s.percentage}%</td>
-                            <td style="text-align:right; white-space:nowrap;">
-                                <button class="btn-icon" style="width:26px; height:26px; font-size:0.7rem; display:inline-flex;" onclick="editSession('${patient.id}', ${s.originalIndex})"><i class="fa-solid fa-pen"></i></button>
-                                <button class="btn-icon" style="width:26px; height:26px; font-size:0.7rem; display:inline-flex; color:var(--danger-color); border-color:rgba(239,68,68,0.3);" onclick="deleteSession('${patient.id}', ${s.originalIndex})"><i class="fa-solid fa-trash"></i></button>
-                            </td>
-                        </tr>`;
-                    }).join('')}
-                </table>
+                ${sessions.map(s => {
+                    const modeName = MODES_CONFIG[s.mode] || s.mode;
+                    const typeTag = s.sessionType === 'timedelay' ? `<span style="font-size:0.6rem; background:rgba(245,158,11,0.2); color:var(--warning-color); padding:1px 5px; border-radius:4px; margin-left:4px;">TD${s.timeDelaySeconds || ''}s</span>` : '';
+                    const activityKey = encodeURIComponent(s.setName + '::' + s.mode + '::' + getSessionTypeGroup(s));
+                    return `
+                    <div style="margin-top:8px; border:1px solid rgba(255,255,255,0.05); border-radius:10px; overflow:hidden;">
+                        <div onclick="toggleDayActivityChart(this, '${patient.id}', '${activityKey}')" style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; cursor:pointer; transition:background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background=''">
+                            <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:0;">
+                                <i class="fa-solid fa-chevron-right day-act-icon" style="transition:transform 0.2s; font-size:0.6rem; color:#555;"></i>
+                                <span style="background:rgba(99,102,241,0.15); padding:2px 8px; border-radius:6px; font-size:0.7rem; color:var(--accent-color); flex-shrink:0;">${modeName}</span>
+                                <span style="font-size:0.9rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.setName}</span>${typeTag}
+                            </div>
+                            <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
+                                <span style="font-size:0.85rem;">${s.correct}/${s.total}</span>
+                                <span style="font-weight:bold; font-size:0.85rem; color:${s.percentage >= 90 ? 'var(--success-color)' : 'white'};">${s.percentage}%</span>
+                                <button class="btn-icon" style="width:24px; height:24px; font-size:0.65rem; display:inline-flex;" onclick="event.stopPropagation(); editSession('${patient.id}', ${s.originalIndex})"><i class="fa-solid fa-pen"></i></button>
+                                <button class="btn-icon" style="width:24px; height:24px; font-size:0.65rem; display:inline-flex; color:var(--danger-color); border-color:rgba(239,68,68,0.3);" onclick="event.stopPropagation(); deleteSession('${patient.id}', ${s.originalIndex})"><i class="fa-solid fa-trash"></i></button>
+                            </div>
+                        </div>
+                        <div class="day-activity-chart-panel" style="display:none; padding:8px 12px 12px; border-top:1px solid rgba(255,255,255,0.03);"></div>
+                    </div>`;
+                }).join('')}
             </div>
         </div>`;
     });
@@ -461,8 +465,8 @@ function renderDatesTab(patient) {
     // Auto-expand first date
     const firstPanel = content.querySelector('.date-detail-panel');
     const firstIcon = content.querySelector('.date-expand-icon');
-    if (firstPanel) { firstPanel.style.display = 'block'; }
-    if (firstIcon) { firstIcon.style.transform = 'rotate(90deg)'; }
+    if (firstPanel) firstPanel.style.display = 'block';
+    if (firstIcon) firstIcon.style.transform = 'rotate(90deg)';
 }
 
 window.toggleDateExpand = (header) => {
@@ -477,8 +481,38 @@ window.toggleDateExpand = (header) => {
     }
 };
 
+// Toggle activity chart inside a date row in Giornate tab
+window.toggleDayActivityChart = (header, patientId, activityKeyEncoded) => {
+    const panel = header.nextElementSibling;
+    const icon = header.querySelector('.day-act-icon');
+    if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+        if (icon) icon.style.transform = 'rotate(90deg)';
+        // Render chart if empty
+        if (panel.innerHTML.trim() === '') {
+            const activityKey = decodeURIComponent(activityKeyEncoded);
+            const p = state.patients.find(x => x.id === patientId);
+            if (!p) return;
+            const [setName, modeCode, typeGroup] = activityKey.split('::');
+            const sessions = p.history.filter(h =>
+                h.setName === setName &&
+                h.mode === modeCode &&
+                getSessionTypeGroup(h) === typeGroup
+            ).sort((a, b) => new Date(a.date) - new Date(b.date));
+            if (sessions.length > 0) {
+                renderActivitySVGChart(panel, sessions, typeGroup);
+            } else {
+                panel.innerHTML = '<span style="font-size:0.8rem; color:#666;">Nessun dato.</span>';
+            }
+        }
+    } else {
+        panel.style.display = 'none';
+        if (icon) icon.style.transform = 'rotate(0deg)';
+    }
+};
+
 // ============================================================
-// TAB 3: ATTIVITA - Per-activity charts (set+mode)
+// TAB 3: ATTIVITA - Per-activity charts separated by session type
 // ============================================================
 function renderActivitiesTab(patient) {
     const content = document.getElementById('report-content');
@@ -486,18 +520,19 @@ function renderActivitiesTab(patient) {
 
     const history = patient.history;
 
-    // Group by setName::mode
+    // Group by setName::mode::sessionType
     const groups = {};
     history.forEach((h, idx) => {
-        const key = `${h.setName}::${h.mode}`;
+        const typeGroup = getSessionTypeGroup(h);
+        const key = `${h.setName}::${h.mode}::${typeGroup}`;
         if (!groups[key]) groups[key] = [];
         groups[key].push({ ...h, originalIndex: idx });
     });
 
     let chartList = Object.entries(groups).map(([key, sessions]) => {
-        const [setName, modeCode] = key.split('::');
+        const [setName, modeCode, typeGroup] = key.split('::');
         const lastDate = Math.max(...sessions.map(s => new Date(s.date).getTime()));
-        return { key, sessions, setName, modeCode, lastDate };
+        return { key, sessions, setName, modeCode, typeGroup, lastDate };
     });
 
     chartList.sort((a, b) => b.lastDate - a.lastDate);
@@ -505,7 +540,7 @@ function renderActivitiesTab(patient) {
     let html = '';
 
     chartList.forEach(item => {
-        const { sessions, setName, modeCode } = item;
+        const { sessions, setName, modeCode, typeGroup } = item;
         const modeName = MODES_CONFIG[modeCode] || modeCode;
         sessions.sort((a, b) => new Date(a.date) - new Date(b.date));
         const isMastered = checkCriterion(sessions);
@@ -513,15 +548,18 @@ function renderActivitiesTab(patient) {
         const badgeHtml = isMastered ?
             `<span class="criterion-badge"><i class="fa-solid fa-trophy"></i> CRITERIO</span>` : '';
 
+        const typeColor = typeGroup === 'timedelay' ? 'var(--warning-color)' : 'var(--success-color)';
+        const typeLbl = getSessionTypeLabel(typeGroup);
         const chartId = 'activity-chart-' + item.key.replace(/[^a-zA-Z0-9]/g, '_');
 
         html += `
-        <div class="chart-wrapper" style="margin-bottom:12px;">
+        <div class="chart-wrapper" style="margin-bottom:12px; border-left:3px solid ${typeColor};">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                 <h4 style="margin:0; color:var(--accent-color); font-size:0.95rem;">
                     ${setName} <span style="color:#666; font-size:0.8em;">(${modeName})</span> ${badgeHtml}
                 </h4>
                 <div style="display:flex; align-items:center; gap:6px;">
+                    <span style="font-size:0.65rem; background:rgba(${typeGroup === 'timedelay' ? '245,158,11' : '16,185,129'},0.15); color:${typeColor}; padding:2px 8px; border-radius:6px; font-weight:bold;">${typeLbl}</span>
                     <span style="font-size:0.75rem; color:var(--text-secondary);">${sessions.length} sess.</span>
                     <button class="btn-icon" onclick="toggleActivityDetails(this)" style="width:28px; height:28px; background:rgba(255,255,255,0.05);" title="Dettagli">
                         <i class="fa-solid fa-chevron-down" style="font-size:0.7rem;"></i>
@@ -532,13 +570,14 @@ function renderActivitiesTab(patient) {
             <div class="activity-details-panel" style="display:none; margin-top:10px; border-top:1px solid rgba(255,255,255,0.05); padding-top:8px;">
                 <table style="width:100%; font-size:0.85rem; color:#ccc; border-collapse:collapse;">
                     <tr style="border-bottom:1px solid #444; text-align:left; color:#888; font-size:0.75rem;">
-                        <th style="padding:5px;">Data</th><th>Score</th><th>%</th><th style="text-align:right;">Azioni</th>
+                        <th style="padding:5px;">Data</th><th>Score</th><th>%</th>${typeGroup === 'timedelay' ? '<th>TD</th>' : ''}<th style="text-align:right;">Azioni</th>
                     </tr>
                     ${[...sessions].reverse().map(s => `
                         <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
                             <td style="padding:6px 5px;">${formatDateEU(s.date)}</td>
-                            <td>${s.correct}/${s.total}</td>
+                            <td>${s.correct}/${s.total}${s.rawP ? ` <span style="color:var(--warning-color); font-size:0.75rem;">P${s.rawP}</span>` : ''}</td>
                             <td style="font-weight:bold; color:${s.percentage >= 90 ? 'var(--success-color)' : 'white'}">${s.percentage}%</td>
+                            ${typeGroup === 'timedelay' ? `<td style="font-size:0.8rem; color:var(--warning-color);">${s.timeDelaySeconds || '?'}s</td>` : ''}
                             <td style="text-align:right;">
                                 <button class="btn-icon" style="width:26px; height:26px; font-size:0.7rem; display:inline-flex;" onclick="editSession('${patient.id}', ${s.originalIndex})"><i class="fa-solid fa-pen"></i></button>
                                 <button class="btn-icon" style="width:26px; height:26px; font-size:0.7rem; display:inline-flex; color:var(--danger-color); border-color:rgba(239,68,68,0.3);" onclick="deleteSession('${patient.id}', ${s.originalIndex})"><i class="fa-solid fa-trash"></i></button>
@@ -552,15 +591,16 @@ function renderActivitiesTab(patient) {
 
     content.innerHTML = html;
 
-    // Render SVG charts after DOM is ready
+    // Render SVG charts
     chartList.forEach(item => {
         const chartId = 'activity-chart-' + item.key.replace(/[^a-zA-Z0-9]/g, '_');
         const container = document.getElementById(chartId);
-        if (container) renderActivitySVGChart(container, item.sessions);
+        if (container) renderActivitySVGChart(container, item.sessions, item.typeGroup);
     });
 }
 
-function renderActivitySVGChart(container, sessions) {
+// --- ACTIVITY SVG CHART with Time Delay vertical markers ---
+function renderActivitySVGChart(container, sessions, typeGroup) {
     const svgNS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(svgNS, "svg");
     svg.setAttribute("class", "chart-svg");
@@ -589,6 +629,35 @@ function renderActivitySVGChart(container, sessions) {
     const stepX = sessions.length > 1 ? 260 / (sessions.length - 1) : 0;
     let pathD = "";
 
+    // Time Delay vertical markers
+    if (typeGroup === 'timedelay') {
+        let lastTD = null;
+        sessions.forEach((s, i) => {
+            const td = s.timeDelaySeconds || null;
+            if (td !== null && td !== lastTD && lastTD !== null) {
+                const x = 20 + (sessions.length > 1 ? i * stepX : 130);
+                const vLine = document.createElementNS(svgNS, "line");
+                vLine.setAttribute("x1", x); vLine.setAttribute("x2", x);
+                vLine.setAttribute("y1", "0"); vLine.setAttribute("y2", "130");
+                vLine.setAttribute("stroke", "var(--warning-color)");
+                vLine.setAttribute("stroke-width", "1.5");
+                vLine.setAttribute("stroke-dasharray", "4,3");
+                vLine.setAttribute("opacity", "0.7");
+                svg.appendChild(vLine);
+
+                const tdLbl = document.createElementNS(svgNS, "text");
+                tdLbl.setAttribute("x", x); tdLbl.setAttribute("y", "140");
+                tdLbl.setAttribute("text-anchor", "middle");
+                tdLbl.setAttribute("fill", "var(--warning-color)");
+                tdLbl.setAttribute("font-size", "8");
+                tdLbl.setAttribute("font-weight", "bold");
+                tdLbl.textContent = `${td}s`;
+                svg.appendChild(tdLbl);
+            }
+            lastTD = td;
+        });
+    }
+
     sessions.forEach((s, i) => {
         const x = 20 + (sessions.length > 1 ? i * stepX : 130);
         const y = 130 - (1.3 * s.percentage);
@@ -612,8 +681,13 @@ function renderActivitySVGChart(container, sessions) {
         dot.setAttribute("cx", x); dot.setAttribute("cy", y);
         dot.setAttribute("r", "5"); dot.setAttribute("fill", "white");
         dot.setAttribute("stroke", "var(--accent-color)"); dot.setAttribute("stroke-width", "2");
+
+        let tooltipText = `${formatDateEU(s.date)}\nScore: ${s.percentage}% (${s.correct}/${s.total})`;
+        if (s.rawP) tooltipText += `\nPrompt: ${s.rawP}`;
+        if (s.timeDelaySeconds) tooltipText += `\nTime Delay: ${s.timeDelaySeconds}s`;
+
         const title = document.createElementNS(svgNS, "title");
-        title.textContent = `${formatDateEU(s.date)}\nScore: ${s.percentage}% (${s.correct}/${s.total})`;
+        title.textContent = tooltipText;
         dot.appendChild(title);
         svg.appendChild(dot);
 
@@ -650,7 +724,6 @@ window.exportPatientExcel = (pid) => {
 
     const sorted = [...p.history].sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    // Build HTML table (Excel-compatible .xls format)
     let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:spreadsheet" xmlns="http://www.w3.org/TR/REC-html40">
 <head><meta charset="UTF-8">
 <style>
@@ -660,7 +733,6 @@ th { background: #4472c4; color: white; font-weight: bold; }
 .pct-low { background: #ffc7ce; color: #9c0006; }
 </style></head><body>`;
 
-    // SHEET 1: All Sessions
     html += `<table><caption>${p.name} - Tutte le Sessioni</caption>`;
     html += `<tr><th>Data</th><th>Ora</th><th>Attivit&agrave;</th><th>Modalit&agrave;</th><th>Tipo</th><th>Corrette</th><th>Prompt</th><th>Totale</th><th>%</th></tr>`;
 
@@ -672,12 +744,10 @@ th { background: #4472c4; color: white; font-weight: bold; }
         const typeLabel = s.sessionType === 'timedelay' ? `Time Delay (${s.timeDelaySeconds || '?'}s)` : (s.sessionType === 'independent' ? 'Indipendente' : '-');
         const pctClass = s.percentage >= 90 ? 'pct-high' : (s.percentage < 50 ? 'pct-low' : '');
         const prompts = s.prompts || s.rawP || '-';
-
         html += `<tr><td>${dateStr}</td><td>${timeStr}</td><td>${s.setName}</td><td>${modeName}</td><td>${typeLabel}</td><td>${s.correct}</td><td>${prompts}</td><td>${s.total}</td><td class="${pctClass}">${s.percentage}%</td></tr>`;
     });
     html += `</table><br>`;
 
-    // SHEET 2: Daily Summary
     html += `<table><caption>${p.name} - Riepilogo Giornaliero</caption>`;
     html += `<tr><th>Data</th><th>LU Totali</th><th>LU Corrette</th><th>% Media</th><th>N. Attivit&agrave;</th></tr>`;
 
@@ -699,39 +769,33 @@ th { background: #4472c4; color: white; font-weight: bold; }
     });
     html += `</table><br>`;
 
-    // SHEET 3: Per-Activity Summary
     html += `<table><caption>${p.name} - Riepilogo per Attivit&agrave;</caption>`;
-    html += `<tr><th>Attivit&agrave;</th><th>Modalit&agrave;</th><th>N. Sessioni</th><th>Ultima Data</th><th>Ultima %</th><th>Media %</th><th>Criterio</th></tr>`;
+    html += `<tr><th>Attivit&agrave;</th><th>Modalit&agrave;</th><th>Tipo</th><th>N. Sessioni</th><th>Ultima Data</th><th>Ultima %</th><th>Media %</th><th>Criterio</th></tr>`;
 
     const byActivity = {};
     sorted.forEach(s => {
-        const key = `${s.setName}__${s.mode}`;
+        const key = `${s.setName}__${s.mode}__${getSessionTypeGroup(s)}`;
         if (!byActivity[key]) byActivity[key] = [];
         byActivity[key].push(s);
     });
 
     Object.entries(byActivity).forEach(([key, sessions]) => {
-        const [name, mode] = key.split('__');
+        const [name, mode, typeGroup] = key.split('__');
         const modeName = MODES_CONFIG[mode] || mode;
         const last = sessions[sessions.length - 1];
         const avgPct = Math.round(sessions.reduce((a, s) => a + s.percentage, 0) / sessions.length);
         const hasCriterion = checkCriterion(sessions);
         const lastD = new Date(last.date);
         const lastDateStr = `${String(lastD.getDate()).padStart(2,'0')}/${String(lastD.getMonth()+1).padStart(2,'0')}/${lastD.getFullYear()}`;
-
-        html += `<tr><td>${name}</td><td>${modeName}</td><td>${sessions.length}</td><td>${lastDateStr}</td><td>${last.percentage}%</td><td>${avgPct}%</td><td>${hasCriterion ? 'RAGGIUNTO' : '-'}</td></tr>`;
+        html += `<tr><td>${name}</td><td>${modeName}</td><td>${getSessionTypeLabel(typeGroup)}</td><td>${sessions.length}</td><td>${lastDateStr}</td><td>${last.percentage}%</td><td>${avgPct}%</td><td>${hasCriterion ? 'RAGGIUNTO' : '-'}</td></tr>`;
     });
-    html += `</table>`;
+    html += `</table></body></html>`;
 
-    html += `</body></html>`;
-
-    // Download as .xls file
     const blob = new Blob(['\uFEFF' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const safeName = p.name.replace(/[^a-zA-Z0-9\u00C0-\u024F]/g, '_');
     const fileName = `${safeName}_report_${new Date().toISOString().split('T')[0]}.xls`;
 
-    // Use Web Share API if available (Android), otherwise download link
     if (typeof Capacitor !== 'undefined' && navigator.share) {
         const file = new File([blob], fileName, { type: 'application/vnd.ms-excel' });
         navigator.share({ files: [file], title: `Report ${p.name}` }).catch(() => {
