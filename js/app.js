@@ -271,36 +271,39 @@ window.startGame = () => {
 };
 
 // --- SCORING ---
-window.recordResponse = (isCorrect) => {
+window.recordResponse = (result) => {
     if (!state.session.active) return;
     const mode = document.getElementById('mode-select').value;
 
     if (mode === 'tact' || (mode === 'ran' && state.ranMode === 'single')) {
         const currentIndex = (mode === 'tact') ? state.tactIndex : state.ranIndex;
-        state.session.itemResults[currentIndex] = isCorrect;
+        state.session.itemResults[currentIndex] = result;
 
         const targetImg = document.querySelector('.tact-card-lg img, .ran-main-img');
         if (targetImg) {
-            targetImg.classList.remove('feedback-success', 'feedback-fail');
+            targetImg.classList.remove('feedback-success', 'feedback-fail', 'feedback-prompt');
             void targetImg.offsetWidth;
-            targetImg.classList.add(isCorrect ? 'feedback-success' : 'feedback-fail');
+            if (result === 'prompt') targetImg.classList.add('feedback-prompt');
+            else targetImg.classList.add(result ? 'feedback-success' : 'feedback-fail');
         }
     } else if (mode === 'search_find' || mode === 'intraverbal_scenari') {
         const markers = document.querySelectorAll('.marker-pin');
         if (markers.length > 0) {
             const lastMarker = markers[markers.length - 1];
             if (!lastMarker.dataset.id) lastMarker.dataset.id = Date.now();
-            state.session.itemResults[lastMarker.dataset.id] = isCorrect;
-            lastMarker.classList.remove('success', 'fail');
-            lastMarker.classList.add(isCorrect ? 'success' : 'fail');
+            state.session.itemResults[lastMarker.dataset.id] = result;
+            lastMarker.classList.remove('success', 'fail', 'prompt');
+            if (result === 'prompt') lastMarker.classList.add('prompt');
+            else lastMarker.classList.add(result ? 'success' : 'fail');
         }
     } else {
-        state.session.itemResults[Date.now()] = isCorrect;
+        state.session.itemResults[Date.now()] = result;
     }
 
     const results = Object.values(state.session.itemResults);
     state.session.correct = results.filter(v => v === true).length;
     state.session.incorrect = results.filter(v => v === false).length;
+    state.session.prompts = results.filter(v => v === 'prompt').length;
     state.session.total = results.length;
 
     updateScoreUI();
@@ -309,7 +312,13 @@ window.recordResponse = (isCorrect) => {
 };
 
 function updateScoreUI() {
-    document.getElementById('score-display').innerText = `${state.session.correct}`;
+    const el = document.getElementById('score-display');
+    const prompts = state.session.prompts || 0;
+    if (prompts > 0) {
+        el.innerHTML = `${state.session.correct} <span style="font-size:0.65rem; color:var(--warning-color);">P${prompts}</span>`;
+    } else {
+        el.innerText = `${state.session.correct}`;
+    }
 }
 
 // --- KEYBOARD SHORTCUTS ---
@@ -318,6 +327,7 @@ function handleShortcuts(e) {
     if (state.session.active && !['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
         if (e.key.toLowerCase() === 'v') recordResponse(true);
         if (e.key.toLowerCase() === 'x') recordResponse(false);
+        if (e.key.toLowerCase() === 'p') recordResponse('prompt');
     }
     if (mode === 'ran' && state.ranMode === 'single') {
         if (e.key === 'ArrowRight') nextRan();

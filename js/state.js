@@ -32,7 +32,7 @@ let state = {
     tactIndex: 0,
     activeSetId: null,
     activePatientId: null,
-    session: { correct: 0, incorrect: 0, total: 0, active: false, itemResults: {} },
+    session: { correct: 0, incorrect: 0, prompts: 0, total: 0, active: false, itemResults: {} },
     // Tag system
     allTags: [],
     // Pool/Intruso: selected tags for filtering

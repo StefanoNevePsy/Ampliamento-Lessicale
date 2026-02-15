@@ -143,6 +143,9 @@
             <button class="btn-score fail" onclick="recordResponse(false)" title="Risposta Errata (Tasto X)">
                 <i class="fa-solid fa-xmark"></i>
             </button>
+            <button class="btn-score prompt" onclick="recordResponse('prompt')" title="Prompt (Tasto P)">
+                P
+            </button>
             <div style="background:rgba(0,0,0,0.5); padding:5px 10px; border-radius:10px; color:white; font-size:0.8rem; display:flex; flex-direction:column; align-items:center; justify-content:center; min-width: 60px;">
                 <span id="score-display" style="font-weight:bold; font-size:1.1rem;">0/0</span>
                 <span style="font-size:0.6rem; opacity:0.8; letter-spacing:1px;">SCORE</span>
@@ -326,7 +329,7 @@
                         <i class="fa-solid fa-stopwatch"></i> Sessione & Scoring
                     </h3>
                     <ul style="padding-left: 20px; line-height: 1.6;">
-                        <li><strong>Valutazione:</strong> Usa i tasti a schermo o la tastiera.<br><span style="color: var(--success-color);"><b>V</b></span> = Corretto (Tasto 'V')<br><span style="color: var(--danger-color);"><b>X</b></span> = Errato (Tasto 'X')</li>
+                        <li><strong>Valutazione:</strong> Usa i tasti a schermo o la tastiera.<br><span style="color: var(--success-color);"><b>V</b></span> = Corretto (Tasto 'V')<br><span style="color: var(--warning-color);"><b>P</b></span> = Prompt (Tasto 'P')<br><span style="color: var(--danger-color);"><b>X</b></span> = Errato (Tasto 'X')</li>
                         <li><strong>N. Stimoli:</strong> Scegli quanti stimoli presentare (3, 4, 6, 8... o Tutti).</li>
                         <li><strong>Child Lock <i class="fa-solid fa-lock-open"></i>:</strong> Blocca lo scroll per evitare tocchi accidentali.</li>
                         <li><strong>Salvataggio <i class="fa-solid fa-floppy-disk"></i>:</strong> Salva i dati nella cartella del paziente attivo.<br><span style="font-size: 0.85em; opacity: 0.7;">Puoi inserire un nome personalizzato nella casella di testo. Se vuoto, usa il nome del set/modalit&agrave;.</span></li>
