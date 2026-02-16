@@ -592,8 +592,11 @@ function renderLibList() {
                 <button class="btn btn-ghost" style="padding:6px 12px;" onclick="editSet('${s.id}')" title="Modifica">
                     <i class="fa-solid fa-pen"></i>
                 </button>
-                <button class="btn btn-ghost" style="padding:6px 12px;" onclick="exportSingleSet('${s.id}')" title="Esporta">
+                <button class="btn btn-ghost" style="padding:6px 12px;" onclick="exportSingleSet('${s.id}')" title="Esporta file">
                     <i class="fa-solid fa-file-export"></i>
+                </button>
+                <button class="btn btn-ghost" style="padding:6px 12px; color:var(--accent-color); border-color:rgba(99,102,241,0.3);" onclick="p2pSendSet('${s.id}')" title="Invia via P2P">
+                    <i class="fa-solid fa-wifi"></i>
                 </button>
                 <button class="btn btn-danger" style="padding:6px 12px;" onclick="deleteSet('${s.id}')" title="Elimina">
                     <i class="fa-solid fa-trash"></i>

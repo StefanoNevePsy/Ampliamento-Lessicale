@@ -218,8 +218,9 @@
             <div style="display:flex; gap:10px; margin-bottom: 20px; flex-wrap:wrap;">
                 <button class="btn btn-primary" onclick="createEmptySet()"><i class="fa-solid fa-plus"></i> Nuovo Set</button>
                 <button class="btn btn-ghost" onclick="exportAllSets()"><i class="fa-solid fa-file-arrow-down"></i> Backup</button>
-                <button class="btn btn-ghost" onclick="document.getElementById('file-upload').click()"><i class="fa-solid fa-file-arrow-up"></i> Importa / Sincronizza</button>
+                <button class="btn btn-ghost" onclick="document.getElementById('file-upload').click()"><i class="fa-solid fa-file-arrow-up"></i> Importa</button>
                 <input type="file" id="file-upload" class="hidden" accept=".json" onchange="importSets(this)">
+                <button class="btn btn-ghost" onclick="openP2PSync()" style="border-color:rgba(99,102,241,0.3); color:var(--accent-color);"><i class="fa-solid fa-wifi"></i> Sync Diretto</button>
             </div>
             <div id="lib-list" class="lib-grid"></div>
         </div>
@@ -378,6 +379,12 @@
                             - Set e dati locali <b>non presenti</b> nel backup vengono <b>mantenuti</b>.<br>
                             - Nessun dato viene cancellato.<br>
                             - Funziona sia con backup completi che con singoli set esportati.</li>
+                        <li><strong>Sync Diretto (<i class="fa-solid fa-wifi"></i>):</strong> Trasferisci set e dati direttamente tra due dispositivi via connessione peer-to-peer (WebRTC).<br>
+                            - Un dispositivo preme <b>Invia</b> e mostra un QR code.<br>
+                            - L'altro preme <b>Ricevi</b> e scansiona il QR (o inserisce il codice).<br>
+                            - I dati viaggiano direttamente tra i due dispositivi.<br>
+                            - Ogni set ha anche il pulsante <i class="fa-solid fa-wifi"></i> per inviare solo quel set.<br>
+                            - La sincronizzazione &egrave; non distruttiva (merge).</li>
                         <li><strong>Firebase Sync (<i class="fa-solid fa-cloud"></i>):</strong> Sincronizzazione automatica dei dati pazienti tra dispositivi via Firebase Realtime Database.</li>
                     </ul>
                 </div>
@@ -419,9 +426,76 @@
         </div>
     </div>
 
+    <!-- MODAL: P2P SYNC -->
+    <div id="modal-p2p-sync" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:2000; justify-content:center; align-items:center;">
+        <div style="background:#1e1e2f; padding:25px; border-radius:20px; width:90%; max-width:420px; border:1px solid var(--glass-border); max-height:90vh; overflow-y:auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3 style="margin:0;"><i class="fa-solid fa-wifi"></i> Sync Diretto</h3>
+                <button class="btn-icon" onclick="closeP2PSync()" style="width:32px; height:32px;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <!-- Role selection -->
+            <div id="p2p-role-select">
+                <p style="color:#aaa; font-size:0.85rem; margin-bottom:15px;">Trasferisci set e dati direttamente tra due dispositivi via connessione peer-to-peer. Entrambi devono avere accesso a internet per la connessione iniziale, poi i dati viaggiano direttamente.</p>
+                <div style="display:flex; gap:10px; flex-direction:column;">
+                    <button class="btn btn-primary" onclick="startP2PSend('all')" style="padding:15px; font-size:1rem;">
+                        <i class="fa-solid fa-upload"></i> Invia Tutto
+                        <span style="display:block; font-size:0.75rem; opacity:0.7; margin-top:4px;">Set, pazienti, tag, template</span>
+                    </button>
+                    <button class="btn btn-ghost" onclick="startP2PReceive()" style="padding:15px; font-size:1rem;">
+                        <i class="fa-solid fa-download"></i> Ricevi
+                        <span style="display:block; font-size:0.75rem; opacity:0.7; margin-top:4px;">Scansiona QR o inserisci codice</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Sender panel -->
+            <div id="p2p-sender-panel" style="display:none; text-align:center;">
+                <div id="p2p-qr-container" style="margin:15px auto; background:white; padding:10px; border-radius:12px; display:inline-block;"></div>
+                <div style="margin:10px 0;">
+                    <span style="font-size:0.75rem; color:#888;">Codice:</span>
+                    <span id="p2p-sender-code" style="font-family:monospace; font-size:1.3rem; font-weight:bold; color:var(--accent-color); letter-spacing:2px; user-select:all;"></span>
+                </div>
+                <p id="p2p-sender-status" style="color:#aaa; font-size:0.85rem;"></p>
+            </div>
+
+            <!-- Receiver panel -->
+            <div id="p2p-receiver-panel" style="display:none;">
+                <p id="p2p-receiver-status" style="color:#aaa; font-size:0.85rem;"></p>
+                <div style="display:flex; gap:8px; margin:15px 0;">
+                    <button class="btn btn-primary" onclick="startQRScan()" style="flex:1;">
+                        <i class="fa-solid fa-qrcode"></i> Scansiona QR
+                    </button>
+                </div>
+                <div id="p2p-qr-scan-area" style="display:none; margin:10px 0; border-radius:12px; overflow:hidden;">
+                    <div id="p2p-qr-reader" style="width:100%;"></div>
+                </div>
+                <div style="display:flex; gap:8px; align-items:center; margin-top:10px;">
+                    <input type="text" id="p2p-manual-code" placeholder="Inserisci codice" style="flex:1; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-family:monospace; font-size:1rem; text-align:center; letter-spacing:2px;">
+                    <button class="btn btn-primary" onclick="connectToSender(document.getElementById('p2p-manual-code').value)" style="padding:10px 16px;">
+                        <i class="fa-solid fa-plug"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Progress panel -->
+            <div id="p2p-progress-panel" style="display:none; text-align:center;">
+                <div style="margin:20px 0; height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden;">
+                    <div id="p2p-progress-bar-fill" style="width:0%; height:100%; background:var(--accent-color); border-radius:4px; transition:width 0.3s;"></div>
+                </div>
+                <p id="p2p-progress-text" style="color:#aaa; font-size:0.9rem;"></p>
+            </div>
+        </div>
+    </div>
+
     <!-- Firebase SDK (compat for global scope) -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+    <!-- P2P Sync libs (PeerJS + QR) -->
+    <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
+    <script src="https://unpkg.com/qrcode@1.5.4/build/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/dist/html5-qrcode.min.js"></script>
 
     <!-- JS MODULES -->
     <script src="js/db.js"></script>
@@ -430,6 +504,7 @@
     <script src="js/editor.js"></script>
     <script src="js/game-modes.js"></script>
     <script src="js/backup.js"></script>
+    <script src="js/p2p-sync.js"></script>
     <script src="js/app.js"></script>
     <script src="js/firebase-sync.js"></script>
 </body>
