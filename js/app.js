@@ -3,6 +3,9 @@
 // --- INIT ---
 window.onload = async () => {
     try {
+        // Init tag image cache (IndexedDB + migrate from localStorage)
+        await initTagImageCache();
+
         state.savedSets = await DB.getAllSets();
         state.patients = await DB.getAllPatients();
 

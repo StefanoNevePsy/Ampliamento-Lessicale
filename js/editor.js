@@ -94,18 +94,42 @@ window.uploadTagImage = (tag) => {
     input.style.display = 'none';
     input.onchange = (e) => {
         if (e.target.files[0]) {
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                setTagImage(tag, ev.target.result);
+            // Compress image before saving (tag images display small)
+            compressImage(e.target.files[0], 128, 0.7, (compressedDataUrl) => {
+                setTagImage(tag, compressedDataUrl);
                 renderTagEditor(editingTags);
-            };
-            reader.readAsDataURL(e.target.files[0]);
+            });
         }
     };
     document.body.appendChild(input);
     input.click();
     setTimeout(() => document.body.removeChild(input), 1000);
 };
+
+// Compress image to maxSize px and quality (0-1)
+function compressImage(file, maxSize, quality, callback) {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let w = img.width, h = img.height;
+        if (w > h) { if (w > maxSize) { h = Math.round(h * maxSize / w); w = maxSize; } }
+        else { if (h > maxSize) { w = Math.round(w * maxSize / h); h = maxSize; } }
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(url);
+        callback(canvas.toDataURL('image/webp', quality));
+    };
+    img.onerror = () => {
+        URL.revokeObjectURL(url);
+        // Fallback: use FileReader
+        const reader = new FileReader();
+        reader.onload = (ev) => callback(ev.target.result);
+        reader.readAsDataURL(file);
+    };
+    img.src = url;
+}
 
 // --- SAVE EDITOR ---
 window.saveEditorChanges = () => {
@@ -152,6 +176,7 @@ function renderEditorList() {
 
         const hasAudio = item.audio ? '<i class="fa-solid fa-volume-high" style="color:var(--success-color); font-size:0.6rem;"></i>' : '';
         const hasZoom = item.zoomArea ? '<i class="fa-solid fa-crop" style="color:var(--warning-color); font-size:0.6rem;"></i>' : '';
+        const hasSeq = item.seqNumber ? `<i class="fa-solid fa-arrow-down-1-9" style="color:var(--accent-color); font-size:0.6rem;" title="Seq: ${item.seqNumber}"></i>` : '';
 
         return `
         <div class="editor-item" style="${activeStyle} ${opacityStyle} transition:0.2s; cursor:pointer;" onclick="setActiveItem(${idx})">
@@ -167,8 +192,14 @@ function renderEditorList() {
                     onfocus="setActiveItem(${idx})"
                     placeholder="Etichetta"
                     style="${item.hidden ? 'text-decoration:line-through; color:#888;' : ''}">
-                <div style="display:flex; gap:2px; margin-top:2px;">${hasAudio}${hasZoom}</div>
+                <div style="display:flex; gap:2px; margin-top:2px;">${hasAudio}${hasZoom}${hasSeq}</div>
             </div>
+            <input type="number" value="${item.seqNumber || ''}" min="1"
+                onchange="state.editingItems[${idx}].seqNumber=this.value?parseInt(this.value):null; renderEditorList();"
+                onclick="event.stopPropagation();"
+                placeholder="#"
+                title="N. Sequenza"
+                style="width:38px; padding:4px; border-radius:6px; background:${item.seqNumber ? 'rgba(99,102,241,0.2)' : 'rgba(0,0,0,0.2)'}; border:1px solid ${item.seqNumber ? 'var(--accent-color)' : 'var(--glass-border)'}; color:${item.seqNumber ? 'var(--accent-color)' : '#888'}; font-size:0.8rem; text-align:center; font-weight:bold;">
             <button class="btn btn-ghost" style="padding:6px;" onclick="triggerAudioUpload(${idx}); event.stopPropagation();" title="Carica Audio">
                 <i class="fa-solid fa-music" style="font-size:0.8rem; ${item.audio ? 'color:var(--success-color)' : 'opacity:0.4'}"></i>
             </button>

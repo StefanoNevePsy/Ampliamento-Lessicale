@@ -51,12 +51,12 @@ window.exportAllSets = async () => {
         }
 
         const fullBackup = {
-            version: 4,
+            version: 5,
             timestamp: new Date().toISOString(),
             device: navigator.userAgent,
             sets: sets || [],
             patients: patients || [],
-            tagImages: getAllTagImages(),
+            tagImages: getAllTagImages(), // from cache (backed by IndexedDB)
             quadernoLists: getSavedQuadernoLists(),
             sessionNames: getRecentSessionNames()
         };
@@ -103,11 +103,13 @@ window.importSets = (input) => {
                 if (data.patients && Array.isArray(data.patients)) {
                     for (const p of data.patients) { await DB.savePatient(p); patientsCount++; }
                 }
-                // Restore tag images if present
+                // Restore tag images if present (merge into IndexedDB)
                 if (data.tagImages && typeof data.tagImages === 'object') {
                     const existing = getAllTagImages();
                     const merged = { ...existing, ...data.tagImages };
-                    localStorage.setItem('tagImages', JSON.stringify(merged));
+                    await DB.importAllTagImages(merged);
+                    // Update in-memory cache
+                    Object.assign(_tagImageCache, merged);
                 }
                 // Restore quaderno lists if present
                 if (data.quadernoLists && Array.isArray(data.quadernoLists)) {

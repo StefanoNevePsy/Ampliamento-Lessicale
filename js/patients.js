@@ -628,6 +628,12 @@ function renderActivitiesTab(patient) {
         const typeLbl = getSessionTypeLabel(typeGroup);
         const chartId = 'activity-chart-' + item.key.replace(/[^a-zA-Z0-9]/g, '_');
 
+        // Check if this is a task analysis group with step data
+        const isTaskAnalysis = modeCode === 'quaderno_task';
+        const sessionsWithSteps = sessions.filter(s => s.taskSteps && s.taskSteps.length > 0);
+        const taskStepsAnalysisHtml = isTaskAnalysis && sessionsWithSteps.length > 0
+            ? renderTaskStepsAnalysis(sessionsWithSteps) : '';
+
         html += `
         <div class="chart-wrapper" style="margin-bottom:12px; border-left:3px solid ${typeColor};">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
@@ -643,6 +649,7 @@ function renderActivitiesTab(patient) {
                 </div>
             </div>
             <div id="${chartId}"></div>
+            ${taskStepsAnalysisHtml}
             <div class="activity-details-panel" style="display:none; margin-top:10px; border-top:1px solid rgba(255,255,255,0.05); padding-top:8px;">
                 <table style="width:100%; font-size:0.85rem; color:#ccc; border-collapse:collapse;">
                     <tr style="border-bottom:1px solid #444; text-align:left; color:#888; font-size:0.75rem;">
@@ -917,4 +924,92 @@ function downloadBlob(url, fileName) {
     a.click();
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+// ============================================================
+// TASK ANALYSIS - Per-step breakdown across sessions
+// ============================================================
+function renderTaskStepsAnalysis(sessions) {
+    // Get the template from the first session that has taskSteps
+    const template = sessions[0].taskSteps;
+    if (!template || template.length === 0) return '';
+
+    // Aggregate per-step across ALL sessions (excluding N/A)
+    const stepAggregates = template.map((tmplStep, stepIdx) => {
+        let totalV = 0, totalX = 0, totalP = 0, totalScored = 0;
+        sessions.forEach(session => {
+            if (session.taskSteps && session.taskSteps[stepIdx]) {
+                const step = session.taskSteps[stepIdx];
+                // Count each result from the results array, excluding N/A
+                (step.results || []).forEach(r => {
+                    if (r === true) { totalV++; totalScored++; }
+                    else if (r === false) { totalX++; totalScored++; }
+                    else if (r === 'prompt') { totalP++; totalScored++; }
+                    // r === 'na' is excluded
+                });
+            }
+        });
+        const pctCorrect = totalScored > 0 ? Math.round((totalV / totalScored) * 100) : 0;
+        const pctError = totalScored > 0 ? Math.round(((totalX + totalP) / totalScored) * 100) : 0;
+        return { name: tmplStep.name, totalV, totalX, totalP, totalScored, pctCorrect, pctError };
+    });
+
+    // Find steps with lowest correct percentage (problem areas)
+    const sorted = [...stepAggregates].filter(s => s.totalScored > 0).sort((a, b) => a.pctCorrect - b.pctCorrect);
+    const worstSteps = sorted.filter(s => s.pctCorrect < 90).slice(0, 3);
+
+    let html = `
+    <div style="margin-top:10px; padding:10px; background:rgba(245,158,11,0.05); border:1px solid rgba(245,158,11,0.15); border-radius:12px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+            <i class="fa-solid fa-list-check" style="color:var(--warning-color);"></i>
+            <span style="font-weight:bold; font-size:0.9rem; color:var(--warning-color);">Analisi per Passaggio</span>
+            <span style="font-size:0.7rem; color:var(--text-secondary);">(su ${sessions.length} sessioni)</span>
+        </div>`;
+
+    // Problem areas highlight
+    if (worstSteps.length > 0) {
+        html += `<div style="margin-bottom:10px; padding:8px; background:rgba(239,68,68,0.08); border-radius:8px; border:1px solid rgba(239,68,68,0.15);">
+            <div style="font-size:0.75rem; color:var(--danger-color); font-weight:bold; margin-bottom:4px;">
+                <i class="fa-solid fa-triangle-exclamation"></i> Passaggi critici:
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:4px;">
+                ${worstSteps.map(s => `<span style="display:inline-block; padding:2px 8px; border-radius:6px; font-size:0.75rem; background:rgba(239,68,68,0.12); color:var(--danger-color); border:1px solid rgba(239,68,68,0.2);">${s.name} <b>${s.pctCorrect}%</b></span>`).join('')}
+            </div>
+        </div>`;
+    }
+
+    // Per-step table
+    html += `<table style="width:100%; font-size:0.8rem; color:#ccc; border-collapse:collapse;">
+        <tr style="border-bottom:1px solid #444; color:#888; font-size:0.7rem;">
+            <th style="padding:4px; text-align:left;">#</th>
+            <th style="text-align:left;">Passaggio</th>
+            <th style="text-align:center;">V</th>
+            <th style="text-align:center;">X/P</th>
+            <th style="text-align:center;">Tot</th>
+            <th style="text-align:right;">%</th>
+        </tr>`;
+
+    stepAggregates.forEach((step, i) => {
+        const barWidth = step.pctCorrect;
+        const barColor = step.pctCorrect >= 90 ? 'var(--success-color)' : step.pctCorrect >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
+        html += `
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
+            <td style="padding:5px 4px; color:var(--text-secondary); font-weight:bold;">${i + 1}</td>
+            <td style="padding:5px 4px; font-weight:600;">${step.name}</td>
+            <td style="text-align:center; color:var(--success-color);">${step.totalV}</td>
+            <td style="text-align:center; color:var(--danger-color);">${step.totalX + step.totalP}</td>
+            <td style="text-align:center; color:var(--text-secondary);">${step.totalScored}</td>
+            <td style="text-align:right; width:90px;">
+                <div style="display:flex; align-items:center; gap:4px; justify-content:flex-end;">
+                    <div style="width:50px; height:6px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden;">
+                        <div style="width:${barWidth}%; height:100%; background:${barColor}; border-radius:3px;"></div>
+                    </div>
+                    <span style="font-weight:bold; color:${barColor}; min-width:30px; text-align:right;">${step.pctCorrect}%</span>
+                </div>
+            </td>
+        </tr>`;
+    });
+
+    html += `</table></div>`;
+    return html;
 }
