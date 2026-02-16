@@ -4,7 +4,22 @@ on:
   push:
     tags:
       - 'v*'
+    branches:
+      - main
+    paths:
+      - '.github/workflows/build.yml'
   workflow_dispatch:
+    inputs:
+      build_target:
+        description: 'Target da buildare'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - macos
+          - windows
+          - android
 
 jobs:
   # ==========================================

@@ -16,7 +16,8 @@
     "appId": "com.stimolatore.clinico",
     "productName": "Stimolatore Clinico",
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "build"
     },
     "files": [
       "index.html",
@@ -26,13 +27,21 @@
     ],
     "mac": {
       "category": "public.app-category.medical",
+      "icon": "build/icon.icns",
       "target": [
         "dmg"
       ]
     },
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         "nsis"
+      ]
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "target": [
+        "AppImage"
       ]
     },
     "nsis": {
