@@ -86,6 +86,20 @@ window.editSession = async (patientId, sessionIndex) => {
     if (newScore === null) return;
     const newTotal = prompt("Totale Item:", s.total);
     if (newTotal === null) return;
+
+    // Session type selection
+    const currentType = s.sessionType || 'independent';
+    const typeChoice = prompt("Tipo sessione (1 = Indipendente, 2 = Time Delay):", currentType === 'timedelay' ? '2' : '1');
+    if (typeChoice === null) return;
+    const newType = typeChoice.trim() === '2' ? 'timedelay' : 'independent';
+
+    let newTDSeconds = s.timeDelaySeconds || 5;
+    if (newType === 'timedelay') {
+        const tdInput = prompt("Secondi Time Delay:", newTDSeconds);
+        if (tdInput === null) return;
+        newTDSeconds = parseInt(tdInput) || 5;
+    }
+
     try {
         let d = new Date(newDateStr);
         if (isNaN(d.getTime())) throw "Data invalida";
@@ -94,6 +108,12 @@ window.editSession = async (patientId, sessionIndex) => {
     s.correct = parseInt(newScore);
     s.total = parseInt(newTotal);
     s.percentage = Math.round((s.correct / s.total) * 100);
+    s.sessionType = newType;
+    if (newType === 'timedelay') {
+        s.timeDelaySeconds = newTDSeconds;
+    } else {
+        delete s.timeDelaySeconds;
+    }
     await DB.savePatient(p);
     loadPatientData(patientId);
 };
