@@ -582,128 +582,187 @@ window.shuffleTopologia = () => {
     });
 };
 
-// --- SEQUENZE (Temporal Ordering) ---
+// --- SEQUENZE (Progressive number ordering with drag-to-slot) ---
 function renderSequenze(items, stage) {
-    const ordered = items.map((item, idx) => ({ ...item, originalIndex: idx }));
-    const shuffled = [...ordered].sort(() => Math.random() - 0.5);
-    state.sequenzeItems = shuffled;
-    state.sequenzeSelected = [];
+    // Use only items with seqNumber assigned, sorted by seqNumber
+    const numbered = items.filter(i => i.seqNumber && !i.hidden).sort((a, b) => a.seqNumber - b.seqNumber);
 
-    const cols = Math.ceil(Math.sqrt(shuffled.length));
-    const rows = Math.ceil(shuffled.length / cols);
+    if (numbered.length === 0) {
+        stage.innerHTML = `
+            <div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; opacity:0.5; text-align:center; padding:20px;">
+                <i class="fa-solid fa-arrow-down-1-9 fa-3x" style="margin-bottom:15px;"></i>
+                <p>Nessuna carta con numero di sequenza assegnato.<br>Nell'editor, usa il campo <b>#</b> per assegnare un numero progressivo alle carte.</p>
+            </div>`;
+        return;
+    }
+
+    // Store correct order (by seqNumber)
+    state.sequenzeCorrectOrder = numbered.map(item => ({ ...item }));
+    // Shuffle for presentation (one at a time)
+    state.sequenzeQueue = [...numbered].sort(() => Math.random() - 0.5);
+    state.sequenzePlacements = new Array(numbered.length).fill(null); // slot index -> item
+    state.sequenzeCurrentCard = 0;
+    state.sequenzeVerified = false;
+
+    renderSequenzeUI(stage);
+}
+
+function renderSequenzeUI(stage) {
+    const total = state.sequenzeCorrectOrder.length;
+    const placed = state.sequenzePlacements.filter(p => p !== null).length;
+    const currentIdx = state.sequenzeCurrentCard;
+    const queue = state.sequenzeQueue;
+    const verified = state.sequenzeVerified;
+
+    // Current card to place (if any remain)
+    const currentCard = currentIdx < queue.length ? queue[currentIdx] : null;
+    const allPlaced = placed === total;
 
     stage.innerHTML = `
     <div style="display:flex; height:100%; flex-direction:column;">
         <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
             <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
-                <i class="fa-solid fa-arrow-down-1-9"></i> Metti in ordine
+                <i class="fa-solid fa-arrow-down-1-9"></i> Sequenze
             </span>
-            <span style="color:var(--text-secondary); font-size:0.75rem;">Tocca le immagini nell'ordine corretto</span>
+            <span style="color:var(--text-secondary); font-size:0.75rem;">${placed}/${total} posizionate</span>
             <button class="btn btn-sm btn-ghost" onclick="resetSequenze()" style="padding:4px 10px; font-size:0.75rem;">
                 <i class="fa-solid fa-rotate-left"></i> Reset
             </button>
-            <button class="btn btn-sm btn-primary" onclick="checkSequenze()" style="padding:4px 10px; font-size:0.75rem;">
-                <i class="fa-solid fa-check"></i> Verifica
-            </button>
+            ${allPlaced && !verified ? `
+            <button class="btn btn-sm btn-success" onclick="checkSequenze()" style="padding:6px 16px; font-size:0.85rem; font-weight:bold;">
+                <i class="fa-solid fa-check-double"></i> Conferma
+            </button>` : ''}
         </div>
-        <div id="seq-grid" style="flex:1; min-height:0; padding:10px; display:grid;
-                    grid-template-columns:repeat(${cols}, 1fr);
-                    grid-template-rows:repeat(${rows}, minmax(80px, 1fr));
-                    gap:10px; overflow-y:auto;">
-            ${shuffled.map((item, idx) => `
-                <div class="card-grid" id="seq-${idx}" onclick="selectSequenze(${idx})"
-                     style="aspect-ratio:unset; height:auto; min-height:0; min-width:0; overflow:visible; cursor:pointer; position:relative;">
-                    <img src="${item.url || getPlaceholderUrl(item.label)}"
-                         style="max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain;"
-                         onerror="handleImgError(this, '${item.label}')">
-                    <div id="seq-badge-${idx}" style="display:none; position:absolute; top:-5px; left:-5px; background:var(--accent-color); color:white; width:28px; height:28px; border-radius:50%; font-weight:bold; font-size:0.85rem; align-items:center; justify-content:center; box-shadow:0 2px 8px rgba(0,0,0,0.4);"></div>
-                </div>
-            `).join('')}
+
+        <!-- Current card to place -->
+        ${currentCard && !allPlaced ? `
+        <div style="padding:15px; background:rgba(99,102,241,0.05); border-bottom:1px solid #ffffff10; display:flex; align-items:center; justify-content:center; gap:15px; flex-shrink:0;">
+            <span style="font-size:0.85rem; color:var(--accent-color); font-weight:bold;">Posiziona:</span>
+            <div style="background:white; border-radius:12px; padding:6px; box-shadow:0 4px 20px rgba(0,0,0,0.4); display:flex; align-items:center; gap:10px; border:3px solid var(--accent-color);">
+                <img src="${currentCard.url || getPlaceholderUrl(currentCard.label)}" style="width:60px; height:60px; object-fit:contain; border-radius:8px;" onerror="handleImgError(this, '${currentCard.label}')">
+                <span style="color:#333; font-weight:bold; padding-right:8px;">${currentCard.label}</span>
+            </div>
+        </div>` : ''}
+
+        ${allPlaced && !verified ? `
+        <div style="padding:10px; background:rgba(16,185,129,0.05); border-bottom:1px solid #ffffff10; text-align:center; flex-shrink:0;">
+            <span style="color:var(--success-color); font-weight:bold; font-size:0.9rem;">
+                <i class="fa-solid fa-hand-pointer"></i> Tutte posizionate! Puoi spostare le carte o premere <b>Conferma</b>.
+            </span>
+        </div>` : ''}
+
+        <!-- Slots grid -->
+        <div style="flex:1; min-height:0; padding:15px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; align-items:center;">
+            ${state.sequenzeCorrectOrder.map((_, slotIdx) => {
+                const placedItem = state.sequenzePlacements[slotIdx];
+                const isCorrect = verified && placedItem && placedItem.seqNumber === state.sequenzeCorrectOrder[slotIdx].seqNumber;
+                const isWrong = verified && placedItem && placedItem.seqNumber !== state.sequenzeCorrectOrder[slotIdx].seqNumber;
+                const slotBorder = verified ? (isCorrect ? '3px solid var(--success-color)' : isWrong ? '3px solid var(--danger-color)' : '2px dashed #555') : (placedItem ? '2px solid var(--accent-color)' : '2px dashed #555');
+                const slotBg = verified ? (isCorrect ? 'rgba(16,185,129,0.1)' : isWrong ? 'rgba(239,68,68,0.1)' : 'rgba(255,255,255,0.02)') : (placedItem ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.02)');
+                const slotShadow = verified ? (isCorrect ? '0 0 12px rgba(16,185,129,0.3)' : isWrong ? '0 0 12px rgba(239,68,68,0.3)' : 'none') : 'none';
+
+                return `
+                <div id="seq-slot-${slotIdx}" onclick="${!verified ? `placeInSlot(${slotIdx})` : ''}"
+                     style="width:100%; max-width:500px; min-height:70px; border:${slotBorder}; border-radius:14px; background:${slotBg};
+                            display:flex; align-items:center; gap:12px; padding:8px 12px; cursor:${!verified ? 'pointer' : 'default'}; transition:0.2s; box-shadow:${slotShadow};">
+                    <span style="width:32px; height:32px; border-radius:50%; background:rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:1rem; color:var(--text-secondary); flex-shrink:0;">${slotIdx + 1}</span>
+                    ${placedItem ? `
+                        <div style="background:white; border-radius:8px; padding:4px; flex-shrink:0;">
+                            <img src="${placedItem.url || getPlaceholderUrl(placedItem.label)}" style="width:50px; height:50px; object-fit:contain; border-radius:6px;" onerror="handleImgError(this, '${placedItem.label}')">
+                        </div>
+                        <span style="font-weight:bold; font-size:0.95rem; flex:1;">${placedItem.label}</span>
+                        ${!verified ? `<button onclick="event.stopPropagation(); removeFromSlot(${slotIdx})" style="width:30px; height:30px; border-radius:8px; border:1px solid rgba(239,68,68,0.3); background:transparent; color:var(--danger-color); cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0;" title="Rimuovi">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>` : ''}
+                        ${verified && isWrong ? `<span style="font-size:0.7rem; color:var(--danger-color); flex-shrink:0;"><i class="fa-solid fa-arrow-right"></i> ${state.sequenzeCorrectOrder[slotIdx].label}</span>` : ''}
+                    ` : `
+                        <span style="color:#555; font-size:0.85rem; font-style:italic;">Tocca per posizionare qui</span>
+                    `}
+                </div>`;
+            }).join('')}
         </div>
     </div>`;
 }
 
-window.selectSequenze = (idx) => {
-    // If already selected, deselect (remove from order)
-    const pos = state.sequenzeSelected.indexOf(idx);
-    if (pos >= 0) {
-        state.sequenzeSelected.splice(pos, 1);
-        // Rebuild all badges
-        state.sequenzeItems.forEach((_, i) => {
-            const badge = document.getElementById(`seq-badge-${i}`);
-            const card = document.getElementById(`seq-${i}`);
-            const selPos = state.sequenzeSelected.indexOf(i);
-            if (selPos >= 0) {
-                badge.style.display = 'flex';
-                badge.textContent = selPos + 1;
-                card.style.border = '2px solid var(--accent-color)';
-            } else {
-                badge.style.display = 'none';
-                card.style.border = '';
-                card.style.opacity = '1';
-            }
-        });
-        return;
+window.placeInSlot = (slotIdx) => {
+    if (state.sequenzeVerified) return;
+    const queue = state.sequenzeQueue;
+    const currentIdx = state.sequenzeCurrentCard;
+
+    // If slot already has an item, put it back in queue and replace
+    if (state.sequenzePlacements[slotIdx] !== null) {
+        // Remove existing item from slot, put back in queue
+        removeFromSlot(slotIdx);
     }
 
-    state.sequenzeSelected.push(idx);
-    const badge = document.getElementById(`seq-badge-${idx}`);
-    const card = document.getElementById(`seq-${idx}`);
-    badge.style.display = 'flex';
-    badge.textContent = state.sequenzeSelected.length;
-    card.style.border = '2px solid var(--accent-color)';
+    if (currentIdx >= queue.length) return; // No more cards
+
+    // Place current card in this slot
+    state.sequenzePlacements[slotIdx] = queue[currentIdx];
+    state.sequenzeCurrentCard++;
+
+    renderSequenzeUI(document.getElementById('game-stage'));
+};
+
+window.removeFromSlot = (slotIdx) => {
+    if (state.sequenzeVerified) return;
+    const removed = state.sequenzePlacements[slotIdx];
+    if (!removed) return;
+
+    state.sequenzePlacements[slotIdx] = null;
+    // Put it back as current card (insert at current position)
+    state.sequenzeCurrentCard--;
+    state.sequenzeQueue.splice(state.sequenzeCurrentCard, 0, removed);
+    // Remove duplicate if it was already in queue
+    const dupIdx = state.sequenzeQueue.findIndex((item, i) => i !== state.sequenzeCurrentCard && item.seqNumber === removed.seqNumber);
+    if (dupIdx >= 0) state.sequenzeQueue.splice(dupIdx, 1);
+
+    renderSequenzeUI(document.getElementById('game-stage'));
 };
 
 window.resetSequenze = () => {
-    state.sequenzeSelected = [];
-    state.sequenzeItems.forEach((_, i) => {
-        const badge = document.getElementById(`seq-badge-${i}`);
-        const card = document.getElementById(`seq-${i}`);
-        if (badge) badge.style.display = 'none';
-        if (card) {
-            card.style.border = '';
-            card.style.opacity = '1';
-            card.style.boxShadow = '';
-        }
-    });
+    if (state.sequenzeVerified) {
+        state.sequenzeVerified = false;
+    }
+    state.sequenzePlacements = new Array(state.sequenzeCorrectOrder.length).fill(null);
+    state.sequenzeQueue = [...state.sequenzeCorrectOrder].sort(() => Math.random() - 0.5);
+    state.sequenzeCurrentCard = 0;
+    renderSequenzeUI(document.getElementById('game-stage'));
 };
 
 window.checkSequenze = () => {
-    if (state.sequenzeSelected.length !== state.sequenzeItems.length) {
-        alert(`Seleziona tutti gli item (${state.sequenzeSelected.length}/${state.sequenzeItems.length})`);
+    // Check that all slots are filled
+    const allPlaced = state.sequenzePlacements.every(p => p !== null);
+    if (!allPlaced) {
+        alert('Posiziona tutte le carte prima di confermare.');
         return;
     }
 
+    state.sequenzeVerified = true;
+
+    // Count correct placements
     let correct = 0;
-    state.sequenzeSelected.forEach((shuffledIdx, userPos) => {
-        const item = state.sequenzeItems[shuffledIdx];
-        const card = document.getElementById(`seq-${shuffledIdx}`);
-        const badge = document.getElementById(`seq-badge-${shuffledIdx}`);
-        if (item.originalIndex === userPos) {
+    state.sequenzePlacements.forEach((placed, slotIdx) => {
+        if (placed && placed.seqNumber === state.sequenzeCorrectOrder[slotIdx].seqNumber) {
             correct++;
-            card.style.border = '3px solid var(--success-color)';
-            card.style.boxShadow = '0 0 15px rgba(16,185,129,0.4)';
-            badge.style.background = 'var(--success-color)';
-        } else {
-            card.style.border = '3px solid var(--danger-color)';
-            card.style.boxShadow = '0 0 15px rgba(239,68,68,0.4)';
-            badge.style.background = 'var(--danger-color)';
         }
     });
 
     // Record score in session
     if (state.session.active) {
         state.session.correct = correct;
-        state.session.total = state.sequenzeItems.length;
+        state.session.total = state.sequenzeCorrectOrder.length;
         state.session.incorrect = state.session.total - correct;
         state.session.itemResults = {};
-        state.sequenzeSelected.forEach((shuffledIdx, userPos) => {
-            state.session.itemResults[userPos] = state.sequenzeItems[shuffledIdx].originalIndex === userPos;
+        state.sequenzePlacements.forEach((placed, slotIdx) => {
+            state.session.itemResults[slotIdx] = placed && placed.seqNumber === state.sequenzeCorrectOrder[slotIdx].seqNumber;
         });
         updateScoreUI();
         document.getElementById('btn-save-session').classList.remove('hidden');
         if (typeof showSessionNameInput === 'function') showSessionNameInput();
     }
+
+    renderSequenzeUI(document.getElementById('game-stage'));
 };
 
 // --- CATEGORIZZAZIONE (Sorting by Tag) ---
@@ -1096,6 +1155,8 @@ window.openQuadernoSheet = (type) => {
         state._quadernoType = 'task';
         state._quadernoSteps = [];
         state._quadernoName = '';
+        state._taskCurrentStep = 0;
+        state._taskCycleCount = 0;
         renderQuadernoTask(content);
     }
 };
@@ -1113,6 +1174,8 @@ window.loadQuadernoList = (name) => {
     if (list.type === 'task') {
         state._quadernoType = 'task';
         state._quadernoSteps = list.items.map(item => ({ ...item, results: [] }));
+        state._taskCurrentStep = 0;
+        state._taskCycleCount = 0;
         renderQuadernoTask(content);
     } else {
         state._quadernoType = 'general';
@@ -1312,55 +1375,104 @@ function getUsedActivityNames() {
 // Save quaderno: uses dropdown type, no modal needed
 window.saveQuadernoSession = async () => {
     if (!state.activePatientId) return alert("Seleziona prima un paziente.");
-    const rows = state._quadernoType === 'task' ? state._quadernoSteps : state._quadernoRows;
-    const scoredRows = rows.filter(r => r.results && r.results.length > 0);
-    if (scoredRows.length === 0) return alert("Nessun LU registrato.");
-
     const p = state.patients.find(x => x.id === state.activePatientId);
     if (!p) return;
 
     const type = getQuadernoSessionType();
     const tdSeconds = getQuadernoTDSeconds();
-
     if (!p.history) p.history = [];
     const now = new Date().toISOString();
-    let totalLU = 0, totalCorrect = 0;
 
-    scoredRows.forEach(row => {
-        const res = row.results;
-        const rawV = res.filter(v => v === true).length;
-        const rawP = res.filter(v => v === 'prompt').length;
-        const rawX = res.filter(v => v === false).length;
-        const total = rawV + rawP + rawX;
-        if (total === 0) return;
+    if (state._quadernoType === 'task') {
+        // Task Analysis: save as ONE session with all step details, exclude N/A from totals
+        const steps = state._quadernoSteps || [];
+        let totalScored = 0, totalCorrect = 0, totalP = 0, totalX = 0;
+        const taskSteps = [];
 
-        const correct = rawV; // In both modes, only V = correct
+        steps.forEach(step => {
+            const res = step.results || [];
+            const vCount = res.filter(r => r === true).length;
+            const pCount = res.filter(r => r === 'prompt').length;
+            const xCount = res.filter(r => r === false).length;
+            const naCount = res.filter(r => r === 'na').length;
+            const scored = vCount + pCount + xCount; // N/A excluded
+            totalScored += scored;
+            totalCorrect += vCount;
+            totalP += pCount;
+            totalX += xCount;
+            taskSteps.push({ name: step.name, results: [...res], v: vCount, p: pCount, x: xCount, na: naCount, scored });
+        });
 
-        totalLU += total;
-        totalCorrect += correct;
+        if (totalScored === 0) return alert("Nessun LU registrato (esclusi N/A).");
+
+        const nameInput = document.getElementById('quaderno-name-input');
+        const taskName = (nameInput ? nameInput.value.trim() : '') || 'Task Analysis';
 
         const sessionData = {
             date: now,
-            setId: 'quaderno_' + row.name.replace(/\s+/g, '_').toLowerCase() + '_' + Date.now(),
-            setName: row.name,
-            mode: state._quadernoType === 'task' ? 'quaderno_task' : 'quaderno',
-            correct: correct,
-            prompts: rawP,
-            total: total,
-            percentage: Math.round((correct / total) * 100),
+            setId: 'quaderno_task_' + taskName.replace(/\s+/g, '_').toLowerCase() + '_' + Date.now(),
+            setName: taskName,
+            mode: 'quaderno_task',
+            correct: totalCorrect,
+            prompts: totalP,
+            total: totalScored,
+            percentage: Math.round((totalCorrect / totalScored) * 100),
             sessionType: type,
-            rawV: rawV,
-            rawP: rawP,
-            rawX: rawX
+            rawV: totalCorrect,
+            rawP: totalP,
+            rawX: totalX,
+            taskSteps: taskSteps // Per-step detail for dashboard analysis
         };
         if (type === 'timedelay') {
             sessionData.timeDelaySeconds = tdSeconds;
         }
         p.history.push(sessionData);
-    });
 
-    await DB.savePatient(p);
-    alert(`Sessione salvata!\n${totalLU} LU, ${totalCorrect} corrette (${totalLU > 0 ? Math.round((totalCorrect/totalLU)*100) : 0}%)`);
+        await DB.savePatient(p);
+        alert(`Task Analysis salvata!\n${totalScored} LU (escl. N/A), ${totalCorrect} corrette (${Math.round((totalCorrect/totalScored)*100)}%)\nCicli completati: ${(state._taskCycleCount || 0) + (state._taskCurrentStep > 0 ? 1 : 0)}`);
+
+    } else {
+        // General Quaderno: save each row as a separate session (original behavior)
+        const rows = state._quadernoRows || [];
+        const scoredRows = rows.filter(r => r.results && r.results.length > 0);
+        if (scoredRows.length === 0) return alert("Nessun LU registrato.");
+
+        let totalLU = 0, totalCorrect = 0;
+
+        scoredRows.forEach(row => {
+            const res = row.results;
+            const rawV = res.filter(v => v === true).length;
+            const rawP = res.filter(v => v === 'prompt').length;
+            const rawX = res.filter(v => v === false).length;
+            const total = rawV + rawP + rawX;
+            if (total === 0) return;
+
+            totalLU += total;
+            totalCorrect += rawV;
+
+            const sessionData = {
+                date: now,
+                setId: 'quaderno_' + row.name.replace(/\s+/g, '_').toLowerCase() + '_' + Date.now(),
+                setName: row.name,
+                mode: 'quaderno',
+                correct: rawV,
+                prompts: rawP,
+                total: total,
+                percentage: Math.round((rawV / total) * 100),
+                sessionType: type,
+                rawV: rawV,
+                rawP: rawP,
+                rawX: rawX
+            };
+            if (type === 'timedelay') {
+                sessionData.timeDelaySeconds = tdSeconds;
+            }
+            p.history.push(sessionData);
+        });
+
+        await DB.savePatient(p);
+        alert(`Sessione salvata!\n${totalLU} LU, ${totalCorrect} corrette (${totalLU > 0 ? Math.round((totalCorrect/totalLU)*100) : 0}%)`);
+    }
 };
 
 // Save quaderno template for reuse
@@ -1395,12 +1507,23 @@ window.saveQuadernoTemplate = () => {
 };
 
 // ============================================================
-// QUADERNO TASK ANALYSIS
+// QUADERNO TASK ANALYSIS (one LU per step, auto-repeat cycles)
 // ============================================================
 function renderQuadernoTask(container) {
     const steps = state._quadernoSteps || [];
     const savedNames = getSavedQuadernoLists().filter(l => l.type === 'task').map(l => l.name);
     const qType = getQuadernoSessionType();
+    const currentStep = state._taskCurrentStep || 0;
+    const cycleCount = state._taskCycleCount || 0;
+
+    // Compute totals excluding N/A
+    let totalScored = 0, totalCorrect = 0;
+    steps.forEach(step => {
+        (step.results || []).forEach(r => {
+            if (r !== 'na') { totalScored++; if (r === true) totalCorrect++; }
+        });
+    });
+    const pct = totalScored > 0 ? Math.round((totalCorrect / totalScored) * 100) : 0;
 
     container.innerHTML = `
     <div style="width:100%; max-width:700px; margin:0 auto;">
@@ -1413,15 +1536,17 @@ function renderQuadernoTask(container) {
             </datalist>
         </div>
 
-        <!-- Legend -->
-        <div style="display:flex; gap:12px; margin-bottom:10px; font-size:0.75rem; color:var(--text-secondary); justify-content:center;">
+        <!-- Legend + Cycle counter -->
+        <div style="display:flex; gap:12px; margin-bottom:10px; font-size:0.75rem; color:var(--text-secondary); justify-content:center; align-items:center; flex-wrap:wrap;">
             ${qType === 'independent' ? '<span><span style="color:var(--danger-color);">X</span> = Errore</span>' : '<span><span style="color:var(--warning-color);">P</span> = Prompt</span>'}
             <span><span style="color:var(--success-color);">V</span> = Corretto</span>
             <span><span style="color:#888;">N/A</span> = Non Applicabile</span>
+            ${cycleCount > 0 ? `<span style="background:rgba(99,102,241,0.2); color:var(--accent-color); padding:2px 10px; border-radius:8px; font-weight:bold;">Ciclo ${cycleCount + 1}</span>` : ''}
+            ${totalScored > 0 ? `<span style="background:rgba(${pct >= 90 ? '16,185,129' : '255,255,255'},0.15); color:${pct >= 90 ? 'var(--success-color)' : '#ccc'}; padding:2px 10px; border-radius:8px; font-weight:bold;">${totalCorrect}/${totalScored} (${pct}%)</span>` : ''}
         </div>
 
         <div id="quaderno-steps-list">
-            ${steps.map((step, i) => renderQuadernoTaskStep(step, i, qType)).join('')}
+            ${steps.map((step, i) => renderQuadernoTaskStep(step, i, qType, i === currentStep && steps.length > 0)).join('')}
         </div>
 
         <div style="display:flex; gap:6px; margin-top:10px; align-items:center; flex-wrap:wrap;">
@@ -1444,7 +1569,10 @@ function renderQuadernoTask(container) {
             </button>
         </div>
 
-        <div style="display:flex; gap:8px; margin-top:15px; justify-content:center;">
+        <div style="display:flex; gap:8px; margin-top:15px; justify-content:center; flex-wrap:wrap;">
+            <button class="btn btn-ghost" onclick="undoLastTaskStep()" style="padding:10px 20px;" ${totalScored === 0 ? 'disabled style="padding:10px 20px; opacity:0.3;"' : ''}>
+                <i class="fa-solid fa-rotate-left"></i> Annulla Ultimo
+            </button>
             <button class="btn btn-success" onclick="saveQuadernoSession()" style="padding:10px 20px;">
                 <i class="fa-solid fa-floppy-disk"></i> Salva Sessione
             </button>
@@ -1453,67 +1581,132 @@ function renderQuadernoTask(container) {
             </button>
         </div>
     </div>`;
+
+    // Auto-scroll to active step
+    if (steps.length > 0) {
+        setTimeout(() => {
+            const activeEl = document.getElementById('task-step-' + currentStep);
+            if (activeEl) activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
+    }
 }
 
-function renderQuadernoTaskStep(step, idx, sessionType) {
+function renderQuadernoTaskStep(step, idx, sessionType, isActive) {
     const res = step.results || [];
     const xCount = res.filter(r => r === false).length;
     const pCount = res.filter(r => r === 'prompt').length;
     const vCount = res.filter(r => r === true).length;
     const naCount = res.filter(r => r === 'na').length;
+    const scoredCount = res.filter(r => r !== 'na').length;
     const total = res.length;
     const isTD = sessionType === 'timedelay';
 
-    // Independent: X + V + N/A, Time Delay: P + V + N/A
-    const leftBtn = isTD ? `
-            <div style="display:flex; flex-direction:column; align-items:center; gap:3px;">
-                <span style="font-size:0.75rem; font-weight:bold; color:var(--warning-color);">${pCount}</span>
-                <button onclick="addQuadernoLU(${idx}, 'prompt')" style="width:48px; height:48px; border-radius:50%; border:2px solid var(--warning-color); background:rgba(245,158,11,0.15); color:var(--warning-color); cursor:pointer; font-size:0.95rem; font-weight:800; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
-                    P
-                </button>
-            </div>` : `
-            <div style="display:flex; flex-direction:column; align-items:center; gap:3px;">
-                <span style="font-size:0.75rem; font-weight:bold; color:var(--danger-color);">${xCount}</span>
-                <button onclick="addQuadernoLU(${idx}, false)" style="width:48px; height:48px; border-radius:50%; border:2px solid var(--danger-color); background:rgba(239,68,68,0.15); color:var(--danger-color); cursor:pointer; font-size:1.1rem; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>`;
+    // Show last result icon for completed steps
+    const lastResult = res.length > 0 ? res[res.length - 1] : null;
+    const lastIcon = lastResult === true ? '<i class="fa-solid fa-check" style="color:var(--success-color);"></i>'
+        : lastResult === false ? '<i class="fa-solid fa-xmark" style="color:var(--danger-color);"></i>'
+        : lastResult === 'prompt' ? '<span style="color:var(--warning-color); font-weight:800;">P</span>'
+        : lastResult === 'na' ? '<span style="color:#888; font-size:0.7rem;">N/A</span>' : '';
+
+    const activeBorder = isActive ? 'border:2px solid var(--accent-color); background:rgba(99,102,241,0.1);' : 'border:1px solid var(--glass-border); background:rgba(255,255,255,0.05);';
+    const activeGlow = isActive ? 'box-shadow:0 0 12px rgba(99,102,241,0.3);' : '';
+
+    // Only show buttons for active step
+    const buttonsHtml = isActive ? `
+        <div style="display:flex; gap:10px; justify-content:center; align-items:stretch; margin-top:6px;">
+            ${isTD ? `
+            <button onclick="taskStepScore('prompt')" style="width:56px; height:56px; border-radius:50%; border:2px solid var(--warning-color); background:rgba(245,158,11,0.15); color:var(--warning-color); cursor:pointer; font-size:1rem; font-weight:800; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
+                P
+            </button>` : `
+            <button onclick="taskStepScore(false)" style="width:56px; height:56px; border-radius:50%; border:2px solid var(--danger-color); background:rgba(239,68,68,0.15); color:var(--danger-color); cursor:pointer; font-size:1.2rem; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
+                <i class="fa-solid fa-xmark"></i>
+            </button>`}
+            <button onclick="taskStepScore(true)" style="width:56px; height:56px; border-radius:50%; border:2px solid var(--success-color); background:rgba(16,185,129,0.15); color:var(--success-color); cursor:pointer; font-size:1.2rem; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
+                <i class="fa-solid fa-check"></i>
+            </button>
+            <button onclick="taskStepScore('na')" style="width:56px; height:56px; border-radius:14px; border:1px solid #666; background:transparent; color:#888; cursor:pointer; font-size:0.7rem; font-weight:bold; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
+                N/A
+            </button>
+        </div>` : '';
+
+    // Summary line for non-active steps (show counts)
+    const summaryHtml = !isActive && total > 0 ? `
+        <div style="display:flex; gap:8px; justify-content:center; font-size:0.75rem; margin-top:4px;">
+            ${vCount > 0 ? `<span style="color:var(--success-color);">V:${vCount}</span>` : ''}
+            ${isTD && pCount > 0 ? `<span style="color:var(--warning-color);">P:${pCount}</span>` : ''}
+            ${!isTD && xCount > 0 ? `<span style="color:var(--danger-color);">X:${xCount}</span>` : ''}
+            ${naCount > 0 ? `<span style="color:#888;">N/A:${naCount}</span>` : ''}
+        </div>` : '';
 
     return `
-    <div style="display:flex; flex-direction:column; gap:6px; padding:12px 14px; margin-bottom:8px; background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); border-radius:14px; transition:0.2s;">
+    <div id="task-step-${idx}" style="display:flex; flex-direction:column; gap:4px; padding:12px 14px; margin-bottom:8px; ${activeBorder} border-radius:14px; transition:0.2s; ${activeGlow}">
         <div style="display:flex; align-items:center; gap:8px;">
-            <span style="width:26px; height:26px; border-radius:50%; background:rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center; font-size:0.8rem; font-weight:bold; color:var(--text-secondary); flex-shrink:0;">${idx + 1}</span>
+            <span style="width:28px; height:28px; border-radius:50%; background:${isActive ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)'}; display:flex; align-items:center; justify-content:center; font-size:0.85rem; font-weight:bold; color:${isActive ? 'white' : 'var(--text-secondary)'}; flex-shrink:0;">${idx + 1}</span>
             <span style="flex:1; font-size:1.05rem; font-weight:700;">${step.name}</span>
-            <span style="background:rgba(99,102,241,0.2); color:var(--accent-color); padding:3px 10px; border-radius:8px; font-size:0.85rem; font-weight:bold; min-width:35px; text-align:center;" title="Totale LU">${total}</span>
-            <button onclick="undoQuadernoResult(${idx})" style="width:34px; height:34px; border-radius:10px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.05); color:var(--text-secondary); cursor:pointer; font-size:0.85rem; display:flex; align-items:center; justify-content:center;" title="Annulla ultimo" ${total === 0 ? 'disabled style="opacity:0.3; width:34px; height:34px; border-radius:10px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.05); color:var(--text-secondary); cursor:default; font-size:0.85rem; display:flex; align-items:center; justify-content:center;"' : ''}>
-                <i class="fa-solid fa-rotate-left"></i>
-            </button>
-            <button onclick="removeQuadernoRow(${idx})" style="width:34px; height:34px; border-radius:10px; border:none; background:transparent; color:#666; cursor:pointer; font-size:0.85rem; display:flex; align-items:center; justify-content:center;" title="Rimuovi riga">
+            ${lastIcon ? `<span style="font-size:1rem;">${lastIcon}</span>` : ''}
+            ${scoredCount > 0 ? `<span style="background:rgba(99,102,241,0.2); color:var(--accent-color); padding:2px 8px; border-radius:8px; font-size:0.75rem; font-weight:bold;">${scoredCount}</span>` : ''}
+            <button onclick="removeQuadernoRow(${idx})" style="width:28px; height:28px; border-radius:8px; border:none; background:transparent; color:#555; cursor:pointer; font-size:0.75rem; display:flex; align-items:center; justify-content:center;" title="Rimuovi">
                 <i class="fa-solid fa-trash"></i>
             </button>
         </div>
-        <div style="display:flex; gap:10px; justify-content:center; align-items:stretch;">
-            ${leftBtn}
-            <div style="display:flex; flex-direction:column; align-items:center; gap:3px;">
-                <span style="font-size:0.75rem; font-weight:bold; color:var(--success-color);">${vCount}</span>
-                <button onclick="addQuadernoLU(${idx}, true)" style="width:48px; height:48px; border-radius:50%; border:2px solid var(--success-color); background:rgba(16,185,129,0.15); color:var(--success-color); cursor:pointer; font-size:1.1rem; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
-                    <i class="fa-solid fa-check"></i>
-                </button>
-            </div>
-            <div style="display:flex; flex-direction:column; align-items:center; gap:3px;">
-                <span style="font-size:0.75rem; font-weight:bold; color:#888;">${naCount}</span>
-                <button onclick="addQuadernoLU(${idx}, 'na')" style="width:48px; height:48px; border-radius:12px; border:1px solid #666; background:${naCount > 0 ? 'rgba(128,128,128,0.2)' : 'transparent'}; color:#888; cursor:pointer; font-size:0.65rem; font-weight:bold; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
-                    N/A
-                </button>
-            </div>
-        </div>
+        ${buttonsHtml}
+        ${summaryHtml}
     </div>`;
 }
+
+// Score the current active task step and auto-advance
+window.taskStepScore = (result) => {
+    const steps = state._quadernoSteps;
+    if (!steps || steps.length === 0) return;
+    const idx = state._taskCurrentStep || 0;
+
+    if (!steps[idx].results) steps[idx].results = [];
+    steps[idx].results.push(result);
+
+    // Advance to next step
+    const nextIdx = idx + 1;
+    if (nextIdx >= steps.length) {
+        // Cycle complete - restart from first step
+        state._taskCurrentStep = 0;
+        state._taskCycleCount = (state._taskCycleCount || 0) + 1;
+    } else {
+        state._taskCurrentStep = nextIdx;
+    }
+
+    renderQuadernoTask(document.getElementById('quaderno-content'));
+};
+
+// Undo last scored task step (go back one)
+window.undoLastTaskStep = () => {
+    const steps = state._quadernoSteps;
+    if (!steps || steps.length === 0) return;
+
+    // Find the last step that has results by walking backwards from current position
+    let currentStep = state._taskCurrentStep || 0;
+    let cycleCount = state._taskCycleCount || 0;
+
+    // The previous step is (currentStep - 1), wrapping to end of list
+    let prevStep;
+    if (currentStep === 0) {
+        prevStep = steps.length - 1;
+        if (cycleCount > 0) cycleCount--;
+    } else {
+        prevStep = currentStep - 1;
+    }
+
+    if (steps[prevStep].results && steps[prevStep].results.length > 0) {
+        steps[prevStep].results.pop();
+        state._taskCurrentStep = prevStep;
+        state._taskCycleCount = cycleCount;
+        renderQuadernoTask(document.getElementById('quaderno-content'));
+    }
+};
 
 window.addQuadernoStep = () => {
     const input = document.getElementById('quaderno-new-step');
     const name = input.value.trim();
     if (!name) return;
+    if (!state._quadernoSteps) state._quadernoSteps = [];
     state._quadernoSteps.push({ name, results: [] });
     input.value = '';
     renderQuadernoTask(document.getElementById('quaderno-content'));

@@ -56,24 +56,53 @@ let state = {
     zoomIndex: 0
 };
 
-// --- TAG IMAGE HELPERS (stored in localStorage) ---
+// --- TAG IMAGE HELPERS (IndexedDB with in-memory cache) ---
+// Cache loaded on app init - sync read, async write
+let _tagImageCache = {};
+
+async function initTagImageCache() {
+    try {
+        _tagImageCache = await DB.getAllTagImages();
+        // Migrate from localStorage if any exist there
+        try {
+            const lsData = localStorage.getItem('tagImages');
+            if (lsData) {
+                const lsMap = JSON.parse(lsData);
+                const lsKeys = Object.keys(lsMap);
+                if (lsKeys.length > 0) {
+                    let migrated = 0;
+                    for (const key of lsKeys) {
+                        if (!_tagImageCache[key]) {
+                            _tagImageCache[key] = lsMap[key];
+                            migrated++;
+                        }
+                    }
+                    if (migrated > 0) {
+                        await DB.importAllTagImages(_tagImageCache);
+                    }
+                    localStorage.removeItem('tagImages');
+                    console.log(`Migrated ${migrated} tag images from localStorage to IndexedDB`);
+                }
+            }
+        } catch(e) { console.warn('Tag image migration:', e); }
+    } catch(e) {
+        console.error('Error loading tag image cache:', e);
+        _tagImageCache = {};
+    }
+}
+
 function getTagImage(tag) {
-    try { return JSON.parse(localStorage.getItem('tagImages') || '{}')[tag.toLowerCase().trim()] || null; }
-    catch(e) { return null; }
+    return _tagImageCache[tag.toLowerCase().trim()] || null;
 }
 
 function setTagImage(tag, dataUrl) {
-    try {
-        const key = tag.toLowerCase().trim();
-        const map = JSON.parse(localStorage.getItem('tagImages') || '{}');
-        map[key] = dataUrl;
-        localStorage.setItem('tagImages', JSON.stringify(map));
-    } catch(e) { console.error('Error saving tag image:', e); }
+    const key = tag.toLowerCase().trim();
+    _tagImageCache[key] = dataUrl;
+    DB.saveTagImage(key, dataUrl).catch(e => console.error('Error saving tag image:', e));
 }
 
 function getAllTagImages() {
-    try { return JSON.parse(localStorage.getItem('tagImages') || '{}'); }
-    catch(e) { return {}; }
+    return { ..._tagImageCache };
 }
 
 // --- CUSTOM SESSION NAMES (stored in localStorage) ---
