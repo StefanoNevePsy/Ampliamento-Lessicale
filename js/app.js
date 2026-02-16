@@ -284,6 +284,7 @@ window.startGame = () => {
 
     state.tactIndex = 0;
     state.ranIndex = 0;
+    state.session.playItems = playItems; // Store for per-item detail tracking
 
     const undoBtn = document.getElementById('btn-undo-marker');
     if (mode === 'search_find' || mode === 'intraverbal_scenari') undoBtn.classList.remove('hidden'); else undoBtn.classList.add('hidden');
@@ -438,6 +439,23 @@ window.confirmSaveSession = async () => {
 
     if (type === 'timedelay') {
         sessionData.timeDelaySeconds = getSelectedTDSeconds();
+    }
+
+    // Save per-item details for modes with labeled items
+    const playItems = state.session.playItems || [];
+    if (playItems.length > 0 && Object.keys(state.session.itemResults).length > 0) {
+        const itemDetails = [];
+        for (const [key, result] of Object.entries(state.session.itemResults)) {
+            const idx = parseInt(key);
+            const item = !isNaN(idx) ? playItems[idx] : null;
+            const label = item ? (item.label || item.l || `Item ${idx + 1}`) : null;
+            if (label) {
+                itemDetails.push({ label, result });
+            }
+        }
+        if (itemDetails.length > 0) {
+            sessionData.itemDetails = itemDetails;
+        }
     }
 
     if (!p.history) p.history = [];
