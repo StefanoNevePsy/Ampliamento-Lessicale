@@ -211,6 +211,9 @@ window.loadSelectedSet = async (setId) => {
 
 // --- START GAME ---
 window.startGame = () => {
+    // Clean up any active fluenza timer
+    if (state.fluenzaTimerInterval) { clearInterval(state.fluenzaTimerInterval); state.fluenzaTimerInterval = null; }
+
     const mode = document.getElementById('mode-select').value;
     const isPoolMode = POOL_MODES.includes(mode);
     const numStimuli = parseInt(document.getElementById('num-stimuli').value);
@@ -266,7 +269,12 @@ window.startGame = () => {
 
     state.session = { correct: 0, incorrect: 0, total: 0, active: true, itemResults: {} };
     updateScoreUI();
-    document.getElementById('scoring-controls').classList.remove('hidden');
+    // Fluenza has its own built-in controls
+    if (mode === 'fluenza') {
+        document.getElementById('scoring-controls').classList.add('hidden');
+    } else {
+        document.getElementById('scoring-controls').classList.remove('hidden');
+    }
     document.getElementById('btn-save-session').classList.add('hidden');
 
     let playItems = state.items.filter(i => !i.hidden);
@@ -378,7 +386,7 @@ function getSelectedTDSeconds() {
 // --- KEYBOARD SHORTCUTS ---
 function handleShortcuts(e) {
     const mode = document.getElementById('mode-select').value;
-    if (state.session.active && !['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
+    if (state.session.active && mode !== 'fluenza' && !['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
         const type = getSelectedSessionType();
         if (e.key.toLowerCase() === 'v') recordResponse(true);
         if (type === 'independent' && e.key.toLowerCase() === 'x') recordResponse(false);
@@ -387,6 +395,10 @@ function handleShortcuts(e) {
     if (mode === 'ran' && state.ranMode === 'single') {
         if (e.key === 'ArrowRight') nextRan();
         if (e.key === 'ArrowLeft') prevRan();
+    }
+    if (mode === 'fluenza') {
+        if (e.key === 'ArrowRight') fluenzaNext();
+        if (e.key.toLowerCase() === 'x') fluenzaMarkError();
     }
     if (mode === 'search_find' || mode === 'intraverbal_scenari') {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') removeLastMarker();
@@ -442,6 +454,18 @@ window.confirmSaveSession = async () => {
 
     if (type === 'timedelay') {
         sessionData.timeDelaySeconds = getSelectedTDSeconds();
+    }
+
+    // Fluenza: store duration and use count-based scoring
+    if (mode === 'fluenza') {
+        sessionData.fluenzaDuration = state.fluenzaTimerDuration;
+        sessionData.correct = state.fluenzaCount - state.fluenzaErrors;
+        sessionData.total = state.fluenzaCount;
+        sessionData.rawV = sessionData.correct;
+        sessionData.rawX = state.fluenzaErrors;
+        sessionData.rawP = 0;
+        sessionData.prompts = 0;
+        sessionData.percentage = sessionData.total > 0 ? Math.round((sessionData.correct / sessionData.total) * 100) : 0;
     }
 
     // Save per-item details for modes with labeled items

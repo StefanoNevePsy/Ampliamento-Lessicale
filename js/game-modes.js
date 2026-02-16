@@ -16,6 +16,7 @@ function renderGameMode(mode, items) {
     if (window._topoCleanup) { window._topoCleanup(); window._topoCleanup = null; }
     if (mode === 'tact') renderTact(items, stage);
     else if (mode === 'ran') renderRan(items, stage);
+    else if (mode === 'fluenza') renderFluenza(items, stage);
     else if (mode === 'tombola') renderTombola(items, stage);
     else if (mode === 'tombola_sonora') renderTombolaSonora(items, stage);
     else if (mode === 'memory') renderMemory(items, stage);
@@ -122,6 +123,258 @@ function updateRanContent() {
 
 window.nextRan = () => { if (state.ranIndex < state.ranDisplayItems.length - 1) { state.ranIndex++; updateRanContent(); } };
 window.prevRan = () => { if (state.ranIndex > 0) { state.ranIndex--; updateRanContent(); } };
+
+// --- FLUENZA (Timed fluency - count items within time limit) ---
+function renderFluenza(items, stage) {
+    state.fluenzaDisplayItems = items;
+    state.fluenzaIndex = -1;
+    state.fluenzaCount = 0;
+    state.fluenzaErrors = 0;
+    state.fluenzaStarted = false;
+    state.fluenzaFinished = false;
+    state.fluenzaTimeLeft = state.fluenzaTimerDuration;
+    state.fluenzaItemResults = {};
+    if (state.fluenzaTimerInterval) { clearInterval(state.fluenzaTimerInterval); state.fluenzaTimerInterval = null; }
+
+    // Calculate obiettivo from patient history
+    state.fluenzaObiettivo = getFluenzaObiettivo();
+
+    renderFluenzaUI(stage);
+}
+
+function getFluenzaObiettivo() {
+    if (!state.activePatientId) return null;
+    const p = state.patients.find(x => x.id === state.activePatientId);
+    if (!p || !p.history) return null;
+    const fluenzaSessions = p.history.filter(h => h.mode === 'fluenza' && h.setId === state.activeSetId);
+    if (fluenzaSessions.length === 0) return null;
+    const maxCorrect = Math.max(...fluenzaSessions.map(s => s.correct || 0));
+    return maxCorrect + 2;
+}
+
+function renderFluenzaUI(stage) {
+    const items = state.fluenzaDisplayItems;
+    const started = state.fluenzaStarted;
+    const finished = state.fluenzaFinished;
+    const idx = state.fluenzaIndex;
+    const count = state.fluenzaCount;
+    const errors = state.fluenzaErrors;
+    const timeLeft = state.fluenzaTimeLeft;
+    const duration = state.fluenzaTimerDuration;
+    const obiettivo = state.fluenzaObiettivo;
+    const correct = count - errors;
+
+    // Format time
+    const mins = Math.floor(timeLeft / 60);
+    const secs = timeLeft % 60;
+    const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
+    const pct = duration > 0 ? (timeLeft / duration * 100) : 100;
+    const timerColor = timeLeft <= 10 ? 'var(--danger-color)' : timeLeft <= 30 ? 'var(--warning-color)' : 'var(--accent-color)';
+
+    // Pre-game: timer selection
+    if (!started && !finished) {
+        stage.innerHTML = `
+        <div style="height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; padding:20px;">
+            <i class="fa-solid fa-bolt fa-3x" style="color:var(--accent-color); opacity:0.6;"></i>
+            <h2 style="margin:0; text-align:center;">Fluenza</h2>
+            <p style="color:var(--text-secondary); text-align:center; margin:0;">Seleziona il tempo e premi <b>Avanti</b> per iniziare.<br>Nomina le immagini il pi&ugrave; velocemente possibile!</p>
+            ${obiettivo !== null ? `<div style="background:rgba(99,102,241,0.15); padding:10px 20px; border-radius:12px; text-align:center;">
+                <span style="font-size:0.8rem; color:var(--text-secondary);">Obiettivo prossima volta</span><br>
+                <span style="font-size:1.5rem; font-weight:bold; color:var(--accent-color);"><i class="fa-solid fa-bullseye"></i> ${obiettivo}</span>
+            </div>` : ''}
+            <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
+                ${[30, 60, 90, 120].map(t => `
+                    <button class="btn btn-sm ${state.fluenzaTimerDuration === t ? 'btn-success' : 'btn-ghost'}"
+                            onclick="state.fluenzaTimerDuration=${t}; state.fluenzaTimeLeft=${t}; renderFluenzaUI(document.getElementById('game-stage'));"
+                            style="padding:10px 20px; font-size:1rem; min-width:70px;">
+                        ${t}s
+                    </button>
+                `).join('')}
+            </div>
+            <button class="ran-btn-nav" onclick="fluenzaNext()" style="width:80px; height:80px; font-size:2rem; margin-top:10px;">
+                <i class="fa-solid fa-play"></i>
+            </button>
+            <span style="font-size:0.75rem; color:var(--text-secondary);">${items.length} stimoli disponibili</span>
+        </div>`;
+        return;
+    }
+
+    // Finished: results screen
+    if (finished) {
+        const pctCorrect = count > 0 ? Math.round((correct / count) * 100) : 0;
+        stage.innerHTML = `
+        <div style="height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:15px; padding:20px;">
+            <i class="fa-solid fa-flag-checkered fa-3x" style="color:var(--success-color); opacity:0.7;"></i>
+            <h2 style="margin:0;">Tempo scaduto!</h2>
+            <div style="display:flex; gap:20px; flex-wrap:wrap; justify-content:center;">
+                <div style="background:rgba(16,185,129,0.15); padding:15px 25px; border-radius:14px; text-align:center;">
+                    <div style="font-size:2rem; font-weight:bold; color:var(--success-color);">${correct}</div>
+                    <div style="font-size:0.75rem; color:var(--text-secondary);">Corrette</div>
+                </div>
+                ${errors > 0 ? `<div style="background:rgba(239,68,68,0.15); padding:15px 25px; border-radius:14px; text-align:center;">
+                    <div style="font-size:2rem; font-weight:bold; color:var(--danger-color);">${errors}</div>
+                    <div style="font-size:0.75rem; color:var(--text-secondary);">Errori</div>
+                </div>` : ''}
+                <div style="background:rgba(255,255,255,0.05); padding:15px 25px; border-radius:14px; text-align:center;">
+                    <div style="font-size:2rem; font-weight:bold;">${count}</div>
+                    <div style="font-size:0.75rem; color:var(--text-secondary);">Totale</div>
+                </div>
+            </div>
+            ${obiettivo !== null ? `<div style="background:rgba(99,102,241,0.15); padding:12px 24px; border-radius:12px; text-align:center; margin-top:5px;">
+                <span style="font-size:0.8rem; color:var(--text-secondary);">Obiettivo prossima volta</span><br>
+                <span style="font-size:1.3rem; font-weight:bold; color:var(--accent-color);"><i class="fa-solid fa-bullseye"></i> ${correct >= (obiettivo || 0) ? correct + 2 : obiettivo}</span>
+                ${correct >= (obiettivo || 0) ? `<br><span style="font-size:0.75rem; color:var(--success-color);"><i class="fa-solid fa-star"></i> Obiettivo raggiunto!</span>` : ''}
+            </div>` : `<div style="background:rgba(99,102,241,0.15); padding:12px 24px; border-radius:12px; text-align:center; margin-top:5px;">
+                <span style="font-size:0.8rem; color:var(--text-secondary);">Obiettivo prossima volta</span><br>
+                <span style="font-size:1.3rem; font-weight:bold; color:var(--accent-color);"><i class="fa-solid fa-bullseye"></i> ${correct + 2}</span>
+            </div>`}
+            <button class="btn btn-ghost" onclick="renderFluenza(state.fluenzaDisplayItems, document.getElementById('game-stage'))" style="margin-top:10px;">
+                <i class="fa-solid fa-rotate-left"></i> Riprova
+            </button>
+        </div>`;
+        return;
+    }
+
+    // During game: show current image + timer + controls
+    const currentItem = idx >= 0 && idx < items.length ? items[idx] : null;
+    const currentResult = state.fluenzaItemResults[idx];
+
+    stage.innerHTML = `
+    <div style="display:flex; flex-direction:column; height:100%; width:100%;">
+        <!-- Timer bar -->
+        <div style="padding:8px 15px; background:rgba(0,0,0,0.3); display:flex; align-items:center; gap:12px; flex-shrink:0;">
+            <span style="font-size:1.4rem; font-weight:bold; color:${timerColor}; font-variant-numeric:tabular-nums; min-width:55px;">${timeStr}</span>
+            <div style="flex:1; height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden;">
+                <div style="width:${pct}%; height:100%; background:${timerColor}; border-radius:4px; transition:width 1s linear;"></div>
+            </div>
+            <span style="font-size:1rem; font-weight:bold; color:white;">${correct} <span style="font-size:0.7rem; color:var(--text-secondary);">/ ${count}</span></span>
+            ${errors > 0 ? `<span style="font-size:0.85rem; color:var(--danger-color); font-weight:bold;">${errors}<i class="fa-solid fa-xmark" style="font-size:0.7rem; margin-left:2px;"></i></span>` : ''}
+        </div>
+
+        <!-- Image area -->
+        <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:15px; overflow:hidden;">
+            ${currentItem ? `
+                <img src="${currentItem.url || getPlaceholderUrl(currentItem.label)}"
+                     class="ran-main-img ${currentResult === false ? 'feedback-fail' : currentResult === true ? 'feedback-success' : ''}"
+                     style="transition:0.3s;"
+                     onerror="handleImgError(this,'${currentItem.label}')">
+                <h2 style="text-align:center; margin-top:10px;">${currentItem.label}</h2>
+            ` : `
+                <p style="color:var(--text-secondary); font-size:1.1rem;">Premi <b>Avanti</b> per iniziare</p>
+            `}
+        </div>
+
+        <!-- Controls bar -->
+        <div class="ran-controls-bar" style="gap:15px;">
+            <button class="btn-score fail" onclick="fluenzaMarkError()" style="width:56px; height:56px; border-radius:50%; font-size:1.3rem;" ${!currentItem || currentResult !== undefined ? 'disabled' : ''}>
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <button class="ran-btn-nav" onclick="fluenzaNext()" style="width:70px; height:70px; font-size:1.8rem;">
+                <i class="fa-solid fa-arrow-right"></i>
+            </button>
+        </div>
+    </div>`;
+}
+
+window.fluenzaNext = () => {
+    if (state.fluenzaFinished) return;
+    const items = state.fluenzaDisplayItems;
+
+    // First press: start timer and show first item
+    if (!state.fluenzaStarted) {
+        state.fluenzaStarted = true;
+        state.fluenzaTimeLeft = state.fluenzaTimerDuration;
+        state.fluenzaIndex = 0;
+        state.fluenzaCount = 1;
+
+        state.fluenzaTimerInterval = setInterval(() => {
+            state.fluenzaTimeLeft--;
+            if (state.fluenzaTimeLeft <= 0) {
+                fluenzaStop();
+                return;
+            }
+            renderFluenzaUI(document.getElementById('game-stage'));
+        }, 1000);
+
+        renderFluenzaUI(document.getElementById('game-stage'));
+        return;
+    }
+
+    // Mark current as correct if not already marked
+    if (state.fluenzaItemResults[state.fluenzaIndex] === undefined) {
+        state.fluenzaItemResults[state.fluenzaIndex] = true;
+    }
+
+    // Advance to next item
+    state.fluenzaIndex++;
+    state.fluenzaCount++;
+
+    // If we've exhausted all items, wrap around
+    if (state.fluenzaIndex >= items.length) {
+        state.fluenzaIndex = 0;
+    }
+
+    renderFluenzaUI(document.getElementById('game-stage'));
+};
+
+window.fluenzaMarkError = () => {
+    if (state.fluenzaFinished || !state.fluenzaStarted) return;
+    if (state.fluenzaIndex < 0) return;
+    if (state.fluenzaItemResults[state.fluenzaIndex] !== undefined) return;
+
+    state.fluenzaItemResults[state.fluenzaIndex] = false;
+    state.fluenzaErrors++;
+
+    // Update session
+    if (state.session.active) {
+        state.session.incorrect = state.fluenzaErrors;
+        state.session.correct = state.fluenzaCount - state.fluenzaErrors;
+        state.session.total = state.fluenzaCount;
+        updateScoreUI();
+    }
+
+    renderFluenzaUI(document.getElementById('game-stage'));
+};
+
+function fluenzaStop() {
+    if (state.fluenzaTimerInterval) {
+        clearInterval(state.fluenzaTimerInterval);
+        state.fluenzaTimerInterval = null;
+    }
+    state.fluenzaFinished = true;
+    state.fluenzaTimeLeft = 0;
+
+    // Finalize: the last shown item counts only if user interacted (next or marked)
+    // If current item has no result, it was shown but not advanced - don't count it
+    if (state.fluenzaIndex >= 0 && state.fluenzaItemResults[state.fluenzaIndex] === undefined) {
+        state.fluenzaCount--;
+    }
+
+    const correct = state.fluenzaCount - state.fluenzaErrors;
+
+    // Update session for saving
+    if (state.session.active) {
+        state.session.correct = correct;
+        state.session.incorrect = state.fluenzaErrors;
+        state.session.total = state.fluenzaCount;
+        state.session.itemResults = {};
+        // Store item results for per-item detail
+        for (const [k, v] of Object.entries(state.fluenzaItemResults)) {
+            state.session.itemResults[k] = v;
+        }
+        updateScoreUI();
+        document.getElementById('btn-save-session').classList.remove('hidden');
+        if (typeof showSessionNameInput === 'function') showSessionNameInput();
+    }
+
+    // Recalculate obiettivo based on current result
+    const prevObiettivo = state.fluenzaObiettivo;
+    if (prevObiettivo === null || correct >= prevObiettivo) {
+        state.fluenzaObiettivo = correct + 2;
+    }
+
+    renderFluenzaUI(document.getElementById('game-stage'));
+}
 
 // --- TOMBOLA ---
 function renderTombola(items, stage) {
