@@ -2,6 +2,7 @@
 const MODES_CONFIG = {
     'tact': 'TACT',
     'ran': 'RAN',
+    'fluenza': 'Fluenza',
     'tombola': 'Tombola',
     'tombola_sonora': 'Tombola Sonora',
     'memory': 'Memory',
@@ -53,7 +54,18 @@ let state = {
     catIndex: 0,
     // Zoom state
     zoomRevealed: false,
-    zoomIndex: 0
+    zoomIndex: 0,
+    // Fluenza state
+    fluenzaIndex: -1,
+    fluenzaCount: 0,
+    fluenzaErrors: 0,
+    fluenzaStarted: false,
+    fluenzaFinished: false,
+    fluenzaTimerDuration: 60,
+    fluenzaTimeLeft: 0,
+    fluenzaTimerInterval: null,
+    fluenzaItemResults: {},
+    fluenzaShowBar: true
 };
 
 // --- TAG IMAGE HELPERS (IndexedDB with in-memory cache) ---

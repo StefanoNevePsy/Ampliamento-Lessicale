@@ -634,11 +634,20 @@ function renderActivitiesTab(patient) {
         const taskStepsAnalysisHtml = isTaskAnalysis && sessionsWithSteps.length > 0
             ? renderTaskStepsAnalysis(sessionsWithSteps) : '';
 
+        // Fluenza obiettivo
+        const isFluenza = modeCode === 'fluenza';
+        let fluenzaObiettivoHtml = '';
+        if (isFluenza && sessions.length > 0) {
+            const maxCorrect = Math.max(...sessions.map(s => s.correct || 0));
+            const obiettivo = maxCorrect + 2;
+            fluenzaObiettivoHtml = `<span style="font-size:0.7rem; background:rgba(99,102,241,0.15); color:var(--accent-color); padding:2px 8px; border-radius:6px; font-weight:bold;"><i class="fa-solid fa-bullseye"></i> Ob: ${obiettivo}</span>`;
+        }
+
         html += `
         <div class="chart-wrapper" style="margin-bottom:12px; border-left:3px solid ${typeColor};">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                 <h4 style="margin:0; color:var(--accent-color); font-size:0.95rem;">
-                    ${setName} <span style="color:#666; font-size:0.8em;">(${modeName})</span> ${badgeHtml}
+                    ${setName} <span style="color:#666; font-size:0.8em;">(${modeName})</span> ${badgeHtml} ${fluenzaObiettivoHtml}
                 </h4>
                 <div style="display:flex; align-items:center; gap:6px;">
                     <span style="font-size:0.65rem; background:rgba(${typeGroup === 'timedelay' ? '245,158,11' : '16,185,129'},0.15); color:${typeColor}; padding:2px 8px; border-radius:6px; font-weight:bold;">${typeLbl}</span>
@@ -705,16 +714,28 @@ function renderActivitiesTab(patient) {
     chartList.forEach(item => {
         const chartId = 'activity-chart-' + item.key.replace(/[^a-zA-Z0-9]/g, '_');
         const container = document.getElementById(chartId);
-        if (container) renderActivitySVGChart(container, item.sessions, item.typeGroup);
+        if (container) renderActivitySVGChart(container, item.sessions, item.typeGroup, item.modeCode);
     });
 }
 
 // --- ACTIVITY SVG CHART with Time Delay vertical markers ---
-function renderActivitySVGChart(container, sessions, typeGroup) {
+function renderActivitySVGChart(container, sessions, typeGroup, modeCode) {
     const svgNS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(svgNS, "svg");
     svg.setAttribute("class", "chart-svg");
     svg.setAttribute("viewBox", "-10 -10 320 160");
+
+    const isFluenza = modeCode === 'fluenza';
+
+    // For fluenza: y-axis shows count (correct items), scale dynamically
+    let fluenzaMax = 0;
+    let fluenzaObiettivo = 0;
+    if (isFluenza) {
+        fluenzaMax = Math.max(...sessions.map(s => s.correct || 0));
+        fluenzaObiettivo = fluenzaMax + 2;
+        // Scale: chart height = 130, max value = obiettivo + a small margin
+        fluenzaMax = Math.max(fluenzaObiettivo + 2, fluenzaMax + 4);
+    }
 
     // Axes
     const axisY = document.createElementNS(svgNS, "line");
@@ -729,12 +750,32 @@ function renderActivitySVGChart(container, sessions, typeGroup) {
     axisX.setAttribute("stroke", "#666"); axisX.setAttribute("stroke-width", "1");
     svg.appendChild(axisX);
 
-    // 90% threshold
-    const line90 = document.createElementNS(svgNS, "line");
-    line90.setAttribute("x1", "20"); line90.setAttribute("x2", "300");
-    line90.setAttribute("y1", "13"); line90.setAttribute("y2", "13");
-    line90.setAttribute("class", "threshold-line");
-    svg.appendChild(line90);
+    if (isFluenza) {
+        // Obiettivo line instead of 90% threshold
+        const obY = fluenzaMax > 0 ? 130 - (130 * fluenzaObiettivo / fluenzaMax) : 10;
+        const lineOb = document.createElementNS(svgNS, "line");
+        lineOb.setAttribute("x1", "20"); lineOb.setAttribute("x2", "300");
+        lineOb.setAttribute("y1", obY); lineOb.setAttribute("y2", obY);
+        lineOb.setAttribute("stroke", "var(--accent-color)");
+        lineOb.setAttribute("stroke-width", "1");
+        lineOb.setAttribute("stroke-dasharray", "6,3");
+        lineOb.setAttribute("opacity", "0.6");
+        svg.appendChild(lineOb);
+
+        const obLbl = document.createElementNS(svgNS, "text");
+        obLbl.setAttribute("x", "5"); obLbl.setAttribute("y", obY - 3);
+        obLbl.setAttribute("fill", "var(--accent-color)"); obLbl.setAttribute("font-size", "8");
+        obLbl.setAttribute("font-weight", "bold");
+        obLbl.textContent = fluenzaObiettivo;
+        svg.appendChild(obLbl);
+    } else {
+        // 90% threshold
+        const line90 = document.createElementNS(svgNS, "line");
+        line90.setAttribute("x1", "20"); line90.setAttribute("x2", "300");
+        line90.setAttribute("y1", "13"); line90.setAttribute("y2", "13");
+        line90.setAttribute("class", "threshold-line");
+        svg.appendChild(line90);
+    }
 
     const stepX = sessions.length > 1 ? 260 / (sessions.length - 1) : 0;
     let pathD = "";
@@ -770,7 +811,9 @@ function renderActivitySVGChart(container, sessions, typeGroup) {
 
     sessions.forEach((s, i) => {
         const x = 20 + (sessions.length > 1 ? i * stepX : 130);
-        const y = 130 - (1.3 * s.percentage);
+        const y = isFluenza
+            ? (fluenzaMax > 0 ? 130 - (130 * (s.correct || 0) / fluenzaMax) : 65)
+            : 130 - (1.3 * s.percentage);
         if (i === 0) pathD += `M ${x} ${y}`; else pathD += ` L ${x} ${y}`;
     });
 
@@ -786,13 +829,17 @@ function renderActivitySVGChart(container, sessions, typeGroup) {
 
     sessions.forEach((s, i) => {
         const x = 20 + (sessions.length > 1 ? i * stepX : 130);
-        const y = 130 - (1.3 * s.percentage);
+        const y = isFluenza
+            ? (fluenzaMax > 0 ? 130 - (130 * (s.correct || 0) / fluenzaMax) : 65)
+            : 130 - (1.3 * s.percentage);
         const dot = document.createElementNS(svgNS, "circle");
         dot.setAttribute("cx", x); dot.setAttribute("cy", y);
         dot.setAttribute("r", "5"); dot.setAttribute("fill", "white");
         dot.setAttribute("stroke", "var(--accent-color)"); dot.setAttribute("stroke-width", "2");
 
-        let tooltipText = `${formatDateEU(s.date)}\nScore: ${s.percentage}% (${s.correct}/${s.total})`;
+        let tooltipText = isFluenza
+            ? `${formatDateEU(s.date)}\nCorrette: ${s.correct}/${s.total}${s.rawX ? ' (Errori: ' + s.rawX + ')' : ''}\nDurata: ${s.fluenzaDuration || '?'}s`
+            : `${formatDateEU(s.date)}\nScore: ${s.percentage}% (${s.correct}/${s.total})`;
         if (s.rawP) tooltipText += `\nPrompt: ${s.rawP}`;
         if (s.timeDelaySeconds) tooltipText += `\nTime Delay: ${s.timeDelaySeconds}s`;
 
@@ -800,6 +847,15 @@ function renderActivitySVGChart(container, sessions, typeGroup) {
         title.textContent = tooltipText;
         dot.appendChild(title);
         svg.appendChild(dot);
+
+        // For fluenza, show count label on dot
+        if (isFluenza) {
+            const countLbl = document.createElementNS(svgNS, "text");
+            countLbl.setAttribute("x", x); countLbl.setAttribute("y", y - 8);
+            countLbl.setAttribute("text-anchor", "middle"); countLbl.setAttribute("fill", "white"); countLbl.setAttribute("font-size", "8"); countLbl.setAttribute("font-weight", "bold");
+            countLbl.textContent = s.correct;
+            svg.appendChild(countLbl);
+        }
 
         const lbl = document.createElementNS(svgNS, "text");
         lbl.setAttribute("x", x); lbl.setAttribute("y", "148");
