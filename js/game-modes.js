@@ -585,7 +585,7 @@ window.shuffleTopologia = () => {
 // --- SEQUENZE (Progressive number ordering with drag-to-slot) ---
 function renderSequenze(items, stage) {
     // Use only items with seqNumber assigned, sorted by seqNumber
-    const numbered = items.filter(i => i.seqNumber && !i.hidden).sort((a, b) => a.seqNumber - b.seqNumber);
+    let numbered = items.filter(i => i.seqNumber && !i.hidden).sort((a, b) => a.seqNumber - b.seqNumber);
 
     if (numbered.length === 0) {
         stage.innerHTML = `
@@ -596,7 +596,14 @@ function renderSequenze(items, stage) {
         return;
     }
 
-    // Store correct order (by seqNumber)
+    // If N.Stimoli is set and less than available numbered items, pick a random subset
+    const numStimuli = parseInt(document.getElementById('num-stimuli').value);
+    if (numStimuli > 0 && numStimuli < numbered.length) {
+        const shuffled = [...numbered].sort(() => Math.random() - 0.5);
+        numbered = shuffled.slice(0, numStimuli).sort((a, b) => a.seqNumber - b.seqNumber);
+    }
+
+    // Store correct order (by seqNumber - ascending, even if not consecutive)
     state.sequenzeCorrectOrder = numbered.map(item => ({ ...item }));
     // Shuffle for presentation (one at a time)
     state.sequenzeQueue = [...numbered].sort(() => Math.random() - 0.5);
