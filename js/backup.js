@@ -72,15 +72,85 @@ window.exportAllSets = async () => {
     }
 };
 
-// Single set export
+// Single set export (with tag images for portability)
 window.exportSingleSet = async (id) => {
     const set = state.savedSets.find(s => s.id === id);
     if (!set) return;
+
+    // Collect relevant tag images for this set's tags
+    const setTagImages = {};
+    if (set.tags && set.tags.length > 0) {
+        const allImgs = getAllTagImages();
+        set.tags.forEach(t => {
+            const key = t.toLowerCase().trim();
+            if (allImgs[key]) setTagImages[key] = allImgs[key];
+        });
+    }
+
+    const exportData = {
+        version: 5,
+        singleSet: true,
+        timestamp: new Date().toISOString(),
+        sets: [set],
+        tagImages: Object.keys(setTagImages).length > 0 ? setTagImages : undefined
+    };
+
     const filename = `Set_${set.name.replace(/\s+/g, '_')}_${getTimestampedFilename()}`;
-    await downloadJSON(set, filename);
+    await downloadJSON(exportData, filename);
 };
 
-// Import (supports old array format and new object format)
+// --- MERGE HELPERS ---
+// Merge a backup set into a local set: keep local items, add/update from backup
+function mergeSets(local, incoming) {
+    const merged = JSON.parse(JSON.stringify(local));
+    // Build map of local items by label for quick lookup
+    const localByLabel = {};
+    merged.items.forEach((item, i) => { localByLabel[item.label || item.l || ''] = i; });
+
+    incoming.items.forEach(bItem => {
+        const label = bItem.label || bItem.l || '';
+        if (label in localByLabel) {
+            // Update existing item (overwrite with backup version)
+            merged.items[localByLabel[label]] = { ...merged.items[localByLabel[label]], ...bItem };
+        } else {
+            // Add new item
+            merged.items.push(bItem);
+        }
+    });
+
+    // Merge metadata: take backup values only if they add info
+    if (incoming.tags && incoming.tags.length > 0) {
+        const tagSet = new Set([...(merged.tags || []), ...incoming.tags].map(t => t.toLowerCase().trim()));
+        merged.tags = [...tagSet];
+    }
+    if (incoming.modes && incoming.modes.length > 0) {
+        merged.modes = [...new Set([...(merged.modes || []), ...incoming.modes])];
+    }
+    return merged;
+}
+
+// Merge backup patient into local patient: keep existing history, add new sessions
+function mergePatients(local, incoming) {
+    const merged = JSON.parse(JSON.stringify(local));
+    if (incoming.history && Array.isArray(incoming.history)) {
+        if (!merged.history) merged.history = [];
+        // Deduplicate by date+mode+setName
+        const existingKeys = new Set(merged.history.map(h => `${h.date}::${h.mode}::${h.setName}`));
+        incoming.history.forEach(h => {
+            const key = `${h.date}::${h.mode}::${h.setName}`;
+            if (!existingKeys.has(key)) {
+                merged.history.push(h);
+                existingKeys.add(key);
+            }
+        });
+    }
+    // Merge basic info (name, notes) - prefer non-empty values
+    if (incoming.name && !merged.name) merged.name = incoming.name;
+    if (incoming.notes && !merged.notes) merged.notes = incoming.notes;
+    return merged;
+}
+
+// Import (non-destructive merge: never deletes existing data)
 window.importSets = (input) => {
     if (!input.files || !input.files[0]) return;
     const file = input.files[0];
@@ -92,57 +162,89 @@ window.importSets = (input) => {
             const jsonContent = e.target.result;
             const data = JSON.parse(jsonContent);
 
-            let setsCount = 0;
-            let patientsCount = 0;
+            let setsAdded = 0, setsUpdated = 0;
+            let patientsAdded = 0, patientsUpdated = 0;
 
-            // New format (object with version)
+            // Load current local data
+            const localSets = await DB.getAllSets();
+            const localPatients = await DB.getAllPatients();
+            const localSetsMap = {};
+            localSets.forEach(s => { localSetsMap[s.id] = s; });
+            const localPatientsMap = {};
+            localPatients.forEach(p => { localPatientsMap[p.id] = p; });
+
+            // Determine incoming sets
+            let incomingSets = [];
+            let incomingPatients = [];
+
             if (data.version && (data.sets || data.patients)) {
-                if (data.sets && Array.isArray(data.sets)) {
-                    for (const s of data.sets) { await DB.saveSet(s); setsCount++; }
-                }
-                if (data.patients && Array.isArray(data.patients)) {
-                    for (const p of data.patients) { await DB.savePatient(p); patientsCount++; }
-                }
-                // Restore tag images if present (merge into IndexedDB)
-                if (data.tagImages && typeof data.tagImages === 'object') {
-                    const existing = getAllTagImages();
-                    const merged = { ...existing, ...data.tagImages };
-                    await DB.importAllTagImages(merged);
-                    // Update in-memory cache
-                    Object.assign(_tagImageCache, merged);
-                }
-                // Restore quaderno lists if present
-                if (data.quadernoLists && Array.isArray(data.quadernoLists)) {
-                    const existing = getSavedQuadernoLists();
-                    const existingNames = new Set(existing.map(l => l.name));
-                    data.quadernoLists.forEach(l => {
-                        if (!existingNames.has(l.name)) existing.push(l);
-                    });
-                    localStorage.setItem('quadernoLists', JSON.stringify(existing));
-                }
-                // Restore session names if present
-                if (data.sessionNames && Array.isArray(data.sessionNames)) {
-                    const existing = getRecentSessionNames();
-                    const merged = [...new Set([...existing, ...data.sessionNames])].slice(0, 30);
-                    localStorage.setItem('sessionNames', JSON.stringify(merged));
-                }
-            }
-            // Old format (array of sets)
-            else if (Array.isArray(data)) {
-                for (const s of data) {
-                    if (s.id && s.items) { await DB.saveSet(s); setsCount++; }
-                }
-            }
-            // Single set
-            else if (data.id && data.items) {
-                await DB.saveSet(data);
-                setsCount = 1;
-            }
-            else {
+                incomingSets = data.sets || [];
+                incomingPatients = data.patients || [];
+            } else if (Array.isArray(data)) {
+                incomingSets = data.filter(s => s.id && s.items);
+            } else if (data.id && data.items) {
+                incomingSets = [data];
+            } else {
                 throw new Error("Formato file non riconosciuto.");
             }
 
-            alert(`Ripristino completato!\n\nSet importati: ${setsCount}\nPazienti importati: ${patientsCount}`);
+            // Merge sets
+            for (const incoming of incomingSets) {
+                if (!incoming.id) continue;
+                if (localSetsMap[incoming.id]) {
+                    const merged = mergeSets(localSetsMap[incoming.id], incoming);
+                    await DB.saveSet(merged);
+                    setsUpdated++;
+                } else {
+                    await DB.saveSet(incoming);
+                    setsAdded++;
+                }
+            }
+
+            // Merge patients
+            for (const incoming of incomingPatients) {
+                if (!incoming.id) continue;
+                if (localPatientsMap[incoming.id]) {
+                    const merged = mergePatients(localPatientsMap[incoming.id], incoming);
+                    await DB.savePatient(merged);
+                    patientsUpdated++;
+                } else {
+                    await DB.savePatient(incoming);
+                    patientsAdded++;
+                }
+            }
+
+            // Merge tag images (add from backup, never remove existing)
+            if (data.tagImages && typeof data.tagImages === 'object') {
+                const existing = getAllTagImages();
+                const merged = { ...existing, ...data.tagImages };
+                await DB.importAllTagImages(merged);
+                Object.assign(_tagImageCache, merged);
+            }
+            // Merge quaderno lists
+            if (data.quadernoLists && Array.isArray(data.quadernoLists)) {
+                const existing = getSavedQuadernoLists();
+                const existingNames = new Set(existing.map(l => l.name));
+                data.quadernoLists.forEach(l => {
+                    if (!existingNames.has(l.name)) existing.push(l);
+                });
+                localStorage.setItem('quadernoLists', JSON.stringify(existing));
+            }
+            // Merge session names
+            if (data.sessionNames && Array.isArray(data.sessionNames)) {
+                const existing = getRecentSessionNames();
+                const merged = [...new Set([...existing, ...data.sessionNames])].slice(0, 30);
+                localStorage.setItem('sessionNames', JSON.stringify(merged));
+            }
+
+            // Build summary
+            const parts = [];
+            if (setsAdded > 0) parts.push(`${setsAdded} set aggiunti`);
+            if (setsUpdated > 0) parts.push(`${setsUpdated} set aggiornati`);
+            if (patientsAdded > 0) parts.push(`${patientsAdded} pazienti aggiunti`);
+            if (patientsUpdated > 0) parts.push(`${patientsUpdated} pazienti aggiornati`);
+
+            alert(`Sincronizzazione completata!\n\n${parts.length > 0 ? parts.join('\n') : 'Nessuna modifica necessaria.'}\n\nI dati locali non presenti nel backup sono stati mantenuti.`);
 
             // Reload without page refresh
             state.savedSets = await DB.getAllSets();

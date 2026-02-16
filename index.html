@@ -218,7 +218,7 @@
             <div style="display:flex; gap:10px; margin-bottom: 20px; flex-wrap:wrap;">
                 <button class="btn btn-primary" onclick="createEmptySet()"><i class="fa-solid fa-plus"></i> Nuovo Set</button>
                 <button class="btn btn-ghost" onclick="exportAllSets()"><i class="fa-solid fa-file-arrow-down"></i> Backup</button>
-                <button class="btn btn-ghost" onclick="document.getElementById('file-upload').click()"><i class="fa-solid fa-file-arrow-up"></i> Ripristina</button>
+                <button class="btn btn-ghost" onclick="document.getElementById('file-upload').click()"><i class="fa-solid fa-file-arrow-up"></i> Importa / Sincronizza</button>
                 <input type="file" id="file-upload" class="hidden" accept=".json" onchange="importSets(this)">
             </div>
             <div id="lib-list" class="lib-grid"></div>
@@ -305,35 +305,40 @@
                     <ul style="padding-left: 20px; line-height: 1.6;">
                         <li><strong>Selettore Rapido:</strong> In alto a destra trovi il menu a tendina.<br><span style="font-size: 0.85em; opacity: 0.7;">Seleziona "Ospite" per sessioni senza salvataggio.</span></li>
                         <li><strong>Cartella Clinica:</strong> Clicca <i class="fa-solid fa-user-doctor"></i> per gestire l'anagrafica.</li>
-                        <li><strong>Grafici & Storico:</strong> Visualizza l'andamento per ogni attivit&agrave;.<br><i class="fa-solid fa-trophy" style="color: #fbbf24;"></i> <strong>Criterio (Mastery):</strong> Assegnato automaticamente dopo 2 sessioni consecutive con &gt;90% di correttezza in giorni diversi.</li>
-                        <li><strong>Editing Dati:</strong> Espandi i grafici (<i class="fa-solid fa-chevron-down"></i>) per correggere errori di inserimento o date.</li>
+                        <li><strong>Dashboard (3 schede):</strong><br>
+                            <b>Panoramica</b> - Riepilogo, grafico giornaliero, ultima sessione.<br>
+                            <b>Giornate</b> - Storico espandibile per data.<br>
+                            <b>Attivit&agrave;</b> - Grafici di progressione per attivit&agrave; con badge criterio.</li>
+                        <li><strong>Criterio (Mastery):</strong> <i class="fa-solid fa-trophy" style="color: #fbbf24;"></i> Assegnato automaticamente dopo 2 sessioni consecutive con &gt;90% in giorni diversi.</li>
+                        <li><strong>Editing Dati:</strong> Espandi i grafici (<i class="fa-solid fa-chevron-down"></i>) per correggere errori, date o eliminare sessioni.</li>
                     </ul>
                 </div>
 
                 <!-- MODES -->
                 <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--accent-color);">
                     <h3 style="margin-top: 0; color: var(--accent-color); display: flex; align-items: center; gap: 10px;">
-                        <i class="fa-solid fa-gamepad"></i> Modalit&agrave;
+                        <i class="fa-solid fa-gamepad"></i> Modalit&agrave; (17)
                     </h3>
                     <ul style="padding-left: 20px; line-height: 1.6;">
                         <li><strong>TACT:</strong> Flashcards sequenziali per denominazione pura.</li>
-                        <li><strong>RAN (Velocit&agrave;):</strong> Denominazione rapida.<br><span style="font-size: 0.85em; opacity: 0.7;">Usa il tasto <i class="fa-solid fa-table-cells"></i> per passare da vista Griglia a Sequenza.</span></li>
-                        <li><strong>Tombola:</strong> Matching visivo. Trova l'immagine target nella griglia. Scoring automatico.</li>
-                        <li><strong>Tombola Sonora:</strong> Ascolta un suono e tocca la carta corrispondente. Richiede audio negli item (<i class="fa-solid fa-music"></i> nell'editor).</li>
+                        <li><strong>RAN:</strong> Denominazione rapida.<br><span style="font-size: 0.85em; opacity: 0.7;">Usa il tasto <i class="fa-solid fa-table-cells"></i> per passare da vista Griglia a Sequenza.</span></li>
+                        <li><strong>Fluenza:</strong> Denominazione a tempo. Scegli la durata (15s-120s o personalizzata), premi Avanti per iniziare il timer. Conta le risposte corrette/errate. Mostra l'<b>obiettivo</b> per la volta successiva (max storico + 2). La barra tempo pu&ograve; essere nascosta per ridurre l'ansia.</li>
+                        <li><strong>Tombola:</strong> Matching visivo. Trova l'immagine target nella griglia.</li>
+                        <li><strong>Tombola Sonora:</strong> Ascolta un suono e tocca la carta corrispondente. Richiede audio (<i class="fa-solid fa-music"></i>).</li>
                         <li><strong>Memory:</strong> Gioco di memoria per funzioni esecutive.</li>
                         <li><strong>Cerca Trova:</strong> Esplorazione visiva su scene. Tocca per marcare i bersagli.</li>
-                        <li><strong>Intraverbal-Scenari:</strong> Come Cerca Trova, ma con dati tracciati separatamente per uso intraverbale/scenari.</li>
-                        <li><strong>Zoom:</strong> Un'immagine viene mostrata zoomata su un dettaglio. Il bambino deve indovinare l'intera immagine. Area zoom definibile nell'editor (<i class="fa-solid fa-crop"></i>).</li>
-                        <li><strong>Topologia:</strong> Trascina le immagini per disporle spazialmente. Scoring manuale.</li>
-                        <li><strong>Sequenze:</strong> Tocca le immagini nell'ordine corretto (1, 2, 3...). Premi Verifica per controllare.</li>
-                        <li><strong>Pool Random:</strong> Griglia di stimoli casuali dai tag selezionati. N. Stimoli = carte a schermo. Avanza all'infinito.</li>
-                        <li><strong>Pool Intraverbal:</strong> Come Pool Random, ma con dati tracciati separatamente per uso intraverbale.</li>
-                        <li><strong>Intruso:</strong> Trova l'intruso! N. Stimoli = carte per round. Round infiniti. Richiede 2+ tag.</li>
-                        <li><strong>Categorizzazione:</strong> Assegna ogni immagine alla categoria corretta. I pulsanti mostrano le immagini dei tag. Richiede 2+ tag.</li>
-                        <li><strong>Quaderno:</strong> Registro manuale con due sotto-modalit&agrave;:<br>
-                            <b>Generale</b> - Aggiungi righe di attivit&agrave; con tasti X/Prompt/V.<br>
-                            <b>Task Analysis</b> - Sequenze operazionalizzate con passi da segnare (X/P/V/N.A.).<br>
-                            Le liste si possono salvare come template e ricaricare. I dati partecipano ai report.</li>
+                        <li><strong>Intraverbal-Scenari:</strong> Come Cerca Trova, con dati tracciati separatamente.</li>
+                        <li><strong>Zoom:</strong> Immagine zoomata su un dettaglio. Il bambino indovina l'intera immagine. Area zoom definibile nell'editor (<i class="fa-solid fa-crop"></i>).</li>
+                        <li><strong>Topologia:</strong> Trascina le immagini per disporle spazialmente.</li>
+                        <li><strong>Sequenze:</strong> Ordina le immagini per numero progressivo. Se N.Stimoli &lt; totale, estrae un sottoinsieme casuale. Corretto = ordine crescente (anche non consecutivo).</li>
+                        <li><strong>Pool Random:</strong> Griglia di stimoli casuali dai tag. N. Stimoli = carte a schermo. Avanza all'infinito.</li>
+                        <li><strong>Pool Intraverbal:</strong> Come Pool Random, con dati tracciati separatamente.</li>
+                        <li><strong>Intruso:</strong> Trova l'intruso! N. Stimoli = carte per round. Richiede 2+ tag.</li>
+                        <li><strong>Categorizzazione:</strong> Assegna ogni immagine alla categoria corretta. Richiede 2+ tag.</li>
+                        <li><strong>Quaderno:</strong> Registro manuale:<br>
+                            <b>Generale</b> - Righe di attivit&agrave; con X/Prompt/V.<br>
+                            <b>Task Analysis</b> - Passi operazionalizzati (X/P/V/N.A.).<br>
+                            Le liste si salvano come template ricaricabili.</li>
                     </ul>
                 </div>
 
@@ -343,25 +348,37 @@
                         <i class="fa-solid fa-stopwatch"></i> Sessione & Scoring
                     </h3>
                     <ul style="padding-left: 20px; line-height: 1.6;">
-                        <li><strong>Valutazione:</strong> Usa i tasti a schermo o la tastiera.<br><span style="color: var(--success-color);"><b>V</b></span> = Corretto (Tasto 'V')<br><span style="color: var(--warning-color);"><b>P</b></span> = Prompt (Tasto 'P')<br><span style="color: var(--danger-color);"><b>X</b></span> = Errato (Tasto 'X')</li>
+                        <li><strong>Valutazione:</strong> Usa i tasti a schermo o la tastiera.<br><span style="color: var(--success-color);"><b>V</b></span> = Corretto (Tasto 'V')<br><span style="color: var(--warning-color);"><b>P</b></span> = Prompt (Tasto 'P', in Time Delay)<br><span style="color: var(--danger-color);"><b>X</b></span> = Errato (Tasto 'X')</li>
+                        <li><strong>Tipo Sessione:</strong><br>
+                            <b>Indipendente</b> - Scoring V/X standard.<br>
+                            <b>Time Delay</b> - Scoring V/P con secondi TD configurabili.</li>
                         <li><strong>N. Stimoli:</strong> Scegli quanti stimoli presentare (3, 4, 6, 8... o Tutti).</li>
+                        <li><strong>Griglia:</strong> Layout visivo (Auto, 3x3, 4x4, 5x5) per modalit&agrave; a griglia.</li>
                         <li><strong>Child Lock <i class="fa-solid fa-lock-open"></i>:</strong> Blocca lo scroll per evitare tocchi accidentali.</li>
-                        <li><strong>Salvataggio <i class="fa-solid fa-floppy-disk"></i>:</strong> Salva i dati nella cartella del paziente attivo.<br><span style="font-size: 0.85em; opacity: 0.7;">Puoi inserire un nome personalizzato nella casella di testo. Se vuoto, usa il nome del set/modalit&agrave;.</span></li>
+                        <li><strong>Salvataggio <i class="fa-solid fa-floppy-disk"></i>:</strong> Salva i dati nella cartella del paziente attivo. Puoi inserire un nome personalizzato.</li>
                     </ul>
                 </div>
 
-                <!-- LIBRARY -->
+                <!-- LIBRARY & BACKUP -->
                 <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid #a855f7;">
                     <h3 style="margin-top: 0; color: #a855f7; display: flex; align-items: center; gap: 10px;">
-                        <i class="fa-solid fa-folder-open"></i> Editor & Libreria
+                        <i class="fa-solid fa-folder-open"></i> Editor, Libreria & Backup
                     </h3>
                     <ul style="padding-left: 20px; line-height: 1.6;">
                         <li><strong>Creazione:</strong> Crea set personalizzati caricando le tue immagini.</li>
-                        <li><strong>Tag Semantici:</strong> Assegna tag (es. "animali", "verbi") per organizzare i set e abilitare le future modalit&agrave; Pool e Intruso.</li>
+                        <li><strong>Tag Semantici:</strong> Assegna tag (es. "animali", "verbi") per organizzare i set e abilitare le modalit&agrave; Pool, Intruso e Categorizzazione.</li>
                         <li><strong>Caricamento Rapido:</strong><br>- Clicca sull'icona fotocamera <i class="fa-solid fa-camera"></i>.<br>- <b>Ctrl+V</b> su una riga per incollare dagli appunti.<br>- <b>Bulk:</b> Carica intere cartelle in una volta.</li>
-                        <li><strong>Audio (<i class="fa-solid fa-music"></i>):</strong> Carica file audio per ogni item (usato in Tombola Sonora).</li>
-                        <li><strong>Zoom Area (<i class="fa-solid fa-crop"></i>):</strong> Definisci l'area di zoom per la modalit&agrave; Zoom trascinando sull'immagine.</li>
-                        <li><strong>Backup Completo:</strong> Esporta un unico file contenente <b>tutti</b> i Set e le Cartelle Pazienti.</li>
+                        <li><strong>Audio (<i class="fa-solid fa-music"></i>):</strong> Carica file audio per ogni item (Tombola Sonora).</li>
+                        <li><strong>Zoom Area (<i class="fa-solid fa-crop"></i>):</strong> Definisci l'area di zoom per la modalit&agrave; Zoom.</li>
+                        <li><strong>Sequenze (#):</strong> Assegna numeri progressivi agli item per la modalit&agrave; Sequenze.</li>
+                        <li><strong>Esporta Singolo Set (<i class="fa-solid fa-file-export"></i>):</strong> Ogni set ha un pulsante per esportarlo singolarmente (con le immagini dei tag). Ideale per condividere set tra colleghi.</li>
+                        <li><strong>Backup Completo:</strong> Esporta un unico file con <b>tutti</b> i Set, Pazienti, Tag Images, Template Quaderno e Nomi Sessione.</li>
+                        <li><strong>Importa / Sincronizza:</strong> L'importazione &egrave; <b>non distruttiva</b>:<br>
+                            - I set e pazienti gi&agrave; presenti vengono <b>aggiornati</b> (nuovi item aggiunti, esistenti aggiornati).<br>
+                            - Set e dati locali <b>non presenti</b> nel backup vengono <b>mantenuti</b>.<br>
+                            - Nessun dato viene cancellato.<br>
+                            - Funziona sia con backup completi che con singoli set esportati.</li>
+                        <li><strong>Firebase Sync (<i class="fa-solid fa-cloud"></i>):</strong> Sincronizzazione automatica dei dati pazienti tra dispositivi via Firebase Realtime Database.</li>
                     </ul>
                 </div>
             </div>
