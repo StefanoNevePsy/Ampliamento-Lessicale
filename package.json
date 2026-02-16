@@ -1,0 +1,61 @@
+{
+  "name": "stimolatore-clinico",
+  "version": "40.0.0",
+  "description": "Stimolatore Clinico - Piattaforma per riabilitazione neuropsicologica",
+  "main": "electron/main.js",
+  "scripts": {
+    "electron:start": "electron .",
+    "electron:build:mac": "electron-builder --mac",
+    "electron:build:win": "electron-builder --win",
+    "cap:init": "npx cap init 'Stimolatore Clinico' 'com.stimolatore.clinico' --web-dir .",
+    "cap:add:android": "npx cap add android",
+    "cap:sync": "npx cap sync",
+    "cap:build:android": "cd android && ./gradlew assembleRelease"
+  },
+  "build": {
+    "appId": "com.stimolatore.clinico",
+    "productName": "Stimolatore Clinico",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "index.html",
+      "css/**/*",
+      "js/**/*",
+      "electron/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.medical",
+      "icon": "build/icon.icns",
+      "target": [
+        "dmg"
+      ]
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "target": [
+        "AppImage"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "dependencies": {
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/cli": "^6.0.0",
+    "@capacitor/android": "^6.0.0"
+  }
+}

@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    
-    <title>Ampliamento Lessicale v30</title>
+
+    <title>Ampliamento Lessicale v40</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#1e1e2f">
@@ -15,216 +15,28 @@
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;800&display=swap" rel="stylesheet">
-    
-    <style>
-        :root {
-            --bg-gradient: linear-gradient(135deg, #1e1e2f 0%, #2d2b55 100%);
-            --glass-bg: rgba(30, 30, 50, 0.95);
-            --glass-border: rgba(255, 255, 255, 0.1);
-            --text-primary: #f1f5f9;
-            --text-secondary: #94a3b8;
-            --accent-color: #6366f1;
-            --success-color: #10b981;
-            --danger-color: #ef4444;
-            --warning-color: #f59e0b;
-            --radius: 20px;
-            --shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-        }
-
-        * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; user-select: none; }
-        body { font-family: 'Noto Sans', sans-serif; background: var(--bg-gradient); background-attachment: fixed; color: var(--text-primary); margin: 0; padding: env(safe-area-inset-top) 10px 10px 10px; min-height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-        body.global-locked { overflow: hidden !important; touch-action: none; }
-
-        /* 1. Allarga l'interfaccia su PC (Rimosso limite 1200px) */
-        .app-shell { 
-            width: 100%; 
-            max-width: 98vw; /* Usa quasi tutta la larghezza disponibile */
-            margin: 0 auto;
-            border: 1px solid var(--glass-border); 
-            border-radius: var(--radius); 
-            padding: 15px; 
-            box-shadow: var(--shadow); 
-            display: flex; 
-            flex-direction: column; 
-            gap: 15px; 
-            position: relative; 
-            height: calc(100vh - 20px); 
-            z-index: 1; 
-        }
-        .app-shell::before {
-            content: ""; position: absolute; inset: 0; background: var(--glass-bg);
-            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            border-radius: var(--radius); z-index: -1; 
-        }
-
-        /* HEADER */
-        header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--glass-border); flex-shrink: 0; }
-        h1 { margin: 0; font-size: 1.1rem; font-weight: 800; display: flex; align-items: center; gap: 10px; }
-        
-        .header-actions { display: flex; gap: 12px; align-items: center; flex-shrink: 0; }
-        
-        .patient-selector-wrapper { position: relative; width: 200px; }
-        .patient-selector-wrapper select { width: 100%; padding: 8px 12px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; color: var(--success-color); font-weight: 600; font-size: 0.9rem; }
-        
-        .btn-icon { background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); color: var(--text-primary); width: 44px; height: 44px; border-radius: 12px; cursor: pointer; display: grid; place-items: center; position: relative; transition: 0.2s; font-size: 1.1rem; flex-shrink: 0; }
-        .btn-icon:active { transform: scale(0.95); }
-        .btn-icon:hover { background: rgba(255,255,255,0.1); border-color: var(--accent-color); }
-        
-        .badge-count { position: absolute; top: -5px; right: -5px; background: var(--danger-color); color: white; font-size: 0.7rem; padding: 2px 6px; border-radius: 10px; border: 2px solid #1e1e2f; font-weight: bold; min-width: 20px; text-align: center; pointer-events: none; }
-
-        /* CONTROLS */
-        .controls-row { display: flex; gap: 8px; align-items: center; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 12px; flex-shrink: 0; flex-wrap: wrap;}
-        .select-wrapper { position: relative; flex: 1; min-width: 120px; }
-        .select-wrapper label { display: block; font-size: 0.6rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 2px; text-transform: uppercase; }
-        select { width: 100%; padding: 10px; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: 8px; color: white; font-size: 0.9rem; font-weight: 600; }
-        
-        /* STAGE */
-        #game-stage { flex: 1; background: rgba(0,0,0,0.2); border-radius: 16px; position: relative; overflow: hidden; border: 2px dashed var(--glass-border); display: flex; flex-direction: column; min-height: 0; }
-
-        /* MODES */
-        .grid-adaptive { display: grid; gap: 10px; width: 100%; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); align-content: start; }
-        
-        /* RAN */
-        .ran-container { width: 100%; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
-        .ran-toolbar { flex-shrink: 0; padding: 10px; display: flex; justify-content: center; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .ran-scroll-area { flex: 1; overflow-y: auto; padding: 10px; }
-        .ran-card { background: white; border-radius: 8px; padding: 4px; aspect-ratio: 1; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
-        .ran-card img { width: 100%; height: 100%; object-fit: contain; }
-        .ran-single-stage { display: flex; flex-direction: column; align-items: center; justify-content: space-between; height: 100%; width: 100%; padding: 10px; overflow: hidden; }
-        .ran-main-img { flex: 1; min-height: 0; width: auto; max-width: 100%; object-fit: contain; border-radius: 12px; background: white; padding: 10px; margin-bottom: 10px; box-shadow: 0 5px 20px rgba(0,0,0,0.3); }
-        .ran-controls-bar { display: flex; align-items: center; gap: 20px; width: 100%; justify-content: center; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 16px; flex-shrink: 0; margin-top: auto; }
-        .ran-btn-nav { width: 60px; height: 60px; border-radius: 50%; background: var(--accent-color); border: none; color: white; font-size: 1.5rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.1s; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
-        .ran-btn-nav:active { transform: scale(0.95); }
-
-        /* SEARCH & FIND */
-        .search-find-container { width: 100%; height: 100%; display: flex; flex-direction: column; overflow: hidden; position: relative; }
-        .sf-toolbar { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 100; background: rgba(0,0,0,0.6); padding: 5px 15px; border-radius: 20px; backdrop-filter: blur(5px); display: flex; gap: 10px; align-items: center; }
-        .sf-viewport { flex: 1; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; background: #222; overflow: hidden; position: relative; cursor: crosshair; }
-        .sf-image { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; display: block; }
-        .marker-pin { position: absolute; width: 40px; height: 40px; border: 4px solid var(--accent-color); border-radius: 50%; background: rgba(255, 255, 255, 0.4); transform: translate(-50%, -50%); pointer-events: auto; z-index: 10; cursor: pointer; }
-
-        /* FLOATING CONTROLS */
-        .global-floating-controls { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column-reverse; gap: 15px; z-index: 9999; pointer-events: none; align-items: flex-end; }
-        .control-row { display: flex; gap: 10px; pointer-events: auto; }
-        .btn-float { width: 60px; height: 60px; border-radius: 18px; background: rgba(30, 30, 50, 0.9); border: 1px solid var(--glass-border); color: white; font-size: 1.4rem; pointer-events: auto; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 15px rgba(0,0,0,0.5); transition: 0.2s; }
-        .btn-float:active { transform: scale(0.9); }
-        .btn-float.locked { background: var(--warning-color); color: #000; animation: pulse 2s infinite; }
-        
-        /* SCORING BUTTONS */
-        .btn-score { width: 60px; height: 60px; border-radius: 50%; border: none; font-size: 1.8rem; color: white; box-shadow: 0 4px 15px rgba(0,0,0,0.4); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.1s; pointer-events: auto; }
-        .btn-score:active { transform: scale(0.9); }
-        .btn-score.success { background: var(--success-color); }
-        .btn-score.fail { background: var(--danger-color); }
-        
-        /* CHART STYLES (CLINICAL) */
-        .chart-wrapper { background: rgba(0,0,0,0.3); border-radius: 12px; padding: 15px; margin-top: 15px; border: 1px solid var(--glass-border); position: relative; }
-        .chart-svg { width: 100%; height: 200px; overflow: visible; }
-        .chart-line { fill: none; stroke: rgba(255,255,255,0.8); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; } /* Bianca sottile */
-        .chart-dot { fill: var(--accent-color); stroke: white; stroke-width: 2; r: 5; cursor: pointer; transition: 0.2s; } /* Nodi visibili */
-        .chart-dot:hover { r: 8; }
-        .threshold-line { stroke: var(--danger-color); stroke-width: 2; stroke-dasharray: 5,5; opacity: 0.7; }
-        
-        .axis-line { stroke: #555; stroke-width: 1; }
-        .axis-text { fill: #888; font-size: 10px; }
-        .grid-line { stroke: rgba(255,255,255,0.05); stroke-width: 1; }
-
-        /* CRITERION BADGE */
-        .criterion-badge { 
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            color: white; padding: 3px 8px; border-radius: 6px; 
-            font-size: 0.7rem; font-weight: bold; text-transform: uppercase; 
-            margin-left: 10px; vertical-align: middle; box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-        }
-
-        /* UTILS */
-        .mode-tags { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 5px; }
-        .mode-check { display: flex; align-items: center; gap: 5px; background: rgba(255,255,255,0.05); padding: 5px 10px; border-radius: 20px; border: 1px solid transparent; cursor: pointer; font-size: 0.8rem; }
-        .mode-check.selected { background: rgba(99, 102, 241, 0.2); border-color: var(--accent-color); color: white; }
-        
-        .lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; padding-bottom: 20px; }
-        .lib-card { background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; transition: 0.2s; position: relative; overflow: hidden; cursor: pointer; }
-        .lib-card:hover { border-color: var(--accent-color); background: rgba(255,255,255,0.08); }
-        .lib-card.clinical { border-left: 3px solid var(--success-color); }
-        .lib-preview-grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 2px; height: 120px; border-radius: 8px; overflow: hidden; background: rgba(0,0,0,0.3); margin-bottom: 5px; }
-        .lib-preview-item { width: 100%; height: 100%; object-fit: cover; background: #222; opacity: 0.8; }
-        
-        .tact-stage { display: flex; justify-content: center; align-items: center; flex: 1; padding: 20px; width: 100%; height: 100%; }
-        .tact-card-lg { background: white; padding: 10px; border-radius: 20px; width: 100%; max-width: 600px; height: 100%; max-height: 90vh; text-align: center; display: flex; flex-direction: column; align-items: center; box-shadow: 0 10px 40px rgba(0,0,0,0.5); justify-content: space-between; }
-        .tact-card-lg img { width: 100%; flex: 1; object-fit: contain; border-radius: 10px; max-height: 70vh; }
-        .tact-title { font-size: 2rem; color: #333; margin: 15px 0; font-weight: 800; text-transform: uppercase; }
-
-        .card-grid { cursor: pointer; transition: 0.2s; background: white; border-radius: 12px; padding: 5px; position:relative; aspect-ratio: 1; display:flex; align-items:center; justify-content:center;}
-        .card-grid img { width: 100%; height: 100%; object-fit: contain; border-radius: 6px; }
-        .card-grid.matched { opacity: 0.3; filter: grayscale(100%); pointer-events: none; }
-
-        .modal-fs { position: fixed; inset: 0; background: #1e1e2f; z-index: 10000; display: flex; flex-direction: column; transform: translateY(100%); transition: transform 0.3s; }
-        .modal-fs.open { transform: translateY(0); }
-        .modal-header { padding: 15px; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; background: rgba(0,0,0,0.2); }
-        .modal-body { flex: 1; overflow-y: auto; padding: 15px; }
-        .hidden { display: none !important; }
-        .btn { padding: 10px 20px; border-radius: 10px; border: none; font-weight: 700; cursor: pointer; color: white; display: inline-flex; align-items: center; gap: 8px; justify-content: center; }
-        .btn-primary { background: var(--accent-color); }
-        .btn-danger { background: var(--danger-color); }
-        .btn-success { background: var(--success-color); }
-        .btn-ghost { background: transparent; border: 1px solid var(--glass-border); color: var(--text-secondary); }
-        
-        .editor-item { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.05); padding: 8px; border-radius: 8px; margin-bottom: 8px; }
-        .editor-thumb { width: 50px; height: 50px; background: #000; overflow: hidden; border-radius: 6px; } 
-        .editor-thumb img { width: 100%; height: 100%; object-fit: cover; }
-         /* 2. Fix Feedback Verde (Rimosso l'ingrandimento che causava overflow) */
-        .feedback-success { 
-            border: 6px solid var(--success-color) !important; 
-            box-shadow: 0 0 25px rgba(16, 185, 129, 0.6) !important; 
-            transform: none !important; /* Mantiene la dimensione originale */
-            box-sizing: border-box; /* Assicura che il bordo stia "dentro" le misure */
-        }
-
-        .feedback-fail { 
-            border: 6px solid var(--danger-color) !important; 
-            box-shadow: 0 0 25px rgba(239, 68, 68, 0.6) !important; 
-            transform: scale(0.96); /* Riduce leggermente per enfatizzare l'errore */
-            filter: grayscale(0.5);
-        }
-
-        /* Stili per Marker (Cerca Trova) */
-        .marker-pin.success { 
-            background: var(--success-color) !important; 
-            border-color: white !important; 
-            box-shadow: 0 0 15px var(--success-color);
-        }
-        .marker-pin.fail { 
-            background: var(--danger-color) !important; 
-            border-color: white !important; 
-            box-shadow: 0 0 15px var(--danger-color);
-        }
-        .marker-pin.success::after { content: '✓'; color: white; }
-        .marker-pin.fail::after { content: '✕'; color: white; }
-        input[type="text"] { width: 100%; padding: 10px; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--glass-border); border-radius: 8px; color: white; }
-        
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(0,0,0,0); } 100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); } }
-
-    </style>
+    <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
 
     <div class="app-shell">
         <header>
-            <h1><i class="fa-solid fa-brain logo-icon"></i> Stimolatore v37</h1>
-            
+            <h1><i class="fa-solid fa-brain logo-icon"></i> Stimolatore v40</h1>
+
             <div class="header-actions">
-                <!-- TASTO INFO -->
+                <!-- INFO BUTTON -->
                 <button class="btn-icon" onclick="window.openInstructions()" title="Manuale Utente" style="z-index:100; position:relative; border-color:var(--accent-color); color:var(--accent-color);">
                     <i class="fa-solid fa-info"></i>
                 </button>
 
-                <!-- SELETTORE PAZIENTE -->
+                <!-- PATIENT SELECTOR -->
                 <div class="patient-selector-wrapper">
                     <select id="global-patient-select" onchange="setGlobalPatient(this.value)">
                         <option value="">-- Ospite --</option>
                     </select>
                 </div>
 
-                <!-- ALTRI TASTI -->
+                <!-- ACTION BUTTONS -->
                 <button class="btn-icon" onclick="openPatients()" title="Gestione Pazienti" style="color:var(--success-color); border-color:rgba(16, 185, 129, 0.3);">
                     <i class="fa-solid fa-user-doctor"></i>
                 </button>
@@ -232,39 +44,95 @@
                     <i class="fa-solid fa-folder-open"></i>
                     <span id="lib-count" class="badge-count">0</span>
                 </button>
+                <button class="btn-icon" onclick="openFirebaseSettings()" title="Firebase Sync" style="color:#f59e0b; border-color:rgba(245,158,11,0.3);">
+                    <i class="fa-solid fa-cloud"></i>
+                </button>
                 <button class="btn-icon" onclick="toggleFullScreen()" title="Schermo Intero">
                     <i class="fa-solid fa-expand" id="fs-icon"></i>
                 </button>
             </div>
         </header>
 
-        <!-- CONTROLLI -->
+        <!-- CONTROLS -->
         <div class="controls-row">
             <div class="select-wrapper">
-                <label><i class="fa-solid fa-gamepad"></i> Attività</label>
+                <label><i class="fa-solid fa-gamepad"></i> Attivit&agrave;</label>
                 <select id="mode-select" onchange="filterSetsByMode()">
                     <option value="tact">TACT (Flashcard)</option>
                     <option value="ran">RAN (Denominazione)</option>
                     <option value="tombola">Tombola (Matching)</option>
+                    <option value="tombola_sonora">Tombola Sonora (Audio)</option>
                     <option value="memory">Memory</option>
                     <option value="search_find">Cerca Trova (Scena)</option>
+                    <option value="intraverbal_scenari">Intraverbal-Scenari</option>
+                    <option value="zoom">Zoom (Indovina)</option>
+                    <option value="quaderno">Quaderno (Manuale)</option>
+                    <optgroup label="Avanzate">
+                        <option value="topologia">Topologia (Drag&amp;Drop)</option>
+                        <option value="sequenze">Sequenze (Ordina)</option>
+                    </optgroup>
+                    <optgroup label="Pool da Tag">
+                        <option value="pool_random">Pool Random</option>
+                        <option value="pool_intraverbal">Pool Intraverbal</option>
+                        <option value="intruso">Intruso</option>
+                        <option value="categorizzazione">Categorizzazione</option>
+                    </optgroup>
                 </select>
             </div>
 
-            <div class="select-wrapper" style="flex: 2;">
+            <!-- Set selector (hidden for pool modes) -->
+            <div class="select-wrapper" style="flex: 2;" id="set-selector-wrapper">
                 <label><i class="fa-solid fa-layer-group"></i> Set Disponibili</label>
                 <select id="category-select" onchange="loadSelectedSet(this.value)">
                     <option value="" disabled selected>-- Scegli un Set --</option>
                 </select>
             </div>
 
-            <div class="select-wrapper" style="max-width: 100px;">
-                <label>N. Item</label>
-                <select id="grid-size" onchange="window.startGame()">
-                    <option value="20">Tutti</option>
-                    <option value="3">9 (3x3)</option>
-                    <option value="4">16 (4x4)</option>
+            <!-- Tag selector (shown for pool modes) -->
+            <div class="select-wrapper hidden" style="flex: 2;" id="tag-selector-wrapper">
+                <label><i class="fa-solid fa-tags"></i> Seleziona Tag</label>
+                <div id="pool-tag-selector" style="display:flex; gap:6px; flex-wrap:wrap; padding:6px; background:rgba(0,0,0,0.2); border-radius:8px; min-height:40px; align-items:center;">
+                    <span style="color:var(--text-secondary); font-size:0.8rem;">Scegli un'attivit&agrave; Pool...</span>
+                </div>
+            </div>
+
+            <!-- STIMULUS COUNT SELECTOR (Phase 1.b) -->
+            <div class="select-wrapper" style="max-width: 110px;">
+                <label><i class="fa-solid fa-hashtag"></i> N. Stimoli</label>
+                <select id="num-stimuli" onchange="window.startGame()">
+                    <option value="0">Tutti</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="6">6</option>
+                    <option value="8">8</option>
+                    <option value="10">10</option>
+                    <option value="12">12</option>
+                    <option value="16">16</option>
+                    <option value="20">20</option>
                 </select>
+            </div>
+
+            <div class="select-wrapper" style="max-width: 100px;">
+                <label>Griglia</label>
+                <select id="grid-size" onchange="window.startGame()">
+                    <option value="20">Auto</option>
+                    <option value="3">3x3</option>
+                    <option value="4">4x4</option>
+                    <option value="5">5x5</option>
+                </select>
+            </div>
+
+            <div class="select-wrapper" style="max-width: 140px;">
+                <label><i class="fa-solid fa-clipboard-check"></i> Tipo</label>
+                <select id="session-type-select" onchange="onSessionTypeChange()">
+                    <option value="independent">Indipendente</option>
+                    <option value="timedelay">Time Delay</option>
+                </select>
+            </div>
+
+            <div class="select-wrapper" id="td-seconds-wrapper" style="max-width: 70px; display:none;">
+                <label>Sec TD</label>
+                <input type="number" id="td-seconds-ctrl" value="5" min="1" max="30" style="padding:8px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.9rem; width:100%; text-align:center;">
             </div>
 
             <button class="btn-icon" onclick="startGame()" title="Riavvia Sessione" style="margin-top: 18px; background: var(--accent-color); border:none; color:white;">
@@ -272,22 +140,24 @@
             </button>
         </div>
 
-        <!-- STAGE DI GIOCO -->
+        <!-- GAME STAGE -->
         <div id="game-stage">
             <div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; color:var(--text-secondary); text-align:center;">
                 <i class="fa-solid fa-shapes" style="font-size:4rem; margin-bottom:20px; opacity:0.2;"></i>
-                <p style="font-size:1.2rem;">Seleziona un'<b>Attività</b> e un <b>Set</b><br>per iniziare la sessione clinica.</p>
+                <p style="font-size:1.2rem;">Seleziona un'<b>Attivit&agrave;</b> e un <b>Set</b><br>per iniziare la sessione clinica.</p>
             </div>
         </div>
     </div>
 
-    <!-- TASTI FLUTTUANTI GLOBALI -->
+    <!-- FLOATING CONTROLS -->
     <div class="global-floating-controls">
-        
-        <!-- Riga Scoring (Shortcut: V / X) -->
+        <!-- Scoring -->
         <div id="scoring-controls" class="control-row hidden">
-            <button class="btn-score fail" onclick="recordResponse(false)" title="Risposta Errata (Tasto X)">
+            <button id="btn-score-x" class="btn-score fail" onclick="recordResponse(false)" title="Risposta Errata (Tasto X)">
                 <i class="fa-solid fa-xmark"></i>
+            </button>
+            <button id="btn-score-p" class="btn-score prompt" onclick="recordResponse('prompt')" title="Prompt (Tasto P)" style="display:none;">
+                P
             </button>
             <div style="background:rgba(0,0,0,0.5); padding:5px 10px; border-radius:10px; color:white; font-size:0.8rem; display:flex; flex-direction:column; align-items:center; justify-content:center; min-width: 60px;">
                 <span id="score-display" style="font-weight:bold; font-size:1.1rem;">0/0</span>
@@ -296,6 +166,11 @@
             <button class="btn-score success" onclick="recordResponse(true)" title="Risposta Corretta (Tasto V)">
                 <i class="fa-solid fa-check"></i>
             </button>
+        </div>
+
+        <div id="session-name-wrapper" class="hidden" style="pointer-events:auto; display:flex; align-items:center; gap:6px;">
+            <input type="text" id="session-name-input" list="session-names-list" placeholder="Nome sessione (opzionale)" style="padding:8px 12px; border-radius:12px; background:rgba(30,30,50,0.95); border:1px solid var(--glass-border); color:white; font-size:0.8rem; width:200px; backdrop-filter:blur(8px);">
+            <datalist id="session-names-list"></datalist>
         </div>
 
         <button class="btn-float hidden" id="btn-save-session" onclick="confirmSaveSession()" style="background:#2563eb;" title="Salva Dati">
@@ -312,7 +187,7 @@
         </div>
     </div>
 
-    <!-- MODALI (PAZIENTI, LIBRARY, EDITOR) -->
+    <!-- MODAL: PATIENTS -->
     <div id="modal-patients" class="modal-fs">
         <div class="modal-header">
             <h2><i class="fa-solid fa-chart-line"></i> Cartelle Cliniche</h2>
@@ -332,6 +207,7 @@
         </div>
     </div>
 
+    <!-- MODAL: LIBRARY -->
     <div id="modal-library" class="modal-fs">
         <div class="modal-header">
             <h2><i class="fa-solid fa-folder-tree"></i> Archivio Set</h2>
@@ -348,6 +224,7 @@
         </div>
     </div>
 
+    <!-- MODAL: EDITOR -->
     <div id="modal-editor" class="modal-fs">
         <div class="modal-header">
             <h2>Modifica Set</h2>
@@ -356,13 +233,21 @@
                 <button class="btn btn-ghost" onclick="closeEditor()">Annulla</button>
             </div>
         </div>
-        
+
         <div class="modal-body">
             <div style="background: rgba(0,0,0,0.2); padding:15px; border-radius:12px; margin-bottom:20px;">
                 <label style="font-size:0.8rem; color:#aaa;">Nome del Set</label>
                 <input type="text" id="edit-set-name" style="margin-bottom:10px; font-size:1.2rem; font-weight:bold;">
-                <label style="font-size:0.8rem; color:#aaa;">Modalità Compatibili</label>
+
+                <label style="font-size:0.8rem; color:#aaa;">Modalit&agrave; Compatibili</label>
                 <div class="mode-tags" id="edit-modes-container"></div>
+
+                <!-- TAG EDITOR (Phase 1.c) -->
+                <label style="font-size:0.8rem; color:#aaa; margin-top:12px; display:block;">
+                    <i class="fa-solid fa-tags"></i> Tag Semantici
+                    <span style="font-size:0.7rem; opacity:0.6;">(es. animali, verbi, colori)</span>
+                </label>
+                <div id="edit-tags-container"></div>
             </div>
             <div style="margin-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:15px;">
                  <button class="btn btn-ghost" onclick="document.getElementById('bulk-upload').click()"><i class="fa-solid fa-images"></i> Carica Immagini (Bulk)</button>
@@ -373,7 +258,7 @@
         </div>
     </div>
 
-    <!-- === API SETTINGS (INLINE HIDDEN) === -->
+    <!-- MODAL: SETTINGS -->
     <div id="modal-settings" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:2000; justify-content:center; align-items:center;">
         <div style="background:#1e1e2f; padding:30px; border-radius:20px; width:90%; max-width:400px; border:1px solid var(--glass-border);">
             <h3><i class="fa-solid fa-key"></i> API Key</h3>
@@ -386,1314 +271,148 @@
         </div>
     </div>
 
-    <!-- === PREVIEW MODAL (INLINE HIDDEN) === -->
+    <!-- MODAL: PREVIEW -->
     <div id="modal-preview" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index: 2000; justify-content: center; align-items: center; padding: 20px;" onclick="this.style.display='none'">
         <img id="preview-img" src="" alt="" style="max-width:100%; max-height:100%; border-radius:12px;">
     </div>
 
-    <!-- MODALE ISTRUZIONI (Layout a Griglia) -->
+    <!-- MODAL: INSTRUCTIONS -->
     <div id="modal-instructions" class="modal-fs">
         <div class="modal-header">
             <h2><i class="fa-solid fa-book-open"></i> Guida Utente</h2>
             <button class="btn btn-danger" onclick="closeInstructions()">Chiudi</button>
         </div>
         <div class="modal-body" style="padding: 20px; max-width: 1100px; margin: 0 auto; color: #e2e8f0;">
-            
+
             <!-- Intro Card -->
             <div style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(99, 102, 241, 0.05) 100%); padding: 20px; border-radius: 16px; margin-bottom: 30px; border: 1px solid rgba(99, 102, 241, 0.2); display: flex; gap: 20px; align-items: center;">
                 <div style="font-size: 2.5rem; color: var(--accent-color); padding: 0 10px;"><i class="fa-solid fa-brain"></i></div>
                 <div>
-                    <h3 style="margin: 0 0 10px 0; color: white;">Stimolatore Clinico v37</h3>
+                    <h3 style="margin: 0 0 10px 0; color: white;">Stimolatore Clinico v40</h3>
                     <p style="margin: 0; opacity: 0.8;">Piattaforma per la riabilitazione neuropsicologica e il potenziamento cognitivo. Gestisci pazienti, crea set personalizzati e monitora i progressi con strumenti clinici avanzati.</p>
                 </div>
             </div>
 
-            <!-- Griglia Istruzioni -->
+            <!-- Instructions Grid -->
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
 
-                <!-- 1. PAZIENTI -->
+                <!-- PATIENTS -->
                 <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--success-color);">
                     <h3 style="margin-top: 0; color: var(--success-color); display: flex; align-items: center; gap: 10px;">
                         <i class="fa-solid fa-user-doctor"></i> Gestione Pazienti
                     </h3>
                     <ul style="padding-left: 20px; line-height: 1.6;">
-                        <li>
-                            <strong>Selettore Rapido:</strong> In alto a destra trovi il menu a tendina.
-                            <br><span style="font-size: 0.85em; opacity: 0.7;">Seleziona "Ospite" per sessioni senza salvataggio.</span>
-                        </li>
-                        <li>
-                            <strong>Cartella Clinica:</strong> Clicca <i class="fa-solid fa-user-doctor"></i> per gestire l'anagrafica.
-                        </li>
-                        <li>
-                            <strong>Grafici & Storico:</strong> Visualizza l'andamento per ogni attività.
-                            <br><i class="fa-solid fa-trophy" style="color: #fbbf24;"></i> <strong>Criterio (Mastery):</strong> Assegnato automaticamente dopo 2 sessioni consecutive con >90% di correttezza in giorni diversi.
-                        </li>
-                        <li>
-                            <strong>Editing Dati:</strong> Espandi i grafici (<i class="fa-solid fa-chevron-down"></i>) per correggere errori di inserimento o date.
-                        </li>
+                        <li><strong>Selettore Rapido:</strong> In alto a destra trovi il menu a tendina.<br><span style="font-size: 0.85em; opacity: 0.7;">Seleziona "Ospite" per sessioni senza salvataggio.</span></li>
+                        <li><strong>Cartella Clinica:</strong> Clicca <i class="fa-solid fa-user-doctor"></i> per gestire l'anagrafica.</li>
+                        <li><strong>Grafici & Storico:</strong> Visualizza l'andamento per ogni attivit&agrave;.<br><i class="fa-solid fa-trophy" style="color: #fbbf24;"></i> <strong>Criterio (Mastery):</strong> Assegnato automaticamente dopo 2 sessioni consecutive con &gt;90% di correttezza in giorni diversi.</li>
+                        <li><strong>Editing Dati:</strong> Espandi i grafici (<i class="fa-solid fa-chevron-down"></i>) per correggere errori di inserimento o date.</li>
                     </ul>
                 </div>
 
-                <!-- 2. ATTIVITÀ -->
+                <!-- MODES -->
                 <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--accent-color);">
                     <h3 style="margin-top: 0; color: var(--accent-color); display: flex; align-items: center; gap: 10px;">
-                        <i class="fa-solid fa-gamepad"></i> Modalità
+                        <i class="fa-solid fa-gamepad"></i> Modalit&agrave;
                     </h3>
                     <ul style="padding-left: 20px; line-height: 1.6;">
                         <li><strong>TACT:</strong> Flashcards sequenziali per denominazione pura.</li>
-                        <li><strong>RAN (Velocità):</strong> Denominazione rapida.
-                            <br><span style="font-size: 0.85em; opacity: 0.7;">Usa il tasto <i class="fa-solid fa-table-cells"></i> per passare da vista Griglia a Sequenza.</span>
-                        </li>
-                        <li><strong>Tombola:</strong> Matching visivo. Trova l'immagine target nella griglia.</li>
+                        <li><strong>RAN (Velocit&agrave;):</strong> Denominazione rapida.<br><span style="font-size: 0.85em; opacity: 0.7;">Usa il tasto <i class="fa-solid fa-table-cells"></i> per passare da vista Griglia a Sequenza.</span></li>
+                        <li><strong>Tombola:</strong> Matching visivo. Trova l'immagine target nella griglia. Scoring automatico.</li>
+                        <li><strong>Tombola Sonora:</strong> Ascolta un suono e tocca la carta corrispondente. Richiede audio negli item (<i class="fa-solid fa-music"></i> nell'editor).</li>
                         <li><strong>Memory:</strong> Gioco di memoria per funzioni esecutive.</li>
                         <li><strong>Cerca Trova:</strong> Esplorazione visiva su scene. Tocca per marcare i bersagli.</li>
+                        <li><strong>Intraverbal-Scenari:</strong> Come Cerca Trova, ma con dati tracciati separatamente per uso intraverbale/scenari.</li>
+                        <li><strong>Zoom:</strong> Un'immagine viene mostrata zoomata su un dettaglio. Il bambino deve indovinare l'intera immagine. Area zoom definibile nell'editor (<i class="fa-solid fa-crop"></i>).</li>
+                        <li><strong>Topologia:</strong> Trascina le immagini per disporle spazialmente. Scoring manuale.</li>
+                        <li><strong>Sequenze:</strong> Tocca le immagini nell'ordine corretto (1, 2, 3...). Premi Verifica per controllare.</li>
+                        <li><strong>Pool Random:</strong> Griglia di stimoli casuali dai tag selezionati. N. Stimoli = carte a schermo. Avanza all'infinito.</li>
+                        <li><strong>Pool Intraverbal:</strong> Come Pool Random, ma con dati tracciati separatamente per uso intraverbale.</li>
+                        <li><strong>Intruso:</strong> Trova l'intruso! N. Stimoli = carte per round. Round infiniti. Richiede 2+ tag.</li>
+                        <li><strong>Categorizzazione:</strong> Assegna ogni immagine alla categoria corretta. I pulsanti mostrano le immagini dei tag. Richiede 2+ tag.</li>
+                        <li><strong>Quaderno:</strong> Registro manuale con due sotto-modalit&agrave;:<br>
+                            <b>Generale</b> - Aggiungi righe di attivit&agrave; con tasti X/Prompt/V.<br>
+                            <b>Task Analysis</b> - Sequenze operazionalizzate con passi da segnare (X/P/V/N.A.).<br>
+                            Le liste si possono salvare come template e ricaricare. I dati partecipano ai report.</li>
                     </ul>
                 </div>
 
-                <!-- 3. SESSIONE -->
+                <!-- SESSION -->
                 <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--warning-color);">
                     <h3 style="margin-top: 0; color: var(--warning-color); display: flex; align-items: center; gap: 10px;">
                         <i class="fa-solid fa-stopwatch"></i> Sessione & Scoring
                     </h3>
                     <ul style="padding-left: 20px; line-height: 1.6;">
-                        <li>
-                            <strong>Valutazione:</strong> Usa i tasti a schermo o la tastiera.
-                            <br><span style="color: var(--success-color);"><b>V</b></span> = Corretto (Tasto 'V')
-                            <br><span style="color: var(--danger-color);"><b>X</b></span> = Errato (Tasto 'X')
-                        </li>
-                        <li>
-                            <strong>Feedback:</strong> L'immagine si borda di verde/rosso per feedback immediato.
-                        </li>
-                        <li>
-                            <strong>Child Lock <i class="fa-solid fa-lock-open"></i>:</strong> Blocca lo scroll per evitare tocchi accidentali.
-                        </li>
-                        <li>
-                            <strong>Salvataggio <i class="fa-solid fa-floppy-disk"></i>:</strong> Salva i dati nella cartella del paziente attivo.
-                        </li>
+                        <li><strong>Valutazione:</strong> Usa i tasti a schermo o la tastiera.<br><span style="color: var(--success-color);"><b>V</b></span> = Corretto (Tasto 'V')<br><span style="color: var(--warning-color);"><b>P</b></span> = Prompt (Tasto 'P')<br><span style="color: var(--danger-color);"><b>X</b></span> = Errato (Tasto 'X')</li>
+                        <li><strong>N. Stimoli:</strong> Scegli quanti stimoli presentare (3, 4, 6, 8... o Tutti).</li>
+                        <li><strong>Child Lock <i class="fa-solid fa-lock-open"></i>:</strong> Blocca lo scroll per evitare tocchi accidentali.</li>
+                        <li><strong>Salvataggio <i class="fa-solid fa-floppy-disk"></i>:</strong> Salva i dati nella cartella del paziente attivo.<br><span style="font-size: 0.85em; opacity: 0.7;">Puoi inserire un nome personalizzato nella casella di testo. Se vuoto, usa il nome del set/modalit&agrave;.</span></li>
                     </ul>
                 </div>
 
-                <!-- 4. LIBRERIA -->
+                <!-- LIBRARY -->
                 <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid #a855f7;">
                     <h3 style="margin-top: 0; color: #a855f7; display: flex; align-items: center; gap: 10px;">
                         <i class="fa-solid fa-folder-open"></i> Editor & Libreria
                     </h3>
                     <ul style="padding-left: 20px; line-height: 1.6;">
-                        <li>
-                            <strong>Creazione:</strong> Crea set personalizzati caricando le tue immagini.
-                        </li>
-                        <li>
-                            <strong>Caricamento Rapido:</strong>
-                            <br>- Clicca sull'icona fotocamera <i class="fa-solid fa-camera"></i>.
-                            <br>- <b>Ctrl+V</b> su una riga per incollare dagli appunti.
-                            <br>- <b>Bulk:</b> Carica intere cartelle in una volta.
-                        </li>
-                        <li>
-                            <strong>Indicatori Libreria:</strong>
-                            <br>⚠️ = Immagini mancanti nel set.
-                            <br>🏆 = Criterio raggiunto dal paziente attivo.
-                        </li>
-                        <li>
-                            <strong>Backup Completo:</strong> Esporta un unico file contenente <b>tutti</b> i Set e le Cartelle Pazienti.
-                        </li>
+                        <li><strong>Creazione:</strong> Crea set personalizzati caricando le tue immagini.</li>
+                        <li><strong>Tag Semantici:</strong> Assegna tag (es. "animali", "verbi") per organizzare i set e abilitare le future modalit&agrave; Pool e Intruso.</li>
+                        <li><strong>Caricamento Rapido:</strong><br>- Clicca sull'icona fotocamera <i class="fa-solid fa-camera"></i>.<br>- <b>Ctrl+V</b> su una riga per incollare dagli appunti.<br>- <b>Bulk:</b> Carica intere cartelle in una volta.</li>
+                        <li><strong>Audio (<i class="fa-solid fa-music"></i>):</strong> Carica file audio per ogni item (usato in Tombola Sonora).</li>
+                        <li><strong>Zoom Area (<i class="fa-solid fa-crop"></i>):</strong> Definisci l'area di zoom per la modalit&agrave; Zoom trascinando sull'immagine.</li>
+                        <li><strong>Backup Completo:</strong> Esporta un unico file contenente <b>tutti</b> i Set e le Cartelle Pazienti.</li>
                     </ul>
                 </div>
-
             </div>
-            
+
             <div style="text-align: center; margin-top: 40px; color: #666; font-size: 0.8rem;">
-                Design e Sviluppo per uso Professionale - v37
+                Design e Sviluppo per uso Professionale - v40
             </div>
         </div>
     </div>
 
-    <script>
-        // --- 0. DB MANAGER ---
-        const DB_NAME = 'StimolatoreLessicaleDB';
-        const DB_VERSION = 3; 
-        const STORE_SETS = 'sets';
-        const STORE_PATIENTS = 'patients';
+    <!-- MODAL: FIREBASE SETTINGS -->
+    <div id="modal-firebase" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:2000; justify-content:center; align-items:center;">
+        <div style="background:#1e1e2f; padding:25px; border-radius:20px; width:90%; max-width:420px; border:1px solid var(--glass-border);">
+            <h3 style="margin-top:0;"><i class="fa-solid fa-cloud"></i> Firebase Sync</h3>
+            <p style="color:#aaa; font-size:0.85rem;">Sincronizza i dati dei pazienti tra dispositivi via Firebase Realtime Database. Solo i dati delle sessioni vengono sincronizzati (non le immagini).</p>
 
-        class DB {
-            static async open() { 
-                return new Promise((res, rej) => { 
-                    const r = indexedDB.open(DB_NAME, DB_VERSION); 
-                    r.onupgradeneeded = e => { 
-                        const db = e.target.result; 
-                        if (!db.objectStoreNames.contains(STORE_SETS)) db.createObjectStore(STORE_SETS, { keyPath: 'id' }); 
-                        if (!db.objectStoreNames.contains(STORE_PATIENTS)) db.createObjectStore(STORE_PATIENTS, { keyPath: 'id' });
-                    }; 
-                    r.onsuccess = e => res(e.target.result); 
-                    r.onerror = e => rej(e.target.error); 
-                }); 
-            }
-            // Sets
-            static async getAllSets() { const db = await DB.open(); return new Promise(r => { const tx = db.transaction(STORE_SETS, 'readonly').objectStore(STORE_SETS).getAll(); tx.onsuccess = () => r(tx.result || []); }); }
-            static async saveSet(set) { const db = await DB.open(); return new Promise(r => { const tx = db.transaction(STORE_SETS, 'readwrite').objectStore(STORE_SETS).put(set); tx.onsuccess = () => r(true); }); }
-            static async deleteSet(id) { const db = await DB.open(); return new Promise(r => { const tx = db.transaction(STORE_SETS, 'readwrite').objectStore(STORE_SETS).delete(id); tx.onsuccess = () => r(true); }); }
-            // Patients
-            static async getAllPatients() { const db = await DB.open(); return new Promise(r => { const tx = db.transaction(STORE_PATIENTS, 'readonly').objectStore(STORE_PATIENTS).getAll(); tx.onsuccess = () => r(tx.result || []); }); }
-            static async savePatient(p) { const db = await DB.open(); return new Promise(r => { const tx = db.transaction(STORE_PATIENTS, 'readwrite').objectStore(STORE_PATIENTS).put(p); tx.onsuccess = () => r(true); }); }
-        }
-
-        // --- STATE ---
-        const MODES_CONFIG = { 'tact': 'TACT', 'ran': 'RAN', 'tombola': 'Tombola', 'memory': 'Memory', 'search_find': 'Cerca-Trova' };
-        let state = {
-            items: [], deck: [], memory: { flipped: [], matched: [], lockBoard: false },
-            savedSets: [], patients: [],
-            editingSetId: null, editingItems: [],
-            ranMode: 'grid', ranIndex: 0, tactIndex: 0,
-            activeSetId: null, activePatientId: null, 
-            session: { correct: 0, incorrect: 0, total: 0, active: false, itemResults: {} }
-        };
-
-        // --- INIT ---
-        window.onload = async () => {
-            try {
-                state.savedSets = await DB.getAllSets();
-                state.patients = await DB.getAllPatients();
-                
-                if (state.savedSets.length === 0) {
-                    const seed = [{ id: "anim_liv1", name: "Liv 1 (Bisillabe)", cat: "Animali", modes:['tact','ran','memory','tombola'], items: [{l:"Cane",url:null},{l:"Gatto",url:null}] }];
-                    for (const s of seed) await DB.saveSet(s);
-                    state.savedSets = await DB.getAllSets();
-                }
-
-                const badge = document.getElementById('lib-count');
-                if(badge) badge.innerText = state.savedSets.length;
-                
-                filterSetsByMode();
-                populateGlobalPatientSelect();
-
-                document.addEventListener('paste', handlePaste);
-                document.addEventListener('dragstart', (e) => e.preventDefault());
-                document.addEventListener('keydown', handleShortcuts);
-
-            } catch(e) { console.error("Init Error", e); }
-        };
-
-        // --- GLOBAL PATIENT ---
-        function populateGlobalPatientSelect() {
-            const sel = document.getElementById('global-patient-select');
-            sel.innerHTML = '<option value="">-- Ospite --</option>' + 
-                state.patients.map(p => `<option value="${p.id}" ${state.activePatientId===p.id?'selected':''}>${p.name}</option>`).join('');
-        }
-        // --- SELETTORE PAZIENTE (Sostituisci la vecchia setGlobalPatient) ---
-        window.setGlobalPatient = (pid) => { 
-            state.activePatientId = pid || null; 
-            
-            // AGGIUNTA FONDAMENTALE: Ridisegna la lista set per calcolare le coppe del nuovo paziente
-            if (typeof filterSetsByMode === 'function') {
-                filterSetsByMode(); 
-            }
-        };
-
-        // --- BLOCCO 1: FILTRI E DROPDOWN (Sostituisci filterSetsByMode e updateDropdown) ---
-        window.filterSetsByMode = function() {
-            const currentMode = document.getElementById('mode-select').value;
-            
-            // Logica di filtraggio rigorosa
-            const compatibleSets = state.savedSets.filter(s => {
-                // Se il set ha i nuovi TAG (modes)
-                if (s.modes && Array.isArray(s.modes) && s.modes.length > 0) {
-                    return s.modes.includes(currentMode);
-                }
-                // Logica Fallback per vecchi set senza tag
-                if (currentMode === 'search_find') {
-                    return s.category && (s.category.includes('Scene') || s.category.includes('Cerca'));
-                } else {
-                    // Escludi le scene dalle altre modalità
-                    return !(s.category && (s.category.includes('Scene') || s.category.includes('Cerca')));
-                }
-            });
-
-            updateDropdown(compatibleSets);
-            
-            // Se il set attualmente attivo non è compatibile, resetta lo stage
-            if(state.activeSetId && !compatibleSets.find(s => s.id === state.activeSetId)) {
-                document.getElementById('game-stage').innerHTML = `
-                    <div style="height:100%; display:flex; justify-content:center; align-items:center; opacity:0.5; flex-direction:column; text-align:center;">
-                        <i class="fa-solid fa-filter-circle-xmark fa-3x" style="margin-bottom:15px"></i>
-                        <p>Il set caricato non è adatto<br>a questa modalità.<br>Scegline un altro.</p>
-                    </div>`;
-                state.items = [];
-                state.activeSetId = null;
-            }
-        };
-
-        // --- AGGIORNAMENTO DROPDOWN CON INDICATORI (Sostituisci updateDropdown) ---
-        function updateDropdown(sets) {
-            const select = document.getElementById('category-select');
-            const currentMode = document.getElementById('mode-select').value;
-            // Recupera il paziente attivo per controllare il criterio
-            const activePatient = state.activePatientId ? state.patients.find(p => p.id === state.activePatientId) : null;
-
-            select.innerHTML = '<option value="" disabled selected>-- Scegli un Set --</option>';
-
-            const categories = {};
-            sets.forEach(s => {
-                const cat = s.category || "Altri";
-                if(!categories[cat]) categories[cat] = [];
-                categories[cat].push(s);
-            });
-
-            for(const [catName, catSets] of Object.entries(categories)) {
-                const group = document.createElement('optgroup');
-                group.label = catName;
-                
-                catSets.forEach(s => {
-                    const opt = document.createElement('option');
-                    opt.value = s.id;
-                    
-                    // 1. Check Immagini Mancanti (⚠️ Numero)
-                    const missingCount = s.items.filter(i => !i.url).length;
-                    const warningTag = missingCount > 0 ? ` ⚠️${missingCount}` : '';
-
-                    // 2. Check Criterio Raggiunto (🏆)
-                    let trophyTag = '';
-                    if (activePatient && activePatient.history) {
-                        // Filtra la storia per questo set e questa modalità
-                        const sessions = activePatient.history.filter(h => h.setId === s.id && h.mode === currentMode);
-                        // Usa la funzione checkCriterion esistente per verificare i 2 successi consecutivi
-                        if (typeof checkCriterion === 'function' && checkCriterion(sessions)) {
-                            trophyTag = ' 🏆';
-                        }
-                    }
-
-                    // Costruisce il testo: "Nome Set ⚠️2 🏆"
-                    opt.text = `${s.name}${warningTag}${trophyTag}`;
-                    
-                    // Mantiene la selezione attiva se necessario
-                    if (state.activeSetId === s.id) opt.selected = true;
-                    group.appendChild(opt);
-                });
-                select.appendChild(group);
-            }
-        }
-
-        // --- SESSION ---
-        window.loadSelectedSet = async (setId) => { const s = state.savedSets.find(x => x.id === setId); if(s) { state.activeSetId = setId; state.items = JSON.parse(JSON.stringify(s.items)); window.startGame(); } };
-
-        window.startGame = () => {
-            if(!state.items.length) return;
-            // Init session con itemResults per tracciare i singoli item
-            state.session = { correct: 0, incorrect: 0, total: 0, active: true, itemResults: {} };
-            updateScoreUI();
-            document.getElementById('scoring-controls').classList.remove('hidden');
-            document.getElementById('btn-save-session').classList.add('hidden');
-
-            let playItems = state.items.filter(i => !i.hidden);
-            const mode = document.getElementById('mode-select').value;
-            const size = parseInt(document.getElementById('grid-size').value);
-            if (mode !== 'search_find') {
-                playItems.sort(() => Math.random() - 0.5); 
-                const limit = size === 20 ? 20 : (size * size); 
-                if (playItems.length > limit) playItems = playItems.slice(0, limit);
-            }
-            state.tactIndex = 0; state.ranIndex = 0;
-            
-            const undoBtn = document.getElementById('btn-undo-marker');
-            if (mode === 'search_find') undoBtn.classList.remove('hidden'); else undoBtn.classList.add('hidden');
-            renderGameMode(mode, playItems);
-        };
-
-        // --- 1. SCORING CON FEEDBACK VISIVO (Sostituisci recordResponse) ---
-        window.recordResponse = (isCorrect) => {
-            if (!state.session.active) return;
-            const mode = document.getElementById('mode-select').value;
-            
-            // Logica Punteggio
-            if (mode === 'tact' || (mode === 'ran' && state.ranMode === 'single')) {
-                const currentIndex = (mode === 'tact') ? state.tactIndex : state.ranIndex;
-                state.session.itemResults[currentIndex] = isCorrect;
-                
-                // APPLICA FEEDBACK VISIVO IMMEDIATO (IMMAGINI)
-                const targetImg = document.querySelector('.tact-card-lg img, .ran-main-img');
-                if(targetImg) {
-                    targetImg.classList.remove('feedback-success', 'feedback-fail');
-                    void targetImg.offsetWidth; // Trigger reflow per animazione
-                    targetImg.classList.add(isCorrect ? 'feedback-success' : 'feedback-fail');
-                }
-
-            } else if (mode === 'search_find') {
-                // Per cerca trova, usiamo un ID basato sul timestamp del marker o l'ultimo aggiunto
-                const markers = document.querySelectorAll('.marker-pin');
-                if(markers.length > 0) {
-                    const lastMarker = markers[markers.length - 1];
-                    // Assegnamo un ID unico al marker se non ce l'ha, per tracciarlo
-                    if(!lastMarker.dataset.id) lastMarker.dataset.id = Date.now();
-                    
-                    state.session.itemResults[lastMarker.dataset.id] = isCorrect;
-                    
-                    // APPLICA FEEDBACK (MARKER)
-                    lastMarker.classList.remove('success', 'fail');
-                    lastMarker.classList.add(isCorrect ? 'success' : 'fail');
-                }
-            } else {
-                // Giochi griglia (Tombola/Memory): feedback generico o non applicabile singolarmente
-                state.session.itemResults[Date.now()] = isCorrect;
-            }
-            
-            // Ricalcolo totali
-            const results = Object.values(state.session.itemResults);
-            state.session.correct = results.filter(v => v === true).length;
-            state.session.incorrect = results.filter(v => v === false).length;
-            state.session.total = results.length;
-
-            updateScoreUI();
-            document.getElementById('btn-save-session').classList.remove('hidden');
-        };
-        
-        function updateScoreUI() { document.getElementById('score-display').innerText = `${state.session.correct}`; }
-
-        function handleShortcuts(e) {
-             const mode = document.getElementById('mode-select').value;
-             if (state.session.active && !['INPUT','TEXTAREA'].includes(e.target.tagName)) {
-                 if (e.key.toLowerCase() === 'v') recordResponse(true);
-                 if (e.key.toLowerCase() === 'x') recordResponse(false);
-             }
-             if (mode === 'ran' && state.ranMode === 'single') {
-                 if (e.key === 'ArrowRight') nextRan(); if (e.key === 'ArrowLeft') prevRan();
-             }
-             if (mode === 'search_find') {
-                 if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') removeLastMarker();
-                 if (e.key === 'Delete' || e.key === 'Backspace') clearMarkers();
-             }
-        }
-
-        window.confirmSaveSession = async () => {
-            if(!state.activePatientId) return alert("Seleziona prima un paziente in alto.");
-            const p = state.patients.find(x => x.id === state.activePatientId);
-            const setName = state.savedSets.find(s => s.id === state.activeSetId)?.name || "Set Rimosso";
-            const total = state.session.total;
-            if (total === 0) return; 
-
-            const sessionData = {
-                date: new Date().toISOString(),
-                setId: state.activeSetId,
-                setName: setName,
-                mode: document.getElementById('mode-select').value,
-                correct: state.session.correct,
-                total: total,
-                percentage: Math.round((state.session.correct / total) * 100)
-            };
-            if(!p.history) p.history = []; p.history.push(sessionData);
-            await DB.savePatient(p);
-            
-            const btn = document.getElementById('btn-save-session');
-            btn.innerHTML = '<i class="fa-solid fa-check"></i>'; btn.style.background = 'var(--success-color)';
-            setTimeout(() => { 
-                btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i>'; btn.style.background = '#2563eb';
-                state.session.active = false; document.getElementById('scoring-controls').classList.add('hidden'); btn.classList.add('hidden');
-            }, 1000);
-        };
-        // --- PATIENTS & CHARTS ---
-        window.openPatients = async () => {
-            state.patients = await DB.getAllPatients();
-            const sel = document.getElementById('patient-select');
-            sel.innerHTML = '<option value="">-- Seleziona Paziente --</option>' + state.patients.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-            document.getElementById('modal-patients').classList.add('open');
-        };
-        window.closePatients = () => document.getElementById('modal-patients').classList.remove('open');
-        window.createNewPatient = async () => { const name = prompt("Nome:"); if(name) { await DB.savePatient({id:Date.now().toString(), name:name, history:[]}); window.openPatients(); populateGlobalPatientSelect(); } };
-        window.loadPatientData = (pid) => {
-            if(!pid) return document.getElementById('patient-dashboard').classList.add('hidden');
-            const p = state.patients.find(x => x.id === pid);
-            document.getElementById('patient-title').innerText = `Cartella: ${p.name}`;
-            renderPatientCharts(p); document.getElementById('patient-dashboard').classList.remove('hidden');
-        };
-
-        // Gestione Eliminazione/Modifica Sessione
-        window.deleteSession = async (patientId, sessionIndex) => {
-            if(!confirm("Eliminare questa sessione dai dati?")) return;
-            const p = state.patients.find(x => x.id === patientId);
-            p.history.splice(sessionIndex, 1);
-            await DB.savePatient(p);
-            loadPatientData(patientId); // Ricarica UI
-        };
-
-        // --- MODIFICA SESSIONE CON DATA (Sostituisci la vecchia window.editSession) ---
-        // --- BLOCCO 4: MODIFICA SESSIONE (Sostituisci editSession) ---
-        window.editSession = async (patientId, sessionIndex) => {
-            const p = state.patients.find(x => x.id === patientId);
-            // Recupera la sessione
-            const s = p.history[sessionIndex];
-
-            // 1. DATA
-            const currentDateStr = s.date.substring(0, 10);
-            const newDateStr = prompt("Data (AAAA-MM-GG):", currentDateStr);
-            if(newDateStr === null) return;
-
-            // 2. PUNTEGGIO
-            const newScore = prompt("Punteggio Corretti:", s.correct);
-            if(newScore === null) return;
-            
-            // 3. TOTALE
-            const newTotal = prompt("Totale Item:", s.total);
-            if(newTotal === null) return;
-            
-            // Applica
-            try {
-                // Preserva l'ora corrente per evitare problemi di fuso orario, cambia solo la data
-                let d = new Date(newDateStr);
-                if (isNaN(d.getTime())) throw "Data invalida";
-                // Ricostruisci l'ISO string mantenendo la data scelta
-                s.date = d.toISOString();
-            } catch(e) {
-                alert("Formato data errato. Usa AAAA-MM-GG");
-                return;
-            }
-
-            s.correct = parseInt(newScore);
-            s.total = parseInt(newTotal);
-            s.percentage = Math.round((s.correct / s.total) * 100);
-            
-            await DB.savePatient(p);
-            // Ricarica per vedere il criterio aggiornato
-            loadPatientData(patientId);
-        };
-
-        // --- BLOCCO 2: GRAFICI, CRITERIO E DATE (Sostituisci renderPatientCharts e checkCriterion) ---
-        
-        // --- FUNZIONI GRAFICI E STORICO (Versione Aggiornata v35) ---
-
-// Helper Data Europea (DD.MM.YYYY)
-function formatDateEU(isoStr) {
-    if(!isoStr) return "--.--.----";
-    const d = new Date(isoStr);
-    if(isNaN(d.getTime())) return isoStr;
-    const day = String(d.getDate()).padStart(2, '0');
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const year = d.getFullYear();
-    return `${day}.${month}.${year}`;
-}
-
-// Toggle Espandi/Comprimi Dettagli (FIXED)
-window.toggleChartDetails = (btn) => {
-    // Risale al wrapper principale e cerca la tabella specifica
-    const wrapper = btn.closest('.chart-wrapper');
-    const details = wrapper.querySelector('.chart-details-table'); 
-    const icon = btn.querySelector('i');
-    
-    if (details.style.display === 'none') {
-        details.style.display = 'block';
-        icon.classList.remove('fa-chevron-down');
-        icon.classList.add('fa-chevron-up');
-    } else {
-        details.style.display = 'none';
-        icon.classList.remove('fa-chevron-up');
-        icon.classList.add('fa-chevron-down');
-    }
-};
-
-// Calcolo Criterio (2 successi >90% consecutivi in giorni diversi)
-function checkCriterion(sessions) {
-    if (sessions.length < 2) return false;
-    const sorted = [...sessions].sort((a,b) => new Date(a.date) - new Date(b.date));
-    let consecutive = 0;
-    let lastDateStr = null;
-    
-    for (const s of sorted) {
-        const currentDateStr = new Date(s.date).toISOString().split('T')[0];
-        if (s.percentage >= 90) {
-            if (lastDateStr && currentDateStr !== lastDateStr) consecutive++;
-            else if (!lastDateStr) consecutive = 1;
-            lastDateStr = currentDateStr;
-        } else {
-            consecutive = 0;
-            lastDateStr = null;
-        }
-        if (consecutive >= 2) return true;
-    }
-    return false;
-}
-
-// Caricamento Dati Paziente con Iniezione Controlli Ordinamento
-window.loadPatientData = (pid) => {
-    if(!pid) return document.getElementById('patient-dashboard').classList.add('hidden');
-    const p = state.patients.find(x => x.id === pid);
-    document.getElementById('patient-title').innerText = `Cartella: ${p.name}`;
-    
-    // Inietta i controlli di ordinamento se non esistono
-    const container = document.getElementById('patient-dashboard');
-    if (!document.getElementById('chart-sort-controls')) {
-        const controls = document.createElement('div');
-        controls.id = 'chart-sort-controls';
-        controls.style.cssText = "display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-bottom:15px; padding:0 5px;";
-        controls.innerHTML = `
-            <span style="font-size:0.85rem; color:#aaa;"><i class="fa-solid fa-arrow-down-short-wide"></i> Ordina:</span>
-            <select id="sort-select" onchange="updateChartSort(this.value)" style="padding:6px; border-radius:8px; background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.2); font-size:0.9rem;">
-                <option value="date_desc">Ultima Attività (Recenti)</option>
-                <option value="date_asc">Cronologico (Vecchi)</option>
-                <option value="mode">Per Modalità (es. TACT, RAN)</option>
-                <option value="name">Alfabetico Nome Set</option>
-            </select>
-        `;
-        // Inserisci dopo il titolo
-        const title = document.getElementById('patient-title');
-        title.parentNode.insertBefore(controls, title.nextSibling);
-    }
-    
-    // Renderizza di default per data decrescente
-    renderPatientCharts(p, 'date_desc');
-    document.getElementById('patient-dashboard').classList.remove('hidden');
-};
-
-// Funzione Helper per l'evento onchange
-window.updateChartSort = (sortMode) => {
-    const pid = document.getElementById('patient-select').value;
-    const p = state.patients.find(x => x.id === pid);
-    if(p) renderPatientCharts(p, sortMode);
-};
-
-// Renderizza Grafici con Ordinamento
-function renderPatientCharts(patient, sortMode = 'date_desc') {
-    const container = document.getElementById('charts-container');
-    container.innerHTML = '';
-
-    if(!patient.history || patient.history.length === 0) {
-        container.innerHTML = '<p style="text-align:center; opacity:0.5; padding:20px;">Nessun dato registrato.</p>';
-        return;
-    }
-
-    // 1. Raggruppa i dati
-    const groups = {};
-    patient.history.forEach((h, idx) => {
-        const key = `${h.setName}::${h.mode}`;
-        if(!groups[key]) groups[key] = [];
-        groups[key].push({...h, originalIndex: idx});
-    });
-
-    // 2. Prepara array per ordinamento
-    let chartList = Object.entries(groups).map(([key, sessions]) => {
-        const [setName, modeCode] = key.split('::');
-        // Trova la data più recente in questo gruppo per l'ordinamento
-        const lastDate = Math.max(...sessions.map(s => new Date(s.date).getTime()));
-        return { key, sessions, setName, modeCode, lastDate };
-    });
-
-    // 3. Applica Ordinamento
-    chartList.sort((a, b) => {
-        if (sortMode === 'date_desc') return b.lastDate - a.lastDate;
-        if (sortMode === 'date_asc') return a.lastDate - b.lastDate;
-        if (sortMode === 'mode') return a.modeCode.localeCompare(b.modeCode);
-        if (sortMode === 'name') return a.setName.localeCompare(b.setName);
-        return 0;
-    });
-
-    // 4. Renderizza ogni grafico
-    chartList.forEach(item => {
-        const { sessions, setName, modeCode } = item;
-        const modeName = MODES_CONFIG[modeCode] || modeCode;
-        
-        // Ordina cronologicamente le sessioni PER IL DISEGNO DEL GRAFICO (sempre X: tempo)
-        sessions.sort((a,b) => new Date(a.date) - new Date(b.date));
-        
-        const isMastered = checkCriterion(sessions);
-        
-        const wrapper = document.createElement('div');
-        wrapper.className = 'chart-wrapper';
-        
-        const badgeHtml = isMastered ? 
-            `<span class="criterion-badge" style="background:#10b981; color:white; padding:2px 8px; border-radius:4px; font-size:0.7em; margin-left:10px; vertical-align:middle;">
-                <i class="fa-solid fa-trophy"></i> CRITERIO
-            </span>` : '';
-
-        // Header
-        wrapper.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <h4 style="margin:0; color:var(--accent-color); font-size:1rem;">
-                    ${setName} <span style="color:#666; font-size:0.8em;">(${modeName})</span> ${badgeHtml}
-                </h4>
-                <button class="btn-icon" onclick="toggleChartDetails(this)" style="width:30px; height:30px; background:rgba(255,255,255,0.05);" title="Dettagli">
-                    <i class="fa-solid fa-chevron-down"></i>
-                </button>
+            <div style="display:flex; align-items:center; gap:10px; margin:15px 0; padding:10px; background:rgba(0,0,0,0.2); border-radius:10px;">
+                <label style="font-size:0.9rem; flex:1; color:white;">Abilita Sync</label>
+                <input type="checkbox" id="firebase-enabled-toggle" style="width:20px; height:20px;">
             </div>
-        `;
-        
-        // SVG
-        const svgNS = "http://www.w3.org/2000/svg";
-        const svg = document.createElementNS(svgNS, "svg");
-        svg.setAttribute("class", "chart-svg");
-        svg.setAttribute("viewBox", "-10 -10 320 170");
-        
-        // Assi
-        const axisY = document.createElementNS(svgNS, "line"); axisY.setAttribute("x1","20"); axisY.setAttribute("y1","0"); axisY.setAttribute("x2","20"); axisY.setAttribute("y2","130"); axisY.setAttribute("stroke", "#666"); axisY.setAttribute("stroke-width", "1"); svg.appendChild(axisY);
-        const axisX = document.createElementNS(svgNS, "line"); axisX.setAttribute("x1","20"); axisX.setAttribute("y1","130"); axisX.setAttribute("x2","300"); axisX.setAttribute("y2","130"); axisX.setAttribute("stroke", "#666"); axisX.setAttribute("stroke-width", "1"); svg.appendChild(axisX);
-        const line90 = document.createElementNS(svgNS, "line"); line90.setAttribute("x1","20"); line90.setAttribute("x2","300"); line90.setAttribute("y1","13"); line90.setAttribute("y2","13"); line90.setAttribute("class", "threshold-line"); svg.appendChild(line90);
 
-        // Dati
-        const stepX = sessions.length > 1 ? 260 / (sessions.length - 1) : 0;
-        let pathD = "";
-        
-        // Linea (Bianca sottile)
-        sessions.forEach((s, i) => {
-            const x = 20 + (sessions.length > 1 ? i * stepX : 130);
-            const y = 130 - (1.3 * s.percentage);
-            if (i === 0) pathD += `M ${x} ${y}`; else pathD += ` L ${x} ${y}`;
-        });
-        
-        if (sessions.length > 1) {
-            const path = document.createElementNS(svgNS, "path");
-            path.setAttribute("d", pathD); path.setAttribute("fill", "none");
-            path.setAttribute("stroke", "white"); path.setAttribute("stroke-width", "1.5"); path.setAttribute("opacity", "0.6");
-            svg.appendChild(path);
-        }
+            <label style="font-size:0.8rem; color:#aaa; display:block; margin-top:10px;">Database URL</label>
+            <input type="text" id="firebase-db-url" placeholder="https://tuo-progetto.firebaseio.com" style="margin-bottom:8px;">
 
-        // Punti (Sferette)
-        sessions.forEach((s, i) => {
-            const x = 20 + (sessions.length > 1 ? i * stepX : 130);
-            const y = 130 - (1.3 * s.percentage);
-            const dot = document.createElementNS(svgNS, "circle");
-            dot.setAttribute("cx", x); dot.setAttribute("cy", y); dot.setAttribute("r", "5"); dot.setAttribute("fill", "white"); dot.setAttribute("stroke", "var(--accent-color)"); dot.setAttribute("stroke-width", "2");
-            const title = document.createElementNS(svgNS, "title"); title.textContent = `${formatDateEU(s.date)}\nScore: ${s.percentage}% (${s.correct}/${s.total})`; dot.appendChild(title); svg.appendChild(dot);
-            const lbl = document.createElementNS(svgNS, "text"); lbl.setAttribute("x", x); lbl.setAttribute("y", "150"); lbl.setAttribute("text-anchor", "middle"); lbl.setAttribute("fill", "#888"); lbl.setAttribute("font-size", "9");
-            const dObj = new Date(s.date); lbl.textContent = `${dObj.getDate()}/${dObj.getMonth()+1}`; svg.appendChild(lbl);
-        });
+            <label style="font-size:0.8rem; color:#aaa; display:block;">API Key (opzionale)</label>
+            <input type="text" id="firebase-api-key" placeholder="AIzaSy..." style="margin-bottom:8px;">
 
-        wrapper.appendChild(svg);
+            <label style="font-size:0.8rem; color:#aaa; display:block;">Project ID (opzionale)</label>
+            <input type="text" id="firebase-project-id" placeholder="il-tuo-progetto" style="margin-bottom:15px;">
 
-        // Tabella Dettagli (Default: Nascosta)
-        const tableContainer = document.createElement('div');
-        tableContainer.className = 'chart-details-table'; // Classe fondamentale per il toggle
-        tableContainer.style.marginTop = "10px";
-        tableContainer.style.display = "none";
-        
-        // Ordine tabella: dal più recente in alto
-        const tableSessions = [...sessions].sort((a,b) => new Date(b.date) - new Date(a.date));
+            <div id="firebase-sync-status" style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:10px;"></div>
 
-        tableContainer.innerHTML = `
-            <table style="width:100%; font-size:0.85rem; color:#ccc; border-collapse:collapse;">
-                <tr style="border-bottom:1px solid #444; text-align:left; color:#888;">
-                    <th style="padding:5px;">Data</th><th>Score</th><th>%</th><th style="text-align:right;">Azioni</th>
-                </tr>
-                ${tableSessions.map(s => `
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                        <td style="padding:8px 5px;">${formatDateEU(s.date)}</td>
-                        <td>${s.correct}/${s.total}</td>
-                        <td style="font-weight:bold; color:${s.percentage>=90?'var(--success-color)':'white'}">${s.percentage}%</td>
-                        <td style="text-align:right;">
-                            <button class="btn-icon" style="width:28px; height:28px; font-size:0.8rem; display:inline-flex;" onclick="editSession('${patient.id}', ${s.originalIndex})"><i class="fa-solid fa-pen"></i></button>
-                            <button class="btn-icon" style="width:28px; height:28px; font-size:0.8rem; display:inline-flex; color:var(--danger-color); border-color:rgba(239,68,68,0.3);" onclick="deleteSession('${patient.id}', ${s.originalIndex})"><i class="fa-solid fa-trash"></i></button>
-                        </td>
-                    </tr>
-                `).join('')}
-            </table>
-        `;
-        
-        wrapper.appendChild(tableContainer);
-        container.appendChild(wrapper);
-    });
-}
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="btn btn-success" onclick="saveFirebaseSettings()" style="flex:1;">Salva</button>
+                <button class="btn btn-primary" onclick="syncWithFirebase()" style="flex:1;"><i class="fa-solid fa-sync"></i> Sync Ora</button>
+                <button class="btn btn-ghost" onclick="closeFirebaseSettings()">Annulla</button>
+            </div>
+        </div>
+    </div>
 
-        // --- EDITOR & UTILS ---
-        // --- FIX TAGGING (Sostituisci editSet, toggleEditMode e saveEditorChanges) ---
-        
-        window.editSet = async (id) => {
-            const set = state.savedSets.find(s => s.id === id);
-            state.editingSetId = id; 
-            state.editingItems = JSON.parse(JSON.stringify(set.items));
-            document.getElementById('edit-set-name').value = set.name;
-            
-            // Genera i checkbox con l'attributo data-mode corretto
-            document.getElementById('edit-modes-container').innerHTML = Object.keys(MODES_CONFIG).map(k => {
-                const isChecked = set.modes ? set.modes.includes(k) : true;
-                return `<div class="mode-check ${isChecked?'selected':''}" data-mode="${k}" onclick="toggleEditMode(this)">
-                    <i class="fa-solid ${isChecked?'fa-check-square':'fa-square'}"></i> ${MODES_CONFIG[k]}
-                </div>`;
-            }).join('');
-            
-            renderEditorList(); 
-            document.getElementById('modal-library').classList.remove('open'); 
-            document.getElementById('modal-editor').classList.add('open');
-        };
+    <!-- Firebase SDK (compat for global scope) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
-        window.toggleEditMode = (el) => { 
-            el.classList.toggle('selected'); 
-            const i = el.querySelector('i'); 
-            i.className = el.classList.contains('selected') ? 'fa-solid fa-check-square' : 'fa-solid fa-square'; 
-        };
-        
-        window.saveEditorChanges = () => {
-            const modes = []; 
-            // FIX: Legge direttamente l'attributo data-mode invece dell'indice
-            document.querySelectorAll('#edit-modes-container .mode-check.selected').forEach(el => {
-                modes.push(el.dataset.mode);
-            });
-            
-            DB.getAllSets().then(all => {
-                const s = all.find(x => x.id === state.editingSetId);
-                if(s) { 
-                    s.name = document.getElementById('edit-set-name').value; 
-                    s.items = state.editingItems; 
-                    s.modes = modes;
-                    DB.saveSet(s).then(() => { 
-                        reloadLibrary(); // Ricarica la libreria per vedere le modifiche
-                        document.getElementById('modal-editor').classList.remove('open'); 
-                        document.getElementById('modal-library').classList.add('open'); 
-                    });
-                }
-            });
-        };
-        
-        // --- HELPERS (Library & Renderers) ---
-
-        // --- FIX LIBRERIA (Inserisci questo blocco verso la fine dello script, prima di renderGameMode) ---
-        
-        // --- BLOCCO 3: HELPERS LIBRERIA (Sostituisci openLibrary, reloadLibrary, renderLibList, loadSet) ---
-        
-        window.openLibrary = async () => { 
-            await reloadLibrary(); 
-            document.getElementById('modal-library').classList.add('open'); 
-        };
-        
-        window.closeLibrary = () => document.getElementById('modal-library').classList.remove('open');
-
-        window.reloadLibrary = async () => { 
-            state.savedSets = await DB.getAllSets(); 
-            renderLibList(); 
-            // Aggiorniamo anche la tendina principale per riflettere eventuali modifiche
-            if(typeof filterSetsByMode === 'function') filterSetsByMode();
-        };
-
-        // --- LIBRERIA AVANZATA (Sostituisci renderLibList) ---
-        function renderLibList() {
-            const container = document.getElementById('lib-list');
-            if(!container) return;
-            
-            if(state.savedSets.length === 0) {
-                container.innerHTML = '<p style="grid-column:1/-1; text-align:center; opacity:0.5;">Nessun set in archivio.</p>';
-                return;
-            }
-
-            container.innerHTML = state.savedSets.map(s => {
-                // Genera Anteprima (Prime 4 immagini valide)
-                const previews = s.items.filter(i => i.url).slice(0, 4);
-                let previewHtml = '';
-                
-                if (previews.length > 0) {
-                    previewHtml = `<div class="lib-preview-grid" style="display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:2px; height:120px; border-radius:8px; overflow:hidden; background:rgba(0,0,0,0.3); margin-bottom:8px;">
-                        ${previews.map(i => `<img src="${i.url}" style="width:100%; height:100%; object-fit:cover;">`).join('')}
-                        ${previews.length < 4 ? Array(4 - previews.length).fill('<div style="background:rgba(255,255,255,0.05);"></div>').join('') : ''}
-                    </div>`;
-                } else {
-                    previewHtml = `<div style="height:120px; background:rgba(0,0,0,0.2); border-radius:8px; display:flex; align-items:center; justify-content:center; color:#666; font-size:0.8rem; margin-bottom:8px; flex-direction:column; gap:5px;">
-                        <i class="fa-solid fa-image fa-2x" style="opacity:0.3"></i>
-                        <span>No Img</span>
-                    </div>`;
-                }
-
-                // Check Immagini Mancanti
-                const missingCount = s.items.filter(i => !i.url).length;
-                const warningHtml = missingCount > 0 
-                    ? `<div style="color:var(--warning-color); font-size:0.75rem; background:rgba(245, 158, 11, 0.1); padding:4px 8px; border-radius:6px; margin-top:5px; display:flex; align-items:center; gap:5px;">
-                        <i class="fa-solid fa-triangle-exclamation"></i> ${missingCount} immagini mancanti
-                       </div>` 
-                    : '';
-
-                return `
-                <div class="lib-card ${s.isClinical ? 'clinical' : ''}">
-                    ${previewHtml}
-                    <div class="lib-title" style="font-weight:bold; font-size:1rem;">${s.name}</div>
-                    <div class="lib-cat" style="color:var(--text-secondary); font-size:0.8rem;">${s.category || 'Generale'}</div>
-                    <div style="font-size:0.8rem; color:#aaa; margin-top:2px;">${s.items.length} items</div>
-                    ${warningHtml}
-                    
-                    <div style="display:flex; gap:5px; margin-top:10px;">
-                        <button class="btn btn-primary" style="flex:1; padding:6px;" onclick="loadSet('${s.id}')" title="Carica">
-                            <i class="fa-solid fa-play"></i>
-                        </button>
-                        <button class="btn btn-ghost" style="padding:6px 12px;" onclick="editSet('${s.id}')" title="Modifica">
-                            <i class="fa-solid fa-pen"></i>
-                        </button>
-                        <button class="btn btn-ghost" style="padding:6px 12px;" onclick="exportSingleSet('${s.id}')" title="Esporta">
-                            <i class="fa-solid fa-file-export"></i>
-                        </button>
-                        <button class="btn btn-danger" style="padding:6px 12px;" onclick="deleteSet('${s.id}')" title="Elimina">
-                            <i class="fa-solid fa-trash"></i>
-                        </button>
-                    </div>
-                </div>`;
-            }).join('');
-        }
-
-        window.loadSet = async (id) => {
-            const s = state.savedSets.find(x => x.id === id);
-            if(s) {
-                state.activeSetId = id;
-                state.items = JSON.parse(JSON.stringify(s.items));
-                
-                // Aggiorna il selettore visivo
-                const select = document.getElementById('category-select');
-                if(select) select.value = id;
-                
-                window.closeLibrary();
-                window.startGame();
-            }
-        };
-        window.createEmptySet = () => { const name = prompt("Nome del nuovo Set?"); if(!name) return; const newSet = { id: Date.now().toString(), name: name, category: "Personale", items: [], date: new Date().toLocaleDateString(), isClinical: false }; DB.saveSet(newSet).then(() => { window.location.reload(); }); };
-        window.deleteSet = (id) => { if(confirm("Eliminare definitivamente?")) DB.deleteSet(id).then(() => window.location.reload()); };
-        
-        // --- FIX EDITOR: GESTIONE IMMAGINI, CLICK E PASTE ---
-
-// --- EDITOR COMPLETO (Render, Upload, Toggle, Paste, Actions) ---
-
-        // 1. RENDERIZZA LISTA (Con Occhio, Upload, Selezione e Counter)
-        function renderEditorList() {
-            const container = document.getElementById('editor-list');
-            if (!container) return;
-
-            // Calcolo Item Attivi per il counter
-            const totalItems = state.editingItems.length;
-            const activeItems = state.editingItems.filter(i => !i.hidden).length;
-            
-            // Inseriamo il counter prima della lista (o aggiorniamo un elemento esistente se c'è)
-            // Per semplicità, lo prepariamo come stringa HTML e lo uniamo alla lista
-            // (In una versione più raffinata potremmo avere un div dedicato nell'HTML statico, ma questo funziona bene)
-            const counterHtml = `
-                <div style="position:sticky; top:0; z-index:10; background:#1e1e2f; padding:10px; margin-bottom:10px; border-bottom:1px solid var(--glass-border); display:flex; justify-content:space-between; align-items:center; color:#ccc; font-size:0.9rem;">
-                    <span><i class="fa-solid fa-list-ol"></i> Item Attivi: <b style="color:${activeItems >= 20 ? 'var(--success-color)' : 'var(--warning-color)'}">${activeItems}</b> / ${totalItems}</span>
-                    <span style="font-size:0.8rem; opacity:0.7;">(Target RAN: ~20)</span>
-                </div>
-            `;
-
-            const listHtml = state.editingItems.map((item, idx) => {
-                const isSelected = state.activeEditorIndex === idx;
-                const activeStyle = isSelected ? 'border:1px solid var(--accent-color); background:rgba(99, 102, 241, 0.1);' : 'border:1px solid transparent;';
-                const opacityStyle = item.hidden ? 'opacity: 0.6;' : 'opacity: 1;';
-
-                return `
-                <div class="editor-item" style="${activeStyle} ${opacityStyle} transition:0.2s; cursor:pointer;" onclick="setActiveItem(${idx})">
-                    
-                    <!-- Immagine: Clicca per caricare -->
-                    <div class="editor-thumb" style="cursor:pointer; position:relative;" onclick="triggerItemUpload(${idx}); event.stopPropagation();" title="Clicca per caricare">
-                        <img src="${item.url || getPlaceholderUrl(item.label)}" style="width:100%; height:100%; object-fit:cover; pointer-events:none;">
-                        <div style="position:absolute; inset:0; background:rgba(0,0,0,0.3); display:flex; justify-content:center; align-items:center; opacity:0; hover:opacity:1;">
-                            <i class="fa-solid fa-camera" style="color:white;"></i>
-                        </div>
-                    </div>
-                    
-                    <!-- Input -->
-                    <div style="flex:1">
-                        <input type="text" value="${item.label}" 
-                            onchange="state.editingItems[${idx}].label=this.value" 
-                            onfocus="setActiveItem(${idx})" 
-                            placeholder="Etichetta"
-                            style="${item.hidden ? 'text-decoration:line-through; color:#888;' : ''}">
-                    </div>
-                    
-                    <!-- Tasto Mostra/Nascondi -->
-                    <button class="btn btn-ghost" style="padding:10px;" onclick="toggleItemVisibility(${idx}); event.stopPropagation();" title="${item.hidden ? 'Mostra' : 'Nascondi'}">
-                        <i class="fa-solid ${item.hidden ? 'fa-eye-slash' : 'fa-eye'}" style="${item.hidden ? 'color:#888' : 'color:var(--success-color)'}"></i>
-                    </button>
-
-                    <!-- Tasto Rimuovi -->
-                    <button class="btn btn-danger" style="padding:10px;" onclick="state.editingItems.splice(${idx},1); renderEditorList(); event.stopPropagation();">
-                        <i class="fa-solid fa-minus"></i>
-                    </button>
-                </div>`;
-            }).join('');
-
-            container.innerHTML = counterHtml + listHtml;
-        }
-
-        // 2. AZIONI EDITOR (Aggiungi, Chiudi, Toggle)
-        window.addNewItem = () => { 
-            state.editingItems.push({ label: 'Nuovo', url: null, hidden: false }); 
-            renderEditorList(); 
-            // Scrolla in fondo
-            setTimeout(() => {
-                const list = document.getElementById('editor-list');
-                list.scrollTop = list.scrollHeight;
-            }, 100);
-        };
-
-        window.closeEditor = () => {
-            document.getElementById('modal-editor').classList.remove('open');
-            document.getElementById('modal-library').classList.add('open'); // Torna alla libreria
-        };
-
-        window.toggleItemVisibility = (idx) => {
-            state.editingItems[idx].hidden = !state.editingItems[idx].hidden;
-            renderEditorList();
-        };
-
-        window.setActiveItem = (index) => {
-            state.activeEditorIndex = index;
-            renderEditorList();
-        };
-
-        // 3. UPLOAD & PASTE
-        window.triggerItemUpload = (index) => {
-            state.activeEditorIndex = index;
-            let input = document.createElement('input');
-            input.type = 'file'; input.accept = 'image/*'; input.style.display = 'none';
-            input.onchange = (e) => {
-                if (e.target.files[0]) {
-                    const r = new FileReader();
-                    r.onload = (ev) => { state.editingItems[index].url = ev.target.result; renderEditorList(); };
-                    r.readAsDataURL(e.target.files[0]);
-                }
-            };
-            document.body.appendChild(input); input.click(); setTimeout(() => document.body.removeChild(input), 1000);
-        };
-
-        async function handlePaste(e) {
-            if (!document.getElementById('modal-editor').classList.contains('open')) return;
-            if (state.activeEditorIndex === null || state.activeEditorIndex === undefined) return;
-            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
-            for (const item of items) {
-                if (item.type.indexOf('image') === 0) {
-                    e.preventDefault();
-                    const blob = item.getAsFile();
-                    const r = new FileReader();
-                    r.onload = (event) => {
-                        state.editingItems[state.activeEditorIndex].url = event.target.result;
-                        renderEditorList();
-                    };
-                    r.readAsDataURL(blob);
-                }
-            }
-        }
-
-        function renderGameMode(mode, items) {
-             const stage = document.getElementById('game-stage'); stage.innerHTML = '';
-             if (mode === 'tact') renderTact(items, stage); else if (mode === 'ran') renderRan(items, stage);
-             else if (mode === 'tombola') renderTombola(items, stage); else if (mode === 'memory') renderMemory(items, stage);
-             else if (mode === 'search_find') renderSearchFind(items, stage);
-        }
-        function getPlaceholderUrl(label) { return `https://placehold.co/600x600?text=${encodeURIComponent(label)}`; }
-        function handleImgError(img, label) { img.onerror = null; img.src = getPlaceholderUrl(label); }
-        
-        // --- 2. AGGIORNAMENTO RENDERERS (Per mantenere il colore navigando) ---
-
-        // Sostituisci renderTact
-        function renderTact(items, stage) {
-            // Se arriviamo qui da un cambio modalità, reset index, altrimenti mantieni
-            if(state.tactIndex === undefined) state.tactIndex = 0;
-            
-            const showCard = () => {
-                const item = items[state.tactIndex];
-                // Recupera stato precedente se esiste
-                const status = state.session.itemResults ? state.session.itemResults[state.tactIndex] : undefined;
-                const feedbackClass = status === true ? 'feedback-success' : (status === false ? 'feedback-fail' : '');
-
-                stage.innerHTML = `
-                <div class="tact-stage" onclick="window.nextTact()">
-                    <div class="tact-card-lg">
-                        <img src="${item.url || getPlaceholderUrl(item.label)}" 
-                             class="${feedbackClass}" 
-                             style="transition:0.3s;"
-                             onerror="handleImgError(this, '${item.label}')">
-                        <div class="tact-title">${item.label}</div>
-                        <div style="font-size:0.9rem; color:#888;">${state.tactIndex + 1} / ${items.length}</div>
-                    </div>
-                </div>`;
-            };
-            window.nextTact = () => { state.tactIndex = (state.tactIndex + 1) % items.length; showCard(); }; 
-            showCard();
-        }
-        function renderRan(items, stage) { 
-            state.ranDisplayItems = items; if(state.ranIndex>=items.length) state.ranIndex=0; 
-            stage.innerHTML=`<div class="ran-container"><div class="ran-toolbar"><button class="btn btn-sm btn-ghost" onclick="toggleRanMode()"><i class="fa-solid ${state.ranMode==='grid'?'fa-film':'fa-table-cells'}"></i> ${state.ranMode==='grid'?'Passa a Sequenza':'Passa a Griglia'}</button></div><div id="ran-content" style="flex:1; overflow:hidden;"></div></div>`; updateRanContent(); 
-        }
-        window.toggleRanMode=()=>{state.ranMode=state.ranMode==='grid'?'single':'grid'; updateRanContent();};
-        // Sostituisci updateRanContent (Solo la parte visualizzazione, la logica next/prev è invariata)
-        function updateRanContent(){ 
-            const c=document.getElementById('ran-content'); 
-            const i=state.ranDisplayItems; 
-            
-            if(state.ranMode==='grid'){ 
-                let cols=Math.ceil(Math.sqrt(i.length)); 
-                if(i.length<=9)cols=3; else if(i.length<=16)cols=4;else cols=5; 
-                let h=`<div class="ran-scroll-area"><div class="grid-adaptive" style="grid-template-columns:repeat(${cols},1fr);">`; 
-                i.forEach(x=>{h+=`<div class="ran-card"><img src="${x.url||getPlaceholderUrl(x.label)}" onerror="handleImgError(this,'${x.label}')"></div>`}); 
-                h+=`</div></div>`; c.innerHTML=h; 
-            } else { 
-                const x=i[state.ranIndex]; 
-                
-                // Recupera stato feedback
-                const status = state.session.itemResults ? state.session.itemResults[state.ranIndex] : undefined;
-                const feedbackClass = status === true ? 'feedback-success' : (status === false ? 'feedback-fail' : '');
-
-                c.innerHTML=`
-                <div class="ran-single-stage">
-                    <div style="flex:1; display:flex; flex-direction:column; justify-content:center; width:100%; overflow:hidden;">
-                        <img src="${x.url||getPlaceholderUrl(x.label)}" 
-                             class="ran-main-img ${feedbackClass}" 
-                             style="transition:0.3s;"
-                             onerror="handleImgError(this,'${x.label}')">
-                        <h2 style="text-align:center;">${x.label}</h2>
-                    </div>
-                    <div class="ran-controls-bar">
-                        <button class="ran-btn-nav" onclick="prevRan()"><i class="fa-solid fa-arrow-left"></i></button>
-                        <div class="ran-counter">${state.ranIndex+1}/${i.length}</div>
-                        <button class="ran-btn-nav" onclick="nextRan()"><i class="fa-solid fa-arrow-right"></i></button>
-                    </div>
-                </div>`; 
-            } 
-        }
-        window.nextRan=()=>{if(state.ranIndex<state.ranDisplayItems.length-1){state.ranIndex++;updateRanContent();}}; window.prevRan=()=>{if(state.ranIndex>0){state.ranIndex--;updateRanContent();}};
-        function renderTombola(items, stage) { state.deck = [...items].sort(() => Math.random() - 0.5); const cols = Math.ceil(Math.sqrt(items.length)); stage.innerHTML = `<div style="display:flex; height:100%; flex-direction:column;"><div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10;"><div style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">Trova:</div><div id="deck-target" style="background:white; padding:5px; border-radius:8px; display:flex; align-items:center; gap:10px;">${getDeckHtml()}</div></div><div style="flex:1; overflow-y:auto; padding:10px;"><div class="grid-adaptive" style="grid-template-columns:repeat(${cols}, 1fr);">${items.map((item, idx) => `<div class="card-grid" id="slot-${idx}" onclick="handleMatchClick(${idx}, '${item.label}')"><img src="${item.url || getPlaceholderUrl(item.label)}" onerror="handleImgError(this, '${item.label}')"></div>`).join('')}</div></div></div>`; }
-        function getDeckHtml() { if (state.deck.length === 0) return `<span>🎉 FINITO!</span>`; const c = state.deck[0]; return `<img src="${c.url||getPlaceholderUrl(c.label)}" style="width:40px; height:40px; object-fit:contain;"> <span style="color:#333; font-weight:bold; padding-right:10px;">${c.label}</span>`; }
-        window.handleMatchClick = (idx, label) => { if (state.deck.length === 0 || label !== state.deck[0].label) return; document.getElementById(`slot-${idx}`).classList.add('matched'); state.deck.shift(); document.getElementById('deck-target').innerHTML = getDeckHtml(); };
-        function renderMemory(items, stage) { let useItems = items.length > 10 ? items.slice(0, 10) : items; let deck = [...useItems, ...useItems].sort(() => Math.random() - 0.5); state.memory = { flipped: [], matched: [], deck: deck, lockBoard: false }; const cols = Math.ceil(Math.sqrt(deck.length)); stage.innerHTML = `<div style="padding:10px; height:100%; overflow-y:auto;"><div class="grid-adaptive" style="grid-template-columns: repeat(${cols}, 1fr);">${deck.map((item, idx) => `<div class="card-grid" id="mem-${idx}" onclick="flipCard(${idx})" style="background:var(--accent-color);"><div class="mem-content" style="display:none; width:100%; height:100%;"><img src="${item.url || getPlaceholderUrl(item.label)}" style="width:100%; height:100%; object-fit:contain; background:white; border-radius:6px;" onerror="handleImgError(this, '${item.label}')"></div><i class="fa-solid fa-question icon-back" style="color:white; font-size:2rem;"></i></div>`).join('')}</div></div>`; }
-        window.flipCard = (idx) => { if (state.memory.lockBoard || state.memory.flipped.includes(idx) || state.memory.matched.includes(idx)) return; const card = document.getElementById(`mem-${idx}`); card.querySelector('.mem-content').style.display = 'block'; card.querySelector('.icon-back').style.display = 'none'; card.style.background = 'white'; state.memory.flipped.push(idx); if (state.memory.flipped.length === 2) { state.memory.lockBoard = true; const [i1, i2] = state.memory.flipped; if (state.memory.deck[i1].label === state.memory.deck[i2].label) { state.memory.matched.push(i1, i2); state.memory.flipped = []; state.memory.lockBoard = false; document.getElementById(`mem-${i1}`).classList.add('matched'); document.getElementById(`mem-${i2}`).classList.add('matched'); } else { setTimeout(() => { [i1, i2].forEach(i => { const c = document.getElementById(`mem-${i}`); c.querySelector('.mem-content').style.display = 'none'; c.querySelector('.icon-back').style.display = 'block'; c.style.background = 'var(--accent-color)'; }); state.memory.flipped = []; state.memory.lockBoard = false; }, 1000); } } };
-        function renderSearchFind(items,stage){const s=items[0]; stage.innerHTML=`<div class="search-find-container"><div class="sf-toolbar"><span style="color:white;font-weight:bold;">${s.label}</span><button class="btn btn-sm btn-danger" onclick="clearMarkers()"><i class="fa-solid fa-eraser"></i> Pulisci</button></div><div class="sf-viewport" id="sf-viewport" onclick="placeMarker(event)"><img src="${s.url||getPlaceholderUrl(s.label)}" class="sf-image" onerror="handleImgError(this,'${s.label}')"></div></div>`;}
-        window.placeMarker=(e)=>{const vp=document.getElementById('sf-viewport'); const r=vp.getBoundingClientRect(); const m=document.createElement('div'); m.className='marker-pin'; m.style.left=(e.clientX-r.left)+'px'; m.style.top=(e.clientY-r.top)+'px'; m.onclick=(ev)=>{ev.stopPropagation();m.remove();}; vp.appendChild(m);};
-        window.removeLastMarker=()=>{const m=document.querySelectorAll('.marker-pin'); if(m.length) m[m.length-1].remove();}; window.clearMarkers=()=>{document.querySelectorAll('.marker-pin').forEach(e=>e.remove());};
-        window.toggleGlobalScrollLock=()=>{document.body.classList.toggle('global-locked'); document.getElementById('btn-global-lock').classList.toggle('locked');};
-
-        // --- FIX BACKUP E EXPORT ---
-
-        // Genera nome file con data e ora: Ampliamento_Lessicale_04_02_2026_13_00.json
-        function getTimestampedFilename() {
-            const now = new Date();
-            const d = String(now.getDate()).padStart(2, '0');
-            const m = String(now.getMonth() + 1).padStart(2, '0');
-            const y = now.getFullYear();
-            const h = String(now.getHours()).padStart(2, '0');
-            const min = String(now.getMinutes()).padStart(2, '0');
-            return `Ampliamento_Lessicale_${d}_${m}_${y}_${h}_${min}.json`;
-        }
-
-        // --- SISTEMA DI BACKUP E RIPRISTINO (COMPLETO v36) ---
-
-        // 1. ESPORTAZIONE (Set + Pazienti)
-        window.exportAllSets = async () => { 
-            try {
-                const sets = await DB.getAllSets();
-                const patients = await DB.getAllPatients();
-                
-                if ((!sets || sets.length === 0) && (!patients || patients.length === 0)) {
-                    alert("Nessun dato da esportare.");
-                    return;
-                }
-
-                // Creiamo un oggetto "Backup Completo"
-                const fullBackup = {
-                    version: 2,
-                    timestamp: new Date().toISOString(),
-                    device: navigator.userAgent,
-                    sets: sets || [],
-                    patients: patients || []
-                };
-                
-                // Nome file con data e ora: "Backup_Stimolatore_2023-10-25_14-30.json"
-                const dateStr = new Date().toLocaleDateString('it-IT').replace(/\//g, '-');
-                const timeStr = new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'}).replace(/:/g, '-');
-                const filename = `Backup_Stimolatore_${dateStr}_${timeStr}.json`;
-                
-                downloadJSON(fullBackup, filename); 
-            } catch (e) {
-                console.error("Errore export:", e);
-                alert("Errore durante l'esportazione: " + e.message);
-            }
-        };
-
-        function downloadJSON(data, filename) { 
-            const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'}); 
-            const url = URL.createObjectURL(blob); 
-            const a = document.createElement('a'); 
-            a.href = url; 
-            a.download = filename; 
-            document.body.appendChild(a); // Necessario per Firefox/Android
-            a.click(); 
-            setTimeout(() => {
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            }, 100); 
-        }
-
-        // 2. IMPORTAZIONE (Fix Android + Supporto Pazienti)
-        window.importSets = (input) => { 
-            // Controllo file
-            if (!input.files || !input.files[0]) return;
-            const file = input.files[0];
-
-            const reader = new FileReader();
-            
-            reader.onload = async (e) => { 
-                try { 
-                    const jsonContent = e.target.result;
-                    const data = JSON.parse(jsonContent);
-                    
-                    let setsCount = 0;
-                    let patientsCount = 0;
-
-                    // CASO A: Backup Nuovo (Oggetto con versione)
-                    if (data.version && (data.sets || data.patients)) {
-                        if (data.sets && Array.isArray(data.sets)) {
-                            for(const s of data.sets) { await DB.saveSet(s); setsCount++; }
-                        }
-                        if (data.patients && Array.isArray(data.patients)) {
-                            for(const p of data.patients) { await DB.savePatient(p); patientsCount++; }
-                        }
-                    } 
-                    // CASO B: Backup Vecchio (Solo Array di Set)
-                    else if (Array.isArray(data)) {
-                        for(const s of data) { 
-                            // Controllo minimo di integrità
-                            if(s.id && s.items) { await DB.saveSet(s); setsCount++; }
-                        }
-                    }
-                    else {
-                        throw new Error("Formato file non riconosciuto.");
-                    }
-                    
-                    alert(`✅ Ripristino completato!\n\n📦 Set importati: ${setsCount}\n👤 Pazienti importati: ${patientsCount}`);
-                    window.location.reload(); // Ricarica per aggiornare l'interfaccia
-                    
-                } catch(err) {
-                    console.error(err);
-                    alert("❌ Errore importazione: " + err.message);
-                } 
-            };
-            
-            reader.onerror = () => {
-                alert("❌ Errore di lettura file. Verifica i permessi dell'app.");
-            };
-
-            // Avvia la lettura
-            reader.readAsText(file); 
-            
-            // Resetta l'input per permettere di ricaricare lo stesso file se necessario
-            input.value = ''; 
-        };
-        // --- INTEGRAZIONE S PEN (Samsung/Android) ---
-// Incolla questo blocco alla fine del tuo script JS
-
-let sPenClickCount = 0;
-let sPenTimer = null;
-
-// Ascolta l'evento personalizzato lanciato da MainActivity.java
-window.addEventListener('sPenNativeEvent', (event) => {
-    try {
-        // Debug approfondito: Logghiamo tutto per capire cosa arriva dal Java
-        console.log("S Pen Event Received. Detail Type:", typeof event.detail, "Value:", event.detail);
-
-        let data = null;
-
-        // TENTATIVO 1: Controllo event.detail (Standard Capacitor)
-        if (event.detail !== undefined && event.detail !== null) {
-            if (typeof event.detail === 'object') {
-                // Caso A: Capacitor ha già convertito in oggetto
-                data = event.detail;
-            } else if (typeof event.detail === 'string') {
-                // Caso B: È una stringa JSON
-                // Controllo preventivo per evitare l'errore "undefined"
-                if (event.detail.trim() === "undefined" || event.detail.trim() === "") {
-                    console.warn("Dati evento vuoti o 'undefined'");
-                    return; 
-                }
-                
-                try {
-                    data = JSON.parse(event.detail);
-                } catch (e) {
-                    console.warn("JSON Parse fallito, provo parsing manuale:", event.detail);
-                    // Fallback estremo: cerchiamo la parola chiave "down"
-                    if (event.detail.includes("down")) data = { action: "down" };
-                }
-            }
-        } 
-        // TENTATIVO 2: Fallback su event.data (alcune versioni bridge)
-        else if (event.data) {
-             data = (typeof event.data === 'string') ? JSON.parse(event.data) : event.data;
-        }
-
-        // Verifica finale dei dati
-        if (data && data.action === 'down') {
-            console.log("Azione S Pen Rilevata: DOWN");
-            handleSPenInput();
-        } else {
-            // Se arriviamo qui, l'evento c'è ma non ha l'azione 'down' o i dati sono illeggibili
-            console.log("Evento ignorato o dati non validi:", data);
-        }
-
-    } catch (e) {
-        console.error("Errore S Pen Event Critico:", e);
-    }
-});
-
-function handleSPenInput() {
-    // Logica per distinguere Singolo Click (V) da Doppio Click (X)
-    sPenClickCount++;
-    
-    if (sPenClickCount === 1) {
-        // Avvia un timer breve (300ms) per aspettare un eventuale secondo click
-        sPenTimer = setTimeout(() => {
-            // Se il timer scade senza un secondo click -> SINGOLO CLICK
-            sPenClickCount = 0;
-            if (isSessionActive()) {
-                recordResponse(true); // V (Verde)
-                // Feedback tattile (vibrazione leggera) se supportato
-                if (navigator.vibrate) navigator.vibrate(50);
-            }
-        }, 300); 
-    } else {
-        // Se arriva un secondo click prima che il timer scada -> DOPPIO CLICK
-        clearTimeout(sPenTimer);
-        sPenClickCount = 0;
-        
-        if (isSessionActive()) {
-            recordResponse(false); // X (Rosso)
-            if (navigator.vibrate) navigator.vibrate([50, 50, 50]); // Vibrazione doppia
-        }
-    }
-}
-
-// Helper per verificare se siamo in gioco
-function isSessionActive() {
-    return typeof state !== 'undefined' && state.session && state.session.active;
-}
-// --- GESTIONE MODALE ISTRUZIONI ---
-
-// Definizione sicura delle funzioni globali
-window.openInstructions = function() {
-    const modal = document.getElementById('modal-instructions');
-    if (modal) {
-        modal.classList.add('open');
-    } else {
-        console.error("Modale istruzioni non trovato!");
-    }
-};
-
-window.closeInstructions = function() {
-    const modal = document.getElementById('modal-instructions');
-    if (modal) {
-        modal.classList.remove('open');
-    }
-};
-
-// Listener per chiudere cliccando fuori (opzionale ma utile)
-document.addEventListener('click', function(event) {
-    const modal = document.getElementById('modal-instructions');
-    if (event.target === modal) {
-        window.closeInstructions();
-    }
-});
-
-// Force Linker: Assicura che il tasto info funzioni
-        document.addEventListener('DOMContentLoaded', () => {
-            // Trova il tasto info (quello con l'icona fa-info)
-            const infoBtns = document.querySelectorAll('.fa-info');
-            
-            infoBtns.forEach(icon => {
-                const btn = icon.closest('button');
-                if (btn) {
-                    btn.onclick = (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        const modal = document.getElementById('modal-instructions');
-                        if (modal) {
-                            modal.classList.add('open');
-                        } else {
-                            alert("Errore: Il codice HTML del modale istruzioni non è stato trovato nella pagina.");
-                        }
-                    };
-                }
-            });
-        });
-    </script>
+    <!-- JS MODULES -->
+    <script src="js/db.js"></script>
+    <script src="js/state.js"></script>
+    <script src="js/patients.js"></script>
+    <script src="js/editor.js"></script>
+    <script src="js/game-modes.js"></script>
+    <script src="js/backup.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/firebase-sync.js"></script>
 </body>
 </html>
