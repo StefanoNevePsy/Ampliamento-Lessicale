@@ -559,6 +559,34 @@ window.toggleDayActivityChart = (header, patientId, activityKeyEncoded) => {
     }
 };
 
+// --- Item details collapsible row for session tables ---
+function renderItemDetailsCollapsible(s, patientId, sessionIdx, isTD) {
+    const details = s.itemDetails;
+    if (!details || details.length === 0) return '';
+
+    const wrong = details.filter(d => d.result !== true);
+    if (wrong.length === 0) return '';
+
+    const wrongLabel = isTD ? 'Promptati' : 'Sbagliati';
+    const wrongColor = isTD ? 'var(--warning-color)' : 'var(--danger-color)';
+    const colSpan = isTD ? 6 : 5;
+
+    const chips = wrong.map(d => {
+        const isPrompt = d.result === 'prompt';
+        const color = isTD ? 'var(--warning-color)' : (isPrompt ? 'var(--warning-color)' : 'var(--danger-color)');
+        const tag = isTD ? 'P' : (isPrompt ? 'P' : 'X');
+        return `<span style="display:inline-block; padding:2px 8px; margin:2px; border-radius:6px; font-size:0.75rem; background:rgba(${isTD ? '245,158,11' : (isPrompt ? '245,158,11' : '239,68,68')},0.12); color:${color}; border:1px solid rgba(${isTD ? '245,158,11' : (isPrompt ? '245,158,11' : '239,68,68')},0.3);">${d.label} <span style="opacity:0.6;">${tag}</span></span>`;
+    }).join('');
+
+    return `
+        <tr class="item-details-row" style="display:none;">
+            <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(0,0,0,0.15);">
+                <div style="font-size:0.7rem; color:${wrongColor}; margin-bottom:4px; font-weight:bold;">${wrongLabel} (${wrong.length}):</div>
+                <div style="display:flex; flex-wrap:wrap; gap:2px;">${chips}</div>
+            </td>
+        </tr>`;
+}
+
 // ============================================================
 // TAB 3: ATTIVITA - Per-activity charts separated by session type
 // ============================================================
@@ -620,24 +648,51 @@ function renderActivitiesTab(patient) {
                     <tr style="border-bottom:1px solid #444; text-align:left; color:#888; font-size:0.75rem;">
                         <th style="padding:5px;">Data</th><th>Score</th><th>%</th>${typeGroup === 'timedelay' ? '<th>TD</th>' : ''}<th style="text-align:right;">Azioni</th>
                     </tr>
-                    ${[...sessions].reverse().map(s => `
+                    ${[...sessions].reverse().map(s => {
+                        const isTD = typeGroup === 'timedelay';
+                        const nonCorrect = s.total - s.correct;
+                        const scoreExtra = isTD
+                            ? (nonCorrect > 0 ? ` <span style="color:var(--warning-color); font-size:0.75rem;">${nonCorrect}P</span>` : '')
+                            : (nonCorrect > 0 ? ` <span style="color:var(--danger-color); font-size:0.75rem;">${nonCorrect}X</span>` : '');
+                        const hasDetails = s.itemDetails && s.itemDetails.length > 0 && s.itemDetails.some(d => d.result !== true);
+                        const itemDetailsHtml = hasDetails
+                            ? renderItemDetailsCollapsible(s, patient.id, s.originalIndex, isTD)
+                            : '';
+                        const detailsBtn = hasDetails
+                            ? `<button class="btn-icon item-details-toggle" style="width:26px; height:26px; font-size:0.6rem; display:inline-flex; color:${isTD ? 'var(--warning-color)' : 'var(--danger-color)'}; border-color:rgba(${isTD ? '245,158,11' : '239,68,68'},0.3);" title="Stimoli sbagliati"><i class="fa-solid fa-chevron-down" style="transition:transform 0.2s;"></i></button>`
+                            : '';
+                        return `
                         <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
                             <td style="padding:6px 5px;">${formatDateEU(s.date)}</td>
-                            <td>${s.correct}/${s.total}${s.rawP ? ` <span style="color:var(--warning-color); font-size:0.75rem;">P${s.rawP}</span>` : ''}</td>
+                            <td>${s.correct}/${s.total}${scoreExtra}</td>
                             <td style="font-weight:bold; color:${s.percentage >= 90 ? 'var(--success-color)' : 'white'}">${s.percentage}%</td>
-                            ${typeGroup === 'timedelay' ? `<td style="font-size:0.8rem; color:var(--warning-color);">${s.timeDelaySeconds || '?'}s</td>` : ''}
+                            ${isTD ? `<td style="font-size:0.8rem; color:var(--warning-color);">${s.timeDelaySeconds || '?'}s</td>` : ''}
                             <td style="text-align:right;">
+                                ${detailsBtn}
                                 <button class="btn-icon" style="width:26px; height:26px; font-size:0.7rem; display:inline-flex;" onclick="editSession('${patient.id}', ${s.originalIndex})"><i class="fa-solid fa-pen"></i></button>
                                 <button class="btn-icon" style="width:26px; height:26px; font-size:0.7rem; display:inline-flex; color:var(--danger-color); border-color:rgba(239,68,68,0.3);" onclick="deleteSession('${patient.id}', ${s.originalIndex})"><i class="fa-solid fa-trash"></i></button>
                             </td>
                         </tr>
-                    `).join('')}
+                        ${itemDetailsHtml}
+                    `}).join('')}
                 </table>
             </div>
         </div>`;
     });
 
     content.innerHTML = html;
+
+    // Wire up item detail toggles
+    content.querySelectorAll('.item-details-toggle').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const row = btn.closest('tr').nextElementSibling;
+            if (row && row.classList.contains('item-details-row')) {
+                const isOpen = row.style.display !== 'none';
+                row.style.display = isOpen ? 'none' : 'table-row';
+                btn.querySelector('i').style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+            }
+        });
+    });
 
     // Render SVG charts
     chartList.forEach(item => {
