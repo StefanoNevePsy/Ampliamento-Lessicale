@@ -173,6 +173,8 @@ function renderFluenzaUI(stage) {
 
     // Pre-game: timer selection
     if (!started && !finished) {
+        const presets = [15, 30, 60, 90, 120];
+        const isCustom = !presets.includes(state.fluenzaTimerDuration);
         stage.innerHTML = `
         <div style="height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; padding:20px;">
             <i class="fa-solid fa-bolt fa-3x" style="color:var(--accent-color); opacity:0.6;"></i>
@@ -182,15 +184,28 @@ function renderFluenzaUI(stage) {
                 <span style="font-size:0.8rem; color:var(--text-secondary);">Obiettivo prossima volta</span><br>
                 <span style="font-size:1.5rem; font-weight:bold; color:var(--accent-color);"><i class="fa-solid fa-bullseye"></i> ${obiettivo}</span>
             </div>` : ''}
-            <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
-                ${[30, 60, 90, 120].map(t => `
+            <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:center; align-items:center;">
+                ${presets.map(t => `
                     <button class="btn btn-sm ${state.fluenzaTimerDuration === t ? 'btn-success' : 'btn-ghost'}"
                             onclick="state.fluenzaTimerDuration=${t}; state.fluenzaTimeLeft=${t}; renderFluenzaUI(document.getElementById('game-stage'));"
-                            style="padding:10px 20px; font-size:1rem; min-width:70px;">
+                            style="padding:10px 16px; font-size:1rem; min-width:60px;">
                         ${t}s
                     </button>
                 `).join('')}
+                <div style="display:flex; align-items:center; gap:4px; padding:4px 8px; border-radius:10px; border:1px solid ${isCustom ? 'var(--success-color)' : 'var(--glass-border)'}; background:${isCustom ? 'rgba(16,185,129,0.15)' : 'rgba(0,0,0,0.2)'};">
+                    <input type="number" id="fluenza-custom-time" value="${state.fluenzaTimerDuration}" min="5" max="600" step="5"
+                        style="width:50px; padding:6px; border:none; background:transparent; color:white; font-size:1rem; text-align:center; outline:none;"
+                        onchange="const v=Math.max(5,Math.min(600,parseInt(this.value)||60)); state.fluenzaTimerDuration=v; state.fluenzaTimeLeft=v; this.value=v; renderFluenzaUI(document.getElementById('game-stage'));">
+                    <span style="font-size:0.8rem; color:var(--text-secondary);">sec</span>
+                </div>
             </div>
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; user-select:none; font-size:0.85rem; color:var(--text-secondary);"
+                   onclick="state.fluenzaShowBar=!state.fluenzaShowBar; renderFluenzaUI(document.getElementById('game-stage'));">
+                <span style="width:36px; height:20px; border-radius:10px; background:${state.fluenzaShowBar ? 'var(--accent-color)' : 'rgba(255,255,255,0.15)'}; position:relative; display:inline-block; transition:0.2s;">
+                    <span style="width:16px; height:16px; border-radius:50%; background:white; position:absolute; top:2px; ${state.fluenzaShowBar ? 'left:18px' : 'left:2px'}; transition:0.2s; box-shadow:0 1px 3px rgba(0,0,0,0.3);"></span>
+                </span>
+                <i class="fa-solid fa-bars-progress"></i> Mostra barra tempo
+            </label>
             <button class="ran-btn-nav" onclick="fluenzaNext()" style="width:80px; height:80px; font-size:2rem; margin-top:10px;">
                 <i class="fa-solid fa-play"></i>
             </button>
@@ -238,15 +253,16 @@ function renderFluenzaUI(stage) {
     // During game: show current image + timer + controls
     const currentItem = idx >= 0 && idx < items.length ? items[idx] : null;
     const currentResult = state.fluenzaItemResults[idx];
+    const showBar = state.fluenzaShowBar;
 
     stage.innerHTML = `
     <div style="display:flex; flex-direction:column; height:100%; width:100%;">
         <!-- Timer bar -->
         <div style="padding:8px 15px; background:rgba(0,0,0,0.3); display:flex; align-items:center; gap:12px; flex-shrink:0;">
             <span style="font-size:1.4rem; font-weight:bold; color:${timerColor}; font-variant-numeric:tabular-nums; min-width:55px;">${timeStr}</span>
-            <div style="flex:1; height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden;">
+            ${showBar ? `<div style="flex:1; height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden;">
                 <div style="width:${pct}%; height:100%; background:${timerColor}; border-radius:4px; transition:width 1s linear;"></div>
-            </div>
+            </div>` : '<div style="flex:1;"></div>'}
             <span style="font-size:1rem; font-weight:bold; color:white;">${correct} <span style="font-size:0.7rem; color:var(--text-secondary);">/ ${count}</span></span>
             ${errors > 0 ? `<span style="font-size:0.85rem; color:var(--danger-color); font-weight:bold;">${errors}<i class="fa-solid fa-xmark" style="font-size:0.7rem; margin-left:2px;"></i></span>` : ''}
         </div>

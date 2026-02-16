@@ -64,7 +64,8 @@ let state = {
     fluenzaTimerDuration: 60,
     fluenzaTimeLeft: 0,
     fluenzaTimerInterval: null,
-    fluenzaItemResults: {}
+    fluenzaItemResults: {},
+    fluenzaShowBar: true
 };
 
 // --- TAG IMAGE HELPERS (IndexedDB with in-memory cache) ---
