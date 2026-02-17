@@ -927,8 +927,8 @@ function renderSequenzeUI(stage) {
             </span>
         </div>` : ''}
 
-        <!-- Slots (horizontal) -->
-        <div id="seq-slots-container" style="flex:1; min-height:0; padding:15px; overflow-x:auto; overflow-y:hidden; display:flex; flex-direction:row; gap:10px; align-items:stretch;">
+        <!-- Slots (horizontal, centered) -->
+        <div id="seq-slots-container" style="flex:1; min-height:0; padding:15px; overflow-x:auto; overflow-y:hidden; display:flex; flex-direction:row; gap:10px; align-items:stretch; justify-content:center;">
             ${state.sequenzeCorrectOrder.map((_, slotIdx) => {
                 const placedItem = state.sequenzePlacements[slotIdx];
                 const isCorrect = verified && placedItem && placedItem.seqNumber === state.sequenzeCorrectOrder[slotIdx].seqNumber;
@@ -1048,8 +1048,13 @@ window.checkSequenze = () => {
     renderSequenzeUI(document.getElementById('game-stage'));
 };
 
-// Drag-to-swap between filled slots (touch + mouse)
+// Drag-to-swap between filled slots (touch + mouse) with floating ghost card
+let _seqDragCleanup = null;
+
 function setupSequenzeDragSwap() {
+    // Clean up previous document-level listeners
+    if (_seqDragCleanup) { _seqDragCleanup(); _seqDragCleanup = null; }
+
     const container = document.getElementById('seq-slots-container');
     if (!container) return;
 
@@ -1057,6 +1062,62 @@ function setupSequenzeDragSwap() {
     let dragEl = null;
     let startX = 0, startY = 0;
     let isDragging = false;
+    let ghostEl = null;
+
+    function createGhost(slot, x, y) {
+        const rect = slot.getBoundingClientRect();
+        const ghost = slot.cloneNode(true);
+        ghost.id = '';
+        ghost.style.cssText = `
+            position:fixed; z-index:9999; pointer-events:none;
+            width:${rect.width}px; height:${rect.height}px;
+            left:${x - rect.width / 2}px; top:${y - rect.height / 2}px;
+            opacity:0.9; transform:scale(1.08); border-radius:14px;
+            border:3px solid var(--accent-color);
+            box-shadow:0 12px 40px rgba(99,102,241,0.5);
+            background:rgba(99,102,241,0.15);
+            backdrop-filter:blur(4px);
+            transition:none;
+        `;
+        document.body.appendChild(ghost);
+        return ghost;
+    }
+
+    function moveGhost(x, y) {
+        if (!ghostEl) return;
+        const w = parseFloat(ghostEl.style.width);
+        const h = parseFloat(ghostEl.style.height);
+        ghostEl.style.left = (x - w / 2) + 'px';
+        ghostEl.style.top = (y - h / 2) + 'px';
+    }
+
+    function removeGhost() {
+        if (ghostEl) { ghostEl.remove(); ghostEl = null; }
+    }
+
+    function highlightTarget(cx, cy) {
+        // Need to hide ghost briefly so elementFromPoint finds the slot underneath
+        if (ghostEl) ghostEl.style.display = 'none';
+        const el = document.elementFromPoint(cx, cy);
+        if (ghostEl) ghostEl.style.display = '';
+        const target = el ? el.closest('.seq-slot-card[data-slot]') : null;
+        slots.forEach(s => {
+            if (s === dragEl) return;
+            s.style.outline = '';
+            s.style.boxShadow = '';
+        });
+        if (target && target !== dragEl) {
+            target.style.outline = '3px dashed var(--accent-color)';
+            target.style.boxShadow = '0 0 20px rgba(99,102,241,0.3)';
+        }
+        return target;
+    }
+
+    function resetVisuals() {
+        removeGhost();
+        if (dragEl) { dragEl.style.opacity = ''; dragEl.style.transform = ''; }
+        slots.forEach(s => { s.style.outline = ''; s.style.boxShadow = ''; });
+    }
 
     const slots = container.querySelectorAll('.seq-slot-card[data-slot]');
 
@@ -1082,17 +1143,15 @@ function setupSequenzeDragSwap() {
             const dx = Math.abs(touch.clientX - startX);
             const dy = Math.abs(touch.clientY - startY);
             if (dx > 10 || dy > 10) {
-                isDragging = true;
-                e.preventDefault();
-                dragEl.style.opacity = '0.5';
-                dragEl.style.transform = 'scale(0.93)';
-                // Highlight target slot
-                slots.forEach(s => { s.style.outline = ''; });
-                const el = document.elementFromPoint(touch.clientX, touch.clientY);
-                const target = el ? el.closest('.seq-slot-card[data-slot]') : null;
-                if (target && target !== dragEl) {
-                    target.style.outline = '3px solid var(--accent-color)';
+                if (!isDragging) {
+                    isDragging = true;
+                    ghostEl = createGhost(dragEl, touch.clientX, touch.clientY);
+                    dragEl.style.opacity = '0.3';
+                    dragEl.style.transform = 'scale(0.9)';
                 }
+                e.preventDefault();
+                moveGhost(touch.clientX, touch.clientY);
+                highlightTarget(touch.clientX, touch.clientY);
             }
         }, { passive: false });
 
@@ -1102,13 +1161,15 @@ function setupSequenzeDragSwap() {
                 return;
             }
             const touch = e.changedTouches[0];
+            if (ghostEl) ghostEl.style.display = 'none';
             const el = document.elementFromPoint(touch.clientX, touch.clientY);
+            if (ghostEl) ghostEl.style.display = '';
             const target = el ? el.closest('.seq-slot-card[data-slot]') : null;
+            removeGhost();
             if (target && target !== dragEl) {
                 swapSequenzeSlots(dragSlotIdx, parseInt(target.dataset.slot));
             } else {
-                if (dragEl) { dragEl.style.opacity = ''; dragEl.style.transform = ''; }
-                slots.forEach(s => { s.style.outline = ''; });
+                resetVisuals();
             }
             dragSlotIdx = null;
             isDragging = false;
@@ -1127,50 +1188,53 @@ function setupSequenzeDragSwap() {
         });
     });
 
-    // Mouse move/up on container
-    container.addEventListener('mousemove', (e) => {
+    // Document-level mouse handlers (so drag works even outside container)
+    function onDocMouseMove(e) {
         if (dragSlotIdx === null) return;
         const dx = Math.abs(e.clientX - startX);
         const dy = Math.abs(e.clientY - startY);
         if (dx > 5 || dy > 5) {
-            isDragging = true;
-            if (dragEl) { dragEl.style.opacity = '0.5'; dragEl.style.transform = 'scale(0.93)'; }
-            slots.forEach(s => { s.style.outline = ''; });
-            const el = document.elementFromPoint(e.clientX, e.clientY);
-            const target = el ? el.closest('.seq-slot-card[data-slot]') : null;
-            if (target && target !== dragEl) {
-                target.style.outline = '3px solid var(--accent-color)';
+            if (!isDragging) {
+                isDragging = true;
+                ghostEl = createGhost(dragEl, e.clientX, e.clientY);
+                dragEl.style.opacity = '0.3';
+                dragEl.style.transform = 'scale(0.9)';
             }
+            moveGhost(e.clientX, e.clientY);
+            highlightTarget(e.clientX, e.clientY);
         }
-    });
+    }
 
-    container.addEventListener('mouseup', (e) => {
+    function onDocMouseUp(e) {
         if (dragSlotIdx === null) return;
         if (isDragging) {
+            if (ghostEl) ghostEl.style.display = 'none';
             const el = document.elementFromPoint(e.clientX, e.clientY);
+            if (ghostEl) ghostEl.style.display = '';
             const target = el ? el.closest('.seq-slot-card[data-slot]') : null;
+            removeGhost();
             if (target && target !== dragEl) {
                 swapSequenzeSlots(dragSlotIdx, parseInt(target.dataset.slot));
             } else {
-                if (dragEl) { dragEl.style.opacity = ''; dragEl.style.transform = ''; }
-                slots.forEach(s => { s.style.outline = ''; });
+                resetVisuals();
             }
         }
         dragSlotIdx = null;
         isDragging = false;
-    });
+    }
 
-    container.addEventListener('mouseleave', () => {
-        if (dragSlotIdx !== null) {
-            if (dragEl) { dragEl.style.opacity = ''; dragEl.style.transform = ''; }
-            slots.forEach(s => { s.style.outline = ''; });
-            dragSlotIdx = null;
-            isDragging = false;
-        }
-    });
+    document.addEventListener('mousemove', onDocMouseMove);
+    document.addEventListener('mouseup', onDocMouseUp);
+
+    _seqDragCleanup = () => {
+        document.removeEventListener('mousemove', onDocMouseMove);
+        document.removeEventListener('mouseup', onDocMouseUp);
+        removeGhost();
+    };
 }
 
 window.swapSequenzeSlots = (fromIdx, toIdx) => {
+    if (_seqDragCleanup) { _seqDragCleanup(); _seqDragCleanup = null; }
     const temp = state.sequenzePlacements[fromIdx];
     state.sequenzePlacements[fromIdx] = state.sequenzePlacements[toIdx];
     state.sequenzePlacements[toIdx] = temp;
