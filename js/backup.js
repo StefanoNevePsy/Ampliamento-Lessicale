@@ -39,7 +39,7 @@ async function downloadJSON(data, filename) {
     }, 100);
 }
 
-// Full backup (Sets + Patients)
+// Full backup - opens selective export modal
 window.exportAllSets = async () => {
     try {
         const sets = await DB.getAllSets();
@@ -50,22 +50,135 @@ window.exportAllSets = async () => {
             return;
         }
 
-        const fullBackup = {
+        // Store data for the export modal
+        window._exportData = { sets, patients };
+
+        // Group sets by category
+        const catMap = {};
+        sets.forEach(s => {
+            const cat = s.category || 'Altri';
+            if (!catMap[cat]) catMap[cat] = [];
+            catMap[cat].push(s);
+        });
+
+        let html = `<div style="max-width:600px; margin:0 auto;">`;
+
+        // --- SETS ---
+        html += `
+        <div style="background:rgba(0,0,0,0.2); border-radius:12px; padding:12px; margin-bottom:12px;">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:bold; font-size:1rem; margin-bottom:8px;">
+                <input type="checkbox" id="exp-all-sets" checked onchange="toggleExportSection('sets', this.checked)" style="width:18px; height:18px;">
+                <i class="fa-solid fa-layer-group"></i> Set (${sets.length})
+            </label>
+            <div id="exp-sets-list" style="padding-left:20px;">`;
+
+        for (const [cat, catSets] of Object.entries(catMap).sort()) {
+            html += `
+            <div style="margin-bottom:6px;">
+                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:0.85rem; color:var(--text-secondary); font-weight:bold;">
+                    <input type="checkbox" class="exp-set-cat" data-cat="${cat}" checked onchange="toggleExportCat('${cat}', this.checked)" style="width:16px; height:16px;">
+                    ${cat} (${catSets.length})
+                </label>
+                <div style="padding-left:18px;">`;
+            catSets.forEach(s => {
+                html += `<label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:0.8rem; padding:2px 0;">
+                    <input type="checkbox" class="exp-set-item" data-id="${s.id}" checked style="width:14px; height:14px;">
+                    ${s.name} <span style="opacity:0.5;">(${s.items.length})</span>
+                </label>`;
+            });
+            html += `</div></div>`;
+        }
+        html += `</div></div>`;
+
+        // --- PATIENTS ---
+        html += `
+        <div style="background:rgba(0,0,0,0.2); border-radius:12px; padding:12px; margin-bottom:12px;">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:bold; font-size:1rem; margin-bottom:8px;">
+                <input type="checkbox" id="exp-all-patients" checked onchange="toggleExportSection('patients', this.checked)" style="width:18px; height:18px;">
+                <i class="fa-solid fa-user-doctor"></i> Pazienti (${patients.length})
+            </label>
+            <div id="exp-patients-list" style="padding-left:20px;">`;
+        patients.forEach(p => {
+            const sessions = (p.history || []).length;
+            html += `<label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:0.8rem; padding:2px 0;">
+                <input type="checkbox" class="exp-patient-item" data-id="${p.id}" checked style="width:14px; height:14px;">
+                ${p.name || 'Senza nome'} <span style="opacity:0.5;">(${sessions} sessioni)</span>
+            </label>`;
+        });
+        html += `</div></div>`;
+
+        // --- CONFIG ---
+        html += `
+        <div style="background:rgba(0,0,0,0.2); border-radius:12px; padding:12px; margin-bottom:12px;">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:bold; font-size:1rem;">
+                <input type="checkbox" id="exp-config" checked style="width:18px; height:18px;">
+                <i class="fa-solid fa-sliders"></i> Configurazione (attivit&agrave;, quaderno, tag)
+            </label>
+        </div>`;
+
+        html += `</div>`;
+
+        document.getElementById('export-select-body').innerHTML = html;
+        document.getElementById('modal-export-select').style.display = 'flex';
+
+    } catch (e) {
+        console.error("Errore export:", e);
+        alert("Errore durante l'esportazione: " + e.message);
+    }
+};
+
+// Toggle helpers for export checklist
+window.toggleExportSection = (section, checked) => {
+    const selector = section === 'sets' ? '.exp-set-item, .exp-set-cat' : '.exp-patient-item';
+    document.querySelectorAll(selector).forEach(cb => { cb.checked = checked; });
+};
+window.toggleExportCat = (cat, checked) => {
+    document.querySelectorAll(`.exp-set-item`).forEach(cb => {
+        const setId = cb.dataset.id;
+        const s = window._exportData.sets.find(x => x.id === setId);
+        if (s && (s.category || 'Altri') === cat) cb.checked = checked;
+    });
+};
+
+// Execute the selective export
+window.executeSelectiveExport = async () => {
+    try {
+        const selectedSetIds = new Set();
+        document.querySelectorAll('.exp-set-item:checked').forEach(cb => selectedSetIds.add(cb.dataset.id));
+        const selectedPatientIds = new Set();
+        document.querySelectorAll('.exp-patient-item:checked').forEach(cb => selectedPatientIds.add(cb.dataset.id));
+        const includeConfig = document.getElementById('exp-config').checked;
+
+        const sets = window._exportData.sets.filter(s => selectedSetIds.has(s.id));
+        const patients = window._exportData.patients.filter(p => selectedPatientIds.has(p.id));
+
+        if (sets.length === 0 && patients.length === 0 && !includeConfig) {
+            alert("Seleziona almeno un elemento da esportare.");
+            return;
+        }
+
+        const backup = {
             version: 5,
             timestamp: new Date().toISOString(),
             device: navigator.userAgent,
-            sets: sets || [],
-            patients: patients || [],
-            tagImages: getAllTagImages(), // from cache (backed by IndexedDB)
-            quadernoLists: getSavedQuadernoLists(),
-            sessionNames: getRecentSessionNames()
+            sets: sets,
+            patients: patients
         };
+
+        if (includeConfig) {
+            backup.tagImages = getAllTagImages();
+            backup.quadernoLists = getSavedQuadernoLists();
+            backup.sessionNames = getRecentSessionNames();
+            backup.activityLayout = getActivityLayout();
+        }
 
         const dateStr = new Date().toLocaleDateString('it-IT').replace(/\//g, '-');
         const timeStr = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }).replace(/:/g, '-');
         const filename = `Backup_Stimolatore_${dateStr}_${timeStr}.json`;
 
-        await downloadJSON(fullBackup, filename);
+        await downloadJSON(backup, filename);
+        document.getElementById('modal-export-select').style.display = 'none';
+        window._exportData = null;
     } catch (e) {
         console.error("Errore export:", e);
         alert("Errore durante l'esportazione: " + e.message);
@@ -235,6 +348,27 @@ window.importSets = (input) => {
                 const existing = getRecentSessionNames();
                 const merged = [...new Set([...existing, ...data.sessionNames])].slice(0, 30);
                 localStorage.setItem('sessionNames', JSON.stringify(merged));
+            }
+            // Import activity layout (if present and none exists locally, or merge custom modes)
+            if (data.activityLayout) {
+                const local = getActivityLayout();
+                if (data.activityLayout.customModes) {
+                    if (!local.customModes) local.customModes = {};
+                    for (const [k, v] of Object.entries(data.activityLayout.customModes)) {
+                        if (!local.customModes[k]) {
+                            local.customModes[k] = v;
+                            // Add to first group if not already in any group
+                            const inAnyGroup = local.groups.some(g => g.modes.includes(k));
+                            if (!inAnyGroup && local.groups.length > 0) local.groups[0].modes.push(k);
+                        }
+                    }
+                }
+                if (data.activityLayout.modeEmojis) {
+                    if (!local.modeEmojis) local.modeEmojis = {};
+                    Object.assign(local.modeEmojis, data.activityLayout.modeEmojis);
+                }
+                saveActivityLayout(local);
+                renderModeSelect();
             }
 
             // Build summary

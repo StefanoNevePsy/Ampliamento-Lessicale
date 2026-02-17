@@ -56,28 +56,13 @@
         <!-- CONTROLS -->
         <div class="controls-row">
             <div class="select-wrapper">
-                <label><i class="fa-solid fa-gamepad"></i> Attivit&agrave;</label>
+                <label>
+                    <i class="fa-solid fa-gamepad"></i> Attivit&agrave;
+                    <button onclick="openActivityLayout()" style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:0.75rem; padding:2px 5px; margin-left:4px; opacity:0.7;" title="Gestisci attivit&agrave;">
+                        <i class="fa-solid fa-gear"></i>
+                    </button>
+                </label>
                 <select id="mode-select" onchange="filterSetsByMode()">
-                    <option value="tact">TACT (Flashcard)</option>
-                    <option value="ran">RAN (Denominazione)</option>
-                    <option value="fluenza">Fluenza (Velocit&agrave;)</option>
-                    <option value="tombola">Tombola (Matching)</option>
-                    <option value="tombola_sonora">Tombola Sonora (Audio)</option>
-                    <option value="memory">Memory</option>
-                    <option value="search_find">Cerca Trova (Scena)</option>
-                    <option value="intraverbal_scenari">Intraverbal-Scenari</option>
-                    <option value="zoom">Zoom (Indovina)</option>
-                    <option value="quaderno">Quaderno (Manuale)</option>
-                    <optgroup label="Avanzate">
-                        <option value="topologia">Topologia (Drag&amp;Drop)</option>
-                        <option value="sequenze">Sequenze (Ordina)</option>
-                    </optgroup>
-                    <optgroup label="Pool da Tag">
-                        <option value="pool_random">Pool Random</option>
-                        <option value="pool_intraverbal">Pool Intraverbal</option>
-                        <option value="intruso">Intruso</option>
-                        <option value="categorizzazione">Categorizzazione</option>
-                    </optgroup>
                 </select>
             </div>
 
@@ -492,6 +477,30 @@
                 <p id="p2p-progress-text" style="color:#aaa; font-size:0.9rem;"></p>
             </div>
         </div>
+    </div>
+
+    <!-- MODAL: ACTIVITY LAYOUT MANAGER -->
+    <div id="modal-activity-layout" class="modal-fs" style="display:none;">
+        <div class="modal-header">
+            <h2><i class="fa-solid fa-sliders"></i> Gestione Attivit&agrave;</h2>
+            <div style="display:flex; gap:10px;">
+                <button class="btn btn-success" onclick="saveActivityLayoutAndClose()"><i class="fa-solid fa-check"></i> Salva</button>
+                <button class="btn btn-ghost" onclick="closeActivityLayout()">Annulla</button>
+            </div>
+        </div>
+        <div class="modal-body" id="activity-layout-body"></div>
+    </div>
+
+    <!-- MODAL: SELECTIVE EXPORT -->
+    <div id="modal-export-select" class="modal-fs" style="display:none;">
+        <div class="modal-header">
+            <h2><i class="fa-solid fa-file-export"></i> Esporta Backup</h2>
+            <div style="display:flex; gap:10px;">
+                <button class="btn btn-success" onclick="executeSelectiveExport()"><i class="fa-solid fa-download"></i> Esporta</button>
+                <button class="btn btn-ghost" onclick="document.getElementById('modal-export-select').style.display='none'">Annulla</button>
+            </div>
+        </div>
+        <div class="modal-body" id="export-select-body"></div>
     </div>
 
     <!-- Firebase SDK (compat for global scope) -->

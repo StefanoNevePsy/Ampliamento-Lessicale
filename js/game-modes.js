@@ -12,22 +12,24 @@ function handleImgError(img, label) {
 function renderGameMode(mode, items) {
     const stage = document.getElementById('game-stage');
     stage.innerHTML = '';
+    // Resolve custom modes to their engine
+    const engine = (typeof getModeEngine === 'function') ? getModeEngine(mode) : mode;
     // Clean up any previous drag handlers
     if (window._topoCleanup) { window._topoCleanup(); window._topoCleanup = null; }
-    if (mode === 'tact') renderTact(items, stage);
-    else if (mode === 'ran') renderRan(items, stage);
-    else if (mode === 'fluenza') renderFluenza(items, stage);
-    else if (mode === 'tombola') renderTombola(items, stage);
-    else if (mode === 'tombola_sonora') renderTombolaSonora(items, stage);
-    else if (mode === 'memory') renderMemory(items, stage);
-    else if (mode === 'search_find' || mode === 'intraverbal_scenari') renderSearchFind(items, stage);
-    else if (mode === 'pool_random' || mode === 'pool_intraverbal') renderPoolRandom(items, stage);
-    else if (mode === 'intruso') renderIntruso(items, stage);
-    else if (mode === 'topologia') renderTopologia(items, stage);
-    else if (mode === 'sequenze') renderSequenze(items, stage);
-    else if (mode === 'categorizzazione') renderCategorizzazione(items, stage);
-    else if (mode === 'zoom') renderZoom(items, stage);
-    else if (mode === 'quaderno') renderQuaderno(stage);
+    if (engine === 'tact') renderTact(items, stage);
+    else if (engine === 'ran') renderRan(items, stage);
+    else if (engine === 'fluenza') renderFluenza(items, stage);
+    else if (engine === 'tombola') renderTombola(items, stage);
+    else if (engine === 'tombola_sonora') renderTombolaSonora(items, stage);
+    else if (engine === 'memory') renderMemory(items, stage);
+    else if (engine === 'search_find' || engine === 'intraverbal_scenari') renderSearchFind(items, stage);
+    else if (engine === 'pool_random' || engine === 'pool_intraverbal') renderPoolRandom(items, stage);
+    else if (engine === 'intruso') renderIntruso(items, stage);
+    else if (engine === 'topologia') renderTopologia(items, stage);
+    else if (engine === 'sequenze') renderSequenze(items, stage);
+    else if (engine === 'categorizzazione') renderCategorizzazione(items, stage);
+    else if (engine === 'zoom') renderZoom(items, stage);
+    else if (engine === 'quaderno') renderQuaderno(stage);
 }
 
 // --- TACT ---
