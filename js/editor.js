@@ -197,6 +197,7 @@ function renderEditorList() {
                 <input type="text" value="${item.label}"
                     onchange="state.editingItems[${idx}].label=this.value"
                     onfocus="setActiveItem(${idx})"
+                    onclick="event.stopPropagation()"
                     placeholder="Etichetta"
                     style="${item.hidden ? 'text-decoration:line-through; color:#888;' : ''}">
                 <div style="display:flex; gap:2px; margin-top:2px;">${hasAudio}${hasZoom}${hasSeq}</div>
@@ -246,6 +247,7 @@ window.toggleItemVisibility = (idx) => {
 };
 
 window.setActiveItem = (index) => {
+    if (state.activeEditorIndex === index) return; // skip re-render if already active
     state.activeEditorIndex = index;
     renderEditorList();
 };

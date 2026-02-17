@@ -101,9 +101,12 @@ window.startP2PSend = async (mode) => {
         // Generate QR code
         const qrContainer = document.getElementById('p2p-qr-container');
         if (typeof QRCode !== 'undefined') {
-            const canvas = document.createElement('canvas');
-            QRCode.toCanvas(canvas, id, { width: 200, margin: 2, color: { dark: '#000000', light: '#ffffff' } }, (err) => {
-                if (!err) qrContainer.appendChild(canvas);
+            new QRCode(qrContainer, {
+                text: id,
+                width: 200,
+                height: 200,
+                colorDark: '#000000',
+                colorLight: '#ffffff'
             });
         }
     });

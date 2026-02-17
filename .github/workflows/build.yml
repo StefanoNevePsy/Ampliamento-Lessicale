@@ -114,18 +114,26 @@ jobs:
       - name: Initialize Capacitor Android
         run: npx cap add android
 
+      - name: Generate Android icons
+        run: |
+          for size_dpi in "48 mdpi" "72 hdpi" "96 xhdpi" "144 xxhdpi" "192 xxxhdpi"; do
+            set -- $size_dpi
+            convert build/icon.png -resize ${1}x${1} android/app/src/main/res/mipmap-${2}/ic_launcher.png
+            cp android/app/src/main/res/mipmap-${2}/ic_launcher.png android/app/src/main/res/mipmap-${2}/ic_launcher_round.png
+          done
+
       - name: Sync Capacitor
         run: npx cap sync android
 
       - name: Build Android APK
         working-directory: android
-        run: ./gradlew assembleRelease
+        run: ./gradlew assembleDebug
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
           name: StimolatoreClinico-Android
-          path: android/app/build/outputs/apk/release/*.apk
+          path: android/app/build/outputs/apk/debug/*.apk
 
   # ==========================================
   # Create Release (on tag push)
