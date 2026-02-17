@@ -119,7 +119,7 @@ window.exportAllSets = async () => {
         html += `</div>`;
 
         document.getElementById('export-select-body').innerHTML = html;
-        document.getElementById('modal-export-select').style.display = 'flex';
+        document.getElementById('modal-export-select').classList.add('open');
 
     } catch (e) {
         console.error("Errore export:", e);
@@ -177,7 +177,7 @@ window.executeSelectiveExport = async () => {
         const filename = `Backup_Stimolatore_${dateStr}_${timeStr}.json`;
 
         await downloadJSON(backup, filename);
-        document.getElementById('modal-export-select').style.display = 'none';
+        document.getElementById('modal-export-select').classList.remove('open');
         window._exportData = null;
     } catch (e) {
         console.error("Errore export:", e);

@@ -679,12 +679,12 @@ let _editingLayout = null;
 
 window.openActivityLayout = () => {
     _editingLayout = JSON.parse(JSON.stringify(getActivityLayout()));
-    document.getElementById('modal-activity-layout').style.display = 'flex';
+    document.getElementById('modal-activity-layout').classList.add('open');
     renderActivityLayoutBody();
 };
 
 window.closeActivityLayout = () => {
-    document.getElementById('modal-activity-layout').style.display = 'none';
+    document.getElementById('modal-activity-layout').classList.remove('open');
     _editingLayout = null;
 };
 
