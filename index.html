@@ -241,6 +241,12 @@
                 <label style="font-size:0.8rem; color:#aaa;">Nome del Set</label>
                 <input type="text" id="edit-set-name" style="margin-bottom:10px; font-size:1.2rem; font-weight:bold;">
 
+                <label style="font-size:0.8rem; color:#aaa;"><i class="fa-solid fa-folder"></i> Categoria</label>
+                <div style="display:flex; gap:8px; margin-bottom:10px;">
+                    <select id="edit-set-category" onchange="onEditCategoryChange(this)" style="flex:1; margin-bottom:0;"></select>
+                    <input type="text" id="edit-set-category-custom" placeholder="Nome categoria..." style="flex:1; margin-bottom:0; display:none;">
+                </div>
+
                 <label style="font-size:0.8rem; color:#aaa;">Modalit&agrave; Compatibili</label>
                 <div class="mode-tags" id="edit-modes-container"></div>
 

@@ -1065,19 +1065,26 @@ function setupSequenzeDragSwap() {
     let ghostEl = null;
 
     function createGhost(slot, x, y) {
-        const rect = slot.getBoundingClientRect();
-        const ghost = slot.cloneNode(true);
-        ghost.id = '';
+        const slotIdx = parseInt(slot.dataset.slot);
+        const item = state.sequenzePlacements[slotIdx];
+        if (!item) return null;
+
+        const ghost = document.createElement('div');
         ghost.style.cssText = `
             position:fixed; z-index:9999; pointer-events:none;
-            width:${rect.width}px; height:${rect.height}px;
-            left:${x - rect.width / 2}px; top:${y - rect.height / 2}px;
-            opacity:0.9; transform:scale(1.08); border-radius:14px;
-            border:3px solid var(--accent-color);
+            width:90px;
+            left:${x - 45}px; top:${y - 55}px;
+            opacity:0.92; transform:scale(1.1) rotate(3deg);
+            border-radius:12px; overflow:hidden;
             box-shadow:0 12px 40px rgba(99,102,241,0.5);
-            background:rgba(99,102,241,0.15);
-            backdrop-filter:blur(4px);
+            background:white;
+            display:flex; flex-direction:column; align-items:center; justify-content:center;
+            padding:6px; gap:4px;
             transition:none;
+        `;
+        ghost.innerHTML = `
+            <img src="${item.url || getPlaceholderUrl(item.label)}" style="width:70px; height:70px; object-fit:contain; border-radius:8px;" draggable="false">
+            <span style="font-weight:bold; font-size:0.7rem; color:#333; text-align:center; line-height:1.1;">${item.label}</span>
         `;
         document.body.appendChild(ghost);
         return ghost;
@@ -1085,10 +1092,8 @@ function setupSequenzeDragSwap() {
 
     function moveGhost(x, y) {
         if (!ghostEl) return;
-        const w = parseFloat(ghostEl.style.width);
-        const h = parseFloat(ghostEl.style.height);
-        ghostEl.style.left = (x - w / 2) + 'px';
-        ghostEl.style.top = (y - h / 2) + 'px';
+        ghostEl.style.left = (x - 45) + 'px';
+        ghostEl.style.top = (y - 55) + 'px';
     }
 
     function removeGhost() {
