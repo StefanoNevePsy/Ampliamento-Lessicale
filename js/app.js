@@ -47,6 +47,8 @@ window.onload = async () => {
         const badge = document.getElementById('lib-count');
         if (badge) badge.innerText = state.savedSets.length;
 
+        rebuildModesConfig();
+        renderModeSelect();
         refreshAllTags();
         filterSetsByMode();
         populateGlobalPatientSelect();
@@ -59,13 +61,16 @@ window.onload = async () => {
 };
 
 // --- SET FILTERING & DROPDOWN ---
-const POOL_MODES = ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione'];
+const POOL_ENGINES = ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione'];
+// Keep POOL_MODES as alias for backward compat
+const POOL_MODES = POOL_ENGINES;
 
 window.filterSetsByMode = function () {
     const currentMode = document.getElementById('mode-select').value;
-    const isPoolMode = POOL_MODES.includes(currentMode);
-
-    const isQuaderno = currentMode === 'quaderno';
+    if (!currentMode) return;
+    const engine = getModeEngine(currentMode);
+    const isPoolMode = POOL_ENGINES.includes(engine);
+    const isQuaderno = engine === 'quaderno';
 
     // Toggle set selector vs tag selector visibility
     const setWrapper = document.getElementById('set-selector-wrapper');
@@ -86,19 +91,18 @@ window.filterSetsByMode = function () {
 
     // Quaderno and Pool modes don't use set dropdown
     if (isPoolMode || isQuaderno) {
-        // Auto-start quaderno when switching to it
         if (isQuaderno) window.startGame();
         return;
     }
 
     const compatibleSets = state.savedSets.filter(s => {
         if (s.modes && Array.isArray(s.modes) && s.modes.length > 0) {
-            // intraverbal_scenari uses same sets as search_find
-            const checkMode = currentMode === 'intraverbal_scenari' ? 'search_find' : currentMode;
-            return s.modes.includes(checkMode) || s.modes.includes(currentMode);
+            // Resolve engine for compatibility check
+            const checkEngine = (engine === 'intraverbal_scenari') ? 'search_find' : engine;
+            return s.modes.includes(checkEngine) || s.modes.includes(engine) || s.modes.includes(currentMode);
         }
         // Fallback for old sets without mode tags
-        if (currentMode === 'search_find' || currentMode === 'intraverbal_scenari') {
+        if (engine === 'search_find' || engine === 'intraverbal_scenari') {
             return s.category && (s.category.includes('Scene') || s.category.includes('Cerca'));
         } else {
             return !(s.category && (s.category.includes('Scene') || s.category.includes('Cerca')));
@@ -215,7 +219,8 @@ window.startGame = () => {
     if (state.fluenzaTimerInterval) { clearInterval(state.fluenzaTimerInterval); state.fluenzaTimerInterval = null; }
 
     const mode = document.getElementById('mode-select').value;
-    const isPoolMode = POOL_MODES.includes(mode);
+    const engine = getModeEngine(mode);
+    const isPoolMode = POOL_ENGINES.includes(engine);
     const numStimuli = parseInt(document.getElementById('num-stimuli').value);
 
     // For pool modes, build items from selected tags
@@ -224,7 +229,7 @@ window.startGame = () => {
             document.getElementById('game-stage').innerHTML = `
                 <div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; opacity:0.5; text-align:center; padding:20px;">
                     <i class="fa-solid fa-tags fa-3x" style="margin-bottom:15px;"></i>
-                    <p>Seleziona almeno un <b>tag</b> dal selettore<br>per avviare la modalit&agrave; ${MODES_CONFIG[mode]}.</p>
+                    <p>Seleziona almeno un <b>tag</b> dal selettore<br>per avviare la modalit&agrave; ${getModeLabel(mode)}.</p>
                 </div>`;
             return;
         }
@@ -235,20 +240,15 @@ window.startGame = () => {
         document.getElementById('btn-save-session').classList.add('hidden');
         document.getElementById('btn-undo-marker').classList.add('hidden');
 
-        // For pool_random / pool_intraverbal: collect all items from tags
-        if (mode === 'pool_random' || mode === 'pool_intraverbal') {
+        if (engine === 'pool_random' || engine === 'pool_intraverbal') {
             let poolItems = getItemsByTags(state.selectedPoolTags);
             poolItems.sort(() => Math.random() - 0.5);
-            state.activeSetId = (mode === 'pool_intraverbal' ? 'pool_iv_' : 'pool_') + state.selectedPoolTags.join('_');
+            state.activeSetId = (engine === 'pool_intraverbal' ? 'pool_iv_' : 'pool_') + state.selectedPoolTags.join('_');
             renderGameMode(mode, poolItems);
-        }
-        // For intruso: the renderer handles its own item building
-        else if (mode === 'intruso') {
+        } else if (engine === 'intruso') {
             state.activeSetId = 'intruso_' + state.selectedPoolTags.join('_');
             renderGameMode(mode, []);
-        }
-        // For categorizzazione: the renderer handles its own item building
-        else if (mode === 'categorizzazione') {
+        } else if (engine === 'categorizzazione') {
             state.activeSetId = 'cat_' + state.selectedPoolTags.join('_');
             renderGameMode(mode, []);
         }
@@ -256,7 +256,7 @@ window.startGame = () => {
     }
 
     // Quaderno mode: no items needed, just render
-    if (mode === 'quaderno') {
+    if (engine === 'quaderno') {
         state.session = { correct: 0, incorrect: 0, total: 0, active: true, itemResults: {} };
         document.getElementById('scoring-controls').classList.add('hidden');
         document.getElementById('btn-save-session').classList.add('hidden');
@@ -270,7 +270,7 @@ window.startGame = () => {
     state.session = { correct: 0, incorrect: 0, total: 0, active: true, itemResults: {} };
     updateScoreUI();
     // Fluenza has its own built-in controls
-    if (mode === 'fluenza') {
+    if (engine === 'fluenza') {
         document.getElementById('scoring-controls').classList.add('hidden');
     } else {
         document.getElementById('scoring-controls').classList.remove('hidden');
@@ -279,7 +279,7 @@ window.startGame = () => {
 
     let playItems = state.items.filter(i => !i.hidden);
 
-    if (mode !== 'search_find' && mode !== 'intraverbal_scenari') {
+    if (engine !== 'search_find' && engine !== 'intraverbal_scenari') {
         playItems.sort(() => Math.random() - 0.5);
         if (numStimuli > 0 && playItems.length > numStimuli) {
             playItems = playItems.slice(0, numStimuli);
@@ -288,7 +288,7 @@ window.startGame = () => {
 
     // Grid size (for visual layout in grids)
     const gridSize = parseInt(document.getElementById('grid-size').value);
-    if (mode !== 'search_find' && mode !== 'intraverbal_scenari' && gridSize !== 20) {
+    if (engine !== 'search_find' && engine !== 'intraverbal_scenari' && gridSize !== 20) {
         const gridLimit = gridSize * gridSize;
         if (playItems.length > gridLimit) playItems = playItems.slice(0, gridLimit);
     }
@@ -298,7 +298,7 @@ window.startGame = () => {
     state.session.playItems = playItems; // Store for per-item detail tracking
 
     const undoBtn = document.getElementById('btn-undo-marker');
-    if (mode === 'search_find' || mode === 'intraverbal_scenari') undoBtn.classList.remove('hidden'); else undoBtn.classList.add('hidden');
+    if (engine === 'search_find' || engine === 'intraverbal_scenari') undoBtn.classList.remove('hidden'); else undoBtn.classList.add('hidden');
     renderGameMode(mode, playItems);
 };
 
@@ -306,9 +306,10 @@ window.startGame = () => {
 window.recordResponse = (result) => {
     if (!state.session.active) return;
     const mode = document.getElementById('mode-select').value;
+    const engine = getModeEngine(mode);
 
-    if (mode === 'tact' || (mode === 'ran' && state.ranMode === 'single')) {
-        const currentIndex = (mode === 'tact') ? state.tactIndex : state.ranIndex;
+    if (engine === 'tact' || (engine === 'ran' && state.ranMode === 'single')) {
+        const currentIndex = (engine === 'tact') ? state.tactIndex : state.ranIndex;
         state.session.itemResults[currentIndex] = result;
 
         const targetImg = document.querySelector('.tact-card-lg img, .ran-main-img');
@@ -318,7 +319,7 @@ window.recordResponse = (result) => {
             if (result === 'prompt') targetImg.classList.add('feedback-prompt');
             else targetImg.classList.add(result ? 'feedback-success' : 'feedback-fail');
         }
-    } else if (mode === 'search_find' || mode === 'intraverbal_scenari') {
+    } else if (engine === 'search_find' || engine === 'intraverbal_scenari') {
         const markers = document.querySelectorAll('.marker-pin');
         if (markers.length > 0) {
             const lastMarker = markers[markers.length - 1];
@@ -386,21 +387,22 @@ function getSelectedTDSeconds() {
 // --- KEYBOARD SHORTCUTS ---
 function handleShortcuts(e) {
     const mode = document.getElementById('mode-select').value;
-    if (state.session.active && mode !== 'fluenza' && !['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
+    const engine = getModeEngine(mode);
+    if (state.session.active && engine !== 'fluenza' && !['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
         const type = getSelectedSessionType();
         if (e.key.toLowerCase() === 'v') recordResponse(true);
         if (type === 'independent' && e.key.toLowerCase() === 'x') recordResponse(false);
         if (type === 'timedelay' && e.key.toLowerCase() === 'p') recordResponse('prompt');
     }
-    if (mode === 'ran' && state.ranMode === 'single') {
+    if (engine === 'ran' && state.ranMode === 'single') {
         if (e.key === 'ArrowRight') nextRan();
         if (e.key === 'ArrowLeft') prevRan();
     }
-    if (mode === 'fluenza') {
+    if (engine === 'fluenza') {
         if (e.key === 'ArrowRight') fluenzaNext();
         if (e.key.toLowerCase() === 'x') fluenzaMarkError();
     }
-    if (mode === 'search_find' || mode === 'intraverbal_scenari') {
+    if (engine === 'search_find' || engine === 'intraverbal_scenari') {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') removeLastMarker();
         if (e.key === 'Delete' || e.key === 'Backspace') clearMarkers();
     }
@@ -414,6 +416,7 @@ window.confirmSaveSession = async () => {
 
     const p = state.patients.find(x => x.id === state.activePatientId);
     const mode = document.getElementById('mode-select').value;
+    const engine = getModeEngine(mode);
     const type = getSelectedSessionType();
     if (!p) return;
 
@@ -424,7 +427,7 @@ window.confirmSaveSession = async () => {
     const rawTotal = rawV + rawP + rawX;
 
     let defaultName;
-    if (POOL_MODES.includes(mode)) {
+    if (POOL_ENGINES.includes(engine)) {
         defaultName = 'Pool: ' + state.selectedPoolTags.join(', ');
     } else {
         defaultName = state.savedSets.find(ss => ss.id === state.activeSetId)?.name || "Set Rimosso";
@@ -457,7 +460,7 @@ window.confirmSaveSession = async () => {
     }
 
     // Fluenza: store duration and use count-based scoring
-    if (mode === 'fluenza') {
+    if (engine === 'fluenza') {
         sessionData.fluenzaDuration = state.fluenzaTimerDuration;
         sessionData.correct = state.fluenzaCount - state.fluenzaErrors;
         sessionData.total = state.fluenzaCount;
@@ -592,8 +595,11 @@ function renderLibList() {
                 <button class="btn btn-ghost" style="padding:6px 12px;" onclick="editSet('${s.id}')" title="Modifica">
                     <i class="fa-solid fa-pen"></i>
                 </button>
-                <button class="btn btn-ghost" style="padding:6px 12px;" onclick="exportSingleSet('${s.id}')" title="Esporta">
+                <button class="btn btn-ghost" style="padding:6px 12px;" onclick="exportSingleSet('${s.id}')" title="Esporta file">
                     <i class="fa-solid fa-file-export"></i>
+                </button>
+                <button class="btn btn-ghost" style="padding:6px 12px; color:var(--accent-color); border-color:rgba(99,102,241,0.3);" onclick="p2pSendSet('${s.id}')" title="Invia via P2P">
+                    <i class="fa-solid fa-wifi"></i>
                 </button>
                 <button class="btn btn-danger" style="padding:6px 12px;" onclick="deleteSet('${s.id}')" title="Elimina">
                     <i class="fa-solid fa-trash"></i>
@@ -638,6 +644,199 @@ window.deleteSet = async (id) => {
         await DB.deleteSet(id);
         await reloadLibrary();
     }
+};
+
+// --- RENDER MODE SELECT (dynamic from layout) ---
+function renderModeSelect() {
+    const select = document.getElementById('mode-select');
+    if (!select) return;
+    const currentValue = select.value;
+    const layout = getActivityLayout();
+    select.innerHTML = '';
+
+    layout.groups.forEach(group => {
+        const parent = group.name ? document.createElement('optgroup') : select;
+        if (group.name) {
+            parent.label = group.name;
+            select.appendChild(parent);
+        }
+        (group.modes || []).forEach(modeKey => {
+            if (!MODES_CONFIG[modeKey] && !BUILTIN_MODES[modeKey]) return;
+            const opt = document.createElement('option');
+            opt.value = modeKey;
+            opt.text = getModeLabel(modeKey);
+            parent.appendChild(opt);
+        });
+    });
+
+    if (currentValue && select.querySelector(`option[value="${currentValue}"]`)) {
+        select.value = currentValue;
+    }
+}
+
+// --- ACTIVITY LAYOUT EDITOR ---
+let _editingLayout = null;
+
+window.openActivityLayout = () => {
+    _editingLayout = JSON.parse(JSON.stringify(getActivityLayout()));
+    document.getElementById('modal-activity-layout').classList.add('open');
+    renderActivityLayoutBody();
+};
+
+window.closeActivityLayout = () => {
+    document.getElementById('modal-activity-layout').classList.remove('open');
+    _editingLayout = null;
+};
+
+window.saveActivityLayoutAndClose = () => {
+    saveActivityLayout(_editingLayout);
+    renderModeSelect();
+    filterSetsByMode();
+    closeActivityLayout();
+};
+
+function renderActivityLayoutBody() {
+    const body = document.getElementById('activity-layout-body');
+    const groups = _editingLayout.groups;
+    const emojis = _editingLayout.modeEmojis || {};
+    const customModes = _editingLayout.customModes || {};
+
+    let html = `
+        <div style="display:flex; gap:8px; margin-bottom:15px; flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="addActivityGroup()" style="padding:8px 14px;">
+                <i class="fa-solid fa-folder-plus"></i> Categoria
+            </button>
+            <button class="btn btn-primary" onclick="openAddCustomMode()" style="padding:8px 14px;">
+                <i class="fa-solid fa-plus-circle"></i> Nuova Attivit&agrave;
+            </button>
+            <button class="btn btn-ghost" onclick="resetActivityLayoutEdit()" style="padding:8px 14px;">
+                <i class="fa-solid fa-rotate-left"></i> Default
+            </button>
+        </div>
+    `;
+
+    groups.forEach((group, gi) => {
+        const groupName = group.name || '(Principale)';
+        html += `
+        <div style="background:rgba(0,0,0,0.2); border-radius:12px; padding:12px; margin-bottom:10px; border:1px solid rgba(255,255,255,0.08);">
+            <div style="display:flex; gap:6px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">
+                <div style="display:flex; flex-direction:column; gap:2px;">
+                    <button class="btn btn-ghost" onclick="moveGroupUp(${gi})" style="padding:1px 7px; font-size:0.65rem;" ${gi === 0 ? 'disabled style="padding:1px 7px; font-size:0.65rem; opacity:0.3;"' : ''}>&#9650;</button>
+                    <button class="btn btn-ghost" onclick="moveGroupDown(${gi})" style="padding:1px 7px; font-size:0.65rem;" ${gi === groups.length - 1 ? 'disabled style="padding:1px 7px; font-size:0.65rem; opacity:0.3;"' : ''}>&#9660;</button>
+                </div>
+                <input type="text" value="${group.name}" onchange="updateGroupName(${gi}, this.value)"
+                       placeholder="Nome categoria..." style="flex:1; min-width:100px; font-weight:bold; font-size:0.95rem; padding:6px 10px;">
+                ${groups.length > 1 ? `<button class="btn btn-ghost" onclick="removeActivityGroup(${gi})" style="color:var(--danger-color); padding:4px 8px;" title="Elimina categoria">
+                    <i class="fa-solid fa-trash" style="font-size:0.8rem;"></i>
+                </button>` : ''}
+            </div>
+            <div style="display:flex; flex-direction:column; gap:3px;">`;
+
+        (group.modes || []).forEach((mode, mi) => {
+            const label = (customModes[mode] ? customModes[mode].label : (BUILTIN_MODES[mode] ? BUILTIN_MODES[mode].label : mode));
+            const emoji = emojis[mode] || '';
+            const isCustom = !!customModes[mode];
+            const engineLabel = isCustom ? ` <span style="font-size:0.65rem; color:var(--text-secondary); opacity:0.7;">(${BUILTIN_MODES[customModes[mode].engine]?.label || customModes[mode].engine})</span>` : '';
+
+            // Build move-to options
+            const moveOpts = groups.map((g, idx) => idx !== gi
+                ? `<option value="${idx}">${g.name || '(Principale)'}</option>` : '').filter(Boolean).join('');
+
+            html += `
+                <div style="display:flex; align-items:center; gap:5px; padding:5px 6px; background:rgba(255,255,255,0.03); border-radius:8px; ${isCustom ? 'border-left:3px solid var(--accent-color);' : ''}">
+                    <input type="text" value="${emoji}" onchange="updateModeEmoji('${mode}', this.value)"
+                           maxlength="4" style="width:34px; text-align:center; font-size:1rem; padding:3px; border-radius:6px;" placeholder="&#128204;" title="Emoji">
+                    <span style="flex:1; font-size:0.82rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${label}${engineLabel}</span>
+                    <button class="btn btn-ghost" onclick="moveModeInGroup(${gi},${mi},-1)" style="padding:1px 5px; font-size:0.6rem;" ${mi === 0 ? 'disabled' : ''}>&#9650;</button>
+                    <button class="btn btn-ghost" onclick="moveModeInGroup(${gi},${mi},1)" style="padding:1px 5px; font-size:0.6rem;" ${mi === (group.modes || []).length - 1 ? 'disabled' : ''}>&#9660;</button>
+                    ${groups.length > 1 ? `<select onchange="moveModeToGroup(${gi},${mi},parseInt(this.value))" style="width:auto; min-width:0; padding:3px 6px; font-size:0.7rem; border-radius:6px;">
+                        <option value="">&#8594;</option>${moveOpts}
+                    </select>` : ''}
+                    ${isCustom ? `<button class="btn btn-ghost" onclick="deleteCustomMode('${mode}',${gi},${mi})" style="color:var(--danger-color); padding:2px 5px;" title="Elimina attivit&agrave; personalizzata"><i class="fa-solid fa-xmark" style="font-size:0.7rem;"></i></button>` : ''}
+                </div>`;
+        });
+
+        html += `</div></div>`;
+    });
+
+    body.innerHTML = html;
+}
+
+// Layout editor actions
+window.addActivityGroup = () => { _editingLayout.groups.push({ name: 'Nuova Categoria', modes: [] }); renderActivityLayoutBody(); };
+window.removeActivityGroup = (gi) => {
+    const modes = _editingLayout.groups[gi].modes;
+    const target = gi === 0 ? 1 : 0;
+    _editingLayout.groups[target].modes.push(...modes);
+    _editingLayout.groups.splice(gi, 1);
+    renderActivityLayoutBody();
+};
+window.moveGroupUp = (gi) => { if (gi <= 0) return; const g = _editingLayout.groups; [g[gi-1], g[gi]] = [g[gi], g[gi-1]]; renderActivityLayoutBody(); };
+window.moveGroupDown = (gi) => { const g = _editingLayout.groups; if (gi >= g.length-1) return; [g[gi], g[gi+1]] = [g[gi+1], g[gi]]; renderActivityLayoutBody(); };
+window.updateGroupName = (gi, name) => { _editingLayout.groups[gi].name = name; };
+window.updateModeEmoji = (mode, emoji) => { if (!_editingLayout.modeEmojis) _editingLayout.modeEmojis = {}; _editingLayout.modeEmojis[mode] = emoji.trim(); };
+window.moveModeInGroup = (gi, mi, dir) => {
+    const modes = _editingLayout.groups[gi].modes;
+    const ni = mi + dir;
+    if (ni < 0 || ni >= modes.length) return;
+    [modes[mi], modes[ni]] = [modes[ni], modes[mi]];
+    renderActivityLayoutBody();
+};
+window.moveModeToGroup = (fromGi, mi, toGi) => {
+    if (toGi === '' || toGi === fromGi) return;
+    const mode = _editingLayout.groups[fromGi].modes.splice(mi, 1)[0];
+    _editingLayout.groups[toGi].modes.push(mode);
+    renderActivityLayoutBody();
+};
+window.resetActivityLayoutEdit = () => { _editingLayout = getDefaultActivityLayout(); renderActivityLayoutBody(); };
+
+// --- CUSTOM MODE CREATION ---
+window.openAddCustomMode = () => {
+    const engines = Object.entries(BUILTIN_MODES).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('');
+    const groups = _editingLayout.groups.map((g, i) => `<option value="${i}">${g.name || '(Principale)'}</option>`).join('');
+
+    const html = `
+    <div style="position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:20000; display:flex; align-items:center; justify-content:center; padding:20px;" id="custom-mode-overlay">
+        <div style="background:#1e1e2f; border-radius:16px; padding:20px; max-width:400px; width:100%; border:1px solid rgba(255,255,255,0.1);">
+            <h3 style="margin:0 0 15px 0;"><i class="fa-solid fa-plus-circle"></i> Nuova Attivit&agrave; Personalizzata</h3>
+            <label style="font-size:0.8rem; color:#aaa;">Nome</label>
+            <input type="text" id="custom-mode-name" placeholder="es. Scena Azioni" style="margin-bottom:10px; font-size:1rem;">
+            <label style="font-size:0.8rem; color:#aaa;">Logica (Modalit&agrave; Base)</label>
+            <select id="custom-mode-engine" style="margin-bottom:10px;">${engines}</select>
+            <label style="font-size:0.8rem; color:#aaa;">Categoria</label>
+            <select id="custom-mode-group" style="margin-bottom:15px;">${groups}</select>
+            <div style="display:flex; gap:10px;">
+                <button class="btn btn-success" onclick="confirmAddCustomMode()" style="flex:1;">Crea</button>
+                <button class="btn btn-ghost" onclick="document.getElementById('custom-mode-overlay').remove()" style="flex:1;">Annulla</button>
+            </div>
+        </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+};
+
+window.confirmAddCustomMode = () => {
+    const name = document.getElementById('custom-mode-name').value.trim();
+    const engine = document.getElementById('custom-mode-engine').value;
+    const groupIdx = parseInt(document.getElementById('custom-mode-group').value);
+    if (!name) { alert('Inserisci un nome.'); return; }
+
+    // Generate unique key
+    const key = 'custom_' + name.toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '') + '_' + Date.now().toString(36);
+
+    if (!_editingLayout.customModes) _editingLayout.customModes = {};
+    _editingLayout.customModes[key] = { label: name, engine: engine };
+    _editingLayout.groups[groupIdx].modes.push(key);
+
+    document.getElementById('custom-mode-overlay').remove();
+    renderActivityLayoutBody();
+};
+
+window.deleteCustomMode = (modeKey, gi, mi) => {
+    if (!confirm('Eliminare questa attivit\u00e0 personalizzata?')) return;
+    _editingLayout.groups[gi].modes.splice(mi, 1);
+    if (_editingLayout.customModes) delete _editingLayout.customModes[modeKey];
+    if (_editingLayout.modeEmojis) delete _editingLayout.modeEmojis[modeKey];
+    renderActivityLayoutBody();
 };
 
 // --- FULLSCREEN ---

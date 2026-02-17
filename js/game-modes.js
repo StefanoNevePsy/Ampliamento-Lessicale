@@ -12,22 +12,24 @@ function handleImgError(img, label) {
 function renderGameMode(mode, items) {
     const stage = document.getElementById('game-stage');
     stage.innerHTML = '';
+    // Resolve custom modes to their engine
+    const engine = (typeof getModeEngine === 'function') ? getModeEngine(mode) : mode;
     // Clean up any previous drag handlers
     if (window._topoCleanup) { window._topoCleanup(); window._topoCleanup = null; }
-    if (mode === 'tact') renderTact(items, stage);
-    else if (mode === 'ran') renderRan(items, stage);
-    else if (mode === 'fluenza') renderFluenza(items, stage);
-    else if (mode === 'tombola') renderTombola(items, stage);
-    else if (mode === 'tombola_sonora') renderTombolaSonora(items, stage);
-    else if (mode === 'memory') renderMemory(items, stage);
-    else if (mode === 'search_find' || mode === 'intraverbal_scenari') renderSearchFind(items, stage);
-    else if (mode === 'pool_random' || mode === 'pool_intraverbal') renderPoolRandom(items, stage);
-    else if (mode === 'intruso') renderIntruso(items, stage);
-    else if (mode === 'topologia') renderTopologia(items, stage);
-    else if (mode === 'sequenze') renderSequenze(items, stage);
-    else if (mode === 'categorizzazione') renderCategorizzazione(items, stage);
-    else if (mode === 'zoom') renderZoom(items, stage);
-    else if (mode === 'quaderno') renderQuaderno(stage);
+    if (engine === 'tact') renderTact(items, stage);
+    else if (engine === 'ran') renderRan(items, stage);
+    else if (engine === 'fluenza') renderFluenza(items, stage);
+    else if (engine === 'tombola') renderTombola(items, stage);
+    else if (engine === 'tombola_sonora') renderTombolaSonora(items, stage);
+    else if (engine === 'memory') renderMemory(items, stage);
+    else if (engine === 'search_find' || engine === 'intraverbal_scenari') renderSearchFind(items, stage);
+    else if (engine === 'pool_random' || engine === 'pool_intraverbal') renderPoolRandom(items, stage);
+    else if (engine === 'intruso') renderIntruso(items, stage);
+    else if (engine === 'topologia') renderTopologia(items, stage);
+    else if (engine === 'sequenze') renderSequenze(items, stage);
+    else if (engine === 'categorizzazione') renderCategorizzazione(items, stage);
+    else if (engine === 'zoom') renderZoom(items, stage);
+    else if (engine === 'quaderno') renderQuaderno(stage);
 }
 
 // --- TACT ---
@@ -923,12 +925,12 @@ function renderSequenzeUI(stage) {
         ${allPlaced && !verified ? `
         <div style="padding:10px; background:rgba(16,185,129,0.05); border-bottom:1px solid #ffffff10; text-align:center; flex-shrink:0;">
             <span style="color:var(--success-color); font-weight:bold; font-size:0.9rem;">
-                <i class="fa-solid fa-hand-pointer"></i> Tutte posizionate! Puoi spostare le carte o premere <b>Conferma</b>.
+                <i class="fa-solid fa-arrows-left-right"></i> Trascina per scambiare o premi <b>Conferma</b>.
             </span>
         </div>` : ''}
 
-        <!-- Slots grid -->
-        <div style="flex:1; min-height:0; padding:15px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; align-items:center;">
+        <!-- Slots (horizontal, centered) -->
+        <div id="seq-slots-container" style="flex:1; min-height:0; padding:15px; overflow-x:auto; overflow-y:hidden; display:flex; flex-direction:row; gap:10px; align-items:stretch; justify-content:center;">
             ${state.sequenzeCorrectOrder.map((_, slotIdx) => {
                 const placedItem = state.sequenzePlacements[slotIdx];
                 const isCorrect = verified && placedItem && placedItem.seqNumber === state.sequenzeCorrectOrder[slotIdx].seqNumber;
@@ -938,26 +940,33 @@ function renderSequenzeUI(stage) {
                 const slotShadow = verified ? (isCorrect ? '0 0 12px rgba(16,185,129,0.3)' : isWrong ? '0 0 12px rgba(239,68,68,0.3)' : 'none') : 'none';
 
                 return `
-                <div id="seq-slot-${slotIdx}" onclick="${!verified ? `placeInSlot(${slotIdx})` : ''}"
-                     style="width:100%; max-width:500px; min-height:70px; border:${slotBorder}; border-radius:14px; background:${slotBg};
-                            display:flex; align-items:center; gap:12px; padding:8px 12px; cursor:${!verified ? 'pointer' : 'default'}; transition:0.2s; box-shadow:${slotShadow};">
-                    <span style="width:32px; height:32px; border-radius:50%; background:rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:1rem; color:var(--text-secondary); flex-shrink:0;">${slotIdx + 1}</span>
+                <div id="seq-slot-${slotIdx}" class="seq-slot-card" data-slot="${slotIdx}"
+                     onclick="${!verified ? `placeInSlot(${slotIdx})` : ''}"
+                     style="min-width:110px; flex:1; max-width:160px; border:${slotBorder}; border-radius:14px; background:${slotBg};
+                            display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; padding:10px 8px;
+                            cursor:${!verified ? 'pointer' : 'default'}; transition:0.2s; box-shadow:${slotShadow}; position:relative; flex-shrink:0; user-select:none;">
+                    <span style="width:28px; height:28px; border-radius:50%; background:rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:0.85rem; color:var(--text-secondary);">${slotIdx + 1}</span>
                     ${placedItem ? `
-                        <div style="background:white; border-radius:8px; padding:4px; flex-shrink:0;">
-                            <img src="${placedItem.url || getPlaceholderUrl(placedItem.label)}" style="width:50px; height:50px; object-fit:contain; border-radius:6px;" onerror="handleImgError(this, '${placedItem.label}')">
+                        <div style="background:white; border-radius:10px; padding:4px;">
+                            <img src="${placedItem.url || getPlaceholderUrl(placedItem.label)}" style="width:70px; height:70px; object-fit:contain; border-radius:8px;" draggable="false" onerror="handleImgError(this, '${placedItem.label}')">
                         </div>
-                        <span style="font-weight:bold; font-size:0.95rem; flex:1;">${placedItem.label}</span>
-                        ${!verified ? `<button onclick="event.stopPropagation(); removeFromSlot(${slotIdx})" style="width:30px; height:30px; border-radius:8px; border:1px solid rgba(239,68,68,0.3); background:transparent; color:var(--danger-color); cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0;" title="Rimuovi">
+                        <span style="font-weight:bold; font-size:0.75rem; text-align:center; word-break:break-word; line-height:1.1;">${placedItem.label}</span>
+                        ${!verified && !allPlaced ? `<button onclick="event.stopPropagation(); removeFromSlot(${slotIdx})" style="position:absolute; top:4px; right:4px; width:24px; height:24px; border-radius:6px; border:1px solid rgba(239,68,68,0.3); background:rgba(0,0,0,0.3); color:var(--danger-color); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:0.7rem;" title="Rimuovi">
                             <i class="fa-solid fa-xmark"></i>
                         </button>` : ''}
-                        ${verified && isWrong ? `<span style="font-size:0.7rem; color:var(--danger-color); flex-shrink:0;"><i class="fa-solid fa-arrow-right"></i> ${state.sequenzeCorrectOrder[slotIdx].label}</span>` : ''}
+                        ${verified && isWrong ? `<span style="font-size:0.65rem; color:var(--danger-color); text-align:center;"><i class="fa-solid fa-arrow-down"></i> ${state.sequenzeCorrectOrder[slotIdx].label}</span>` : ''}
                     ` : `
-                        <span style="color:#555; font-size:0.85rem; font-style:italic;">Tocca per posizionare qui</span>
+                        <span style="color:#555; font-size:0.75rem; font-style:italic; text-align:center;">Tocca</span>
                     `}
                 </div>`;
             }).join('')}
         </div>
     </div>`;
+
+    // Setup drag-to-swap when all cards are placed and not yet verified
+    if (allPlaced && !verified) {
+        setupSequenzeDragSwap();
+    }
 }
 
 window.placeInSlot = (slotIdx) => {
@@ -1038,6 +1047,204 @@ window.checkSequenze = () => {
         if (typeof showSessionNameInput === 'function') showSessionNameInput();
     }
 
+    renderSequenzeUI(document.getElementById('game-stage'));
+};
+
+// Drag-to-swap between filled slots (touch + mouse) with floating ghost card
+let _seqDragCleanup = null;
+
+function setupSequenzeDragSwap() {
+    // Clean up previous document-level listeners
+    if (_seqDragCleanup) { _seqDragCleanup(); _seqDragCleanup = null; }
+
+    const container = document.getElementById('seq-slots-container');
+    if (!container) return;
+
+    let dragSlotIdx = null;
+    let dragEl = null;
+    let startX = 0, startY = 0;
+    let isDragging = false;
+    let ghostEl = null;
+
+    function createGhost(slot, x, y) {
+        const slotIdx = parseInt(slot.dataset.slot);
+        const item = state.sequenzePlacements[slotIdx];
+        if (!item) return null;
+
+        const ghost = document.createElement('div');
+        ghost.style.cssText = `
+            position:fixed; z-index:9999; pointer-events:none;
+            width:90px;
+            left:${x - 45}px; top:${y - 55}px;
+            opacity:0.92; transform:scale(1.1) rotate(3deg);
+            border-radius:12px; overflow:hidden;
+            box-shadow:0 12px 40px rgba(99,102,241,0.5);
+            background:white;
+            display:flex; flex-direction:column; align-items:center; justify-content:center;
+            padding:6px; gap:4px;
+            transition:none;
+        `;
+        ghost.innerHTML = `
+            <img src="${item.url || getPlaceholderUrl(item.label)}" style="width:70px; height:70px; object-fit:contain; border-radius:8px;" draggable="false">
+            <span style="font-weight:bold; font-size:0.7rem; color:#333; text-align:center; line-height:1.1;">${item.label}</span>
+        `;
+        document.body.appendChild(ghost);
+        return ghost;
+    }
+
+    function moveGhost(x, y) {
+        if (!ghostEl) return;
+        ghostEl.style.left = (x - 45) + 'px';
+        ghostEl.style.top = (y - 55) + 'px';
+    }
+
+    function removeGhost() {
+        if (ghostEl) { ghostEl.remove(); ghostEl = null; }
+    }
+
+    function highlightTarget(cx, cy) {
+        // Need to hide ghost briefly so elementFromPoint finds the slot underneath
+        if (ghostEl) ghostEl.style.display = 'none';
+        const el = document.elementFromPoint(cx, cy);
+        if (ghostEl) ghostEl.style.display = '';
+        const target = el ? el.closest('.seq-slot-card[data-slot]') : null;
+        slots.forEach(s => {
+            if (s === dragEl) return;
+            s.style.outline = '';
+            s.style.boxShadow = '';
+        });
+        if (target && target !== dragEl) {
+            target.style.outline = '3px dashed var(--accent-color)';
+            target.style.boxShadow = '0 0 20px rgba(99,102,241,0.3)';
+        }
+        return target;
+    }
+
+    function resetVisuals() {
+        removeGhost();
+        if (dragEl) { dragEl.style.opacity = ''; dragEl.style.transform = ''; }
+        slots.forEach(s => { s.style.outline = ''; s.style.boxShadow = ''; });
+    }
+
+    const slots = container.querySelectorAll('.seq-slot-card[data-slot]');
+
+    slots.forEach(slot => {
+        const slotIdx = parseInt(slot.dataset.slot);
+        if (state.sequenzePlacements[slotIdx] === null) return;
+
+        // Touch
+        slot.addEventListener('touchstart', (e) => {
+            if (state.sequenzeVerified) return;
+            if (e.target.closest('button')) return;
+            const touch = e.touches[0];
+            startX = touch.clientX;
+            startY = touch.clientY;
+            dragSlotIdx = slotIdx;
+            dragEl = slot;
+            isDragging = false;
+        }, { passive: true });
+
+        slot.addEventListener('touchmove', (e) => {
+            if (dragSlotIdx === null) return;
+            const touch = e.touches[0];
+            const dx = Math.abs(touch.clientX - startX);
+            const dy = Math.abs(touch.clientY - startY);
+            if (dx > 10 || dy > 10) {
+                if (!isDragging) {
+                    isDragging = true;
+                    ghostEl = createGhost(dragEl, touch.clientX, touch.clientY);
+                    dragEl.style.opacity = '0.3';
+                    dragEl.style.transform = 'scale(0.9)';
+                }
+                e.preventDefault();
+                moveGhost(touch.clientX, touch.clientY);
+                highlightTarget(touch.clientX, touch.clientY);
+            }
+        }, { passive: false });
+
+        slot.addEventListener('touchend', (e) => {
+            if (dragSlotIdx === null || !isDragging) {
+                dragSlotIdx = null;
+                return;
+            }
+            const touch = e.changedTouches[0];
+            if (ghostEl) ghostEl.style.display = 'none';
+            const el = document.elementFromPoint(touch.clientX, touch.clientY);
+            if (ghostEl) ghostEl.style.display = '';
+            const target = el ? el.closest('.seq-slot-card[data-slot]') : null;
+            removeGhost();
+            if (target && target !== dragEl) {
+                swapSequenzeSlots(dragSlotIdx, parseInt(target.dataset.slot));
+            } else {
+                resetVisuals();
+            }
+            dragSlotIdx = null;
+            isDragging = false;
+        });
+
+        // Mouse
+        slot.addEventListener('mousedown', (e) => {
+            if (state.sequenzeVerified) return;
+            if (e.target.closest('button')) return;
+            startX = e.clientX;
+            startY = e.clientY;
+            dragSlotIdx = slotIdx;
+            dragEl = slot;
+            isDragging = false;
+            e.preventDefault();
+        });
+    });
+
+    // Document-level mouse handlers (so drag works even outside container)
+    function onDocMouseMove(e) {
+        if (dragSlotIdx === null) return;
+        const dx = Math.abs(e.clientX - startX);
+        const dy = Math.abs(e.clientY - startY);
+        if (dx > 5 || dy > 5) {
+            if (!isDragging) {
+                isDragging = true;
+                ghostEl = createGhost(dragEl, e.clientX, e.clientY);
+                dragEl.style.opacity = '0.3';
+                dragEl.style.transform = 'scale(0.9)';
+            }
+            moveGhost(e.clientX, e.clientY);
+            highlightTarget(e.clientX, e.clientY);
+        }
+    }
+
+    function onDocMouseUp(e) {
+        if (dragSlotIdx === null) return;
+        if (isDragging) {
+            if (ghostEl) ghostEl.style.display = 'none';
+            const el = document.elementFromPoint(e.clientX, e.clientY);
+            if (ghostEl) ghostEl.style.display = '';
+            const target = el ? el.closest('.seq-slot-card[data-slot]') : null;
+            removeGhost();
+            if (target && target !== dragEl) {
+                swapSequenzeSlots(dragSlotIdx, parseInt(target.dataset.slot));
+            } else {
+                resetVisuals();
+            }
+        }
+        dragSlotIdx = null;
+        isDragging = false;
+    }
+
+    document.addEventListener('mousemove', onDocMouseMove);
+    document.addEventListener('mouseup', onDocMouseUp);
+
+    _seqDragCleanup = () => {
+        document.removeEventListener('mousemove', onDocMouseMove);
+        document.removeEventListener('mouseup', onDocMouseUp);
+        removeGhost();
+    };
+}
+
+window.swapSequenzeSlots = (fromIdx, toIdx) => {
+    if (_seqDragCleanup) { _seqDragCleanup(); _seqDragCleanup = null; }
+    const temp = state.sequenzePlacements[fromIdx];
+    state.sequenzePlacements[fromIdx] = state.sequenzePlacements[toIdx];
+    state.sequenzePlacements[toIdx] = temp;
     renderSequenzeUI(document.getElementById('game-stage'));
 };
 
@@ -1170,22 +1377,60 @@ function renderSearchFind(items, stage) {
                 <span style="color:white;font-weight:bold;">${s.label}</span>
                 <button class="btn btn-sm btn-danger" onclick="clearMarkers()"><i class="fa-solid fa-eraser"></i> Pulisci</button>
             </div>
-            <div class="sf-viewport" id="sf-viewport" onclick="placeMarker(event)">
+            <div class="sf-viewport" id="sf-viewport">
                 <img src="${s.url || getPlaceholderUrl(s.label)}" class="sf-image" onerror="handleImgError(this,'${s.label}')">
             </div>
         </div>`;
+    setupSearchFindTouch();
 }
 
-window.placeMarker = (e) => {
+// Touch-permissive marker placement (tolerates slight finger movement)
+function setupSearchFindTouch() {
     const vp = document.getElementById('sf-viewport');
+    if (!vp) return;
+
+    let touchStartX = 0, touchStartY = 0;
+    let lastTouchEnd = 0;
+
+    vp.addEventListener('touchstart', (e) => {
+        const touch = e.touches[0];
+        touchStartX = touch.clientX;
+        touchStartY = touch.clientY;
+    }, { passive: true });
+
+    vp.addEventListener('touchend', (e) => {
+        const touch = e.changedTouches[0];
+        const dx = Math.abs(touch.clientX - touchStartX);
+        const dy = Math.abs(touch.clientY - touchStartY);
+        // Allow up to 20px of finger movement as a tap
+        if (dx < 20 && dy < 20) {
+            placeMarkerAt(touch.clientX, touch.clientY);
+        }
+        lastTouchEnd = Date.now();
+        e.preventDefault();
+    });
+
+    // Mouse click for desktop (skip if just handled by touch)
+    vp.addEventListener('click', (e) => {
+        if (Date.now() - lastTouchEnd < 500) return;
+        placeMarkerAt(e.clientX, e.clientY);
+    });
+}
+
+function placeMarkerAt(clientX, clientY) {
+    const vp = document.getElementById('sf-viewport');
+    if (!vp) return;
     const r = vp.getBoundingClientRect();
     const m = document.createElement('div');
     m.className = 'marker-pin';
-    m.style.left = (e.clientX - r.left) + 'px';
-    m.style.top = (e.clientY - r.top) + 'px';
+    m.style.left = (clientX - r.left) + 'px';
+    m.style.top = (clientY - r.top) + 'px';
     m.onclick = (ev) => { ev.stopPropagation(); m.remove(); };
     vp.appendChild(m);
-};
+}
+
+// Keep backward compat
+window.placeMarker = (e) => { placeMarkerAt(e.clientX, e.clientY); };
 
 window.removeLastMarker = () => {
     const m = document.querySelectorAll('.marker-pin');

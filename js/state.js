@@ -1,23 +1,92 @@
 // === STATE & CONSTANTS ===
-const MODES_CONFIG = {
-    'tact': 'TACT',
-    'ran': 'RAN',
-    'fluenza': 'Fluenza',
-    'tombola': 'Tombola',
-    'tombola_sonora': 'Tombola Sonora',
-    'memory': 'Memory',
-    'search_find': 'Cerca-Trova',
-    'intraverbal_scenari': 'Intraverbal-Scenari',
-    'pool_random': 'Pool Random',
-    'pool_intraverbal': 'Pool Intraverbal',
-    'intruso': 'Intruso',
-    'topologia': 'Topologia',
-    'sequenze': 'Sequenze',
-    'categorizzazione': 'Categorizzazione',
-    'zoom': 'Zoom',
-    'quaderno': 'Quaderno',
-    'quaderno_task': 'Task Analysis'
+
+// Built-in mode definitions (label + engine for rendering)
+const BUILTIN_MODES = {
+    'tact': { label: 'TACT', engine: 'tact' },
+    'ran': { label: 'RAN', engine: 'ran' },
+    'fluenza': { label: 'Fluenza', engine: 'fluenza' },
+    'tombola': { label: 'Tombola', engine: 'tombola' },
+    'tombola_sonora': { label: 'Tombola Sonora', engine: 'tombola_sonora' },
+    'memory': { label: 'Memory', engine: 'memory' },
+    'search_find': { label: 'Cerca-Trova', engine: 'search_find' },
+    'intraverbal_scenari': { label: 'Intraverbal-Scenari', engine: 'intraverbal_scenari' },
+    'pool_random': { label: 'Pool Random', engine: 'pool_random' },
+    'pool_intraverbal': { label: 'Pool Intraverbal', engine: 'pool_intraverbal' },
+    'intruso': { label: 'Intruso', engine: 'intruso' },
+    'topologia': { label: 'Topologia', engine: 'topologia' },
+    'sequenze': { label: 'Sequenze', engine: 'sequenze' },
+    'categorizzazione': { label: 'Categorizzazione', engine: 'categorizzazione' },
+    'zoom': { label: 'Zoom', engine: 'zoom' },
+    'quaderno': { label: 'Quaderno', engine: 'quaderno' },
+    'quaderno_task': { label: 'Task Analysis', engine: 'quaderno_task' }
 };
+
+// MODES_CONFIG: dynamic map of all modes (built-in + custom)
+// Rebuilt by rebuildModesConfig() on init and after edits
+let MODES_CONFIG = {};
+
+function rebuildModesConfig() {
+    MODES_CONFIG = {};
+    // Built-in modes
+    for (const [k, v] of Object.entries(BUILTIN_MODES)) {
+        MODES_CONFIG[k] = v.label;
+    }
+    // Custom modes from layout
+    const layout = getActivityLayout();
+    if (layout.customModes) {
+        for (const [k, v] of Object.entries(layout.customModes)) {
+            MODES_CONFIG[k] = v.label;
+        }
+    }
+}
+
+// --- ACTIVITY LAYOUT ---
+function getDefaultActivityLayout() {
+    return {
+        groups: [
+            { name: '', modes: ['tact', 'ran', 'fluenza', 'tombola', 'tombola_sonora', 'memory', 'search_find', 'intraverbal_scenari', 'zoom', 'quaderno'] },
+            { name: 'Avanzate', modes: ['topologia', 'sequenze', 'quaderno_task'] },
+            { name: 'Pool da Tag', modes: ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione'] }
+        ],
+        modeEmojis: {},
+        customModes: {} // key -> { label, engine (built-in mode key used for logic) }
+    };
+}
+
+function getActivityLayout() {
+    try {
+        const saved = localStorage.getItem('activityLayout');
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            if (!parsed.customModes) parsed.customModes = {};
+            if (!parsed.modeEmojis) parsed.modeEmojis = {};
+            return parsed;
+        }
+    } catch(e) {}
+    return getDefaultActivityLayout();
+}
+
+function saveActivityLayout(layout) {
+    localStorage.setItem('activityLayout', JSON.stringify(layout));
+    rebuildModesConfig();
+}
+
+// Get the engine (rendering logic) for a mode key
+function getModeEngine(modeKey) {
+    if (BUILTIN_MODES[modeKey]) return modeKey;
+    const layout = getActivityLayout();
+    if (layout.customModes && layout.customModes[modeKey]) return layout.customModes[modeKey].engine;
+    return modeKey;
+}
+
+// Get display label for a mode (with emoji if set)
+function getModeLabel(modeKey) {
+    const layout = getActivityLayout();
+    const emoji = (layout.modeEmojis && layout.modeEmojis[modeKey]) ? layout.modeEmojis[modeKey] + ' ' : '';
+    if (layout.customModes && layout.customModes[modeKey]) return emoji + layout.customModes[modeKey].label;
+    if (BUILTIN_MODES[modeKey]) return emoji + BUILTIN_MODES[modeKey].label;
+    return emoji + (MODES_CONFIG[modeKey] || modeKey);
+}
 
 let state = {
     items: [],

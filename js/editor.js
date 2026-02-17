@@ -14,6 +14,9 @@ window.editSet = async (id) => {
         </div>`;
     }).join('');
 
+    // Category editor
+    populateEditorCategory(set.category || 'Personale');
+
     // Tag editor
     renderTagEditor(set.tags || []);
 
@@ -142,6 +145,10 @@ window.saveEditorChanges = () => {
         const s = all.find(x => x.id === state.editingSetId);
         if (s) {
             s.name = document.getElementById('edit-set-name').value;
+            // Category
+            let cat = document.getElementById('edit-set-category').value;
+            if (cat === '__new__') cat = document.getElementById('edit-set-category-custom').value.trim() || 'Personale';
+            s.category = cat;
             s.items = state.editingItems;
             s.modes = modes;
             s.tags = [...editingTags]; // Save semantic tags
@@ -419,6 +426,35 @@ window.closeZoomEditor = () => {
     if (window._zoomEditorCleanup) { window._zoomEditorCleanup(); window._zoomEditorCleanup = null; }
     const modal = document.getElementById('zoom-area-modal');
     if (modal) modal.remove();
+};
+
+// --- CATEGORY EDITOR ---
+function populateEditorCategory(current) {
+    const sel = document.getElementById('edit-set-category');
+    if (!sel) return;
+    const cats = [...new Set(state.savedSets.map(s => s.category).filter(Boolean))].sort();
+    sel.innerHTML = '';
+    if (!cats.includes(current) && current) {
+        const opt = document.createElement('option');
+        opt.value = current; opt.text = current; opt.selected = true;
+        sel.appendChild(opt);
+    }
+    cats.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c; opt.text = c;
+        if (c === current) opt.selected = true;
+        sel.appendChild(opt);
+    });
+    const optNew = document.createElement('option');
+    optNew.value = '__new__'; optNew.text = '+ Nuova categoria...';
+    sel.appendChild(optNew);
+    document.getElementById('edit-set-category-custom').style.display = 'none';
+}
+
+window.onEditCategoryChange = (sel) => {
+    const custom = document.getElementById('edit-set-category-custom');
+    if (sel.value === '__new__') { custom.style.display = ''; custom.focus(); }
+    else { custom.style.display = 'none'; }
 };
 
 // --- PASTE HANDLER ---
