@@ -4,25 +4,56 @@
 let _p2pPeer = null;
 let _p2pConn = null;
 let _p2pScanner = null;
+let _p2pSelectData = null; // holds loaded data for checklist
+
+// ICE servers for reliable WebRTC connections
+const P2P_ICE_SERVERS = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' }
+];
+
+function createPeer(id) {
+    const opts = { config: { iceServers: P2P_ICE_SERVERS } };
+    return id ? new Peer(id, opts) : new Peer(opts);
+}
 
 // Generate short random ID
 function generateSyncId() {
     return 'sc-' + Math.random().toString(36).substring(2, 8);
 }
 
+// Format bytes to human-readable
+function formatBytes(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
 // Open the P2P sync modal
 window.openP2PSync = () => {
     document.getElementById('modal-p2p-sync').style.display = 'flex';
     document.getElementById('p2p-role-select').style.display = '';
+    document.getElementById('p2p-select-panel').style.display = 'none';
     document.getElementById('p2p-sender-panel').style.display = 'none';
     document.getElementById('p2p-receiver-panel').style.display = 'none';
     document.getElementById('p2p-progress-panel').style.display = 'none';
+    _p2pSelectData = null;
     cleanupP2P();
 };
 
 window.closeP2PSync = () => {
     cleanupP2P();
+    _p2pSelectData = null;
     document.getElementById('modal-p2p-sync').style.display = 'none';
+};
+
+window.backToP2PRoleSelect = () => {
+    document.getElementById('p2p-select-panel').style.display = 'none';
+    document.getElementById('p2p-role-select').style.display = '';
+    _p2pSelectData = null;
 };
 
 function cleanupP2P() {
@@ -41,20 +72,177 @@ function cleanupP2P() {
 }
 
 // ===============================
+// SELECTIVE SEND - CHECKLIST
+// ===============================
+window.openP2PSendSelect = async () => {
+    document.getElementById('p2p-role-select').style.display = 'none';
+    document.getElementById('p2p-select-panel').style.display = '';
+
+    const sets = await DB.getAllSets();
+    const patients = await DB.getAllPatients();
+    _p2pSelectData = { sets, patients };
+
+    // Group sets by category
+    const catMap = {};
+    sets.forEach(s => {
+        const cat = s.category || 'Altri';
+        if (!catMap[cat]) catMap[cat] = [];
+        catMap[cat].push(s);
+    });
+
+    let html = '';
+
+    // --- SETS ---
+    html += `
+    <div style="background:rgba(0,0,0,0.2); border-radius:10px; padding:10px; margin-bottom:8px;">
+        <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-weight:bold; font-size:0.9rem; margin-bottom:6px;">
+            <input type="checkbox" id="p2p-all-sets" checked onchange="toggleP2PSection('sets', this.checked)" style="width:16px; height:16px;">
+            <i class="fa-solid fa-layer-group"></i> Set (${sets.length})
+        </label>
+        <div id="p2p-sets-list" style="padding-left:16px; max-height:150px; overflow-y:auto;">`;
+
+    for (const [cat, catSets] of Object.entries(catMap).sort()) {
+        html += `
+        <div style="margin-bottom:4px;">
+            <label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:0.8rem; color:var(--text-secondary); font-weight:bold;">
+                <input type="checkbox" class="p2p-set-cat" data-cat="${cat}" checked onchange="toggleP2PCat('${cat}', this.checked)" style="width:14px; height:14px;">
+                ${cat} (${catSets.length})
+            </label>
+            <div style="padding-left:14px;">`;
+        catSets.forEach(s => {
+            const sizeEst = formatBytes(JSON.stringify(s).length);
+            html += `<label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:0.75rem; padding:1px 0;">
+                <input type="checkbox" class="p2p-set-item" data-id="${s.id}" checked onchange="updateP2PSizeEstimate()" style="width:13px; height:13px;">
+                ${s.name} <span style="opacity:0.4;">(${sizeEst})</span>
+            </label>`;
+        });
+        html += `</div></div>`;
+    }
+    html += `</div></div>`;
+
+    // --- PATIENTS ---
+    html += `
+    <div style="background:rgba(0,0,0,0.2); border-radius:10px; padding:10px; margin-bottom:8px;">
+        <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-weight:bold; font-size:0.9rem; margin-bottom:6px;">
+            <input type="checkbox" id="p2p-all-patients" checked onchange="toggleP2PSection('patients', this.checked)" style="width:16px; height:16px;">
+            <i class="fa-solid fa-user-doctor"></i> Pazienti (${patients.length})
+        </label>
+        <div id="p2p-patients-list" style="padding-left:16px; max-height:120px; overflow-y:auto;">`;
+    patients.forEach(p => {
+        const sessions = (p.history || []).length;
+        const sizeEst = formatBytes(JSON.stringify(p).length);
+        html += `<label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:0.75rem; padding:1px 0;">
+            <input type="checkbox" class="p2p-patient-item" data-id="${p.id}" checked onchange="updateP2PSizeEstimate()" style="width:13px; height:13px;">
+            ${p.name || 'Senza nome'} <span style="opacity:0.4;">(${sessions} sess., ${sizeEst})</span>
+        </label>`;
+    });
+    html += `</div></div>`;
+
+    // --- CONFIG ---
+    html += `
+    <div style="background:rgba(0,0,0,0.2); border-radius:10px; padding:10px;">
+        <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-weight:bold; font-size:0.9rem;">
+            <input type="checkbox" id="p2p-config" checked onchange="updateP2PSizeEstimate()" style="width:16px; height:16px;">
+            <i class="fa-solid fa-sliders"></i> Configurazione (tag, quaderno, layout)
+        </label>
+    </div>`;
+
+    document.getElementById('p2p-select-body').innerHTML = html;
+    updateP2PSizeEstimate();
+};
+
+window.toggleP2PSection = (section, checked) => {
+    const selector = section === 'sets' ? '.p2p-set-item, .p2p-set-cat' : '.p2p-patient-item';
+    document.querySelectorAll(selector).forEach(cb => { cb.checked = checked; });
+    updateP2PSizeEstimate();
+};
+
+window.toggleP2PCat = (cat, checked) => {
+    document.querySelectorAll('.p2p-set-item').forEach(cb => {
+        const setId = cb.dataset.id;
+        const s = _p2pSelectData.sets.find(x => x.id === setId);
+        if (s && (s.category || 'Altri') === cat) cb.checked = checked;
+    });
+    updateP2PSizeEstimate();
+};
+
+window.updateP2PSizeEstimate = () => {
+    if (!_p2pSelectData) return;
+
+    const selectedSetIds = new Set();
+    document.querySelectorAll('.p2p-set-item:checked').forEach(cb => selectedSetIds.add(cb.dataset.id));
+    const selectedPatientIds = new Set();
+    document.querySelectorAll('.p2p-patient-item:checked').forEach(cb => selectedPatientIds.add(cb.dataset.id));
+    const includeConfig = document.getElementById('p2p-config').checked;
+
+    // Calculate size
+    let totalSize = 0;
+    const selectedSets = _p2pSelectData.sets.filter(s => selectedSetIds.has(s.id));
+    const selectedPatients = _p2pSelectData.patients.filter(p => selectedPatientIds.has(p.id));
+    totalSize += JSON.stringify(selectedSets).length;
+    totalSize += JSON.stringify(selectedPatients).length;
+    if (includeConfig) {
+        totalSize += JSON.stringify(getAllTagImages()).length;
+        totalSize += JSON.stringify(getSavedQuadernoLists()).length;
+        totalSize += JSON.stringify(getRecentSessionNames()).length;
+    }
+
+    const sizeStr = formatBytes(totalSize);
+    const infoEl = document.getElementById('p2p-size-info');
+
+    let speedNote = '';
+    if (totalSize > 50 * 1024 * 1024) {
+        speedNote = `<div style="margin-top:6px; color:var(--warning-color);"><i class="fa-solid fa-triangle-exclamation"></i> Dati molto grandi. Per trasferimenti &gt;50 MB consigliamo l'esportazione file (Backup) e condivisione manuale.</div>`;
+    } else if (totalSize > 10 * 1024 * 1024) {
+        speedNote = `<div style="margin-top:6px; color:#f59e0b;"><i class="fa-solid fa-info-circle"></i> Trasferimento di ~${sizeStr}: potrebbe richiedere qualche minuto via P2P.</div>`;
+    }
+
+    infoEl.innerHTML = `<i class="fa-solid fa-weight-hanging"></i> Dimensione stimata: <b>${sizeStr}</b>${speedNote}`;
+};
+
+// ===============================
 // SENDER FLOW
 // ===============================
+window.startP2PSendSelected = async () => {
+    if (!_p2pSelectData) return;
+
+    // Build payload from checklist selections
+    const selectedSetIds = new Set();
+    document.querySelectorAll('.p2p-set-item:checked').forEach(cb => selectedSetIds.add(cb.dataset.id));
+    const selectedPatientIds = new Set();
+    document.querySelectorAll('.p2p-patient-item:checked').forEach(cb => selectedPatientIds.add(cb.dataset.id));
+    const includeConfig = document.getElementById('p2p-config').checked;
+
+    const sets = _p2pSelectData.sets.filter(s => selectedSetIds.has(s.id));
+    const patients = _p2pSelectData.patients.filter(p => selectedPatientIds.has(p.id));
+
+    if (sets.length === 0 && patients.length === 0 && !includeConfig) {
+        alert('Seleziona almeno un elemento da inviare.');
+        return;
+    }
+
+    const payload = {
+        type: 'sync',
+        version: 5,
+        sets: sets,
+        patients: patients
+    };
+
+    if (includeConfig) {
+        payload.tagImages = getAllTagImages();
+        payload.quadernoLists = getSavedQuadernoLists();
+        payload.sessionNames = getRecentSessionNames();
+        payload.activityLayout = getActivityLayout();
+    }
+
+    startP2PSendWithPayload(payload);
+};
+
+// Direct send for single set (from library card)
 window.startP2PSend = async (mode) => {
-    document.getElementById('p2p-role-select').style.display = 'none';
-    document.getElementById('p2p-sender-panel').style.display = '';
-    document.getElementById('p2p-sender-status').textContent = 'Connessione in corso...';
-    document.getElementById('p2p-qr-container').innerHTML = '';
-    document.getElementById('p2p-sender-code').textContent = '';
-
-    const syncId = generateSyncId();
-
-    // Build payload based on mode
     let payload;
     if (mode === 'all') {
+        // This path is kept for backward compatibility but normally goes through checklist
         const sets = await DB.getAllSets();
         const patients = await DB.getAllPatients();
         payload = {
@@ -67,7 +255,7 @@ window.startP2PSend = async (mode) => {
             sessionNames: getRecentSessionNames()
         };
     } else {
-        // mode = set ID
+        // Single set
         const set = state.savedSets.find(s => s.id === mode);
         if (!set) { alert('Set non trovato'); return; }
         const setTagImages = {};
@@ -86,24 +274,40 @@ window.startP2PSend = async (mode) => {
             tagImages: Object.keys(setTagImages).length > 0 ? setTagImages : undefined
         };
     }
+    startP2PSendWithPayload(payload);
+};
+
+function startP2PSendWithPayload(payload) {
+    document.getElementById('p2p-role-select').style.display = 'none';
+    document.getElementById('p2p-select-panel').style.display = 'none';
+    document.getElementById('p2p-sender-panel').style.display = '';
+    document.getElementById('p2p-sender-status').textContent = 'Connessione in corso...';
+    document.getElementById('p2p-qr-container').innerHTML = '';
+    document.getElementById('p2p-sender-code').textContent = '';
+
+    const syncId = generateSyncId();
 
     try {
-        _p2pPeer = new Peer(syncId);
+        _p2pPeer = createPeer(syncId);
     } catch (e) {
         document.getElementById('p2p-sender-status').textContent = 'Errore: PeerJS non disponibile. Verifica la connessione internet.';
         return;
     }
 
     _p2pPeer.on('open', (id) => {
-        document.getElementById('p2p-sender-status').innerHTML = 'In attesa di connessione...<br><span style="font-size:0.75rem; opacity:0.6;">L\'altro dispositivo deve scansionare il QR o inserire il codice.</span>';
+        const payloadSize = formatBytes(JSON.stringify(payload).length);
+        document.getElementById('p2p-sender-status').innerHTML = `In attesa di connessione... (${payloadSize})<br><span style="font-size:0.75rem; opacity:0.6;">L'altro dispositivo deve scansionare il QR o inserire il codice.</span>`;
         document.getElementById('p2p-sender-code').textContent = id;
 
         // Generate QR code
         const qrContainer = document.getElementById('p2p-qr-container');
         if (typeof QRCode !== 'undefined') {
-            const canvas = document.createElement('canvas');
-            QRCode.toCanvas(canvas, id, { width: 200, margin: 2, color: { dark: '#000000', light: '#ffffff' } }, (err) => {
-                if (!err) qrContainer.appendChild(canvas);
+            new QRCode(qrContainer, {
+                text: id,
+                width: 200,
+                height: 200,
+                colorDark: '#000000',
+                colorLight: '#ffffff'
             });
         }
     });
@@ -113,7 +317,6 @@ window.startP2PSend = async (mode) => {
         document.getElementById('p2p-sender-status').textContent = 'Dispositivo connesso! Invio dati...';
 
         conn.on('open', () => {
-            // Send data in chunks if large
             const json = JSON.stringify(payload);
             const chunkSize = 64 * 1024; // 64KB chunks
             const totalChunks = Math.ceil(json.length / chunkSize);
@@ -134,9 +337,13 @@ window.startP2PSend = async (mode) => {
     });
 
     _p2pPeer.on('error', (err) => {
-        document.getElementById('p2p-sender-status').textContent = 'Errore: ' + err.message;
+        let msg = 'Errore: ' + err.message;
+        if (err.type === 'network' || err.type === 'server-error') {
+            msg += '\n\nIl server di segnalazione non è raggiungibile. Verifica la connessione internet.';
+        }
+        document.getElementById('p2p-sender-status').textContent = msg;
     });
-};
+}
 
 // ===============================
 // RECEIVER FLOW
@@ -173,7 +380,6 @@ window.startQRScan = () => {
         { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 200, height: 200 } },
         (decodedText) => {
-            // QR scanned successfully
             _p2pScanner.stop().then(() => {
                 scanArea.style.display = 'none';
                 document.getElementById('p2p-manual-code').value = decodedText;
@@ -195,7 +401,7 @@ function performReceive(senderId) {
     document.getElementById('p2p-progress-bar-fill').style.width = '0%';
 
     try {
-        _p2pPeer = new Peer();
+        _p2pPeer = createPeer();
     } catch (e) {
         document.getElementById('p2p-progress-text').textContent = 'Errore: PeerJS non disponibile.';
         return;
@@ -217,14 +423,13 @@ function performReceive(senderId) {
                 totalChunks = msg.totalChunks;
                 totalSize = msg.totalSize;
                 chunks = new Array(totalChunks).fill(null);
-                const sizeKB = Math.round(totalSize / 1024);
-                document.getElementById('p2p-progress-text').textContent = `Ricezione: 0/${totalChunks} (${sizeKB} KB)`;
+                document.getElementById('p2p-progress-text').textContent = `Ricezione: 0/${totalChunks} (${formatBytes(totalSize)})`;
             } else if (msg.type === 'chunk') {
                 chunks[msg.index] = msg.data;
                 const received = chunks.filter(c => c !== null).length;
                 const pct = Math.round((received / totalChunks) * 100);
                 document.getElementById('p2p-progress-bar-fill').style.width = pct + '%';
-                document.getElementById('p2p-progress-text').textContent = `Ricezione: ${received}/${totalChunks}`;
+                document.getElementById('p2p-progress-text').textContent = `Ricezione: ${received}/${totalChunks} (${pct}%)`;
             } else if (msg.type === 'done') {
                 document.getElementById('p2p-progress-text').textContent = 'Sincronizzazione in corso...';
                 document.getElementById('p2p-progress-bar-fill').style.width = '100%';
@@ -242,12 +447,18 @@ function performReceive(senderId) {
         });
 
         _p2pConn.on('error', (err) => {
-            document.getElementById('p2p-progress-text').textContent = 'Errore: ' + err.message;
+            document.getElementById('p2p-progress-text').textContent = 'Errore connessione: ' + err.message;
         });
     });
 
     _p2pPeer.on('error', (err) => {
-        document.getElementById('p2p-progress-text').textContent = 'Errore: ' + err.message;
+        let msg = 'Errore: ' + err.message;
+        if (err.type === 'peer-unavailable') {
+            msg = 'Dispositivo non trovato. Verifica che il codice sia corretto e che il mittente sia ancora in attesa.';
+        } else if (err.type === 'network' || err.type === 'server-error') {
+            msg += '\n\nProblema di rete. Verifica che entrambi i dispositivi siano connessi a internet.';
+        }
+        document.getElementById('p2p-progress-text').textContent = msg;
     });
 }
 
@@ -308,6 +519,26 @@ async function mergeReceivedData(data) {
         const existing = getRecentSessionNames();
         const merged = [...new Set([...existing, ...data.sessionNames])].slice(0, 30);
         localStorage.setItem('sessionNames', JSON.stringify(merged));
+    }
+    // Import activity layout (same logic as backup import)
+    if (data.activityLayout) {
+        const local = getActivityLayout();
+        if (data.activityLayout.customModes) {
+            if (!local.customModes) local.customModes = {};
+            for (const [k, v] of Object.entries(data.activityLayout.customModes)) {
+                if (!local.customModes[k]) {
+                    local.customModes[k] = v;
+                    const inAnyGroup = local.groups.some(g => g.modes.includes(k));
+                    if (!inAnyGroup && local.groups.length > 0) local.groups[0].modes.push(k);
+                }
+            }
+        }
+        if (data.activityLayout.modeEmojis) {
+            if (!local.modeEmojis) local.modeEmojis = {};
+            Object.assign(local.modeEmojis, data.activityLayout.modeEmojis);
+        }
+        saveActivityLayout(local);
+        renderModeSelect();
     }
 
     // Reload state

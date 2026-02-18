@@ -418,8 +418,8 @@
     </div>
 
     <!-- MODAL: P2P SYNC -->
-    <div id="modal-p2p-sync" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:2000; justify-content:center; align-items:center;">
-        <div style="background:#1e1e2f; padding:25px; border-radius:20px; width:90%; max-width:420px; border:1px solid var(--glass-border); max-height:90vh; overflow-y:auto;">
+    <div id="modal-p2p-sync" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:10500; justify-content:center; align-items:center;">
+        <div style="background:#1e1e2f; padding:25px; border-radius:20px; width:90%; max-width:480px; border:1px solid var(--glass-border); max-height:90vh; overflow-y:auto;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                 <h3 style="margin:0;"><i class="fa-solid fa-wifi"></i> Sync Diretto</h3>
                 <button class="btn-icon" onclick="closeP2PSync()" style="width:32px; height:32px;"><i class="fa-solid fa-xmark"></i></button>
@@ -429,13 +429,27 @@
             <div id="p2p-role-select">
                 <p style="color:#aaa; font-size:0.85rem; margin-bottom:15px;">Trasferisci set e dati direttamente tra due dispositivi via connessione peer-to-peer. Entrambi devono avere accesso a internet per la connessione iniziale, poi i dati viaggiano direttamente.</p>
                 <div style="display:flex; gap:10px; flex-direction:column;">
-                    <button class="btn btn-primary" onclick="startP2PSend('all')" style="padding:15px; font-size:1rem;">
-                        <i class="fa-solid fa-upload"></i> Invia Tutto
-                        <span style="display:block; font-size:0.75rem; opacity:0.7; margin-top:4px;">Set, pazienti, tag, template</span>
+                    <button class="btn btn-primary" onclick="openP2PSendSelect()" style="padding:15px; font-size:1rem;">
+                        <i class="fa-solid fa-upload"></i> Invia
+                        <span style="display:block; font-size:0.75rem; opacity:0.7; margin-top:4px;">Scegli cosa trasferire</span>
                     </button>
                     <button class="btn btn-ghost" onclick="startP2PReceive()" style="padding:15px; font-size:1rem;">
                         <i class="fa-solid fa-download"></i> Ricevi
                         <span style="display:block; font-size:0.75rem; opacity:0.7; margin-top:4px;">Scansiona QR o inserisci codice</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Selection panel -->
+            <div id="p2p-select-panel" style="display:none;">
+                <div id="p2p-select-body" style="margin-bottom:12px;"></div>
+                <div id="p2p-size-info" style="background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.3); border-radius:10px; padding:10px; margin-bottom:12px; font-size:0.8rem; color:#aaa; text-align:center;"></div>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-primary" onclick="startP2PSendSelected()" style="flex:1; padding:12px;">
+                        <i class="fa-solid fa-paper-plane"></i> Invia Selezionati
+                    </button>
+                    <button class="btn btn-ghost" onclick="backToP2PRoleSelect()" style="padding:12px;">
+                        <i class="fa-solid fa-arrow-left"></i>
                     </button>
                 </div>
             </div>
@@ -508,9 +522,9 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
     <!-- P2P Sync libs (PeerJS + QR) -->
-    <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
     <!-- JS MODULES -->
     <script src="js/db.js"></script>
