@@ -633,7 +633,7 @@ function generateIntrusoRound(tags, cardsPerRound) {
     const intruder = validIntruders[Math.floor(Math.random() * validIntruders.length)];
 
     const cards = [...targets.map(t => ({ ...t, isIntruder: false, tag: targetTag })),
-                   { ...intruder, isIntruder: true, tag: intruderTag }];
+    { ...intruder, isIntruder: true, tag: intruderTag }];
     cards.sort(() => Math.random() - 0.5);
 
     return { targetTag, intruderTag, cards };
@@ -760,7 +760,7 @@ function renderTopologia(items, stage) {
             img.src = item.url || getPlaceholderUrl(item.label);
             img.draggable = false;
             img.style.cssText = 'max-width:100%; max-height:75%; object-fit:contain; pointer-events:none;';
-            img.onerror = function() { handleImgError(this, item.label); };
+            img.onerror = function () { handleImgError(this, item.label); };
 
             const lbl = document.createElement('span');
             lbl.style.cssText = 'font-size:0.65rem; color:#333; font-weight:bold; margin-top:2px; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%; pointer-events:none;';
@@ -932,14 +932,14 @@ function renderSequenzeUI(stage) {
         <!-- Slots (horizontal, centered) -->
         <div id="seq-slots-container" style="flex:1; min-height:0; padding:15px; overflow-x:auto; overflow-y:hidden; display:flex; flex-direction:row; gap:10px; align-items:stretch; justify-content:center;">
             ${state.sequenzeCorrectOrder.map((_, slotIdx) => {
-                const placedItem = state.sequenzePlacements[slotIdx];
-                const isCorrect = verified && placedItem && placedItem.seqNumber === state.sequenzeCorrectOrder[slotIdx].seqNumber;
-                const isWrong = verified && placedItem && placedItem.seqNumber !== state.sequenzeCorrectOrder[slotIdx].seqNumber;
-                const slotBorder = verified ? (isCorrect ? '3px solid var(--success-color)' : isWrong ? '3px solid var(--danger-color)' : '2px dashed #555') : (placedItem ? '2px solid var(--accent-color)' : '2px dashed #555');
-                const slotBg = verified ? (isCorrect ? 'rgba(16,185,129,0.1)' : isWrong ? 'rgba(239,68,68,0.1)' : 'rgba(255,255,255,0.02)') : (placedItem ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.02)');
-                const slotShadow = verified ? (isCorrect ? '0 0 12px rgba(16,185,129,0.3)' : isWrong ? '0 0 12px rgba(239,68,68,0.3)' : 'none') : 'none';
+        const placedItem = state.sequenzePlacements[slotIdx];
+        const isCorrect = verified && placedItem && placedItem.seqNumber === state.sequenzeCorrectOrder[slotIdx].seqNumber;
+        const isWrong = verified && placedItem && placedItem.seqNumber !== state.sequenzeCorrectOrder[slotIdx].seqNumber;
+        const slotBorder = verified ? (isCorrect ? '3px solid var(--success-color)' : isWrong ? '3px solid var(--danger-color)' : '2px dashed #555') : (placedItem ? '2px solid var(--accent-color)' : '2px dashed #555');
+        const slotBg = verified ? (isCorrect ? 'rgba(16,185,129,0.1)' : isWrong ? 'rgba(239,68,68,0.1)' : 'rgba(255,255,255,0.02)') : (placedItem ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.02)');
+        const slotShadow = verified ? (isCorrect ? '0 0 12px rgba(16,185,129,0.3)' : isWrong ? '0 0 12px rgba(239,68,68,0.3)' : 'none') : 'none';
 
-                return `
+        return `
                 <div id="seq-slot-${slotIdx}" class="seq-slot-card" data-slot="${slotIdx}"
                      onclick="${!verified ? `placeInSlot(${slotIdx})` : ''}"
                      style="min-width:110px; flex:1; max-width:160px; border:${slotBorder}; border-radius:14px; background:${slotBg};
@@ -959,7 +959,7 @@ function renderSequenzeUI(stage) {
                         <span style="color:#555; font-size:0.75rem; font-style:italic; text-align:center;">Tocca</span>
                     `}
                 </div>`;
-            }).join('')}
+    }).join('')}
         </div>
     </div>`;
 
@@ -1432,10 +1432,73 @@ function placeMarkerAt(clientX, clientY) {
 // Keep backward compat
 window.placeMarker = (e) => { placeMarkerAt(e.clientX, e.clientY); };
 
-window.removeLastMarker = () => {
-    const m = document.querySelectorAll('.marker-pin');
-    if (m.length) m[m.length - 1].remove();
+window.undoLastAction = () => {
+    if (!state.session || !state.session.active) return;
+    const mode = document.getElementById('mode-select').value;
+    const engine = getModeEngine(mode);
+
+    if (engine === 'quaderno') {
+        if (state._quadernoType === 'task') {
+            if (typeof window.undoLastTaskStep === 'function') window.undoLastTaskStep();
+        }
+        return;
+    }
+
+    let removedId = null;
+
+    if (engine === 'search_find' || engine === 'intraverbal_scenari') {
+        const markers = document.querySelectorAll('.marker-pin');
+        let markerToRemove = null;
+
+        if (state.session.scoreHistory && state.session.scoreHistory.length > 0) {
+            removedId = state.session.scoreHistory.pop();
+
+            if (markers.length > 0) {
+                for (let i = markers.length - 1; i >= 0; i--) {
+                    if (markers[i].dataset.id === removedId) {
+                        markerToRemove = markers[i];
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!markerToRemove && markers.length > 0) {
+            markerToRemove = markers[markers.length - 1];
+            removedId = markerToRemove.dataset.id;
+
+            if (removedId && state.session.scoreHistory) {
+                state.session.scoreHistory = state.session.scoreHistory.filter(id => id !== removedId);
+            }
+        }
+
+        if (markerToRemove) markerToRemove.remove();
+    } else {
+        if (state.session.scoreHistory && state.session.scoreHistory.length > 0) {
+            removedId = state.session.scoreHistory.pop();
+
+            const currentIndex = (engine === 'tact') ? state.tactIndex : state.ranIndex;
+            if (removedId === currentIndex) {
+                const targetImg = document.querySelector('.tact-card-lg img, .ran-main-img');
+                if (targetImg) targetImg.classList.remove('feedback-success', 'feedback-fail', 'feedback-prompt');
+            }
+        }
+    }
+
+    if (removedId && state.session.itemResults[removedId] !== undefined) {
+        delete state.session.itemResults[removedId];
+    }
+
+    const results = Object.values(state.session.itemResults);
+    state.session.correct = results.filter(v => v === true).length;
+    state.session.incorrect = results.filter(v => v === false).length;
+    state.session.prompts = results.filter(v => v === 'prompt').length;
+    state.session.total = results.length;
+
+    if (typeof updateScoreUI === 'function') updateScoreUI();
 };
+
+window.removeLastMarker = window.undoLastAction;
 
 window.clearMarkers = () => {
     document.querySelectorAll('.marker-pin').forEach(e => e.remove());
@@ -1594,7 +1657,7 @@ function showZoomItem(stage) {
         </div>
         <div id="zoom-display" style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; min-height:0; cursor:pointer;" onclick="revealZoom()">
             <div id="zoom-image-container" style="position:relative; max-width:90%; max-height:70%; overflow:hidden; border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,0.5); background:white;">
-                <img id="zoom-img" src="${item.url}" style="display:block; width:100%; height:auto; transform-origin:${area.x + area.w/2}% ${area.y + area.h/2}%; transform:scale(${Math.round(100/area.w * 2.5)}); transition:transform 0.8s ease;" onerror="handleImgError(this, '${item.label}')">
+                <img id="zoom-img" src="${item.url}" style="display:block; width:100%; height:auto; transform-origin:${area.x + area.w / 2}% ${area.y + area.h / 2}%; transform:scale(${Math.round(100 / area.w * 2.5)}); transition:transform 0.8s ease;" onerror="handleImgError(this, '${item.label}')">
             </div>
             <div id="zoom-label" style="margin-top:15px; font-size:1.5rem; font-weight:800; color:white; text-transform:uppercase; opacity:0; transition:opacity 0.5s;">${item.label}</div>
             <div id="zoom-hint" style="margin-top:10px; color:var(--text-secondary); font-size:0.85rem;">
@@ -1950,7 +2013,7 @@ window.saveQuadernoSession = async () => {
         p.history.push(sessionData);
 
         await DB.savePatient(p);
-        alert(`Task Analysis salvata!\n${totalScored} LU (escl. N/A), ${totalCorrect} corrette (${Math.round((totalCorrect/totalScored)*100)}%)\nCicli completati: ${(state._taskCycleCount || 0) + (state._taskCurrentStep > 0 ? 1 : 0)}`);
+        alert(`Task Analysis salvata!\n${totalScored} LU (escl. N/A), ${totalCorrect} corrette (${Math.round((totalCorrect / totalScored) * 100)}%)\nCicli completati: ${(state._taskCycleCount || 0) + (state._taskCurrentStep > 0 ? 1 : 0)}`);
 
     } else {
         // General Quaderno: save each row as a separate session (original behavior)
@@ -1992,7 +2055,7 @@ window.saveQuadernoSession = async () => {
         });
 
         await DB.savePatient(p);
-        alert(`Sessione salvata!\n${totalLU} LU, ${totalCorrect} corrette (${totalLU > 0 ? Math.round((totalCorrect/totalLU)*100) : 0}%)`);
+        alert(`Sessione salvata!\n${totalLU} LU, ${totalCorrect} corrette (${totalLU > 0 ? Math.round((totalCorrect / totalLU) * 100) : 0}%)`);
     }
 };
 
@@ -2126,8 +2189,8 @@ function renderQuadernoTaskStep(step, idx, sessionType, isActive) {
     const lastResult = res.length > 0 ? res[res.length - 1] : null;
     const lastIcon = lastResult === true ? '<i class="fa-solid fa-check" style="color:var(--success-color);"></i>'
         : lastResult === false ? '<i class="fa-solid fa-xmark" style="color:var(--danger-color);"></i>'
-        : lastResult === 'prompt' ? '<span style="color:var(--warning-color); font-weight:800;">P</span>'
-        : lastResult === 'na' ? '<span style="color:#888; font-size:0.7rem;">N/A</span>' : '';
+            : lastResult === 'prompt' ? '<span style="color:var(--warning-color); font-weight:800;">P</span>'
+                : lastResult === 'na' ? '<span style="color:#888; font-size:0.7rem;">N/A</span>' : '';
 
     const activeBorder = isActive ? 'border:2px solid var(--accent-color); background:rgba(99,102,241,0.1);' : 'border:1px solid var(--glass-border); background:rgba(255,255,255,0.05);';
     const activeGlow = isActive ? 'box-shadow:0 0 12px rgba(99,102,241,0.3);' : '';

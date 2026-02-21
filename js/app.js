@@ -238,7 +238,7 @@ window.startGame = () => {
         updateScoreUI();
         document.getElementById('scoring-controls').classList.remove('hidden');
         document.getElementById('btn-save-session').classList.add('hidden');
-        document.getElementById('btn-undo-marker').classList.add('hidden');
+        document.getElementById('btn-undo-marker').classList.remove('hidden');
 
         if (engine === 'pool_random' || engine === 'pool_intraverbal') {
             let poolItems = getItemsByTags(state.selectedPoolTags);
@@ -298,7 +298,7 @@ window.startGame = () => {
     state.session.playItems = playItems; // Store for per-item detail tracking
 
     const undoBtn = document.getElementById('btn-undo-marker');
-    if (engine === 'search_find' || engine === 'intraverbal_scenari') undoBtn.classList.remove('hidden'); else undoBtn.classList.add('hidden');
+    if (undoBtn) undoBtn.classList.remove('hidden');
     renderGameMode(mode, playItems);
 };
 
@@ -308,9 +308,14 @@ window.recordResponse = (result) => {
     const mode = document.getElementById('mode-select').value;
     const engine = getModeEngine(mode);
 
+    if (!state.session.scoreHistory) state.session.scoreHistory = [];
+
     if (engine === 'tact' || (engine === 'ran' && state.ranMode === 'single')) {
         const currentIndex = (engine === 'tact') ? state.tactIndex : state.ranIndex;
         state.session.itemResults[currentIndex] = result;
+        if (state.session.scoreHistory[state.session.scoreHistory.length - 1] !== currentIndex) {
+            state.session.scoreHistory.push(currentIndex);
+        }
 
         const targetImg = document.querySelector('.tact-card-lg img, .ran-main-img');
         if (targetImg) {
@@ -321,16 +326,26 @@ window.recordResponse = (result) => {
         }
     } else if (engine === 'search_find' || engine === 'intraverbal_scenari') {
         const markers = document.querySelectorAll('.marker-pin');
+        let scoredId = null;
         if (markers.length > 0) {
             const lastMarker = markers[markers.length - 1];
-            if (!lastMarker.dataset.id) lastMarker.dataset.id = Date.now();
-            state.session.itemResults[lastMarker.dataset.id] = result;
+            if (!lastMarker.dataset.id) lastMarker.dataset.id = Date.now().toString();
+            scoredId = lastMarker.dataset.id;
+            state.session.itemResults[scoredId] = result;
             lastMarker.classList.remove('success', 'fail', 'prompt');
             if (result === 'prompt') lastMarker.classList.add('prompt');
             else lastMarker.classList.add(result ? 'success' : 'fail');
+        } else if (engine === 'intraverbal_scenari') {
+            scoredId = Date.now().toString();
+            state.session.itemResults[scoredId] = result;
+        }
+        if (scoredId && state.session.scoreHistory[state.session.scoreHistory.length - 1] !== scoredId) {
+            state.session.scoreHistory.push(scoredId);
         }
     } else {
-        state.session.itemResults[Date.now()] = result;
+        const id = Date.now().toString();
+        state.session.itemResults[id] = result;
+        state.session.scoreHistory.push(id);
     }
 
     const results = Object.values(state.session.itemResults);
@@ -347,11 +362,21 @@ window.recordResponse = (result) => {
 function updateScoreUI() {
     const el = document.getElementById('score-display');
     const prompts = state.session.prompts || 0;
+    const errors = state.session.incorrect || 0;
+
+    let html = `${state.session.correct}`;
+    let tags = [];
     if (prompts > 0) {
-        el.innerHTML = `${state.session.correct} <span style="font-size:0.65rem; color:var(--warning-color);">P${prompts}</span>`;
-    } else {
-        el.innerText = `${state.session.correct}`;
+        tags.push(`<span style="font-size:0.65rem; color:var(--warning-color);">P${prompts}</span>`);
     }
+    if (errors > 0) {
+        tags.push(`<span style="font-size:0.65rem; color:var(--danger-color);">X${errors}</span>`);
+    }
+
+    if (tags.length > 0) {
+        html += ` ${tags.join(' ')}`;
+    }
+    el.innerHTML = html;
 }
 
 // --- SESSION TYPE SELECTOR ---
@@ -403,8 +428,12 @@ function handleShortcuts(e) {
         if (e.key.toLowerCase() === 'x') fluenzaMarkError();
     }
     if (engine === 'search_find' || engine === 'intraverbal_scenari') {
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') removeLastMarker();
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { if (typeof window.undoLastAction === 'function') window.undoLastAction(); }
         if (e.key === 'Delete' || e.key === 'Backspace') clearMarkers();
+    }
+    // Global undo fallback
+    if (!(engine === 'search_find' || engine === 'intraverbal_scenari') && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        if (typeof window.undoLastAction === 'function') window.undoLastAction();
     }
 }
 
@@ -771,8 +800,8 @@ window.removeActivityGroup = (gi) => {
     _editingLayout.groups.splice(gi, 1);
     renderActivityLayoutBody();
 };
-window.moveGroupUp = (gi) => { if (gi <= 0) return; const g = _editingLayout.groups; [g[gi-1], g[gi]] = [g[gi], g[gi-1]]; renderActivityLayoutBody(); };
-window.moveGroupDown = (gi) => { const g = _editingLayout.groups; if (gi >= g.length-1) return; [g[gi], g[gi+1]] = [g[gi+1], g[gi]]; renderActivityLayoutBody(); };
+window.moveGroupUp = (gi) => { if (gi <= 0) return; const g = _editingLayout.groups;[g[gi - 1], g[gi]] = [g[gi], g[gi - 1]]; renderActivityLayoutBody(); };
+window.moveGroupDown = (gi) => { const g = _editingLayout.groups; if (gi >= g.length - 1) return;[g[gi], g[gi + 1]] = [g[gi + 1], g[gi]]; renderActivityLayoutBody(); };
 window.updateGroupName = (gi, name) => { _editingLayout.groups[gi].name = name; };
 window.updateModeEmoji = (mode, emoji) => { if (!_editingLayout.modeEmojis) _editingLayout.modeEmojis = {}; _editingLayout.modeEmojis[mode] = emoji.trim(); };
 window.moveModeInGroup = (gi, mi, dir) => {
@@ -842,7 +871,7 @@ window.deleteCustomMode = (modeKey, gi, mi) => {
 // --- FULLSCREEN ---
 window.toggleFullScreen = () => {
     if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(() => {});
+        document.documentElement.requestFullscreen().catch(() => { });
     } else {
         document.exitFullscreen();
     }
