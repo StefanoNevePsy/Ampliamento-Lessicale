@@ -483,10 +483,10 @@ function renderDatesTab(patient) {
             </div>
             <div class="date-detail-panel" style="display:none; padding:0 15px 12px; border-top:1px solid rgba(255,255,255,0.05);">
                 ${sessions.map(s => {
-                    const modeName = MODES_CONFIG[s.mode] || s.mode;
-                    const typeTag = s.sessionType === 'timedelay' ? `<span style="font-size:0.6rem; background:rgba(245,158,11,0.2); color:var(--warning-color); padding:1px 5px; border-radius:4px; margin-left:4px;">TD${s.timeDelaySeconds || ''}s</span>` : '';
-                    const activityKey = encodeURIComponent(s.setName + '::' + s.mode + '::' + getSessionTypeGroup(s));
-                    return `
+            const modeName = MODES_CONFIG[s.mode] || s.mode;
+            const typeTag = s.sessionType === 'timedelay' ? `<span style="font-size:0.6rem; background:rgba(245,158,11,0.2); color:var(--warning-color); padding:1px 5px; border-radius:4px; margin-left:4px;">TD${s.timeDelaySeconds || ''}s</span>` : '';
+            const activityKey = encodeURIComponent(s.setName + '::' + s.mode + '::' + getSessionTypeGroup(s));
+            return `
                     <div style="margin-top:8px; border:1px solid rgba(255,255,255,0.05); border-radius:10px; overflow:hidden;">
                         <div onclick="toggleDayActivityChart(this, '${patient.id}', '${activityKey}')" style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; cursor:pointer; transition:background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background=''">
                             <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:0;">
@@ -503,7 +503,7 @@ function renderDatesTab(patient) {
                         </div>
                         <div class="day-activity-chart-panel" style="display:none; padding:8px 12px 12px; border-top:1px solid rgba(255,255,255,0.03);"></div>
                     </div>`;
-                }).join('')}
+        }).join('')}
             </div>
         </div>`;
     });
@@ -587,6 +587,44 @@ function renderItemDetailsCollapsible(s, patientId, sessionIdx, isTD) {
         </tr>`;
 }
 
+function renderTaskStepDetailsCollapsible(s, patientId, sessionIdx, isTD) {
+    if (!s.taskSteps || s.taskSteps.length === 0) return '';
+    const colSpan = isTD ? 6 : 5;
+
+    const chips = s.taskSteps.map((step, i) => {
+        const v = step.v || 0;
+        const x = step.x || 0;
+        const p = step.p || 0;
+        const na = step.na || 0;
+
+        let parts = [];
+        if (v > 0) parts.push(`<span style="color:var(--success-color)">${v}V</span>`);
+        if (x > 0) parts.push(`<span style="color:var(--danger-color)">${x}X</span>`);
+        if (p > 0) parts.push(`<span style="color:var(--warning-color)">${p}P</span>`);
+        if (parts.length === 0 && na > 0) parts.push(`<span style="color:#888">N/A</span>`);
+
+        let bg = 'rgba(255,255,255,0.05)';
+        let border = 'rgba(255,255,255,0.1)';
+
+        if (v > 0 && x === 0 && p === 0) { bg = 'rgba(16,185,129,0.1)'; border = 'rgba(16,185,129,0.3)'; }
+        else if (x > 0) { bg = 'rgba(239,68,68,0.1)'; border = 'rgba(239,68,68,0.3)'; }
+        else if (p > 0) { bg = 'rgba(245,158,11,0.1)'; border = 'rgba(245,158,11,0.3)'; }
+
+        return `<div style="padding:4px 8px; margin:2px 0; border-radius:6px; font-size:0.75rem; background:${bg}; border:1px solid ${border}; display:flex; justify-content:space-between; align-items:center;">
+            <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px;"><b>${i + 1}.</b> ${step.name}</span>
+            <span style="font-weight:bold; flex-shrink:0;">${parts.length > 0 ? parts.join(' ') : (step.scored ? '-' : '<span style="color:#888">N/A</span>')}</span>
+        </div>`;
+    }).join('');
+
+    return `
+        <tr class="item-details-row" style="display:none;">
+            <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(0,0,0,0.15);">
+                <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-list-ol"></i> Dettaglio Passaggi (V/X/P):</div>
+                <div style="display:flex; flex-direction:column; gap:2px;">${chips}</div>
+            </td>
+        </tr>`;
+}
+
 // ============================================================
 // TAB 3: ATTIVITA - Per-activity charts separated by session type
 // ============================================================
@@ -665,19 +703,20 @@ function renderActivitiesTab(patient) {
                         <th style="padding:5px;">Data</th><th>Score</th><th>%</th>${typeGroup === 'timedelay' ? '<th>TD</th>' : ''}<th style="text-align:right;">Azioni</th>
                     </tr>
                     ${[...sessions].reverse().map(s => {
-                        const isTD = typeGroup === 'timedelay';
-                        const nonCorrect = s.total - s.correct;
-                        const scoreExtra = isTD
-                            ? (nonCorrect > 0 ? ` <span style="color:var(--warning-color); font-size:0.75rem;">${nonCorrect}P</span>` : '')
-                            : (nonCorrect > 0 ? ` <span style="color:var(--danger-color); font-size:0.75rem;">${nonCorrect}X</span>` : '');
-                        const hasDetails = s.itemDetails && s.itemDetails.length > 0 && s.itemDetails.some(d => d.result !== true);
-                        const itemDetailsHtml = hasDetails
-                            ? renderItemDetailsCollapsible(s, patient.id, s.originalIndex, isTD)
-                            : '';
-                        const detailsBtn = hasDetails
-                            ? `<button class="btn-icon item-details-toggle" style="width:26px; height:26px; font-size:0.6rem; display:inline-flex; color:${isTD ? 'var(--warning-color)' : 'var(--danger-color)'}; border-color:rgba(${isTD ? '245,158,11' : '239,68,68'},0.3);" title="Stimoli sbagliati"><i class="fa-solid fa-chevron-down" style="transition:transform 0.2s;"></i></button>`
-                            : '';
-                        return `
+            const isTD = typeGroup === 'timedelay';
+            const nonCorrect = s.total - s.correct;
+            const scoreExtra = isTD
+                ? (nonCorrect > 0 ? ` <span style="color:var(--warning-color); font-size:0.75rem;">${nonCorrect}P</span>` : '')
+                : (nonCorrect > 0 ? ` <span style="color:var(--danger-color); font-size:0.75rem;">${nonCorrect}X</span>` : '');
+            const isTaskAnalysisSession = s.mode === 'quaderno_task' && s.taskSteps && s.taskSteps.length > 0;
+            const hasDetails = s.itemDetails && s.itemDetails.length > 0 && s.itemDetails.some(d => d.result !== true);
+            const itemDetailsHtml = hasDetails
+                ? renderItemDetailsCollapsible(s, patient.id, s.originalIndex, isTD)
+                : (isTaskAnalysisSession ? renderTaskStepDetailsCollapsible(s, patient.id, s.originalIndex, isTD) : '');
+            const detailsBtn = (hasDetails || isTaskAnalysisSession)
+                ? `<button class="btn-icon item-details-toggle" style="width:26px; height:26px; font-size:0.6rem; display:inline-flex; color:${isTD ? 'var(--warning-color)' : (isTaskAnalysisSession ? 'var(--accent-color)' : 'var(--danger-color)')}; border-color:rgba(${isTD ? '245,158,11' : (isTaskAnalysisSession ? '99,102,241' : '239,68,68')},0.3);" title="Dettagli"><i class="fa-solid fa-chevron-down" style="transition:transform 0.2s;"></i></button>`
+                : '';
+            return `
                         <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
                             <td style="padding:6px 5px;">${formatDateEU(s.date)}</td>
                             <td>${s.correct}/${s.total}${scoreExtra}</td>
@@ -904,8 +943,8 @@ th { background: #4472c4; color: white; font-weight: bold; }
 
     sorted.forEach(s => {
         const d = new Date(s.date);
-        const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
-        const timeStr = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+        const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
         const modeName = MODES_CONFIG[s.mode] || s.mode;
         const typeLabel = s.sessionType === 'timedelay' ? `Time Delay (${s.timeDelaySeconds || '?'}s)` : (s.sessionType === 'independent' ? 'Indipendente' : '-');
         const pctClass = s.percentage >= 90 ? 'pct-high' : (s.percentage < 50 ? 'pct-low' : '');
@@ -924,12 +963,12 @@ th { background: #4472c4; color: white; font-weight: bold; }
         byDate[dk].push(s);
     });
 
-    Object.entries(byDate).sort(([a],[b]) => a.localeCompare(b)).forEach(([dk, sessions]) => {
+    Object.entries(byDate).sort(([a], [b]) => a.localeCompare(b)).forEach(([dk, sessions]) => {
         const totalLU = sessions.reduce((acc, s) => acc + s.total, 0);
         const totalCorrect = sessions.reduce((acc, s) => acc + s.correct, 0);
         const avgPct = totalLU > 0 ? Math.round((totalCorrect / totalLU) * 100) : 0;
         const d = new Date(dk);
-        const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+        const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
         const pctClass = avgPct >= 90 ? 'pct-high' : (avgPct < 50 ? 'pct-low' : '');
         html += `<tr><td>${dateStr}</td><td>${totalLU}</td><td>${totalCorrect}</td><td class="${pctClass}">${avgPct}%</td><td>${sessions.length}</td></tr>`;
     });
@@ -952,7 +991,7 @@ th { background: #4472c4; color: white; font-weight: bold; }
         const avgPct = Math.round(sessions.reduce((a, s) => a + s.percentage, 0) / sessions.length);
         const hasCriterion = checkCriterion(sessions);
         const lastD = new Date(last.date);
-        const lastDateStr = `${String(lastD.getDate()).padStart(2,'0')}/${String(lastD.getMonth()+1).padStart(2,'0')}/${lastD.getFullYear()}`;
+        const lastDateStr = `${String(lastD.getDate()).padStart(2, '0')}/${String(lastD.getMonth() + 1).padStart(2, '0')}/${lastD.getFullYear()}`;
         html += `<tr><td>${name}</td><td>${modeName}</td><td>${getSessionTypeLabel(typeGroup)}</td><td>${sessions.length}</td><td>${lastDateStr}</td><td>${last.percentage}%</td><td>${avgPct}%</td><td>${hasCriterion ? 'RAGGIUNTO' : '-'}</td></tr>`;
     });
     html += `</table></body></html>`;

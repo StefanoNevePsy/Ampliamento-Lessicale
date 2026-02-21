@@ -3,6 +3,10 @@
 // --- INIT ---
 window.onload = async () => {
     try {
+        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar) {
+            window.Capacitor.Plugins.StatusBar.hide().catch(err => console.error("Impossibile nascondere status bar", err));
+        }
+
         // Init tag image cache (IndexedDB + migrate from localStorage)
         await initTagImageCache();
 

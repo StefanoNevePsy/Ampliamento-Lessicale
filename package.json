@@ -7,9 +7,10 @@
     "electron:start": "electron .",
     "electron:build:mac": "electron-builder --mac",
     "electron:build:win": "electron-builder --win",
-    "cap:init": "npx cap init 'Stimolatore Clinico' 'com.stimolatore.clinico' --web-dir .",
-    "cap:add:android": "npx cap add android",
-    "cap:sync": "npx cap sync",
+    "build:web": "node build.js",
+    "cap:init": "npx cap init 'Stimolatore Clinico' 'com.stimolatore.clinico' --web-dir www",
+    "cap:add:android": "npm run build:web && npx cap add android",
+    "cap:sync": "npm run build:web && npx cap sync",
     "cap:build:android": "cd android && ./gradlew assembleRelease"
   },
   "build": {
@@ -50,12 +51,14 @@
     }
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "electron": "^33.0.0",
     "electron-builder": "^25.0.0"
   },
   "dependencies": {
-    "@capacitor/core": "^6.0.0",
+    "@capacitor/android": "^6.0.0",
     "@capacitor/cli": "^6.0.0",
-    "@capacitor/android": "^6.0.0"
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/status-bar": "^6.0.3"
   }
 }
