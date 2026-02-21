@@ -1393,12 +1393,14 @@ function setupSearchFindTouch() {
     let lastTouchEnd = 0;
 
     vp.addEventListener('touchstart', (e) => {
+        if (e.target.classList.contains('marker-pin')) return;
         const touch = e.touches[0];
         touchStartX = touch.clientX;
         touchStartY = touch.clientY;
     }, { passive: true });
 
     vp.addEventListener('touchend', (e) => {
+        if (e.target.classList.contains('marker-pin')) return;
         const touch = e.changedTouches[0];
         const dx = Math.abs(touch.clientX - touchStartX);
         const dy = Math.abs(touch.clientY - touchStartY);
@@ -1412,6 +1414,7 @@ function setupSearchFindTouch() {
 
     // Mouse click for desktop (skip if just handled by touch)
     vp.addEventListener('click', (e) => {
+        if (e.target.classList.contains('marker-pin')) return;
         if (Date.now() - lastTouchEnd < 500) return;
         placeMarkerAt(e.clientX, e.clientY);
     });
@@ -1425,7 +1428,34 @@ function placeMarkerAt(clientX, clientY) {
     m.className = 'marker-pin';
     m.style.left = (clientX - r.left) + 'px';
     m.style.top = (clientY - r.top) + 'px';
-    m.onclick = (ev) => { ev.stopPropagation(); m.remove(); };
+
+    const removeThisMarker = (ev) => {
+        ev.stopPropagation();
+        ev.preventDefault();
+
+        if (m.dataset.id && state.session && state.session.active && state.session.itemResults) {
+            const removedId = m.dataset.id;
+            delete state.session.itemResults[removedId];
+
+            if (state.session.scoreHistory) {
+                state.session.scoreHistory = state.session.scoreHistory.filter(id => id !== removedId);
+            }
+
+            const results = Object.values(state.session.itemResults);
+            state.session.correct = results.filter(v => v === true).length;
+            state.session.incorrect = results.filter(v => v === false).length;
+            state.session.prompts = results.filter(v => v === 'prompt').length;
+            state.session.total = results.length;
+
+            if (typeof updateScoreUI === 'function') updateScoreUI();
+        }
+
+        m.remove();
+    };
+
+    m.onclick = removeThisMarker;
+    m.addEventListener('touchend', removeThisMarker);
+
     vp.appendChild(m);
 }
 
@@ -1501,7 +1531,25 @@ window.undoLastAction = () => {
 window.removeLastMarker = window.undoLastAction;
 
 window.clearMarkers = () => {
-    document.querySelectorAll('.marker-pin').forEach(e => e.remove());
+    document.querySelectorAll('.marker-pin').forEach(m => {
+        if (m.dataset.id && state.session && state.session.active && state.session.itemResults) {
+            const removedId = m.dataset.id;
+            delete state.session.itemResults[removedId];
+            if (state.session.scoreHistory) {
+                state.session.scoreHistory = state.session.scoreHistory.filter(id => id !== removedId);
+            }
+        }
+        m.remove();
+    });
+
+    if (state.session && state.session.active && state.session.itemResults) {
+        const results = Object.values(state.session.itemResults);
+        state.session.correct = results.filter(v => v === true).length;
+        state.session.incorrect = results.filter(v => v === false).length;
+        state.session.prompts = results.filter(v => v === 'prompt').length;
+        state.session.total = results.length;
+        if (typeof updateScoreUI === 'function') updateScoreUI();
+    }
 };
 
 // --- TOMBOLA SONORA (Audio matching) ---
