@@ -963,3 +963,70 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
+
+// --- GLOBAL BACK BUTTON & BROWSER HISTORY ---
+document.addEventListener('DOMContentLoaded', () => {
+    // Inizializza la history di base della finestra per evitare popstate vuoti
+    if (!window.history.state || !window.history.state.base) {
+        window.history.replaceState({ base: true }, '');
+    }
+
+    // Creiamo una funzione universale per aggiungere uno "strato" di navigazione (es. quando apriamo un modal)
+    window.pushAppHistory = (hashName) => {
+        window.history.pushState({ hash: hashName }, '', '#' + hashName);
+    };
+
+    // Sovrascriviamo leggermente i metodi di apertura modali per registrare la history
+    const overrideModalOpen = (fnName, hash) => {
+        if (typeof window[fnName] === 'function') {
+            const orig = window[fnName];
+            window[fnName] = (...args) => {
+                window.pushAppHistory(hash);
+                return orig(...args);
+            };
+        }
+    };
+
+    overrideModalOpen('openPatients', 'patients');
+    overrideModalOpen('openLibrary', 'library');
+    overrideModalOpen('openEditor', 'editor');
+    if (typeof openActivityLayout === 'function') overrideModalOpen('openActivityLayout', 'activities');
+    overrideModalOpen('openFirebaseSettings', 'firebase');
+
+    // Funzione globale che prova a chiudere l'ultima cosa aperta
+    const goBackOrClose = () => {
+        const openModals = Array.from(document.querySelectorAll('.modal-fs.open, .modal.open, .modal-small.open'));
+        if (openModals.length > 0) {
+            const topModal = openModals[openModals.length - 1];
+            topModal.classList.remove('open');
+            return true;
+        } else if (typeof state !== 'undefined' && state.session && state.session.active) {
+            if (confirm("Attività in corso. Vuoi tornare al menu e azzerare i dati correnti?")) {
+                window.location.reload();
+            }
+            return true; // We handled it
+        }
+        return false;
+    };
+
+    // Ascolto del tasto indietro sul browser e su Android gestito come popstate
+    window.addEventListener('popstate', (e) => {
+        // Se c'è un modal aperto, chiudiamolo
+        goBackOrClose();
+    });
+
+    // Se Capacitor è disponibile ma per qualche configurazione il "back" nativo non scatena popstate per Android, forziamolo:
+    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
+        window.Capacitor.Plugins.App.addListener('backButton', ({ canGoBack }) => {
+            if (canGoBack) {
+                // Fai fare alla WebView un passo indietro (scatenerà il popstate nativo su js)
+                window.history.back();
+            } else {
+                // Se non c'è storia, vediamo se c'è un modal fuggito dai tracciamenti (aperto diversamente), o secion attiva
+                if (!goBackOrClose()) {
+                    window.Capacitor.Plugins.App.exitApp();
+                }
+            }
+        });
+    }
+});
