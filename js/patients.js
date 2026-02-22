@@ -727,9 +727,14 @@ function renderActivitiesTab(patient, sortBy) {
             fluenzaObiettivoHtml = `<span style="font-size:0.7rem; background:rgba(99,102,241,0.15); color:var(--accent-color); padding:2px 8px; border-radius:6px; font-weight:bold;"><i class="fa-solid fa-bullseye"></i> Ob: ${obiettivo}</span>`;
         }
 
+        // Quick status: last session + near criterion
+        const lastPctColor = lastPct >= 90 ? 'var(--success-color)' : lastPct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
+        const nearCritHtml = nearCrit ? `<span style="font-size:0.65rem; background:rgba(16,185,129,0.15); color:var(--success-color); padding:1px 6px; border-radius:4px;"><i class="fa-solid fa-arrow-trend-up"></i> Vicino al criterio</span>` : '';
+        const lastInfoHtml = lastSession ? `<span style="font-size:0.7rem; color:var(--text-secondary);">${formatDateEU(lastSession.date)}</span> <span style="font-size:0.75rem; font-weight:bold; color:${lastPctColor};">${lastPct}%</span>` : '';
+
         html += `
         <div class="chart-wrapper" style="margin-bottom:12px; border-left:3px solid ${typeColor};">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                 <h4 style="margin:0; color:var(--accent-color); font-size:0.95rem;">
                     ${setName} ${setCat ? `<span style="color:var(--text-secondary); font-size:0.7em; background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:4px;">${setCat}</span>` : ''}<span style="color:#666; font-size:0.8em;">(${modeName})</span> ${badgeHtml} ${fluenzaObiettivoHtml}
                 </h4>
@@ -740,6 +745,9 @@ function renderActivitiesTab(patient, sortBy) {
                         <i class="fa-solid fa-chevron-down" style="font-size:0.7rem;"></i>
                     </button>
                 </div>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center; margin-bottom:6px; flex-wrap:wrap;">
+                ${lastInfoHtml} ${nearCritHtml}
             </div>
             <div id="${chartId}"></div>
             <div class="activity-details-panel" style="display:none; margin-top:10px; border-top:1px solid rgba(255,255,255,0.05); padding-top:8px;">
@@ -964,6 +972,12 @@ window.toggleActivityDetails = (btn) => {
         panel.style.display = 'none';
         icon.classList.replace('fa-chevron-up', 'fa-chevron-down');
     }
+};
+
+window.changeActivitiesSort = (sortBy, patientId) => {
+    state._activitiesSortBy = sortBy;
+    const p = state.patients.find(x => x.id === patientId);
+    if (p) renderActivitiesTab(p, sortBy);
 };
 
 // ============================================================
