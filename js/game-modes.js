@@ -905,6 +905,10 @@ function renderSequenzeUI(stage) {
             <button class="btn btn-sm btn-success" onclick="checkSequenze()" style="padding:6px 16px; font-size:0.85rem; font-weight:bold;">
                 <i class="fa-solid fa-check-double"></i> Conferma
             </button>` : ''}
+            ${verified ? `
+            <button class="btn btn-sm" onclick="startRacconto()" style="padding:6px 16px; font-size:0.85rem; font-weight:bold; background:var(--accent-color); color:white;">
+                <i class="fa-solid fa-book-open"></i> Racconto
+            </button>` : ''}
         </div>
 
         ${sourceCards.length > 0 ? `
@@ -1018,6 +1022,8 @@ window.checkSequenze = () => {
         state.session.correct = correct;
         state.session.total = state.sequenzeCorrectOrder.length;
         state.session.incorrect = state.session.total - correct;
+        state.session.sequenzePhase = 'seriazione';
+        state.session.playItems = [...state.sequenzeCorrectOrder];
         state.session.itemResults = {};
         state.sequenzePlacements.forEach((placed, slotIdx) => {
             state.session.itemResults[slotIdx] = placed && placed.seqNumber === state.sequenzeCorrectOrder[slotIdx].seqNumber;
@@ -1027,6 +1033,181 @@ window.checkSequenze = () => {
         if (typeof showSessionNameInput === 'function') showSessionNameInput();
     }
     renderSequenzeUI(document.getElementById('game-stage'));
+};
+
+// --- RACCONTO PHASE ---
+window.startRacconto = async () => {
+    // Auto-save seriazione session inline (avoid confirmSaveSession's setTimeout issues)
+    if (state.session.active && state.session.total > 0 && state.activePatientId) {
+        const p = state.patients.find(x => x.id === state.activePatientId);
+        if (p) {
+            const mode = document.getElementById('mode-select').value;
+            const engine = getModeEngine(mode);
+            const type = getSelectedSessionType();
+            const results = Object.values(state.session.itemResults);
+            const rawV = results.filter(v => v === true).length;
+            const rawP = results.filter(v => v === 'prompt').length;
+            const rawX = results.filter(v => v === false).length;
+            const rawTotal = rawV + rawP + rawX;
+            const defaultSetName = state.savedSets.find(ss => ss.id === state.activeSetId)?.name || "Set Rimosso";
+            const nameInput = document.getElementById('session-name-input');
+            const customName = nameInput ? nameInput.value.trim() : '';
+            const setName = customName || defaultSetName;
+            const stimCount = state.sequenzeCorrectOrder ? state.sequenzeCorrectOrder.length : rawTotal;
+
+            const sessionData = {
+                date: new Date().toISOString(),
+                setId: state.activeSetId,
+                setName: setName + ` [Seriazione ${stimCount}]`,
+                mode: mode,
+                correct: rawV,
+                prompts: rawP,
+                total: rawTotal,
+                percentage: Math.round((rawV / rawTotal) * 100),
+                sessionType: type,
+                rawV, rawP, rawX,
+                sequenzePhase: 'seriazione'
+            };
+            if (type === 'timedelay') sessionData.timeDelaySeconds = getSelectedTDSeconds();
+
+            const playItems = state.session.playItems || [];
+            if (playItems.length > 0) {
+                const itemDetails = [];
+                for (const [key, result] of Object.entries(state.session.itemResults)) {
+                    const idx = parseInt(key);
+                    const item = !isNaN(idx) ? playItems[idx] : null;
+                    const label = item ? (item.label || item.l || `Item ${idx + 1}`) : null;
+                    if (label) itemDetails.push({ label, result });
+                }
+                if (itemDetails.length > 0) sessionData.itemDetails = itemDetails;
+            }
+
+            if (!p.history) p.history = [];
+            p.history.push(sessionData);
+            await DB.savePatient(p);
+            if (nameInput) nameInput.value = '';
+        }
+    }
+
+    // Reset session for racconto phase
+    state.session = { correct: 0, incorrect: 0, total: 0, prompts: 0, active: true, itemResults: {}, scoreHistory: [], sequenzePhase: 'racconto' };
+    state.session.playItems = [...state.sequenzeCorrectOrder];
+    state.raccontoSelectedIdx = null;
+    state.raccontoScored = {};
+
+    updateScoreUI();
+    document.getElementById('scoring-controls').classList.remove('hidden');
+    document.getElementById('btn-save-session').classList.add('hidden');
+    const undoBtn = document.getElementById('btn-undo-marker');
+    if (undoBtn) undoBtn.classList.remove('hidden');
+    const sessionNameWrapper = document.getElementById('session-name-wrapper');
+    if (sessionNameWrapper) sessionNameWrapper.classList.add('hidden');
+
+    renderRaccontoUI(document.getElementById('game-stage'));
+};
+
+function renderRaccontoUI(stage) {
+    const items = state.sequenzeCorrectOrder;
+    const selectedIdx = state.raccontoSelectedIdx;
+    const scored = state.raccontoScored || {};
+    const allScored = Object.keys(scored).length === items.length;
+
+    stage.innerHTML = `
+    <div style="display:flex; height:100%; flex-direction:column;">
+        <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
+            <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
+                <i class="fa-solid fa-book-open"></i> Racconto
+            </span>
+            <span style="color:var(--text-secondary); font-size:0.75rem;">${Object.keys(scored).length}/${items.length} valutate</span>
+        </div>
+
+        <div style="padding:8px; text-align:center; font-size:0.75rem; color:#888; flex-shrink:0;">
+            ${selectedIdx !== null ? '<i class="fa-solid fa-check-circle"></i> Usa i pulsanti <b>V</b> / <b>X</b> / <b>P</b> per valutare il racconto di questa scena' : '<i class="fa-solid fa-hand-pointer"></i> Tocca un\'immagine per evidenziarla e valutarla'}
+        </div>
+
+        <div style="flex:1; min-height:0; padding:15px; overflow-x:auto; display:flex; flex-direction:row; gap:14px; align-items:center; justify-content:center;">
+            ${items.map((item, idx) => {
+        const isSelected = selectedIdx === idx;
+        const result = scored[idx];
+        const resultBorder = result === true ? '3px solid var(--success-color)' : result === false ? '3px solid var(--danger-color)' : result === 'prompt' ? '3px solid var(--warning-color)' : (isSelected ? '3px solid var(--accent-color)' : '2px solid rgba(255,255,255,0.1)');
+        const resultBg = result === true ? 'rgba(16,185,129,0.1)' : result === false ? 'rgba(239,68,68,0.1)' : result === 'prompt' ? 'rgba(245,158,11,0.1)' : (isSelected ? 'rgba(99,102,241,0.1)' : 'rgba(255,255,255,0.03)');
+        const resultIcon = result === true ? '<i class="fa-solid fa-check" style="color:var(--success-color);"></i>' : result === false ? '<i class="fa-solid fa-xmark" style="color:var(--danger-color);"></i>' : result === 'prompt' ? '<i class="fa-solid fa-hand" style="color:var(--warning-color);"></i>' : '';
+        const shadow = isSelected ? '0 0 25px rgba(99,102,241,0.5)' : 'none';
+        const scale = isSelected ? 'transform:scale(1.08);' : '';
+
+        return `
+                <div onclick="selectRaccontoCard(${idx})"
+                     style="min-width:140px; max-width:200px; flex-shrink:0; border:${resultBorder}; border-radius:16px; background:${resultBg};
+                            display:flex; flex-direction:column; align-items:center; gap:8px; padding:12px 10px; cursor:pointer;
+                            transition:0.2s; box-shadow:${shadow}; ${scale} user-select:none; position:relative;">
+                    <span style="width:28px; height:28px; border-radius:50%; background:rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:0.85rem; color:var(--text-secondary);">${idx + 1}</span>
+                    <div style="background:white; border-radius:12px; padding:5px;">
+                        <img src="${item.url || getPlaceholderUrl(item.label)}" style="width:120px; height:120px; object-fit:contain; border-radius:10px;" draggable="false" onerror="handleImgError(this, '${item.label}')">
+                    </div>
+                    <span style="font-weight:bold; font-size:0.85rem; text-align:center; word-break:break-word; line-height:1.1;">${item.label}</span>
+                    ${resultIcon ? `<div style="position:absolute; top:6px; right:6px;">${resultIcon}</div>` : ''}
+                </div>`;
+    }).join('')}
+        </div>
+
+        ${allScored ? `
+        <div style="padding:10px; text-align:center; flex-shrink:0;">
+            <span style="font-size:0.85rem; color:var(--success-color);"><i class="fa-solid fa-check-double"></i> Tutte le scene valutate</span>
+        </div>` : ''}
+    </div>`;
+}
+
+window.selectRaccontoCard = (idx) => {
+    state.raccontoSelectedIdx = (state.raccontoSelectedIdx === idx) ? null : idx;
+    renderRaccontoUI(document.getElementById('game-stage'));
+};
+
+// Hook into recordResponse for racconto scoring
+const _origRecordResponse = window.recordResponse;
+window.recordResponse = (result) => {
+    if (state.session.sequenzePhase === 'racconto' && state.raccontoSelectedIdx !== null) {
+        const idx = state.raccontoSelectedIdx;
+        const prevResult = state.raccontoScored[idx];
+
+        // If already scored, remove old score from session counts
+        if (prevResult !== undefined) {
+            delete state.session.itemResults[idx];
+        }
+
+        state.raccontoScored[idx] = result;
+        state.session.itemResults[idx] = result;
+
+        // Recount
+        const results = Object.values(state.session.itemResults);
+        state.session.correct = results.filter(v => v === true).length;
+        state.session.incorrect = results.filter(v => v === false).length;
+        state.session.prompts = results.filter(v => v === 'prompt').length;
+        state.session.total = results.length;
+
+        if (!state.session.scoreHistory) state.session.scoreHistory = [];
+        state.session.scoreHistory.push(idx);
+
+        updateScoreUI();
+
+        // Auto-advance to next unscored card
+        const items = state.sequenzeCorrectOrder;
+        let nextIdx = null;
+        for (let i = 1; i <= items.length; i++) {
+            const candidate = (idx + i) % items.length;
+            if (state.raccontoScored[candidate] === undefined) { nextIdx = candidate; break; }
+        }
+        state.raccontoSelectedIdx = nextIdx;
+
+        // Check if all scored
+        if (Object.keys(state.raccontoScored).length === items.length) {
+            document.getElementById('btn-save-session').classList.remove('hidden');
+            if (typeof showSessionNameInput === 'function') showSessionNameInput();
+        }
+
+        renderRaccontoUI(document.getElementById('game-stage'));
+        return;
+    }
+    _origRecordResponse(result);
 };
 
 let _seqDragCleanup = null;
@@ -1379,6 +1560,25 @@ window.undoLastAction = () => {
     if (engine === 'quaderno') {
         if (state._quadernoType === 'task') {
             if (typeof window.undoLastTaskStep === 'function') window.undoLastTaskStep();
+        }
+        return;
+    }
+
+    // Racconto phase undo
+    if (state.session.sequenzePhase === 'racconto') {
+        if (state.session.scoreHistory && state.session.scoreHistory.length > 0) {
+            const lastIdx = state.session.scoreHistory.pop();
+            delete state.raccontoScored[lastIdx];
+            delete state.session.itemResults[lastIdx];
+            const results = Object.values(state.session.itemResults);
+            state.session.correct = results.filter(v => v === true).length;
+            state.session.incorrect = results.filter(v => v === false).length;
+            state.session.prompts = results.filter(v => v === 'prompt').length;
+            state.session.total = results.length;
+            state.raccontoSelectedIdx = lastIdx;
+            if (typeof updateScoreUI === 'function') updateScoreUI();
+            document.getElementById('btn-save-session').classList.add('hidden');
+            renderRaccontoUI(document.getElementById('game-stage'));
         }
         return;
     }

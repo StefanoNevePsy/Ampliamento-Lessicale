@@ -504,6 +504,14 @@ window.confirmSaveSession = async () => {
         sessionData.percentage = sessionData.total > 0 ? Math.round((sessionData.correct / sessionData.total) * 100) : 0;
     }
 
+    // Sequenze phase (seriazione / racconto)
+    if (state.session.sequenzePhase) {
+        sessionData.sequenzePhase = state.session.sequenzePhase;
+        const stimCount = state.sequenzeCorrectOrder ? state.sequenzeCorrectOrder.length : sessionData.total;
+        const phaseLabel = state.session.sequenzePhase === 'racconto' ? 'Racconto' : 'Seriazione';
+        sessionData.setName = setName + ` [${phaseLabel} ${stimCount}]`;
+    }
+
     // Save per-item details for modes with labeled items
     const playItems = state.session.playItems || [];
     if (playItems.length > 0 && Object.keys(state.session.itemResults).length > 0) {
