@@ -191,15 +191,31 @@ function updateDropdown(sets) {
             const missingCount = s.items.filter(i => !i.url).length;
             const warningTag = missingCount > 0 ? ` \u26A0\uFE0F${missingCount}` : '';
 
-            let trophyTag = '';
+            let statusTag = '';
             if (activePatient && activePatient.history) {
                 const sessions = activePatient.history.filter(h => h.setId === s.id && h.mode === currentMode);
-                if (typeof checkCriterion === 'function' && checkCriterion(sessions)) {
-                    trophyTag = ' \uD83C\uDFC6';
+                if (sessions.length > 0) {
+                    const isMastered = typeof checkCriterion === 'function' && checkCriterion(sessions);
+                    const isRepertorio = typeof checkRepertorio === 'function' && checkRepertorio(sessions);
+                    if (isMastered) {
+                        statusTag = ' \uD83C\uDFC6';
+                    } else if (isRepertorio) {
+                        statusTag = ' \u2B50';
+                    }
+                    // Last session percentage
+                    const sorted = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
+                    const last = sorted[sorted.length - 1];
+                    if (last && last.percentage != null) {
+                        statusTag += ` ${Math.round(last.percentage)}%`;
+                    }
+                    // Near criterion indicator (last >= 90% but not yet mastered)
+                    if (!isMastered && typeof isNearCriterion === 'function' && isNearCriterion(sessions)) {
+                        statusTag += '\u2191';
+                    }
                 }
             }
 
-            opt.text = `${s.name}${warningTag}${trophyTag}`;
+            opt.text = `${s.name}${warningTag}${statusTag}`;
             if (state.activeSetId === s.id) opt.selected = true;
             group.appendChild(opt);
         });

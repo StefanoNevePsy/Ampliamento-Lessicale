@@ -1,6 +1,6 @@
 {
   "appId": "com.stimolatore.clinico",
-  "appName": "Stimolatore Clinico",
+  "appName": "Terapia Attiva",
   "webDir": "www",
   "server": {
     "androidScheme": "https"
