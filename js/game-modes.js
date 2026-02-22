@@ -866,7 +866,7 @@ function renderSequenze(items, stage) {
         return;
     }
 
-    const numStimuli = parseInt(document.getElementById('num-stimoli').value);
+    const numStimuli = parseInt(document.getElementById('num-stimuli').value);
     if (numStimuli > 0 && numStimuli < numbered.length) {
         const shuffled = [...numbered].sort(() => Math.random() - 0.5);
         numbered = shuffled.slice(0, numStimuli).sort((a, b) => a.seqNumber - b.seqNumber);
