@@ -1952,6 +1952,8 @@ window.onQuadernoTypeChange = () => {
 };
 
 function renderQuadernoGeneral(container) {
+    container.style.justifyContent = 'flex-start';
+    container.style.alignItems = 'stretch';
     const rows = state._quadernoRows || [];
     const savedNames = getSavedQuadernoLists().filter(l => l.type !== 'task').map(l => l.name);
     const qType = getQuadernoSessionType();
@@ -2254,6 +2256,8 @@ window.saveQuadernoTemplate = () => {
 // QUADERNO TASK ANALYSIS (one LU per step, auto-repeat cycles)
 // ============================================================
 function renderQuadernoTask(container) {
+    container.style.justifyContent = 'flex-start';
+    container.style.alignItems = 'stretch';
     const steps = state._quadernoSteps || [];
     const savedNames = getSavedQuadernoLists().filter(l => l.type === 'task').map(l => l.name);
     const qType = getQuadernoSessionType();
