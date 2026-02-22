@@ -444,6 +444,10 @@
             <div id="p2p-select-panel" style="display:none;">
                 <div id="p2p-select-body" style="margin-bottom:12px;"></div>
                 <div id="p2p-size-info" style="background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.3); border-radius:10px; padding:10px; margin-bottom:12px; font-size:0.8rem; color:#aaa; text-align:center;"></div>
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.8rem; color:#ccc; margin-bottom:10px; padding:8px 10px; background:rgba(0,0,0,0.2); border-radius:8px;">
+                    <input type="checkbox" id="p2p-compress" checked onchange="updateP2PSizeEstimate()" style="width:16px; height:16px;">
+                    <i class="fa-solid fa-compress"></i> Comprimi dati (consigliato per trasferimenti grandi)
+                </label>
                 <div style="display:flex; gap:8px;">
                     <button class="btn btn-primary" onclick="startP2PSendSelected()" style="flex:1; padding:12px;">
                         <i class="fa-solid fa-paper-plane"></i> Invia Selezionati
@@ -525,6 +529,7 @@
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
 
     <!-- JS MODULES -->
     <script src="js/db.js"></script>
