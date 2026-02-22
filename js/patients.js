@@ -313,7 +313,7 @@ function renderOverviewTab(patient) {
             <div style="display:flex; gap:15px; flex-wrap:wrap; font-size:0.9rem;">
                 <div><span style="color:var(--text-secondary);">Data:</span> <b>${formatDateEU(lastSession.date)}</b></div>
                 <div><span style="color:var(--text-secondary);">Attivit&agrave;:</span> <b>${modeName}</b></div>
-                <div><span style="color:var(--text-secondary);">Set:</span> <b>${lastSession.setName}</b></div>
+                <div><span style="color:var(--text-secondary);">Set:</span> <b>${lastSession.setName}</b>${lastSession.setCat ? ` <span style="color:var(--text-secondary); font-size:0.8em;">(${lastSession.setCat})</span>` : ''}</div>
                 <div><span style="color:var(--text-secondary);">Score:</span> <b style="color:${lastSession.percentage >= 90 ? 'var(--success-color)' : 'white'}">${lastSession.correct}/${lastSession.total} (${lastSession.percentage}%)</b></div>
             </div>
         </div>`;
@@ -492,7 +492,7 @@ function renderDatesTab(patient) {
                             <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:0;">
                                 <i class="fa-solid fa-chevron-right day-act-icon" style="transition:transform 0.2s; font-size:0.6rem; color:#555;"></i>
                                 <span style="background:rgba(99,102,241,0.15); padding:2px 8px; border-radius:6px; font-size:0.7rem; color:var(--accent-color); flex-shrink:0;">${modeName}</span>
-                                <span style="font-size:0.9rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.setName}</span>${typeTag}
+                                <span style="font-size:0.9rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.setName}</span>${s.setCat ? `<span style="font-size:0.65rem; color:var(--text-secondary); background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:4px; flex-shrink:0;">${s.setCat}</span>` : ''}${typeTag}
                             </div>
                             <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
                                 <span style="font-size:0.85rem;">${s.correct}/${s.total}</span>
@@ -656,6 +656,7 @@ function renderActivitiesTab(patient) {
     chartList.forEach(item => {
         const { sessions, setName, modeCode, typeGroup } = item;
         const modeName = MODES_CONFIG[modeCode] || modeCode;
+        const setCat = sessions.find(s => s.setCat)?.setCat || '';
         sessions.sort((a, b) => new Date(a.date) - new Date(b.date));
         const isMastered = checkCriterion(sessions);
 
@@ -685,7 +686,7 @@ function renderActivitiesTab(patient) {
         <div class="chart-wrapper" style="margin-bottom:12px; border-left:3px solid ${typeColor};">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                 <h4 style="margin:0; color:var(--accent-color); font-size:0.95rem;">
-                    ${setName} <span style="color:#666; font-size:0.8em;">(${modeName})</span> ${badgeHtml} ${fluenzaObiettivoHtml}
+                    ${setName} ${setCat ? `<span style="color:var(--text-secondary); font-size:0.7em; background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:4px;">${setCat}</span>` : ''}<span style="color:#666; font-size:0.8em;">(${modeName})</span> ${badgeHtml} ${fluenzaObiettivoHtml}
                 </h4>
                 <div style="display:flex; align-items:center; gap:6px;">
                     <span style="font-size:0.65rem; background:rgba(${typeGroup === 'timedelay' ? '245,158,11' : '16,185,129'},0.15); color:${typeColor}; padding:2px 8px; border-radius:6px; font-weight:bold;">${typeLbl}</span>
@@ -949,7 +950,8 @@ th { background: #4472c4; color: white; font-weight: bold; }
         const typeLabel = s.sessionType === 'timedelay' ? `Time Delay (${s.timeDelaySeconds || '?'}s)` : (s.sessionType === 'independent' ? 'Indipendente' : '-');
         const pctClass = s.percentage >= 90 ? 'pct-high' : (s.percentage < 50 ? 'pct-low' : '');
         const prompts = s.prompts || s.rawP || '-';
-        html += `<tr><td>${dateStr}</td><td>${timeStr}</td><td>${s.setName}</td><td>${modeName}</td><td>${typeLabel}</td><td>${s.correct}</td><td>${prompts}</td><td>${s.total}</td><td class="${pctClass}">${s.percentage}%</td></tr>`;
+        const catStr = s.setCat ? ` (${s.setCat})` : '';
+        html += `<tr><td>${dateStr}</td><td>${timeStr}</td><td>${s.setName}${catStr}</td><td>${modeName}</td><td>${typeLabel}</td><td>${s.correct}</td><td>${prompts}</td><td>${s.total}</td><td class="${pctClass}">${s.percentage}%</td></tr>`;
     });
     html += `</table><br>`;
 
@@ -992,7 +994,9 @@ th { background: #4472c4; color: white; font-weight: bold; }
         const hasCriterion = checkCriterion(sessions);
         const lastD = new Date(last.date);
         const lastDateStr = `${String(lastD.getDate()).padStart(2, '0')}/${String(lastD.getMonth() + 1).padStart(2, '0')}/${lastD.getFullYear()}`;
-        html += `<tr><td>${name}</td><td>${modeName}</td><td>${getSessionTypeLabel(typeGroup)}</td><td>${sessions.length}</td><td>${lastDateStr}</td><td>${last.percentage}%</td><td>${avgPct}%</td><td>${hasCriterion ? 'RAGGIUNTO' : '-'}</td></tr>`;
+        const aCat = sessions.find(s => s.setCat)?.setCat || '';
+        const aCatStr = aCat ? ` (${aCat})` : '';
+        html += `<tr><td>${name}${aCatStr}</td><td>${modeName}</td><td>${getSessionTypeLabel(typeGroup)}</td><td>${sessions.length}</td><td>${lastDateStr}</td><td>${last.percentage}%</td><td>${avgPct}%</td><td>${hasCriterion ? 'RAGGIUNTO' : '-'}</td></tr>`;
     });
     html += `</table></body></html>`;
 

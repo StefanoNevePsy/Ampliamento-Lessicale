@@ -1049,7 +1049,9 @@ window.startRacconto = async () => {
             const rawP = results.filter(v => v === 'prompt').length;
             const rawX = results.filter(v => v === false).length;
             const rawTotal = rawV + rawP + rawX;
-            const defaultSetName = state.savedSets.find(ss => ss.id === state.activeSetId)?.name || "Set Rimosso";
+            const activeSet = state.savedSets.find(ss => ss.id === state.activeSetId);
+            const defaultSetName = activeSet?.name || "Set Rimosso";
+            const setCat = activeSet?.category || '';
             const nameInput = document.getElementById('session-name-input');
             const customName = nameInput ? nameInput.value.trim() : '';
             const setName = customName || defaultSetName;
@@ -1059,6 +1061,7 @@ window.startRacconto = async () => {
                 date: new Date().toISOString(),
                 setId: state.activeSetId,
                 setName: setName + ` [Seriazione ${stimCount}]`,
+                setCat: setCat,
                 mode: mode,
                 correct: rawV,
                 prompts: rawP,

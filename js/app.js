@@ -460,10 +460,13 @@ window.confirmSaveSession = async () => {
     const rawTotal = rawV + rawP + rawX;
 
     let defaultName;
+    let setCat = '';
     if (POOL_ENGINES.includes(engine)) {
         defaultName = 'Pool: ' + state.selectedPoolTags.join(', ');
     } else {
-        defaultName = state.savedSets.find(ss => ss.id === state.activeSetId)?.name || "Set Rimosso";
+        const activeSet = state.savedSets.find(ss => ss.id === state.activeSetId);
+        defaultName = activeSet?.name || "Set Rimosso";
+        setCat = activeSet?.category || '';
     }
 
     const nameInput = document.getElementById('session-name-input');
@@ -477,6 +480,7 @@ window.confirmSaveSession = async () => {
         date: new Date().toISOString(),
         setId: state.activeSetId,
         setName: setName,
+        setCat: setCat,
         mode: mode,
         correct: correct,
         prompts: rawP,
