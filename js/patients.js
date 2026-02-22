@@ -1039,12 +1039,10 @@ function renderTaskStepsAnalysis(sessions) {
         sessions.forEach(session => {
             if (session.taskSteps && session.taskSteps[stepIdx]) {
                 const step = session.taskSteps[stepIdx];
-                // Count each result from the results array, excluding N/A
                 (step.results || []).forEach(r => {
                     if (r === true) { totalV++; totalScored++; }
                     else if (r === false) { totalX++; totalScored++; }
                     else if (r === 'prompt') { totalP++; totalScored++; }
-                    // r === 'na' is excluded
                 });
             }
         });
@@ -1077,7 +1075,61 @@ function renderTaskStepsAnalysis(sessions) {
         </div>`;
     }
 
-    // Per-step table
+    // Aggregate table (always visible)
+    html += renderTaskStepTable(stepAggregates, 'Riepilogo Totale');
+
+    // Per-session collapsible sections
+    if (sessions.length > 0) {
+        html += `<div style="margin-top:10px;">`;
+        [...sessions].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach((session, si) => {
+            const steps = session.taskSteps || [];
+            const sessionStepData = steps.map((step, stepIdx) => {
+                let totalV = 0, totalX = 0, totalP = 0, totalScored = 0;
+                (step.results || []).forEach(r => {
+                    if (r === true) { totalV++; totalScored++; }
+                    else if (r === false) { totalX++; totalScored++; }
+                    else if (r === 'prompt') { totalP++; totalScored++; }
+                });
+                const pctCorrect = totalScored > 0 ? Math.round((totalV / totalScored) * 100) : 0;
+                const pctError = totalScored > 0 ? Math.round(((totalX + totalP) / totalScored) * 100) : 0;
+                return { name: step.name, totalV, totalX, totalP, totalScored, pctCorrect, pctError };
+            });
+            const sTotalScored = sessionStepData.reduce((s, x) => s + x.totalScored, 0);
+            const sTotalV = sessionStepData.reduce((s, x) => s + x.totalV, 0);
+            const sPct = sTotalScored > 0 ? Math.round((sTotalV / sTotalScored) * 100) : 0;
+            const pctColor = sPct >= 90 ? 'var(--success-color)' : sPct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
+
+            html += `
+            <div style="border:1px solid rgba(255,255,255,0.05); border-radius:8px; margin-bottom:6px; overflow:hidden;">
+                <div onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? '' : 'none'; this.querySelector('.ta-sess-icon').style.transform = this.nextElementSibling.style.display === 'none' ? '' : 'rotate(90deg)';"
+                     style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; cursor:pointer; background:rgba(255,255,255,0.02);"
+                     onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='rgba(255,255,255,0.02)'">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <i class="fa-solid fa-chevron-right ta-sess-icon" style="font-size:0.6rem; color:var(--text-secondary); transition:transform 0.2s;"></i>
+                        <span style="font-size:0.8rem; font-weight:600;">${formatDateEU(session.date)}</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:0.8rem;">${sTotalV}/${sTotalScored}</span>
+                        <span style="font-weight:bold; font-size:0.8rem; color:${pctColor};">${sPct}%</span>
+                    </div>
+                </div>
+                <div style="display:none; padding:6px;">
+                    ${renderTaskStepTable(sessionStepData)}
+                </div>
+            </div>`;
+        });
+        html += `</div>`;
+    }
+
+    html += `</div>`;
+    return html;
+}
+
+function renderTaskStepTable(stepAggregates, title) {
+    let html = '';
+    if (title) {
+        html += `<div style="font-size:0.75rem; color:var(--text-secondary); font-weight:bold; margin-bottom:4px; margin-top:4px;">${title}</div>`;
+    }
     html += `<table style="width:100%; font-size:0.8rem; color:#ccc; border-collapse:collapse;">
         <tr style="border-bottom:1px solid #444; color:#888; font-size:0.7rem;">
             <th style="padding:4px; text-align:left;">#</th>
@@ -1109,6 +1161,6 @@ function renderTaskStepsAnalysis(sessions) {
         </tr>`;
     });
 
-    html += `</table></div>`;
+    html += `</table>`;
     return html;
 }

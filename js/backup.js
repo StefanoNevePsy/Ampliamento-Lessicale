@@ -247,13 +247,20 @@ function mergePatients(local, incoming) {
     const merged = JSON.parse(JSON.stringify(local));
     if (incoming.history && Array.isArray(incoming.history)) {
         if (!merged.history) merged.history = [];
-        // Deduplicate by date+mode+setName
-        const existingKeys = new Set(merged.history.map(h => `${h.date}::${h.mode}::${h.setName}`));
+        // Deduplicate by date+mode+setName, but enrich if incoming has more data
+        const existingByKey = {};
+        merged.history.forEach((h, i) => { existingByKey[`${h.date}::${h.mode}::${h.setName}`] = i; });
         incoming.history.forEach(h => {
             const key = `${h.date}::${h.mode}::${h.setName}`;
-            if (!existingKeys.has(key)) {
+            if (existingByKey[key] !== undefined) {
+                // Replace local with incoming if incoming has more fields (taskSteps, itemDetails, etc.)
+                const localIdx = existingByKey[key];
+                if (Object.keys(h).length > Object.keys(merged.history[localIdx]).length) {
+                    merged.history[localIdx] = h;
+                }
+            } else {
+                existingByKey[key] = merged.history.length;
                 merged.history.push(h);
-                existingKeys.add(key);
             }
         });
     }
