@@ -58,19 +58,18 @@ async function syncPatientToFirebase(patient) {
     if (!initFirebase()) return;
 
     try {
-        // Only sync essential data (no large blobs)
+        // Sync full patient data including session details
+        // (taskSteps, itemDetails, sessionType, setCat, etc.)
         const syncData = {
             id: patient.id,
             name: patient.name,
-            history: (patient.history || []).map(h => ({
-                date: h.date,
-                setId: h.setId,
-                setName: h.setName,
-                mode: h.mode,
-                correct: h.correct,
-                total: h.total,
-                percentage: h.percentage
-            })),
+            history: (patient.history || []).map(h => {
+                // Clone session but exclude any accidental large fields
+                const session = { ...h };
+                // Remove transient/internal fields that shouldn't sync
+                delete session.originalIndex;
+                return session;
+            }),
             lastSync: new Date().toISOString(),
             deviceId: getDeviceId()
         };
