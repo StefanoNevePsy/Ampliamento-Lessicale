@@ -158,6 +158,21 @@ function checkCriterion(sessions) {
     return false;
 }
 
+// --- REPERTORIO CHECK (>= 90% on first session) ---
+function checkRepertorio(sessions) {
+    if (sessions.length === 0) return false;
+    const sorted = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
+    return sorted[0].percentage >= 90;
+}
+
+// --- NEAR CRITERION CHECK (last session >= 90%) ---
+function isNearCriterion(sessions) {
+    if (sessions.length === 0) return false;
+    const sorted = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
+    const last = sorted[sorted.length - 1];
+    return last.percentage >= 90;
+}
+
 // ============================================================
 // --- LOAD PATIENT DATA (New Dashboard) ---
 // ============================================================
@@ -628,11 +643,12 @@ function renderTaskStepDetailsCollapsible(s, patientId, sessionIdx, isTD) {
 // ============================================================
 // TAB 3: ATTIVITA - Per-activity charts separated by session type
 // ============================================================
-function renderActivitiesTab(patient) {
+function renderActivitiesTab(patient, sortBy) {
     const content = document.getElementById('report-content');
     if (!content) return;
 
     const history = patient.history;
+    if (!sortBy) sortBy = state._activitiesSortBy || 'recent-desc';
 
     // Group by setName::mode::sessionType
     const groups = {};
@@ -645,23 +661,52 @@ function renderActivitiesTab(patient) {
 
     let chartList = Object.entries(groups).map(([key, sessions]) => {
         const [setName, modeCode, typeGroup] = key.split('::');
+        const sortedSess = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
         const lastDate = Math.max(...sessions.map(s => new Date(s.date).getTime()));
-        return { key, sessions, setName, modeCode, typeGroup, lastDate };
+        const setCat = sessions.find(s => s.setCat)?.setCat || '';
+        const isMastered = checkCriterion(sortedSess);
+        const isRepertorio = checkRepertorio(sortedSess);
+        const lastSession = sortedSess[sortedSess.length - 1];
+        const lastPct = lastSession ? lastSession.percentage : 0;
+        const avgPct = sessions.length > 0 ? Math.round(sessions.reduce((a, s) => a + s.percentage, 0) / sessions.length) : 0;
+        const criterionScore = isMastered ? 2 : isRepertorio ? 1 : 0;
+        return { key, sessions, setName, modeCode, typeGroup, lastDate, setCat, isMastered, isRepertorio, lastPct, avgPct, criterionScore };
     });
 
-    chartList.sort((a, b) => b.lastDate - a.lastDate);
+    // Sort
+    if (sortBy === 'recent-desc') chartList.sort((a, b) => b.lastDate - a.lastDate);
+    else if (sortBy === 'recent-asc') chartList.sort((a, b) => a.lastDate - b.lastDate);
+    else if (sortBy === 'category') chartList.sort((a, b) => (a.setCat || 'zzz').localeCompare(b.setCat || 'zzz') || b.lastDate - a.lastDate);
+    else if (sortBy === 'criterion-desc') chartList.sort((a, b) => b.criterionScore - a.criterionScore || b.lastDate - a.lastDate);
+    else if (sortBy === 'criterion-asc') chartList.sort((a, b) => a.criterionScore - b.criterionScore || b.lastDate - a.lastDate);
+    else if (sortBy === 'pct-desc') chartList.sort((a, b) => b.lastPct - a.lastPct || b.lastDate - a.lastDate);
+    else if (sortBy === 'pct-asc') chartList.sort((a, b) => a.lastPct - b.lastPct || b.lastDate - a.lastDate);
 
-    let html = '';
+    // Sort toolbar
+    let html = `
+    <div style="display:flex; gap:6px; margin-bottom:12px; align-items:center; flex-wrap:wrap; background:rgba(0,0,0,0.2); padding:8px; border-radius:10px;">
+        <span style="font-size:0.75rem; color:var(--text-secondary); margin-right:4px;"><i class="fa-solid fa-sort"></i> Ordina:</span>
+        ${[
+            ['recent-desc', 'Recenti ↓'],
+            ['recent-asc', 'Recenti ↑'],
+            ['category', 'Categoria'],
+            ['criterion-desc', 'Criterio ↓'],
+            ['criterion-asc', 'Criterio ↑'],
+            ['pct-desc', '% ↓'],
+            ['pct-asc', '% ↑']
+        ].map(([val, label]) => `<button onclick="changeActivitiesSort('${val}', '${patient.id}')" style="padding:4px 10px; border-radius:6px; font-size:0.7rem; border:1px solid ${sortBy === val ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)'}; background:${sortBy === val ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.03)'}; color:${sortBy === val ? 'var(--accent-color)' : 'var(--text-secondary)'}; cursor:pointer; font-weight:${sortBy === val ? 'bold' : 'normal'};">${label}</button>`).join('')}
+    </div>`;
 
     chartList.forEach(item => {
-        const { sessions, setName, modeCode, typeGroup } = item;
+        const { sessions, setName, modeCode, typeGroup, setCat, isMastered, isRepertorio, lastPct } = item;
         const modeName = MODES_CONFIG[modeCode] || modeCode;
-        const setCat = sessions.find(s => s.setCat)?.setCat || '';
         sessions.sort((a, b) => new Date(a.date) - new Date(b.date));
-        const isMastered = checkCriterion(sessions);
+        const lastSession = sessions[sessions.length - 1];
+        const nearCrit = !isMastered && isNearCriterion(sessions);
 
-        const badgeHtml = isMastered ?
-            `<span class="criterion-badge"><i class="fa-solid fa-trophy"></i> CRITERIO</span>` : '';
+        let badgeHtml = '';
+        if (isMastered) badgeHtml += `<span class="criterion-badge"><i class="fa-solid fa-trophy"></i> CRITERIO</span>`;
+        if (isRepertorio) badgeHtml += `<span class="repertorio-badge"><i class="fa-solid fa-star"></i> REPERTORIO</span>`;
 
         const typeColor = typeGroup === 'timedelay' ? 'var(--warning-color)' : 'var(--success-color)';
         const typeLbl = getSessionTypeLabel(typeGroup);
@@ -697,8 +742,8 @@ function renderActivitiesTab(patient) {
                 </div>
             </div>
             <div id="${chartId}"></div>
-            ${taskStepsAnalysisHtml}
             <div class="activity-details-panel" style="display:none; margin-top:10px; border-top:1px solid rgba(255,255,255,0.05); padding-top:8px;">
+                ${taskStepsAnalysisHtml}
                 <table style="width:100%; font-size:0.85rem; color:#ccc; border-collapse:collapse;">
                     <tr style="border-bottom:1px solid #444; text-align:left; color:#888; font-size:0.75rem;">
                         <th style="padding:5px;">Data</th><th>Score</th><th>%</th>${typeGroup === 'timedelay' ? '<th>TD</th>' : ''}<th style="text-align:right;">Azioni</th>
