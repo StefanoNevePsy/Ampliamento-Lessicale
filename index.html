@@ -197,10 +197,15 @@
             <button class="btn btn-danger" onclick="closePatients()">Chiudi</button>
         </div>
         <div class="modal-body">
-            <div style="display:flex; gap:10px; margin-bottom:20px;">
-                <select id="patient-select" onchange="loadPatientData(this.value)" style="flex:1;">
-                    <option value="">-- Seleziona Paziente --</option>
-                </select>
+            <div style="display:flex; gap:10px; margin-bottom:20px; align-items:center;">
+                <div class="custom-dropdown" id="patient-modal-dropdown" style="flex:1;">
+                    <button class="custom-dropdown-trigger" id="patient-modal-trigger" onclick="togglePatientModalDropdown()">
+                        <span id="patient-modal-avatar" class="patient-avatar-mini"><i class="fa-solid fa-user"></i></span>
+                        <span id="patient-modal-label">-- Seleziona Paziente --</span>
+                        <i class="fa-solid fa-chevron-down custom-dropdown-arrow"></i>
+                    </button>
+                    <div class="custom-dropdown-panel" id="patient-modal-panel"></div>
+                </div>
                 <button class="btn btn-primary" onclick="createNewPatient()">+ Nuovo</button>
             </div>
             <div id="patient-dashboard" class="hidden">

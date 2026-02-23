@@ -1005,6 +1005,34 @@ const MODE_ICONS = {
     topologia: 'fa-map-pin', sequenze: 'fa-arrow-right-arrow-left', categorizzazione: 'fa-sitemap',
     zoom: 'fa-search-plus', quaderno: 'fa-book-open', quaderno_task: 'fa-list-check'
 };
+
+// Curated FA icon list for icon picker
+const FA_ICON_CHOICES = [
+    'fa-hand-pointer','fa-bolt','fa-comment-dots','fa-table-cells','fa-volume-high','fa-clone',
+    'fa-magnifying-glass','fa-comments','fa-shuffle','fa-random','fa-ban','fa-map-pin',
+    'fa-arrow-right-arrow-left','fa-sitemap','fa-search-plus','fa-book-open','fa-list-check',
+    'fa-star','fa-heart','fa-brain','fa-lightbulb','fa-puzzle-piece','fa-music','fa-palette',
+    'fa-image','fa-camera','fa-eye','fa-ear-listen','fa-hand','fa-hands','fa-gamepad',
+    'fa-dice','fa-shapes','fa-icons','fa-wand-magic-sparkles','fa-paintbrush','fa-pen',
+    'fa-book','fa-graduation-cap','fa-chalkboard','fa-school','fa-apple-whole','fa-tree',
+    'fa-sun','fa-moon','fa-cloud','fa-house','fa-car','fa-dog','fa-cat','fa-fish',
+    'fa-bug','fa-feather','fa-leaf','fa-fire','fa-droplet','fa-snowflake','fa-mountain',
+    'fa-basket-shopping','fa-utensils','fa-shirt','fa-person','fa-people-group','fa-child',
+    'fa-face-smile','fa-face-laugh','fa-face-surprise','fa-clock','fa-trophy','fa-medal',
+    'fa-flag','fa-bullseye','fa-chart-line','fa-chart-bar','fa-circle-check','fa-thumbs-up',
+    'fa-rocket','fa-gear','fa-wrench','fa-scissors','fa-ruler','fa-calculator',
+    'fa-phone','fa-envelope','fa-globe','fa-map','fa-location-dot','fa-compass',
+    'fa-bicycle','fa-plane','fa-train','fa-ship','fa-futbol','fa-baseball','fa-basketball',
+    'fa-volleyball','fa-dumbbell','fa-guitar','fa-drum','fa-microphone','fa-headphones',
+    'fa-tv','fa-desktop','fa-tablet','fa-keyboard','fa-robot','fa-user-astronaut'
+];
+
+// Get effective icon for a mode (custom from layout, or default)
+function getModeIcon(modeKey) {
+    const layout = getActivityLayout();
+    if (layout.modeIcons && layout.modeIcons[modeKey]) return layout.modeIcons[modeKey];
+    return MODE_ICONS[getModeEngine(modeKey)] || 'fa-puzzle-piece';
+}
 const DEFAULT_GROUP_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899'];
 
 // --- RENDER MODE SELECT (custom dropdown + hidden select sync) ---
@@ -1045,7 +1073,7 @@ function renderModeSelect() {
             if (!MODES_CONFIG[modeKey] && !BUILTIN_MODES[modeKey]) return;
             const isSelected = select.value === modeKey;
             const emoji = (layout.modeEmojis && layout.modeEmojis[modeKey]) || '';
-            const iconClass = MODE_ICONS[getModeEngine(modeKey)] || 'fa-puzzle-piece';
+            const iconClass = getModeIcon(modeKey);
             const iconHtml = emoji
                 ? `<div class="mode-dd-icon" style="font-size:1.1rem;">${emoji}</div>`
                 : `<div class="mode-dd-icon" style="color:${color};"><i class="fa-solid ${iconClass}"></i></div>`;
@@ -1176,6 +1204,7 @@ function renderActivityLayoutBody() {
             const emoji = emojis[mode] || '';
             const isCustom = !!customModes[mode];
             const engineLabel = isCustom ? ` <span style="font-size:0.65rem; color:var(--text-secondary); opacity:0.7;">(${BUILTIN_MODES[customModes[mode].engine]?.label || customModes[mode].engine})</span>` : '';
+            const modeIconClass = (_editingLayout.modeIcons && _editingLayout.modeIcons[mode]) || MODE_ICONS[getModeEngine(mode)] || 'fa-puzzle-piece';
 
             // Build move-to options
             const moveOpts = groups.map((g, idx) => idx !== gi
@@ -1183,6 +1212,9 @@ function renderActivityLayoutBody() {
 
             html += `
                 <div style="display:flex; align-items:center; gap:5px; padding:5px 6px; background:rgba(255,255,255,0.03); border-radius:8px; ${isCustom ? 'border-left:3px solid var(--accent-color);' : ''}">
+                    <button class="btn btn-ghost" onclick="openModeIconPicker('${mode}')" style="width:32px; height:32px; padding:0; font-size:0.9rem; color:${groupColor}; display:flex; align-items:center; justify-content:center; border-radius:6px;" title="Cambia icona">
+                        <i class="fa-solid ${modeIconClass}"></i>
+                    </button>
                     <input type="text" value="${emoji}" onchange="updateModeEmoji('${mode}', this.value)"
                            maxlength="4" style="width:34px; text-align:center; font-size:1rem; padding:3px; border-radius:6px;" placeholder="&#128204;" title="Emoji">
                     <span style="flex:1; font-size:0.82rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${label}${engineLabel}</span>
@@ -1288,6 +1320,45 @@ window.deleteCustomMode = (modeKey, gi, mi) => {
     _editingLayout.groups[gi].modes.splice(mi, 1);
     if (_editingLayout.customModes) delete _editingLayout.customModes[modeKey];
     if (_editingLayout.modeEmojis) delete _editingLayout.modeEmojis[modeKey];
+    if (_editingLayout.modeIcons) delete _editingLayout.modeIcons[modeKey];
+    renderActivityLayoutBody();
+};
+
+// --- MODE ICON PICKER ---
+window.openModeIconPicker = (modeKey) => {
+    const currentIcon = (_editingLayout.modeIcons && _editingLayout.modeIcons[modeKey]) || MODE_ICONS[getModeEngine(modeKey)] || 'fa-puzzle-piece';
+    const iconsHtml = FA_ICON_CHOICES.map(ic =>
+        `<button onclick="selectModeIcon('${modeKey}','${ic}')" style="width:40px; height:40px; display:inline-flex; align-items:center; justify-content:center; border:1px solid ${ic === currentIcon ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)'}; border-radius:8px; background:${ic === currentIcon ? 'rgba(99,102,241,0.25)' : 'rgba(255,255,255,0.03)'}; color:${ic === currentIcon ? 'var(--accent-color)' : '#ccc'}; cursor:pointer; font-size:1rem; transition:all 0.15s;" onmouseover="this.style.background='rgba(99,102,241,0.15)'" onmouseout="this.style.background='${ic === currentIcon ? 'rgba(99,102,241,0.25)' : 'rgba(255,255,255,0.03)'}'" title="${ic}">
+            <i class="fa-solid ${ic}"></i>
+        </button>`
+    ).join('');
+
+    const html = `
+    <div style="position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:20000; display:flex; align-items:center; justify-content:center; padding:20px;" id="icon-picker-overlay" onclick="if(event.target===this)this.remove()">
+        <div style="background:#1e1e2f; border-radius:16px; padding:20px; max-width:500px; width:100%; max-height:80vh; overflow-y:auto; border:1px solid rgba(255,255,255,0.1);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3 style="margin:0;"><i class="fa-solid fa-icons"></i> Scegli Icona</h3>
+                <button class="btn btn-ghost" onclick="selectModeIcon('${modeKey}','')" style="font-size:0.75rem; padding:4px 10px;">
+                    <i class="fa-solid fa-rotate-left"></i> Default
+                </button>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:6px; justify-content:center;">
+                ${iconsHtml}
+            </div>
+        </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+};
+
+window.selectModeIcon = (modeKey, iconClass) => {
+    if (!_editingLayout.modeIcons) _editingLayout.modeIcons = {};
+    if (iconClass) {
+        _editingLayout.modeIcons[modeKey] = iconClass;
+    } else {
+        delete _editingLayout.modeIcons[modeKey];
+    }
+    const overlay = document.getElementById('icon-picker-overlay');
+    if (overlay) overlay.remove();
     renderActivityLayoutBody();
 };
 

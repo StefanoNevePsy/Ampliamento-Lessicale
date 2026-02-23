@@ -595,6 +595,14 @@ async function mergeReceivedData(data) {
             if (!local.modeEmojis) local.modeEmojis = {};
             Object.assign(local.modeEmojis, data.activityLayout.modeEmojis);
         }
+        if (data.activityLayout.modeIcons) {
+            if (!local.modeIcons) local.modeIcons = {};
+            Object.assign(local.modeIcons, data.activityLayout.modeIcons);
+        }
+        if (data.activityLayout.groupColors) {
+            if (!local.groupColors) local.groupColors = {};
+            Object.assign(local.groupColors, data.activityLayout.groupColors);
+        }
         saveActivityLayout(local);
         renderModeSelect();
     }

@@ -142,11 +142,96 @@ function resizeImage(dataUrl, maxSize) {
 }
 
 // --- PATIENT MODAL ---
+let _patientModalSelectedId = null;
+
+function renderPatientModalDropdown(selectedId) {
+    _patientModalSelectedId = selectedId || null;
+    const panel = document.getElementById('patient-modal-panel');
+    const label = document.getElementById('patient-modal-label');
+    const avatar = document.getElementById('patient-modal-avatar');
+    if (!panel) return;
+
+    const selP = selectedId ? state.patients.find(p => p.id === selectedId) : null;
+
+    // Group by category
+    const catMap = {};
+    state.patients.forEach(p => {
+        const cat = p.category || '';
+        if (!catMap[cat]) catMap[cat] = [];
+        catMap[cat].push(p);
+    });
+
+    let html = '';
+    for (const [catName, catPatients] of Object.entries(catMap)) {
+        if (catName) {
+            html += `<div class="mode-group-header" style="color:var(--success-color); top:0;">
+                <span class="mode-group-dot" style="background:var(--success-color);"></span>${catName}
+            </div>`;
+        }
+        catPatients.forEach(p => {
+            const isSel = selectedId === p.id;
+            const sessCount = (p.history || []).length;
+            const photoHtml = p.photo
+                ? `<div class="patient-dd-avatar"><img src="${p.photo}" alt=""></div>`
+                : `<div class="patient-dd-avatar"><i class="fa-solid fa-user"></i></div>`;
+            html += `<div class="patient-dd-item${isSel ? ' selected' : ''}" onclick="selectPatientModal('${p.id}')">
+                ${photoHtml}
+                <div class="patient-dd-info">
+                    <div class="patient-dd-name">${p.name}</div>
+                    ${p.category ? `<div class="patient-dd-cat">${p.category}</div>` : ''}
+                    ${sessCount > 0 ? `<div class="patient-dd-cat">${sessCount} sessioni</div>` : ''}
+                </div>
+            </div>`;
+        });
+    }
+    if (state.patients.length === 0) {
+        html = '<div style="padding:20px; text-align:center; color:var(--text-secondary);">Nessun paziente</div>';
+    }
+    panel.innerHTML = html;
+
+    if (selP) {
+        label.textContent = selP.name;
+        avatar.innerHTML = selP.photo ? `<img src="${selP.photo}" alt="">` : '<i class="fa-solid fa-user"></i>';
+    } else {
+        label.textContent = '-- Seleziona Paziente --';
+        avatar.innerHTML = '<i class="fa-solid fa-user"></i>';
+    }
+}
+
+window.togglePatientModalDropdown = () => {
+    const trigger = document.getElementById('patient-modal-trigger');
+    const panel = document.getElementById('patient-modal-panel');
+    if (!trigger || !panel) return;
+    if (panel.classList.contains('open')) {
+        trigger.classList.remove('open'); panel.classList.remove('open');
+    } else {
+        trigger.classList.add('open'); panel.classList.add('open');
+    }
+};
+
+window.selectPatientModal = (pid) => {
+    const trigger = document.getElementById('patient-modal-trigger');
+    const panel = document.getElementById('patient-modal-panel');
+    if (trigger) trigger.classList.remove('open');
+    if (panel) panel.classList.remove('open');
+    renderPatientModalDropdown(pid);
+    loadPatientData(pid);
+};
+
+// Close modal dropdown on outside click
+document.addEventListener('click', (e) => {
+    const dd = document.getElementById('patient-modal-dropdown');
+    if (dd && !dd.contains(e.target)) {
+        const t = document.getElementById('patient-modal-trigger');
+        const p = document.getElementById('patient-modal-panel');
+        if (t) t.classList.remove('open');
+        if (p) p.classList.remove('open');
+    }
+});
+
 window.openPatients = async () => {
     state.patients = await DB.getAllPatients();
-    const sel = document.getElementById('patient-select');
-    sel.innerHTML = '<option value="">-- Seleziona Paziente --</option>' +
-        state.patients.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+    renderPatientModalDropdown(_patientModalSelectedId);
     document.getElementById('modal-patients').classList.add('open');
 };
 
@@ -159,10 +244,7 @@ window.createNewPatient = async () => {
         await DB.savePatient(newPatient);
         state.patients = await DB.getAllPatients();
         populateGlobalPatientSelect();
-        const sel = document.getElementById('patient-select');
-        sel.innerHTML = '<option value="">-- Seleziona Paziente --</option>' +
-            state.patients.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-        sel.value = newPatient.id;
+        renderPatientModalDropdown(newPatient.id);
         loadPatientData(newPatient.id);
     }
 };
@@ -177,9 +259,7 @@ window.renamePatient = async (patientId) => {
     await DB.savePatient(p);
     state.patients = await DB.getAllPatients();
     populateGlobalPatientSelect();
-    const sel = document.getElementById('patient-select');
-    sel.innerHTML = '<option value="">-- Seleziona Paziente --</option>' +
-        state.patients.map(pt => `<option value="${pt.id}" ${pt.id === patientId ? 'selected' : ''}>${pt.name}</option>`).join('');
+    renderPatientModalDropdown(patientId);
     document.getElementById('patient-title').innerText = `Cartella: ${p.name}`;
 };
 
@@ -206,9 +286,7 @@ window.deletePatient = async (patientId) => {
     state.patients = await DB.getAllPatients();
     if (state.activePatientId === patientId) state.activePatientId = null;
     populateGlobalPatientSelect();
-    const sel = document.getElementById('patient-select');
-    sel.innerHTML = '<option value="">-- Seleziona Paziente --</option>' +
-        state.patients.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+    renderPatientModalDropdown(null);
     document.getElementById('patient-dashboard').classList.add('hidden');
 };
 
@@ -483,6 +561,7 @@ function renderOverviewTab(patient) {
 
     if (lastSession) {
         const modeName = MODES_CONFIG[lastSession.mode] || lastSession.mode;
+        const lastModeIcon = (typeof getModeIcon === 'function') ? getModeIcon(lastSession.mode) : 'fa-puzzle-piece';
         html += `
         <div class="chart-wrapper" style="margin-bottom:15px; border-left:4px solid var(--accent-color);">
             <h4 style="margin:0 0 8px 0; color:var(--accent-color); font-size:0.9rem;">
@@ -490,7 +569,7 @@ function renderOverviewTab(patient) {
             </h4>
             <div style="display:flex; gap:15px; flex-wrap:wrap; font-size:0.9rem;">
                 <div><span style="color:var(--text-secondary);">Data:</span> <b>${formatDateEU(lastSession.date)}</b></div>
-                <div><span style="color:var(--text-secondary);">Attivit&agrave;:</span> <b>${modeName}</b></div>
+                <div><span style="color:var(--text-secondary);">Attivit&agrave;:</span> <b><i class="fa-solid ${lastModeIcon}" style="font-size:0.8rem; margin-right:3px; opacity:0.7;"></i>${modeName}</b></div>
                 <div><span style="color:var(--text-secondary);">Set:</span> <b>${lastSession.setName}</b>${lastSession.setCat ? ` <span style="color:var(--text-secondary); font-size:0.8em;">(${lastSession.setCat})</span>` : ''}</div>
                 <div><span style="color:var(--text-secondary);">Score:</span> <b style="color:${lastSession.percentage >= 90 ? 'var(--success-color)' : 'white'}">${lastSession.correct}/${lastSession.total} (${lastSession.percentage}%)</b></div>
             </div>
@@ -662,14 +741,25 @@ function renderDatesTab(patient) {
             <div class="date-detail-panel" style="display:none; padding:0 15px 12px; border-top:1px solid rgba(255,255,255,0.05);">
                 ${sessions.map(s => {
             const modeName = MODES_CONFIG[s.mode] || s.mode;
+            const dayModeIcon = (typeof getModeIcon === 'function') ? getModeIcon(s.mode) : 'fa-puzzle-piece';
             const typeTag = s.sessionType === 'timedelay' ? `<span style="font-size:0.6rem; background:rgba(245,158,11,0.2); color:var(--warning-color); padding:1px 5px; border-radius:4px; margin-left:4px;">TD${s.timeDelaySeconds || ''}s</span>` : '';
             const activityKey = encodeURIComponent(s.setName + '::' + s.mode + '::' + getSessionTypeGroup(s));
+            // Set thumbnail for Giornate
+            let dayThumb = '';
+            if (s.setId && state.savedSets) {
+                const daySet = state.savedSets.find(ss => ss.id === s.setId);
+                if (daySet && daySet.items && daySet.items.length > 0) {
+                    const fi = daySet.items.find(it => it.img || it.image);
+                    if (fi) dayThumb = `<img src="${fi.img || fi.image}" style="width:22px; height:22px; border-radius:4px; object-fit:cover; border:1px solid rgba(255,255,255,0.1); flex-shrink:0;" alt="">`;
+                }
+            }
             return `
                     <div style="margin-top:8px; border:1px solid rgba(255,255,255,0.05); border-radius:10px; overflow:hidden;">
                         <div onclick="toggleDayActivityChart(this, '${patient.id}', '${activityKey}')" style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; cursor:pointer; transition:background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background=''">
                             <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:0;">
                                 <i class="fa-solid fa-chevron-right day-act-icon" style="transition:transform 0.2s; font-size:0.6rem; color:#555;"></i>
-                                <span style="background:rgba(99,102,241,0.15); padding:2px 8px; border-radius:6px; font-size:0.7rem; color:var(--accent-color); flex-shrink:0;">${modeName}</span>
+                                ${dayThumb}
+                                <span style="background:rgba(99,102,241,0.15); padding:2px 8px; border-radius:6px; font-size:0.7rem; color:var(--accent-color); flex-shrink:0; display:inline-flex; align-items:center; gap:4px;"><i class="fa-solid ${dayModeIcon}" style="font-size:0.65rem;"></i>${modeName}</span>
                                 <span style="font-size:0.9rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.setName}</span>${s.setCat ? `<span style="font-size:0.65rem; color:var(--text-secondary); background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:4px; flex-shrink:0;">${s.setCat}</span>` : ''}${typeTag}
                             </div>
                             <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
@@ -875,6 +965,23 @@ function renderActivitiesTab(patient, sortBy) {
         const typeLbl = getSessionTypeLabel(typeGroup);
         const chartId = 'activity-chart-' + item.key.replace(/[^a-zA-Z0-9]/g, '_');
 
+        // Mode icon
+        const modeIconClass = (typeof getModeIcon === 'function') ? getModeIcon(modeCode) : 'fa-puzzle-piece';
+
+        // Set thumbnail from first item image (if set still exists)
+        let setThumbHtml = '';
+        const setId = sessions.find(s => s.setId)?.setId;
+        if (setId && state.savedSets) {
+            const setObj = state.savedSets.find(ss => ss.id === setId);
+            if (setObj && setObj.items && setObj.items.length > 0) {
+                const firstImg = setObj.items.find(it => it.img || it.image);
+                if (firstImg) {
+                    const imgSrc = firstImg.img || firstImg.image;
+                    setThumbHtml = `<img src="${imgSrc}" style="width:28px; height:28px; border-radius:6px; object-fit:cover; border:1px solid rgba(255,255,255,0.1); flex-shrink:0;" alt="">`;
+                }
+            }
+        }
+
         // Check if this is a task analysis group with step data
         const isTaskAnalysis = modeCode === 'quaderno_task';
         const sessionsWithSteps = sessions.filter(s => s.taskSteps && s.taskSteps.length > 0);
@@ -898,7 +1005,9 @@ function renderActivitiesTab(patient, sortBy) {
         html += `
         <div class="chart-wrapper" style="margin-bottom:12px; border-left:3px solid ${typeColor};">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                <h4 style="margin:0; color:var(--accent-color); font-size:0.95rem;">
+                <h4 style="margin:0; color:var(--accent-color); font-size:0.95rem; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                    ${setThumbHtml}
+                    <i class="fa-solid ${modeIconClass}" style="font-size:0.85rem; opacity:0.7;"></i>
                     ${setName} ${setCat ? `<span style="color:var(--text-secondary); font-size:0.7em; background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:4px;">${setCat}</span>` : ''}<span style="color:#666; font-size:0.8em;">(${modeName})</span> ${badgeHtml} ${fluenzaObiettivoHtml}
                 </h4>
                 <div style="display:flex; align-items:center; gap:6px;">
