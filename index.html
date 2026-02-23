@@ -69,9 +69,13 @@
             <!-- Set selector (hidden for pool modes) -->
             <div class="select-wrapper" style="flex: 2;" id="set-selector-wrapper">
                 <label><i class="fa-solid fa-layer-group"></i> Set Disponibili</label>
-                <select id="category-select" onchange="loadSelectedSet(this.value)">
-                    <option value="" disabled selected>-- Scegli un Set --</option>
-                </select>
+                <div class="custom-dropdown" id="set-dropdown">
+                    <button class="custom-dropdown-trigger" id="set-dropdown-trigger" onclick="toggleSetDropdown()">
+                        <span id="set-dropdown-label">-- Scegli un Set --</span>
+                        <i class="fa-solid fa-chevron-down custom-dropdown-arrow"></i>
+                    </button>
+                    <div class="custom-dropdown-panel" id="set-dropdown-panel"></div>
+                </div>
             </div>
 
             <!-- Tag selector (shown for pool modes) -->

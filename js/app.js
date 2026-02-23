@@ -124,6 +124,8 @@ window.filterSetsByMode = function () {
             </div>`;
         state.items = [];
         state.activeSetId = null;
+        const lbl = document.getElementById('set-dropdown-label');
+        if (lbl) lbl.textContent = '-- Scegli un Set --';
     }
 };
 
@@ -165,14 +167,17 @@ window.togglePoolTag = (tag) => {
     renderPoolTagSelector();
 };
 
-// --- DROPDOWN WITH INDICATORS ---
+// --- CUSTOM SET DROPDOWN ---
 function updateDropdown(sets) {
-    const select = document.getElementById('category-select');
+    const panel = document.getElementById('set-dropdown-panel');
+    const trigger = document.getElementById('set-dropdown-trigger');
+    const label = document.getElementById('set-dropdown-label');
+    if (!panel) return;
+
     const currentMode = document.getElementById('mode-select').value;
     const activePatient = state.activePatientId ? state.patients.find(p => p.id === state.activePatientId) : null;
 
-    select.innerHTML = '<option value="" disabled selected>-- Scegli un Set --</option>';
-
+    // Group by category
     const categories = {};
     sets.forEach(s => {
         const cat = s.category || "Altri";
@@ -180,48 +185,114 @@ function updateDropdown(sets) {
         categories[cat].push(s);
     });
 
+    let html = '';
     for (const [catName, catSets] of Object.entries(categories)) {
-        const group = document.createElement('optgroup');
-        group.label = catName;
-
+        html += `<div class="set-dropdown-group-label">${catName}</div>`;
         catSets.forEach(s => {
-            const opt = document.createElement('option');
-            opt.value = s.id;
-
+            const isSelected = state.activeSetId === s.id;
             const missingCount = s.items.filter(i => !i.url).length;
-            const warningTag = missingCount > 0 ? ` \u26A0\uFE0F${missingCount}` : '';
 
-            let statusTag = '';
+            // Get first item thumbnail
+            const firstImg = s.items.find(i => i.url);
+            const thumbHtml = firstImg
+                ? `<div class="set-item-thumb"><img src="${firstImg.url}" loading="lazy" alt=""></div>`
+                : `<div class="set-item-thumb"><i class="fa-solid fa-images"></i></div>`;
+
+            // Build badges
+            let badges = '';
+            let pctValue = null;
             if (activePatient && activePatient.history) {
                 const sessions = activePatient.history.filter(h => h.setId === s.id && h.mode === currentMode);
                 if (sessions.length > 0) {
                     const isMastered = typeof checkCriterion === 'function' && checkCriterion(sessions);
                     const isRepertorio = typeof checkRepertorio === 'function' && checkRepertorio(sessions);
-                    if (isMastered) {
-                        statusTag = ' \uD83C\uDFC6';
-                    } else if (isRepertorio) {
-                        statusTag = ' \u2B50';
-                    }
-                    // Last session percentage
                     const sorted = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
                     const last = sorted[sorted.length - 1];
-                    if (last && last.percentage != null) {
-                        statusTag += ` ${Math.round(last.percentage)}%`;
+
+                    if (isMastered) {
+                        badges += '<span class="set-item-badge badge-criterion">\uD83C\uDFC6 Criterio</span>';
+                    } else if (isRepertorio) {
+                        badges += '<span class="set-item-badge badge-repertorio">\u2B50 Repertorio</span>';
                     }
-                    // Near criterion indicator (last >= 90% but not yet mastered)
                     if (!isMastered && typeof isNearCriterion === 'function' && isNearCriterion(sessions)) {
-                        statusTag += '\u2191';
+                        badges += '<span class="set-item-badge badge-near">\u2191 Vicino</span>';
+                    }
+                    if (last && last.percentage != null) {
+                        pctValue = Math.round(last.percentage);
+                        const pctColor = pctValue >= 90 ? '#10b981' : pctValue >= 70 ? '#f59e0b' : '#ef4444';
+                        badges += `<span class="set-item-badge badge-pct" style="color:${pctColor}">${pctValue}%</span>`;
                     }
                 }
             }
+            if (missingCount > 0) {
+                badges += `<span class="set-item-badge badge-warning">\u26A0 ${missingCount}</span>`;
+            }
 
-            opt.text = `${s.name}${warningTag}${statusTag}`;
-            if (state.activeSetId === s.id) opt.selected = true;
-            group.appendChild(opt);
+            html += `<div class="set-dropdown-item${isSelected ? ' selected' : ''}" data-set-id="${s.id}" onclick="selectSetFromDropdown('${s.id}')">
+                ${thumbHtml}
+                <div class="set-item-info">
+                    <div class="set-item-name">${s.name}</div>
+                    <div class="set-item-meta">
+                        <span class="set-item-count">${s.items.length} stimoli</span>
+                        ${badges}
+                    </div>
+                </div>
+            </div>`;
         });
-        select.appendChild(group);
+    }
+
+    if (html === '') {
+        html = '<div style="padding:20px; text-align:center; color:var(--text-secondary); font-size:0.85rem;">Nessun set compatibile</div>';
+    }
+
+    panel.innerHTML = html;
+
+    // Update trigger label
+    if (state.activeSetId) {
+        const activeSet = sets.find(s => s.id === state.activeSetId);
+        if (activeSet) {
+            label.textContent = activeSet.name;
+        } else {
+            label.textContent = '-- Scegli un Set --';
+        }
+    } else {
+        label.textContent = '-- Scegli un Set --';
     }
 }
+
+window.toggleSetDropdown = () => {
+    const trigger = document.getElementById('set-dropdown-trigger');
+    const panel = document.getElementById('set-dropdown-panel');
+    if (!trigger || !panel) return;
+    const isOpen = panel.classList.contains('open');
+    if (isOpen) {
+        closeSetDropdown();
+    } else {
+        trigger.classList.add('open');
+        panel.classList.add('open');
+        // Scroll selected item into view
+        const sel = panel.querySelector('.set-dropdown-item.selected');
+        if (sel) setTimeout(() => sel.scrollIntoView({ block: 'nearest' }), 50);
+    }
+};
+
+function closeSetDropdown() {
+    const trigger = document.getElementById('set-dropdown-trigger');
+    const panel = document.getElementById('set-dropdown-panel');
+    if (trigger) trigger.classList.remove('open');
+    if (panel) panel.classList.remove('open');
+}
+
+window.selectSetFromDropdown = (setId) => {
+    closeSetDropdown();
+    loadSelectedSet(setId);
+};
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+    const dd = document.getElementById('set-dropdown');
+    if (dd && !dd.contains(e.target)) closeSetDropdown();
+});
 
 // --- LOAD SET FROM DROPDOWN ---
 window.loadSelectedSet = async (setId) => {
@@ -229,6 +300,15 @@ window.loadSelectedSet = async (setId) => {
     if (s) {
         state.activeSetId = setId;
         state.items = JSON.parse(JSON.stringify(s.items));
+        // Update custom dropdown label & selection highlight
+        const label = document.getElementById('set-dropdown-label');
+        if (label) label.textContent = s.name;
+        const panel = document.getElementById('set-dropdown-panel');
+        if (panel) {
+            panel.querySelectorAll('.set-dropdown-item').forEach(el => {
+                el.classList.toggle('selected', el.dataset.setId === setId);
+            });
+        }
         window.startGame();
     }
 };
@@ -675,8 +755,9 @@ window.loadSet = async (id) => {
     if (s) {
         state.activeSetId = id;
         state.items = JSON.parse(JSON.stringify(s.items));
-        const select = document.getElementById('category-select');
-        if (select) select.value = id;
+        // Update custom dropdown label
+        const label = document.getElementById('set-dropdown-label');
+        if (label) label.textContent = s.name;
         window.closeLibrary();
         window.startGame();
     }
