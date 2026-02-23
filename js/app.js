@@ -927,30 +927,28 @@ window.moveSetInCategory = async (setId, dir) => {
     if (!s) return;
     const cat = s.category || 'Altri';
 
-    // Get all sets in same category, sorted by sortOrder
+    // Get all sets in same category, sorted by current sortOrder then name
     const catSets = state.savedSets
         .filter(x => (x.category || 'Altri') === cat)
-        .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || a.name.localeCompare(b.name));
+        .sort((a, b) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999) || a.name.localeCompare(b.name));
+
+    // Always normalize to clean sequential integers first
+    catSets.forEach((cs, i) => { cs.sortOrder = i; });
 
     const idx = catSets.findIndex(x => x.id === setId);
     const newIdx = idx + dir;
     if (newIdx < 0 || newIdx >= catSets.length) return;
 
-    // Swap sort orders
-    const swap = catSets[newIdx];
-    const orderA = s.sortOrder || 0;
-    const orderB = swap.sortOrder || 0;
-    // If they have the same order, assign sequential orders first
-    if (orderA === orderB) {
-        catSets.forEach((cs, i) => { cs.sortOrder = i; });
-    }
-    // Now swap
-    const tmpOrder = s.sortOrder;
-    s.sortOrder = swap.sortOrder;
-    swap.sortOrder = tmpOrder;
+    // Swap the two adjacent items' sortOrder
+    const other = catSets[newIdx];
+    const tmp = s.sortOrder;
+    s.sortOrder = other.sortOrder;
+    other.sortOrder = tmp;
 
-    await DB.saveSet(s);
-    await DB.saveSet(swap);
+    // Save all sets in category (normalized orders) to DB
+    for (const cs of catSets) {
+        await DB.saveSet(cs);
+    }
     state.savedSets = await DB.getAllSets();
     renderLibList();
 };

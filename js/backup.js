@@ -7,7 +7,7 @@ function getTimestampedFilename() {
     const y = now.getFullYear();
     const h = String(now.getHours()).padStart(2, '0');
     const min = String(now.getMinutes()).padStart(2, '0');
-    return `Ampliamento_Lessicale_${d}_${m}_${y}_${h}_${min}.json`;
+    return `Terapia_Attiva_${d}_${m}_${y}_${h}_${min}.json`;
 }
 
 async function downloadJSON(data, filename) {
@@ -18,7 +18,7 @@ async function downloadJSON(data, filename) {
     try {
         const file = new File([blob], filename, { type: 'application/json' });
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
-            await navigator.share({ title: 'Backup Stimolatore', files: [file] });
+            await navigator.share({ title: 'Backup Terapia Attiva', files: [file] });
             return;
         }
     } catch (e) {
@@ -174,7 +174,7 @@ window.executeSelectiveExport = async () => {
 
         const dateStr = new Date().toLocaleDateString('it-IT').replace(/\//g, '-');
         const timeStr = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }).replace(/:/g, '-');
-        const filename = `Backup_Stimolatore_${dateStr}_${timeStr}.json`;
+        const filename = `Backup_TerapiaAttiva_${dateStr}_${timeStr}.json`;
 
         await downloadJSON(backup, filename);
         document.getElementById('modal-export-select').classList.remove('open');
@@ -238,6 +238,10 @@ function mergeSets(local, incoming) {
     }
     if (incoming.modes && incoming.modes.length > 0) {
         merged.modes = [...new Set([...(merged.modes || []), ...incoming.modes])];
+    }
+    // Preserve sortOrder from incoming if local doesn't have one
+    if (incoming.sortOrder != null && merged.sortOrder == null) {
+        merged.sortOrder = incoming.sortOrder;
     }
     return merged;
 }
