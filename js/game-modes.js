@@ -1854,7 +1854,11 @@ window.nextZoomItem = () => {
 // --- QUADERNO (Manual scoring + Task Analysis) ---
 // ============================================================
 function renderQuaderno(stage) {
-    const savedLists = getSavedQuadernoLists();
+    // Gather saved quaderno sets from IndexedDB
+    const quadernoSets = state.savedSets.filter(s => s.modes && (s.modes.includes('quaderno') || s.modes.includes('quaderno_task')));
+    // Also check localStorage for legacy lists not yet migrated
+    const legacyLists = getSavedQuadernoLists();
+    const hasLegacy = legacyLists.some(l => !quadernoSets.find(s => s.name === l.name));
 
     stage.innerHTML = `
     <div style="height:100%; display:flex; flex-direction:column; overflow:hidden;">
@@ -1867,20 +1871,27 @@ function renderQuaderno(stage) {
                 <button class="btn btn-ghost" onclick="openQuadernoSheet('task')" style="padding:8px 16px; font-size:0.9rem; border-color:var(--warning-color); color:var(--warning-color);">
                     <i class="fa-solid fa-list-check"></i> Task Analysis
                 </button>
-                ${savedLists.length > 0 ? `
-                    <select id="quaderno-load-select" onchange="loadQuadernoList(this.value)" style="padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.85rem; max-width:200px;">
-                        <option value="">-- Carica Lista Salvata --</option>
-                        ${savedLists.map(l => `<option value="${l.name}">${l.name} (${l.type === 'task' ? 'Task' : 'Generale'})</option>`).join('')}
-                    </select>
-                ` : ''}
             </div>
         </div>
+        <!-- Saved lists area -->
+        ${quadernoSets.length > 0 || hasLegacy ? `
+        <div style="padding:10px 12px; border-bottom:1px solid #ffffff08; flex-shrink:0; overflow-x:auto;">
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                ${quadernoSets.map(s => {
+                    const isTask = s.modes.includes('quaderno_task');
+                    return `<button class="btn btn-ghost" onclick="loadQuadernoSet('${s.id}')" style="padding:6px 12px; font-size:0.8rem; white-space:nowrap; ${isTask ? 'border-color:var(--warning-color); color:var(--warning-color);' : ''}">
+                        <i class="fa-solid ${isTask ? 'fa-list-check' : 'fa-clipboard-list'}" style="margin-right:4px;"></i>${s.name}
+                        <span style="opacity:0.5; font-size:0.7rem; margin-left:4px;">${s.items.length}</span>
+                    </button>`;
+                }).join('')}
+            </div>
+        </div>` : ''}
         <!-- Content area -->
         <div id="quaderno-content" style="flex:1; overflow-y:auto; padding:15px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--text-secondary);">
             <i class="fa-solid fa-book-open fa-3x" style="margin-bottom:15px; opacity:0.3;"></i>
             <p style="text-align:center;">Scegli <b>Quaderno Generale</b> per registrare attivit&agrave; manuali<br>
             o <b>Task Analysis</b> per sequenze operazionalizzate.</p>
-            ${savedLists.length > 0 ? '<p style="font-size:0.8rem; opacity:0.6;">Oppure carica una lista salvata dal menu sopra.</p>' : ''}
+            ${quadernoSets.length > 0 ? '<p style="font-size:0.8rem; opacity:0.6;">Oppure carica una lista salvata dai pulsanti sopra.</p>' : ''}
         </div>
     </div>`;
 }
@@ -1894,18 +1905,20 @@ window.openQuadernoSheet = (type) => {
         state._quadernoType = 'general';
         state._quadernoRows = [];
         state._quadernoName = '';
+        state._quadernoSetId = null;
         renderQuadernoGeneral(content);
     } else if (type === 'task') {
         state._quadernoType = 'task';
         state._quadernoSteps = [];
         state._quadernoName = '';
+        state._quadernoSetId = null;
         state._taskCurrentStep = 0;
         state._taskCycleCount = 0;
         renderQuadernoTask(content);
     }
 };
 
-// --- Load saved list ---
+// --- Load saved list (legacy localStorage) ---
 window.loadQuadernoList = (name) => {
     if (!name) return;
     const lists = getSavedQuadernoLists();
@@ -1914,6 +1927,7 @@ window.loadQuadernoList = (name) => {
 
     const content = document.getElementById('quaderno-content');
     state._quadernoName = list.name;
+    state._quadernoSetId = null;
 
     if (list.type === 'task') {
         state._quadernoType = 'task';
@@ -1924,6 +1938,30 @@ window.loadQuadernoList = (name) => {
     } else {
         state._quadernoType = 'general';
         state._quadernoRows = list.items.map(item => ({ ...item, results: [] }));
+        renderQuadernoGeneral(content);
+    }
+};
+
+// --- Load quaderno from IndexedDB set ---
+window.loadQuadernoSet = (setId) => {
+    const s = state.savedSets.find(x => x.id === setId);
+    if (!s) return;
+
+    const content = document.getElementById('quaderno-content');
+    const isTask = s.modes && s.modes.includes('quaderno_task');
+
+    state._quadernoName = s.name;
+    state._quadernoSetId = s.id;
+
+    if (isTask) {
+        state._quadernoType = 'task';
+        state._quadernoSteps = s.items.map(item => ({ name: item.name || item.label || item.l || '', results: [] }));
+        state._taskCurrentStep = 0;
+        state._taskCycleCount = 0;
+        renderQuadernoTask(content);
+    } else {
+        state._quadernoType = 'general';
+        state._quadernoRows = s.items.map(item => ({ name: item.name || item.label || item.l || '', results: [] }));
         renderQuadernoGeneral(content);
     }
 };
@@ -2027,10 +2065,19 @@ function renderQuadernoRow(row, idx, sessionType) {
                 </button>
             </div>`;
 
+    const totalRows = (state._quadernoType === 'general' ? state._quadernoRows : state._quadernoSteps || []).length;
     return `
     <div style="display:flex; flex-direction:column; gap:6px; padding:12px 14px; margin-bottom:8px; background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); border-radius:14px; transition:0.2s;">
-        <div style="display:flex; align-items:center; gap:8px;">
-            <span style="flex:1; font-size:1.05rem; font-weight:700;">${row.name}</span>
+        <div style="display:flex; align-items:center; gap:6px;">
+            <div style="display:flex; flex-direction:column; gap:2px; flex-shrink:0;">
+                <button onclick="moveQuadernoRow(${idx},-1)" style="width:24px; height:16px; border:none; background:transparent; color:${idx > 0 ? 'var(--text-secondary)' : '#333'}; cursor:${idx > 0 ? 'pointer' : 'default'}; font-size:0.6rem; display:flex; align-items:center; justify-content:center; padding:0;" title="Sposta su" ${idx === 0 ? 'disabled' : ''}>
+                    <i class="fa-solid fa-chevron-up"></i>
+                </button>
+                <button onclick="moveQuadernoRow(${idx},1)" style="width:24px; height:16px; border:none; background:transparent; color:${idx < totalRows - 1 ? 'var(--text-secondary)' : '#333'}; cursor:${idx < totalRows - 1 ? 'pointer' : 'default'}; font-size:0.6rem; display:flex; align-items:center; justify-content:center; padding:0;" title="Sposta giù" ${idx >= totalRows - 1 ? 'disabled' : ''}>
+                    <i class="fa-solid fa-chevron-down"></i>
+                </button>
+            </div>
+            <span onclick="renameQuadernoRow(${idx})" style="flex:1; font-size:1.05rem; font-weight:700; cursor:pointer;" title="Rinomina">${row.name}</span>
             <span style="background:rgba(99,102,241,0.2); color:var(--accent-color); padding:3px 10px; border-radius:8px; font-size:0.85rem; font-weight:bold; min-width:35px; text-align:center;" title="Totale LU">${total}</span>
             <button onclick="undoQuadernoResult(${idx})" style="width:34px; height:34px; border-radius:10px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.05); color:var(--text-secondary); cursor:pointer; font-size:0.85rem; display:flex; align-items:center; justify-content:center;" title="Annulla ultimo" ${total === 0 ? 'disabled style="opacity:0.3; width:34px; height:34px; border-radius:10px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.05); color:var(--text-secondary); cursor:default; font-size:0.85rem; display:flex; align-items:center; justify-content:center;"' : ''}>
                 <i class="fa-solid fa-rotate-left"></i>
@@ -2096,8 +2143,40 @@ window.removeQuadernoRow = (idx) => {
         renderQuadernoGeneral(document.getElementById('quaderno-content'));
     } else {
         state._quadernoSteps.splice(idx, 1);
+        // Adjust current step pointer if needed
+        if (state._taskCurrentStep >= (state._quadernoSteps || []).length) {
+            state._taskCurrentStep = 0;
+        }
         renderQuadernoTask(document.getElementById('quaderno-content'));
     }
+};
+
+window.moveQuadernoRow = (idx, dir) => {
+    const rows = state._quadernoType === 'general' ? state._quadernoRows : state._quadernoSteps;
+    if (!rows) return;
+    const newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= rows.length) return;
+    // Swap
+    [rows[idx], rows[newIdx]] = [rows[newIdx], rows[idx]];
+    // Adjust task current step pointer if needed
+    if (state._quadernoType === 'task') {
+        if (state._taskCurrentStep === idx) state._taskCurrentStep = newIdx;
+        else if (state._taskCurrentStep === newIdx) state._taskCurrentStep = idx;
+    }
+    const content = document.getElementById('quaderno-content');
+    if (state._quadernoType === 'general') renderQuadernoGeneral(content);
+    else renderQuadernoTask(content);
+};
+
+window.renameQuadernoRow = (idx) => {
+    const rows = state._quadernoType === 'general' ? state._quadernoRows : state._quadernoSteps;
+    if (!rows || !rows[idx]) return;
+    const newName = prompt('Rinomina:', rows[idx].name);
+    if (!newName || newName.trim() === '' || newName.trim() === rows[idx].name) return;
+    rows[idx].name = newName.trim();
+    const content = document.getElementById('quaderno-content');
+    if (state._quadernoType === 'general') renderQuadernoGeneral(content);
+    else renderQuadernoTask(content);
 };
 
 function getUsedActivityNames() {
@@ -2221,34 +2300,60 @@ window.saveQuadernoSession = async () => {
     }
 };
 
-// Save quaderno template for reuse
-window.saveQuadernoTemplate = () => {
+// Save quaderno template as a proper set (IndexedDB) for reuse and editing
+window.saveQuadernoTemplate = async () => {
     const nameInput = document.getElementById('quaderno-name-input');
-    const name = nameInput ? nameInput.value.trim() : '';
-    if (!name) return alert("Inserisci un nome per la lista.");
+    let name = nameInput ? nameInput.value.trim() : '';
+    if (!name) {
+        name = prompt("Nome per la lista:");
+        if (!name || !name.trim()) return;
+        name = name.trim();
+        if (nameInput) nameInput.value = name;
+    }
 
     const rows = state._quadernoType === 'task' ? state._quadernoSteps : state._quadernoRows;
     if (rows.length === 0) return alert("Aggiungi almeno un'attivit\u00E0.");
 
-    const list = {
+    const modeTag = state._quadernoType === 'task' ? 'quaderno_task' : 'quaderno';
+
+    // Check if we're editing an existing set (matched by _quadernoSetId)
+    let setId = state._quadernoSetId || null;
+    let existingSet = setId ? state.savedSets.find(s => s.id === setId) : null;
+
+    if (!existingSet) {
+        // Also check by name + mode for backward compatibility
+        existingSet = state.savedSets.find(s => s.name === name && s.modes && s.modes.includes(modeTag));
+        if (existingSet) setId = existingSet.id;
+    }
+
+    const setData = {
+        id: setId || Date.now().toString(),
         name: name,
-        type: state._quadernoType,
-        items: rows.map(r => ({ name: r.name }))
+        category: state._quadernoType === 'task' ? 'Task Analysis' : 'Quaderno',
+        items: rows.map(r => ({ label: r.name, name: r.name })),
+        modes: [modeTag],
+        tags: [],
+        date: new Date().toLocaleDateString(),
+        isClinical: false
     };
+
+    await DB.saveSet(setData);
+    state.savedSets = await DB.getAllSets();
+    state._quadernoSetId = setData.id;
+    state._quadernoName = name;
+
+    // Also save to localStorage for backward compat
+    const list = { name, type: state._quadernoType, items: rows.map(r => ({ name: r.name })) };
     saveQuadernoList(list);
+
     alert(`Lista "${name}" salvata!`);
-    renderQuaderno(document.getElementById('game-stage'));
-    // Re-open the current sheet with data
+
+    // Re-render keeping current data
+    const content = document.getElementById('quaderno-content');
     if (state._quadernoType === 'task') {
-        openQuadernoSheet('task');
-        state._quadernoName = name;
-        state._quadernoSteps = rows;
-        renderQuadernoTask(document.getElementById('quaderno-content'));
+        renderQuadernoTask(content);
     } else {
-        openQuadernoSheet('general');
-        state._quadernoName = name;
-        state._quadernoRows = rows;
-        renderQuadernoGeneral(document.getElementById('quaderno-content'));
+        renderQuadernoGeneral(content);
     }
 };
 
@@ -2386,11 +2491,20 @@ function renderQuadernoTaskStep(step, idx, sessionType, isActive) {
             ${naCount > 0 ? `<span style="color:#888;">N/A:${naCount}</span>` : ''}
         </div>` : '';
 
+    const totalSteps = (state._quadernoSteps || []).length;
     return `
     <div id="task-step-${idx}" style="display:flex; flex-direction:column; gap:4px; padding:12px 14px; margin-bottom:8px; ${activeBorder} border-radius:14px; transition:0.2s; ${activeGlow}">
-        <div style="display:flex; align-items:center; gap:8px;">
-            <span style="width:28px; height:28px; border-radius:50%; background:${isActive ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)'}; display:flex; align-items:center; justify-content:center; font-size:0.85rem; font-weight:bold; color:${isActive ? 'white' : 'var(--text-secondary)'}; flex-shrink:0;">${idx + 1}</span>
-            <span style="flex:1; font-size:1.05rem; font-weight:700;">${step.name}</span>
+        <div style="display:flex; align-items:center; gap:6px;">
+            <div style="display:flex; flex-direction:column; gap:1px; flex-shrink:0;">
+                <button onclick="moveQuadernoRow(${idx},-1)" style="width:22px; height:14px; border:none; background:transparent; color:${idx > 0 ? 'var(--text-secondary)' : '#333'}; cursor:${idx > 0 ? 'pointer' : 'default'}; font-size:0.55rem; display:flex; align-items:center; justify-content:center; padding:0;" ${idx === 0 ? 'disabled' : ''}>
+                    <i class="fa-solid fa-chevron-up"></i>
+                </button>
+                <span style="width:22px; height:22px; border-radius:50%; background:${isActive ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)'}; display:flex; align-items:center; justify-content:center; font-size:0.75rem; font-weight:bold; color:${isActive ? 'white' : 'var(--text-secondary)'};">${idx + 1}</span>
+                <button onclick="moveQuadernoRow(${idx},1)" style="width:22px; height:14px; border:none; background:transparent; color:${idx < totalSteps - 1 ? 'var(--text-secondary)' : '#333'}; cursor:${idx < totalSteps - 1 ? 'pointer' : 'default'}; font-size:0.55rem; display:flex; align-items:center; justify-content:center; padding:0;" ${idx >= totalSteps - 1 ? 'disabled' : ''}>
+                    <i class="fa-solid fa-chevron-down"></i>
+                </button>
+            </div>
+            <span onclick="renameQuadernoRow(${idx})" style="flex:1; font-size:1.05rem; font-weight:700; cursor:pointer;" title="Rinomina">${step.name}</span>
             ${lastIcon ? `<span style="font-size:1rem;">${lastIcon}</span>` : ''}
             ${scoredCount > 0 ? `<span style="background:rgba(99,102,241,0.2); color:var(--accent-color); padding:2px 8px; border-radius:8px; font-size:0.75rem; font-weight:bold;">${scoredCount}</span>` : ''}
             <button onclick="removeQuadernoRow(${idx})" style="width:28px; height:28px; border-radius:8px; border:none; background:transparent; color:#555; cursor:pointer; font-size:0.75rem; display:flex; align-items:center; justify-content:center;" title="Rimuovi">

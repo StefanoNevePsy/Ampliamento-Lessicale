@@ -84,11 +84,24 @@ select optgroup { background: #1e1e2f; color: var(--text-secondary); }
     box-shadow: 0 12px 32px rgba(0,0,0,0.5); backdrop-filter: blur(10px);
 }
 .custom-dropdown-panel.open { display: block; }
+.set-dropdown-sort-bar {
+    display: flex; gap: 2px; padding: 6px 8px; background: #1a1a2e; border-bottom: 1px solid rgba(255,255,255,0.06);
+    position: sticky; top: 0; z-index: 2;
+}
+.set-dropdown-sort-bar button {
+    flex: 1; padding: 5px 4px; border: none; border-radius: 6px; background: transparent;
+    color: var(--text-secondary); cursor: pointer; font-size: 0.7rem; transition: 0.15s;
+}
+.set-dropdown-sort-bar button:hover { background: rgba(255,255,255,0.08); }
+.set-dropdown-sort-bar button.active { background: rgba(99,102,241,0.25); color: var(--accent-color); }
 .set-dropdown-group-label {
     padding: 8px 12px 4px; font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
-    color: var(--accent-color); letter-spacing: 0.5px; position: sticky; top: 0;
+    color: var(--accent-color); letter-spacing: 0.5px; position: sticky; top: 34px; z-index: 1;
     background: #22223a; border-bottom: 1px solid rgba(99,102,241,0.15);
+    cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+    user-select: none; transition: background 0.15s;
 }
+.set-dropdown-group-label:hover { background: #282848; }
 .set-dropdown-item {
     display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer;
     transition: background 0.15s; border-bottom: 1px solid rgba(255,255,255,0.04);

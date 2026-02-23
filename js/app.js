@@ -100,12 +100,14 @@ window.filterSetsByMode = function () {
     }
 
     const compatibleSets = state.savedSets.filter(s => {
-        if (s.modes && Array.isArray(s.modes) && s.modes.length > 0) {
+        if (s.modes && Array.isArray(s.modes)) {
+            // If modes array exists (even empty), use it as the source of truth
+            if (s.modes.length === 0) return false; // No modes assigned = not compatible with anything
             // Resolve engine for compatibility check
             const checkEngine = (engine === 'intraverbal_scenari') ? 'search_find' : engine;
             return s.modes.includes(checkEngine) || s.modes.includes(engine) || s.modes.includes(currentMode);
         }
-        // Fallback for old sets without mode tags
+        // Fallback for old sets without mode tags at all (modes field missing)
         if (engine === 'search_find' || engine === 'intraverbal_scenari') {
             return s.category && (s.category.includes('Scene') || s.category.includes('Cerca'));
         } else {
@@ -168,81 +170,108 @@ window.togglePoolTag = (tag) => {
 };
 
 // --- CUSTOM SET DROPDOWN ---
+// Persist sort preference and collapsed categories
+if (!state._setDropdownSort) state._setDropdownSort = 'category';
+if (!state._collapsedCats) state._collapsedCats = {};
+let _dropdownSets = []; // cached for re-sort
+
+function getSetStatus(s, activePatient, currentMode) {
+    const info = { isMastered: false, isRepertorio: false, isNear: false, lastPct: null, lastDate: null, sessions: 0 };
+    if (!activePatient || !activePatient.history) return info;
+    const sessions = activePatient.history.filter(h => h.setId === s.id && h.mode === currentMode);
+    info.sessions = sessions.length;
+    if (sessions.length === 0) return info;
+    info.isMastered = typeof checkCriterion === 'function' && checkCriterion(sessions);
+    info.isRepertorio = typeof checkRepertorio === 'function' && checkRepertorio(sessions);
+    info.isNear = !info.isMastered && typeof isNearCriterion === 'function' && isNearCriterion(sessions);
+    const sorted = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
+    const last = sorted[sorted.length - 1];
+    if (last) {
+        info.lastPct = last.percentage != null ? Math.round(last.percentage) : null;
+        info.lastDate = last.date;
+    }
+    return info;
+}
+
 function updateDropdown(sets) {
     const panel = document.getElementById('set-dropdown-panel');
-    const trigger = document.getElementById('set-dropdown-trigger');
     const label = document.getElementById('set-dropdown-label');
     if (!panel) return;
 
+    _dropdownSets = sets;
     const currentMode = document.getElementById('mode-select').value;
     const activePatient = state.activePatientId ? state.patients.find(p => p.id === state.activePatientId) : null;
+    const sortBy = state._setDropdownSort || 'category';
 
-    // Group by category
-    const categories = {};
-    sets.forEach(s => {
-        const cat = s.category || "Altri";
-        if (!categories[cat]) categories[cat] = [];
-        categories[cat].push(s);
+    // Enrich sets with status data for sorting
+    const enriched = sets.map(s => ({
+        set: s,
+        status: getSetStatus(s, activePatient, currentMode)
+    }));
+
+    // Sort
+    const sortFunctions = {
+        'category': (a, b) => (a.set.category || 'ZZZ').localeCompare(b.set.category || 'ZZZ') || a.set.name.localeCompare(b.set.name),
+        'name': (a, b) => a.set.name.localeCompare(b.set.name),
+        'pct-desc': (a, b) => (b.status.lastPct ?? -1) - (a.status.lastPct ?? -1),
+        'pct-asc': (a, b) => (a.status.lastPct ?? 999) - (b.status.lastPct ?? 999),
+        'recent': (a, b) => {
+            const da = a.status.lastDate ? new Date(a.status.lastDate) : new Date(0);
+            const db = b.status.lastDate ? new Date(b.status.lastDate) : new Date(0);
+            return db - da;
+        },
+        'criterion': (a, b) => {
+            const scoreA = a.status.isMastered ? 3 : a.status.isRepertorio ? 2 : a.status.isNear ? 1 : 0;
+            const scoreB = b.status.isMastered ? 3 : b.status.isRepertorio ? 2 : b.status.isNear ? 1 : 0;
+            return scoreB - scoreA || (b.status.lastPct ?? -1) - (a.status.lastPct ?? -1);
+        }
+    };
+    enriched.sort(sortFunctions[sortBy] || sortFunctions['category']);
+
+    // Sort toolbar
+    const sortOpts = [
+        { key: 'category', icon: 'fa-folder', tip: 'Categoria' },
+        { key: 'name', icon: 'fa-font', tip: 'Nome' },
+        { key: 'recent', icon: 'fa-clock', tip: 'Recenti' },
+        { key: 'pct-desc', icon: 'fa-arrow-down-9-1', tip: '% desc' },
+        { key: 'pct-asc', icon: 'fa-arrow-up-1-9', tip: '% asc' },
+        { key: 'criterion', icon: 'fa-trophy', tip: 'Criterio' }
+    ];
+    let html = `<div class="set-dropdown-sort-bar">`;
+    sortOpts.forEach(o => {
+        html += `<button onclick="event.stopPropagation(); changeSetDropdownSort('${o.key}')" class="${sortBy === o.key ? 'active' : ''}" title="${o.tip}"><i class="fa-solid ${o.icon}"></i></button>`;
     });
+    html += `</div>`;
 
-    let html = '';
-    for (const [catName, catSets] of Object.entries(categories)) {
-        html += `<div class="set-dropdown-group-label">${catName}</div>`;
-        catSets.forEach(s => {
-            const isSelected = state.activeSetId === s.id;
-            const missingCount = s.items.filter(i => !i.url).length;
+    // Group by category (only for 'category' sort)
+    const useGroups = sortBy === 'category';
 
-            // Get first item thumbnail
-            const firstImg = s.items.find(i => i.url);
-            const thumbHtml = firstImg
-                ? `<div class="set-item-thumb"><img src="${firstImg.url}" loading="lazy" alt=""></div>`
-                : `<div class="set-item-thumb"><i class="fa-solid fa-images"></i></div>`;
-
-            // Build badges
-            let badges = '';
-            let pctValue = null;
-            if (activePatient && activePatient.history) {
-                const sessions = activePatient.history.filter(h => h.setId === s.id && h.mode === currentMode);
-                if (sessions.length > 0) {
-                    const isMastered = typeof checkCriterion === 'function' && checkCriterion(sessions);
-                    const isRepertorio = typeof checkRepertorio === 'function' && checkRepertorio(sessions);
-                    const sorted = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
-                    const last = sorted[sorted.length - 1];
-
-                    if (isMastered) {
-                        badges += '<span class="set-item-badge badge-criterion">\uD83C\uDFC6 Criterio</span>';
-                    } else if (isRepertorio) {
-                        badges += '<span class="set-item-badge badge-repertorio">\u2B50 Repertorio</span>';
-                    }
-                    if (!isMastered && typeof isNearCriterion === 'function' && isNearCriterion(sessions)) {
-                        badges += '<span class="set-item-badge badge-near">\u2191 Vicino</span>';
-                    }
-                    if (last && last.percentage != null) {
-                        pctValue = Math.round(last.percentage);
-                        const pctColor = pctValue >= 90 ? '#10b981' : pctValue >= 70 ? '#f59e0b' : '#ef4444';
-                        badges += `<span class="set-item-badge badge-pct" style="color:${pctColor}">${pctValue}%</span>`;
-                    }
-                }
-            }
-            if (missingCount > 0) {
-                badges += `<span class="set-item-badge badge-warning">\u26A0 ${missingCount}</span>`;
-            }
-
-            html += `<div class="set-dropdown-item${isSelected ? ' selected' : ''}" data-set-id="${s.id}" onclick="selectSetFromDropdown('${s.id}')">
-                ${thumbHtml}
-                <div class="set-item-info">
-                    <div class="set-item-name">${s.name}</div>
-                    <div class="set-item-meta">
-                        <span class="set-item-count">${s.items.length} stimoli</span>
-                        ${badges}
-                    </div>
-                </div>
-            </div>`;
+    if (useGroups) {
+        const categories = {};
+        enriched.forEach(e => {
+            const cat = e.set.category || "Altri";
+            if (!categories[cat]) categories[cat] = [];
+            categories[cat].push(e);
         });
+        for (const [catName, catItems] of Object.entries(categories)) {
+            const collapsed = state._collapsedCats[catName] || false;
+            html += `<div class="set-dropdown-group-label" onclick="event.stopPropagation(); toggleSetCategory('${catName.replace(/'/g, "\\'")}')">
+                <span>${catName}</span>
+                <span style="display:flex; align-items:center; gap:6px;">
+                    <span style="opacity:0.5; font-size:0.6rem;">${catItems.length}</span>
+                    <i class="fa-solid fa-chevron-${collapsed ? 'right' : 'down'}" style="font-size:0.55rem; opacity:0.5;"></i>
+                </span>
+            </div>`;
+            if (!collapsed) {
+                catItems.forEach(e => { html += renderSetDropdownItem(e.set, e.status); });
+            }
+        }
+    } else {
+        enriched.forEach(e => { html += renderSetDropdownItem(e.set, e.status); });
     }
 
-    if (html === '') {
-        html = '<div style="padding:20px; text-align:center; color:var(--text-secondary); font-size:0.85rem;">Nessun set compatibile</div>';
+    if (enriched.length === 0) {
+        html += '<div style="padding:20px; text-align:center; color:var(--text-secondary); font-size:0.85rem;">Nessun set compatibile</div>';
     }
 
     panel.innerHTML = html;
@@ -250,15 +279,59 @@ function updateDropdown(sets) {
     // Update trigger label
     if (state.activeSetId) {
         const activeSet = sets.find(s => s.id === state.activeSetId);
-        if (activeSet) {
-            label.textContent = activeSet.name;
-        } else {
-            label.textContent = '-- Scegli un Set --';
-        }
+        label.textContent = activeSet ? activeSet.name : '-- Scegli un Set --';
     } else {
         label.textContent = '-- Scegli un Set --';
     }
 }
+
+function renderSetDropdownItem(s, status) {
+    const isSelected = state.activeSetId === s.id;
+    const missingCount = s.items.filter(i => !i.url).length;
+
+    const firstImg = s.items.find(i => i.url);
+    const thumbHtml = firstImg
+        ? `<div class="set-item-thumb"><img src="${firstImg.url}" loading="lazy" alt=""></div>`
+        : `<div class="set-item-thumb"><i class="fa-solid fa-images"></i></div>`;
+
+    let badges = '';
+    if (status.isMastered) {
+        badges += '<span class="set-item-badge badge-criterion">\uD83C\uDFC6 Criterio</span>';
+    } else if (status.isRepertorio) {
+        badges += '<span class="set-item-badge badge-repertorio">\u2B50 Repertorio</span>';
+    }
+    if (status.isNear) {
+        badges += '<span class="set-item-badge badge-near">\u2191 Vicino</span>';
+    }
+    if (status.lastPct != null) {
+        const pctColor = status.lastPct >= 90 ? '#10b981' : status.lastPct >= 70 ? '#f59e0b' : '#ef4444';
+        badges += `<span class="set-item-badge badge-pct" style="color:${pctColor}">${status.lastPct}%</span>`;
+    }
+    if (missingCount > 0) {
+        badges += `<span class="set-item-badge badge-warning">\u26A0 ${missingCount}</span>`;
+    }
+
+    return `<div class="set-dropdown-item${isSelected ? ' selected' : ''}" data-set-id="${s.id}" onclick="selectSetFromDropdown('${s.id}')">
+        ${thumbHtml}
+        <div class="set-item-info">
+            <div class="set-item-name">${s.name}</div>
+            <div class="set-item-meta">
+                <span class="set-item-count">${s.items.length} stimoli</span>
+                ${badges}
+            </div>
+        </div>
+    </div>`;
+}
+
+window.changeSetDropdownSort = (sortBy) => {
+    state._setDropdownSort = sortBy;
+    updateDropdown(_dropdownSets);
+};
+
+window.toggleSetCategory = (catName) => {
+    state._collapsedCats[catName] = !state._collapsedCats[catName];
+    updateDropdown(_dropdownSets);
+};
 
 window.toggleSetDropdown = () => {
     const trigger = document.getElementById('set-dropdown-trigger');
