@@ -341,9 +341,10 @@ window.toggleSetDropdown = () => {
     if (isOpen) {
         closeSetDropdown();
     } else {
+        closeModeDropdown();
+        if (typeof closePatientDropdown === 'function') closePatientDropdown();
         trigger.classList.add('open');
         panel.classList.add('open');
-        // Scroll selected item into view
         const sel = panel.querySelector('.set-dropdown-item.selected');
         if (sel) setTimeout(() => sel.scrollIntoView({ block: 'nearest' }), 50);
     }
@@ -361,10 +362,14 @@ window.selectSetFromDropdown = (setId) => {
     loadSelectedSet(setId);
 };
 
-// Close dropdown when clicking outside
+// Close all custom dropdowns when clicking outside
 document.addEventListener('click', (e) => {
-    const dd = document.getElementById('set-dropdown');
-    if (dd && !dd.contains(e.target)) closeSetDropdown();
+    const setDd = document.getElementById('set-dropdown');
+    if (setDd && !setDd.contains(e.target)) closeSetDropdown();
+    const modeDd = document.getElementById('mode-dropdown');
+    if (modeDd && !modeDd.contains(e.target)) closeModeDropdown();
+    const patDd = document.getElementById('patient-dropdown');
+    if (patDd && !patDd.contains(e.target)) { if (typeof closePatientDropdown === 'function') closePatientDropdown(); }
 });
 
 // --- LOAD SET FROM DROPDOWN ---
@@ -991,33 +996,118 @@ window.deleteSet = async (id) => {
     }
 };
 
-// --- RENDER MODE SELECT (dynamic from layout) ---
+// --- MODE ICONS MAP ---
+const MODE_ICONS = {
+    tact: 'fa-hand-pointer', ran: 'fa-bolt', fluenza: 'fa-comment-dots',
+    tombola: 'fa-table-cells', tombola_sonora: 'fa-volume-high', memory: 'fa-clone',
+    search_find: 'fa-magnifying-glass', intraverbal_scenari: 'fa-comments',
+    pool_random: 'fa-shuffle', pool_intraverbal: 'fa-random', intruso: 'fa-ban',
+    topologia: 'fa-map-pin', sequenze: 'fa-arrow-right-arrow-left', categorizzazione: 'fa-sitemap',
+    zoom: 'fa-search-plus', quaderno: 'fa-book-open', quaderno_task: 'fa-list-check'
+};
+const DEFAULT_GROUP_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899'];
+
+// --- RENDER MODE SELECT (custom dropdown + hidden select sync) ---
 function renderModeSelect() {
     const select = document.getElementById('mode-select');
     if (!select) return;
     const currentValue = select.value;
     const layout = getActivityLayout();
-    select.innerHTML = '';
 
+    // Keep hidden select in sync for filterSetsByMode
+    select.innerHTML = '';
     layout.groups.forEach(group => {
         const parent = group.name ? document.createElement('optgroup') : select;
-        if (group.name) {
-            parent.label = group.name;
-            select.appendChild(parent);
-        }
+        if (group.name) { parent.label = group.name; select.appendChild(parent); }
         (group.modes || []).forEach(modeKey => {
             if (!MODES_CONFIG[modeKey] && !BUILTIN_MODES[modeKey]) return;
             const opt = document.createElement('option');
-            opt.value = modeKey;
-            opt.text = getModeLabel(modeKey);
+            opt.value = modeKey; opt.text = getModeLabel(modeKey);
             parent.appendChild(opt);
         });
     });
+    if (currentValue && select.querySelector(`option[value="${currentValue}"]`)) select.value = currentValue;
 
-    if (currentValue && select.querySelector(`option[value="${currentValue}"]`)) {
-        select.value = currentValue;
+    // Render custom dropdown
+    const panel = document.getElementById('mode-dropdown-panel');
+    const label = document.getElementById('mode-dropdown-label');
+    if (!panel) return;
+
+    let html = '';
+    layout.groups.forEach((group, gi) => {
+        const color = (layout.groupColors && layout.groupColors[gi]) || DEFAULT_GROUP_COLORS[gi % DEFAULT_GROUP_COLORS.length];
+        if (group.name) {
+            html += `<div class="mode-group-header" style="color:${color};">
+                <span class="mode-group-dot" style="background:${color};"></span>${group.name}
+            </div>`;
+        }
+        (group.modes || []).forEach(modeKey => {
+            if (!MODES_CONFIG[modeKey] && !BUILTIN_MODES[modeKey]) return;
+            const isSelected = select.value === modeKey;
+            const emoji = (layout.modeEmojis && layout.modeEmojis[modeKey]) || '';
+            const iconClass = MODE_ICONS[getModeEngine(modeKey)] || 'fa-puzzle-piece';
+            const iconHtml = emoji
+                ? `<div class="mode-dd-icon" style="font-size:1.1rem;">${emoji}</div>`
+                : `<div class="mode-dd-icon" style="color:${color};"><i class="fa-solid ${iconClass}"></i></div>`;
+
+            // Preview: count compatible sets
+            const engine = getModeEngine(modeKey);
+            const compatCount = state.savedSets.filter(s => {
+                if (s.modes && Array.isArray(s.modes) && s.modes.length > 0) {
+                    return s.modes.includes(engine) || s.modes.includes(modeKey);
+                }
+                return false;
+            }).length;
+
+            html += `<div class="mode-dd-item${isSelected ? ' selected' : ''}" onclick="selectModeFromDropdown('${modeKey}')">
+                ${iconHtml}
+                <div style="flex:1; min-width:0;">
+                    <div class="mode-dd-label">${getModeLabel(modeKey)}</div>
+                    ${compatCount > 0 ? `<div style="font-size:0.65rem; color:var(--text-secondary);">${compatCount} set</div>` : ''}
+                </div>
+            </div>`;
+        });
+    });
+    panel.innerHTML = html;
+
+    // Update trigger label
+    const selVal = select.value;
+    if (selVal) {
+        label.textContent = getModeLabel(selVal);
+    } else {
+        label.textContent = '-- Attivit\u00E0 --';
     }
 }
+
+window.toggleModeDropdown = () => {
+    const trigger = document.getElementById('mode-dropdown-trigger');
+    const panel = document.getElementById('mode-dropdown-panel');
+    if (!trigger || !panel) return;
+    // Close other dropdowns first
+    closeSetDropdown();
+    closePatientDropdown();
+    if (panel.classList.contains('open')) {
+        trigger.classList.remove('open'); panel.classList.remove('open');
+    } else {
+        trigger.classList.add('open'); panel.classList.add('open');
+    }
+};
+
+function closeModeDropdown() {
+    const t = document.getElementById('mode-dropdown-trigger');
+    const p = document.getElementById('mode-dropdown-panel');
+    if (t) t.classList.remove('open');
+    if (p) p.classList.remove('open');
+}
+
+window.selectModeFromDropdown = (modeKey) => {
+    const select = document.getElementById('mode-select');
+    if (select) { select.value = modeKey; }
+    closeModeDropdown();
+    const label = document.getElementById('mode-dropdown-label');
+    if (label) label.textContent = getModeLabel(modeKey);
+    filterSetsByMode();
+};
 
 // --- ACTIVITY LAYOUT EDITOR ---
 let _editingLayout = null;
@@ -1045,6 +1135,7 @@ function renderActivityLayoutBody() {
     const groups = _editingLayout.groups;
     const emojis = _editingLayout.modeEmojis || {};
     const customModes = _editingLayout.customModes || {};
+    if (!_editingLayout.groupColors) _editingLayout.groupColors = {};
 
     let html = `
         <div style="display:flex; gap:8px; margin-bottom:15px; flex-wrap:wrap;">
@@ -1062,13 +1153,16 @@ function renderActivityLayoutBody() {
 
     groups.forEach((group, gi) => {
         const groupName = group.name || '(Principale)';
+        const groupColor = (_editingLayout.groupColors[gi]) || DEFAULT_GROUP_COLORS[gi % DEFAULT_GROUP_COLORS.length];
         html += `
-        <div style="background:rgba(0,0,0,0.2); border-radius:12px; padding:12px; margin-bottom:10px; border:1px solid rgba(255,255,255,0.08);">
+        <div style="background:rgba(0,0,0,0.2); border-radius:12px; padding:12px; margin-bottom:10px; border:1px solid rgba(255,255,255,0.08); border-left:3px solid ${groupColor};">
             <div style="display:flex; gap:6px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">
                 <div style="display:flex; flex-direction:column; gap:2px;">
                     <button class="btn btn-ghost" onclick="moveGroupUp(${gi})" style="padding:1px 7px; font-size:0.65rem;" ${gi === 0 ? 'disabled style="padding:1px 7px; font-size:0.65rem; opacity:0.3;"' : ''}>&#9650;</button>
                     <button class="btn btn-ghost" onclick="moveGroupDown(${gi})" style="padding:1px 7px; font-size:0.65rem;" ${gi === groups.length - 1 ? 'disabled style="padding:1px 7px; font-size:0.65rem; opacity:0.3;"' : ''}>&#9660;</button>
                 </div>
+                <input type="color" value="${groupColor}" onchange="updateGroupColor(${gi}, this.value)"
+                       style="width:30px; height:30px; border:none; border-radius:6px; background:transparent; cursor:pointer; padding:0;" title="Colore categoria">
                 <input type="text" value="${group.name}" onchange="updateGroupName(${gi}, this.value)"
                        placeholder="Nome categoria..." style="flex:1; min-width:100px; font-weight:bold; font-size:0.95rem; padding:6px 10px;">
                 ${groups.length > 1 ? `<button class="btn btn-ghost" onclick="removeActivityGroup(${gi})" style="color:var(--danger-color); padding:4px 8px;" title="Elimina categoria">
@@ -1116,9 +1210,22 @@ window.removeActivityGroup = (gi) => {
     _editingLayout.groups.splice(gi, 1);
     renderActivityLayoutBody();
 };
-window.moveGroupUp = (gi) => { if (gi <= 0) return; const g = _editingLayout.groups;[g[gi - 1], g[gi]] = [g[gi], g[gi - 1]]; renderActivityLayoutBody(); };
-window.moveGroupDown = (gi) => { const g = _editingLayout.groups; if (gi >= g.length - 1) return;[g[gi], g[gi + 1]] = [g[gi + 1], g[gi]]; renderActivityLayoutBody(); };
+window.moveGroupUp = (gi) => {
+    if (gi <= 0) return;
+    const g = _editingLayout.groups; [g[gi - 1], g[gi]] = [g[gi], g[gi - 1]];
+    const c = _editingLayout.groupColors || {};
+    const tmp = c[gi]; c[gi] = c[gi - 1]; c[gi - 1] = tmp;
+    renderActivityLayoutBody();
+};
+window.moveGroupDown = (gi) => {
+    const g = _editingLayout.groups; if (gi >= g.length - 1) return;
+    [g[gi], g[gi + 1]] = [g[gi + 1], g[gi]];
+    const c = _editingLayout.groupColors || {};
+    const tmp = c[gi]; c[gi] = c[gi + 1]; c[gi + 1] = tmp;
+    renderActivityLayoutBody();
+};
 window.updateGroupName = (gi, name) => { _editingLayout.groups[gi].name = name; };
+window.updateGroupColor = (gi, color) => { if (!_editingLayout.groupColors) _editingLayout.groupColors = {}; _editingLayout.groupColors[gi] = color; renderActivityLayoutBody(); };
 window.updateModeEmoji = (mode, emoji) => { if (!_editingLayout.modeEmojis) _editingLayout.modeEmojis = {}; _editingLayout.modeEmojis[mode] = emoji.trim(); };
 window.moveModeInGroup = (gi, mi, dir) => {
     const modes = _editingLayout.groups[gi].modes;

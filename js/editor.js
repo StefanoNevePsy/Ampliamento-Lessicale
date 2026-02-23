@@ -461,6 +461,25 @@ window.onEditCategoryChange = (sel) => {
 
 // --- PASTE HANDLER ---
 async function handlePaste(e) {
+    // Patient photo paste (when patient dropdown is open and a target is set)
+    if (window._patientPhotoTarget) {
+        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        for (const item of items) {
+            if (item.type.indexOf('image') === 0) {
+                e.preventDefault();
+                const blob = item.getAsFile();
+                const r = new FileReader();
+                r.onload = async (event) => {
+                    await savePatientPhoto(window._patientPhotoTarget, event.target.result);
+                    window._patientPhotoTarget = null;
+                };
+                r.readAsDataURL(blob);
+                return;
+            }
+        }
+    }
+
+    // Editor paste
     if (!document.getElementById('modal-editor').classList.contains('open')) return;
     if (state.activeEditorIndex === null || state.activeEditorIndex === undefined) return;
     const items = (e.clipboardData || e.originalEvent.clipboardData).items;

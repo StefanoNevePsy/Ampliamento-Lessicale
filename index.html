@@ -31,9 +31,15 @@
 
                 <!-- PATIENT SELECTOR -->
                 <div class="patient-selector-wrapper">
-                    <select id="global-patient-select" onchange="setGlobalPatient(this.value)">
-                        <option value="">-- Ospite --</option>
-                    </select>
+                    <div class="custom-dropdown" id="patient-dropdown">
+                        <button class="custom-dropdown-trigger" id="patient-dropdown-trigger" onclick="togglePatientDropdown()">
+                            <span id="patient-dropdown-avatar" class="patient-avatar-mini"><i class="fa-solid fa-user"></i></span>
+                            <span id="patient-dropdown-label">-- Ospite --</span>
+                            <i class="fa-solid fa-chevron-down custom-dropdown-arrow"></i>
+                        </button>
+                        <div class="custom-dropdown-panel" id="patient-dropdown-panel"></div>
+                    </div>
+                    <input type="file" id="patient-photo-upload" class="hidden" accept="image/*" onchange="onPatientPhotoSelected(this)">
                 </div>
 
                 <!-- ACTION BUTTONS -->
@@ -62,7 +68,14 @@
                         <i class="fa-solid fa-gear"></i>
                     </button>
                 </label>
-                <select id="mode-select" onchange="filterSetsByMode()">
+                <div class="custom-dropdown" id="mode-dropdown">
+                    <button class="custom-dropdown-trigger" id="mode-dropdown-trigger" onclick="toggleModeDropdown()">
+                        <span id="mode-dropdown-label">-- Attivit&agrave; --</span>
+                        <i class="fa-solid fa-chevron-down custom-dropdown-arrow"></i>
+                    </button>
+                    <div class="custom-dropdown-panel" id="mode-dropdown-panel"></div>
+                </div>
+                <select id="mode-select" class="hidden" style="display:none;">
                 </select>
             </div>
 

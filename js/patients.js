@@ -1,16 +1,145 @@
 // === PATIENT MANAGEMENT & CHARTS ===
 
-// --- GLOBAL PATIENT SELECTOR ---
+// --- GLOBAL PATIENT SELECTOR (custom dropdown) ---
 function populateGlobalPatientSelect() {
-    const sel = document.getElementById('global-patient-select');
-    sel.innerHTML = '<option value="">-- Ospite --</option>' +
-        state.patients.map(p => `<option value="${p.id}" ${state.activePatientId === p.id ? 'selected' : ''}>${p.name}</option>`).join('');
+    const panel = document.getElementById('patient-dropdown-panel');
+    const label = document.getElementById('patient-dropdown-label');
+    const avatar = document.getElementById('patient-dropdown-avatar');
+    if (!panel) return;
+
+    const activeP = state.activePatientId ? state.patients.find(p => p.id === state.activePatientId) : null;
+
+    // Guest option
+    let html = `<div class="patient-dd-item${!state.activePatientId ? ' selected' : ''}" onclick="selectPatientFromDropdown('')">
+        <div class="patient-dd-avatar"><i class="fa-solid fa-user-slash" style="font-size:0.8rem; opacity:0.5;"></i></div>
+        <div class="patient-dd-info"><div class="patient-dd-name" style="opacity:0.6;">Ospite</div></div>
+    </div>`;
+
+    // Group by category
+    const catMap = {};
+    state.patients.forEach(p => {
+        const cat = p.category || '';
+        if (!catMap[cat]) catMap[cat] = [];
+        catMap[cat].push(p);
+    });
+
+    for (const [catName, catPatients] of Object.entries(catMap)) {
+        if (catName) {
+            html += `<div class="mode-group-header" style="color:var(--success-color); top:0;">
+                <span class="mode-group-dot" style="background:var(--success-color);"></span>${catName}
+            </div>`;
+        }
+        catPatients.forEach(p => {
+            const isSelected = state.activePatientId === p.id;
+            const sessCount = (p.history || []).length;
+            const photoHtml = p.photo
+                ? `<div class="patient-dd-avatar"><img src="${p.photo}" alt=""></div>`
+                : `<div class="patient-dd-avatar"><i class="fa-solid fa-user"></i></div>`;
+
+            html += `<div class="patient-dd-item${isSelected ? ' selected' : ''}" onclick="selectPatientFromDropdown('${p.id}')">
+                ${photoHtml}
+                <div class="patient-dd-info">
+                    <div class="patient-dd-name">${p.name}</div>
+                    ${p.category ? `<div class="patient-dd-cat">${p.category}</div>` : ''}
+                    ${sessCount > 0 ? `<div class="patient-dd-cat">${sessCount} sessioni</div>` : ''}
+                </div>
+                <button class="patient-dd-photo-btn" onclick="event.stopPropagation(); startPatientPhotoUpload('${p.id}')" title="Cambia foto">
+                    <i class="fa-solid fa-camera"></i>
+                </button>
+            </div>`;
+        });
+    }
+
+    panel.innerHTML = html;
+
+    // Update trigger
+    if (activeP) {
+        label.textContent = activeP.name;
+        avatar.innerHTML = activeP.photo
+            ? `<img src="${activeP.photo}" alt="">`
+            : `<i class="fa-solid fa-user"></i>`;
+    } else {
+        label.textContent = '-- Ospite --';
+        avatar.innerHTML = '<i class="fa-solid fa-user"></i>';
+    }
 }
+
+window.togglePatientDropdown = () => {
+    const trigger = document.getElementById('patient-dropdown-trigger');
+    const panel = document.getElementById('patient-dropdown-panel');
+    if (!trigger || !panel) return;
+    if (typeof closeModeDropdown === 'function') closeModeDropdown();
+    if (typeof closeSetDropdown === 'function') closeSetDropdown();
+    if (panel.classList.contains('open')) {
+        trigger.classList.remove('open'); panel.classList.remove('open');
+    } else {
+        trigger.classList.add('open'); panel.classList.add('open');
+    }
+};
+
+function closePatientDropdown() {
+    const t = document.getElementById('patient-dropdown-trigger');
+    const p = document.getElementById('patient-dropdown-panel');
+    if (t) t.classList.remove('open');
+    if (p) p.classList.remove('open');
+}
+
+window.selectPatientFromDropdown = (pid) => {
+    closePatientDropdown();
+    setGlobalPatient(pid);
+    populateGlobalPatientSelect();
+};
 
 window.setGlobalPatient = (pid) => {
     state.activePatientId = pid || null;
     if (typeof filterSetsByMode === 'function') filterSetsByMode();
 };
+
+// --- PATIENT PHOTO UPLOAD ---
+window._patientPhotoTarget = null;
+
+window.startPatientPhotoUpload = (pid) => {
+    window._patientPhotoTarget = pid;
+    document.getElementById('patient-photo-upload').click();
+};
+
+window.onPatientPhotoSelected = async (input) => {
+    if (!input.files || !input.files[0] || !window._patientPhotoTarget) return;
+    const file = input.files[0];
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        await savePatientPhoto(window._patientPhotoTarget, e.target.result);
+        window._patientPhotoTarget = null;
+    };
+    reader.readAsDataURL(file);
+    input.value = '';
+};
+
+async function savePatientPhoto(pid, dataUrl) {
+    // Resize to max 200px for storage efficiency
+    const resized = await resizeImage(dataUrl, 200);
+    const p = state.patients.find(x => x.id === pid);
+    if (!p) return;
+    p.photo = resized;
+    await DB.savePatient(p);
+    populateGlobalPatientSelect();
+}
+
+function resizeImage(dataUrl, maxSize) {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let w = img.width, h = img.height;
+            if (w > h) { if (w > maxSize) { h = h * maxSize / w; w = maxSize; } }
+            else { if (h > maxSize) { w = w * maxSize / h; h = maxSize; } }
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', 0.8));
+        };
+        img.src = dataUrl;
+    });
+}
 
 // --- PATIENT MODAL ---
 window.openPatients = async () => {
@@ -52,6 +181,22 @@ window.renamePatient = async (patientId) => {
     sel.innerHTML = '<option value="">-- Seleziona Paziente --</option>' +
         state.patients.map(pt => `<option value="${pt.id}" ${pt.id === patientId ? 'selected' : ''}>${pt.name}</option>`).join('');
     document.getElementById('patient-title').innerText = `Cartella: ${p.name}`;
+};
+
+// --- PATIENT CATEGORY ---
+window.editPatientCategory = async (patientId) => {
+    const p = state.patients.find(x => x.id === patientId);
+    if (!p) return;
+    // Gather existing categories for suggestions
+    const existingCats = [...new Set(state.patients.map(x => x.category).filter(Boolean))];
+    const suggestion = existingCats.length > 0 ? `\n\nCategorie esistenti: ${existingCats.join(', ')}` : '';
+    const newCat = prompt(`Categoria per ${p.name}:${suggestion}`, p.category || '');
+    if (newCat === null) return;
+    p.category = newCat.trim();
+    await DB.savePatient(p);
+    state.patients = await DB.getAllPatients();
+    populateGlobalPatientSelect();
+    loadPatientData(patientId);
 };
 
 // --- DELETE PATIENT ---
@@ -185,18 +330,36 @@ window.loadPatientData = (pid) => {
     const container = document.getElementById('charts-container');
     container.innerHTML = '';
 
-    // Patient action buttons
+    // Patient header with photo + category + actions
+    const photoSrc = p.photo || '';
+    const photoHtml = photoSrc
+        ? `<img src="${photoSrc}" style="width:60px; height:60px; border-radius:50%; object-fit:cover; border:2px solid var(--glass-border);" onclick="startPatientPhotoUpload('${pid}')" title="Cambia foto">`
+        : `<div onclick="startPatientPhotoUpload('${pid}')" title="Aggiungi foto" style="width:60px; height:60px; border-radius:50%; background:rgba(99,102,241,0.15); display:flex; align-items:center; justify-content:center; cursor:pointer; border:2px dashed var(--glass-border); color:var(--accent-color); font-size:1.3rem;">
+            <i class="fa-solid fa-camera"></i>
+        </div>`;
+
     container.innerHTML += `
-        <div style="display:flex; gap:8px; margin-bottom:15px; flex-wrap:wrap;">
-            <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem;" onclick="renamePatient('${pid}')">
-                <i class="fa-solid fa-pen"></i> Rinomina
-            </button>
-            <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(16,185,129,0.3); color:var(--success-color);" onclick="exportPatientExcel('${pid}')">
-                <i class="fa-solid fa-file-excel"></i> Esporta Excel
-            </button>
-            <button class="btn btn-danger" style="padding:6px 12px; font-size:0.85rem;" onclick="deletePatient('${pid}')">
-                <i class="fa-solid fa-user-minus"></i> Elimina
-            </button>
+        <div style="display:flex; gap:15px; margin-bottom:15px; align-items:center;">
+            ${photoHtml}
+            <div style="flex:1;">
+                <div style="font-size:1.1rem; font-weight:700;">${p.name}</div>
+                <div style="display:flex; gap:6px; align-items:center; margin-top:4px;">
+                    <span onclick="editPatientCategory('${pid}')" style="font-size:0.75rem; padding:2px 8px; border-radius:6px; background:rgba(99,102,241,0.15); color:var(--accent-color); cursor:pointer;" title="Cambia categoria">
+                        <i class="fa-solid fa-tag" style="margin-right:3px;"></i>${p.category || 'Nessuna categoria'}
+                    </span>
+                </div>
+            </div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem;" onclick="renamePatient('${pid}')">
+                    <i class="fa-solid fa-pen"></i>
+                </button>
+                <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(16,185,129,0.3); color:var(--success-color);" onclick="exportPatientExcel('${pid}')">
+                    <i class="fa-solid fa-file-excel"></i>
+                </button>
+                <button class="btn btn-danger" style="padding:6px 12px; font-size:0.85rem;" onclick="deletePatient('${pid}')">
+                    <i class="fa-solid fa-user-minus"></i>
+                </button>
+            </div>
         </div>
     `;
 
