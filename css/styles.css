@@ -199,6 +199,26 @@ select optgroup { background: #1e1e2f; color: var(--text-secondary); }
 .mode-check { display: flex; align-items: center; gap: 5px; background: rgba(255,255,255,0.05); padding: 5px 10px; border-radius: 20px; border: 1px solid transparent; cursor: pointer; font-size: 0.8rem; }
 .mode-check.selected { background: rgba(99, 102, 241, 0.2); border-color: var(--accent-color); color: white; }
 
+/* LIBRARY SORT BAR */
+.lib-sort-bar {
+    display: flex; gap: 4px; padding: 8px 0; margin-bottom: 10px; flex-wrap: wrap; align-items: center;
+}
+.lib-sort-bar button {
+    padding: 5px 10px; border: 1px solid var(--glass-border); border-radius: 8px; background: transparent;
+    color: var(--text-secondary); cursor: pointer; font-size: 0.75rem; transition: 0.15s;
+    display: flex; align-items: center; gap: 4px;
+}
+.lib-sort-bar button:hover { background: rgba(255,255,255,0.08); }
+.lib-sort-bar button.active { background: rgba(99,102,241,0.2); border-color: var(--accent-color); color: var(--accent-color); }
+.lib-category-header {
+    grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 14px; background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.15);
+    border-radius: 10px; cursor: pointer; user-select: none; transition: 0.15s; margin-top: 4px;
+}
+.lib-category-header:first-child { margin-top: 0; }
+.lib-category-header:hover { background: rgba(99,102,241,0.14); }
+.lib-category-header h3 { margin: 0; font-size: 0.85rem; font-weight: 700; color: var(--accent-color); text-transform: uppercase; letter-spacing: 0.5px; }
+.lib-category-header .cat-count { font-size: 0.7rem; color: var(--text-secondary); }
 .lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 15px; padding-bottom: 20px; }
 .lib-card { background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; transition: 0.2s; position: relative; overflow: hidden; cursor: pointer; }
 .lib-card:hover { border-color: var(--accent-color); background: rgba(255,255,255,0.08); }

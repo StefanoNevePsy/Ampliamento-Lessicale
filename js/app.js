@@ -754,74 +754,206 @@ window.reloadLibrary = async () => {
 };
 
 // --- LIBRARY LIST ---
+if (!state._libSort) state._libSort = 'category';
+if (!state._libCollapsed) state._libCollapsed = {};
+
+function renderLibSortBar() {
+    const bar = document.getElementById('lib-sort-bar');
+    if (!bar) return;
+    const sortBy = state._libSort || 'category';
+    const opts = [
+        { key: 'category', icon: 'fa-folder', label: 'Categoria' },
+        { key: 'name', icon: 'fa-font', label: 'Nome' },
+        { key: 'recent', icon: 'fa-clock', label: 'Recenti' },
+        { key: 'items-desc', icon: 'fa-arrow-down-9-1', label: 'N. stimoli' },
+        { key: 'modes', icon: 'fa-gamepad', label: 'Modalit\u00E0' }
+    ];
+    bar.innerHTML = opts.map(o =>
+        `<button class="${sortBy === o.key ? 'active' : ''}" onclick="changeLibSort('${o.key}')">
+            <i class="fa-solid ${o.icon}"></i> ${o.label}
+        </button>`
+    ).join('');
+}
+
+window.changeLibSort = (sortBy) => {
+    state._libSort = sortBy;
+    renderLibList();
+};
+
+window.toggleLibCategory = (catName) => {
+    state._libCollapsed[catName] = !state._libCollapsed[catName];
+    renderLibList();
+};
+
 function renderLibList() {
     const container = document.getElementById('lib-list');
     if (!container) return;
+    renderLibSortBar();
 
     if (state.savedSets.length === 0) {
-        container.innerHTML = '<p style="grid-column:1/-1; text-align:center; opacity:0.5;">Nessun set in archivio.</p>';
+        container.innerHTML = '<p style="text-align:center; opacity:0.5; padding:40px;">Nessun set in archivio.</p>';
         return;
     }
 
-    container.innerHTML = state.savedSets.map(s => {
-        const previews = s.items.filter(i => i.url).slice(0, 4);
-        let previewHtml = '';
+    const sortBy = state._libSort || 'category';
+    let sets = [...state.savedSets];
 
-        if (previews.length > 0) {
-            previewHtml = `<div class="lib-preview-grid" style="display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:2px; height:120px; border-radius:8px; overflow:hidden; background:rgba(0,0,0,0.3); margin-bottom:8px;">
-                ${previews.map(i => `<img src="${i.url}" style="width:100%; height:100%; object-fit:cover;">`).join('')}
-                ${previews.length < 4 ? Array(4 - previews.length).fill('<div style="background:rgba(255,255,255,0.05);"></div>').join('') : ''}
+    // Sort
+    const sortFn = {
+        'name': (a, b) => a.name.localeCompare(b.name),
+        'recent': (a, b) => (b.date || '').localeCompare(a.date || ''),
+        'items-desc': (a, b) => b.items.length - a.items.length,
+        'modes': (a, b) => ((a.modes || []).join(',') || 'zzz').localeCompare((b.modes || []).join(',') || 'zzz'),
+        'category': (a, b) => (a.category || 'ZZZ').localeCompare(b.category || 'ZZZ') || (a.sortOrder || 0) - (b.sortOrder || 0) || a.name.localeCompare(b.name)
+    };
+    sets.sort(sortFn[sortBy] || sortFn['category']);
+
+    const useGroups = sortBy === 'category';
+    let html = '';
+
+    if (useGroups) {
+        const categories = {};
+        sets.forEach(s => {
+            const cat = s.category || 'Altri';
+            if (!categories[cat]) categories[cat] = [];
+            categories[cat].push(s);
+        });
+        for (const [catName, catSets] of Object.entries(categories)) {
+            const collapsed = state._libCollapsed[catName] || false;
+            html += `<div class="lib-category-header" onclick="toggleLibCategory('${catName.replace(/'/g, "\\'")}')">
+                <h3><i class="fa-solid fa-chevron-${collapsed ? 'right' : 'down'}" style="font-size:0.7rem; margin-right:6px;"></i>${catName}</h3>
+                <span class="cat-count">${catSets.length} set</span>
             </div>`;
-        } else {
-            previewHtml = `<div style="height:120px; background:rgba(0,0,0,0.2); border-radius:8px; display:flex; align-items:center; justify-content:center; color:#666; font-size:0.8rem; margin-bottom:8px; flex-direction:column; gap:5px;">
-                <i class="fa-solid fa-image fa-2x" style="opacity:0.3"></i>
-                <span>No Img</span>
-            </div>`;
+            if (!collapsed) {
+                html += '<div class="lib-grid">';
+                catSets.forEach((s, idx) => {
+                    html += renderLibCard(s, idx, catSets.length);
+                });
+                html += '</div>';
+            }
         }
+    } else {
+        html += '<div class="lib-grid">';
+        sets.forEach(s => { html += renderLibCard(s); });
+        html += '</div>';
+    }
 
-        const missingCount = s.items.filter(i => !i.url).length;
-        const warningHtml = missingCount > 0
-            ? `<div style="color:var(--warning-color); font-size:0.75rem; background:rgba(245, 158, 11, 0.1); padding:4px 8px; border-radius:6px; margin-top:5px; display:flex; align-items:center; gap:5px;">
-                <i class="fa-solid fa-triangle-exclamation"></i> ${missingCount} immagini mancanti
-               </div>`
-            : '';
-
-        // Show tags if present
-        const tagsHtml = (s.tags && s.tags.length > 0)
-            ? `<div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:4px;">
-                ${s.tags.map(t => `<span class="tag-chip" style="font-size:0.65rem; padding:1px 6px;">${t}</span>`).join('')}
-               </div>`
-            : '';
-
-        return `
-        <div class="lib-card ${s.isClinical ? 'clinical' : ''}">
-            ${previewHtml}
-            <div class="lib-title" style="font-weight:bold; font-size:1rem;">${s.name}</div>
-            <div class="lib-cat" style="color:var(--text-secondary); font-size:0.8rem;">${s.category || 'Generale'}</div>
-            <div style="font-size:0.8rem; color:#aaa; margin-top:2px;">${s.items.length} items</div>
-            ${tagsHtml}
-            ${warningHtml}
-
-            <div style="display:flex; gap:5px; margin-top:10px;">
-                <button class="btn btn-primary" style="flex:1; padding:6px;" onclick="loadSet('${s.id}')" title="Carica">
-                    <i class="fa-solid fa-play"></i>
-                </button>
-                <button class="btn btn-ghost" style="padding:6px 12px;" onclick="editSet('${s.id}')" title="Modifica">
-                    <i class="fa-solid fa-pen"></i>
-                </button>
-                <button class="btn btn-ghost" style="padding:6px 12px;" onclick="exportSingleSet('${s.id}')" title="Esporta file">
-                    <i class="fa-solid fa-file-export"></i>
-                </button>
-                <button class="btn btn-ghost" style="padding:6px 12px; color:var(--accent-color); border-color:rgba(99,102,241,0.3);" onclick="p2pSendSet('${s.id}')" title="Invia via P2P">
-                    <i class="fa-solid fa-wifi"></i>
-                </button>
-                <button class="btn btn-danger" style="padding:6px 12px;" onclick="deleteSet('${s.id}')" title="Elimina">
-                    <i class="fa-solid fa-trash"></i>
-                </button>
-            </div>
-        </div>`;
-    }).join('');
+    container.innerHTML = html;
 }
+
+function renderLibCard(s, idxInCat, catLength) {
+    const previews = s.items.filter(i => i.url).slice(0, 4);
+    let previewHtml = '';
+
+    if (previews.length > 0) {
+        previewHtml = `<div class="lib-preview-grid" style="display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:2px; height:120px; border-radius:8px; overflow:hidden; background:rgba(0,0,0,0.3); margin-bottom:8px;">
+            ${previews.map(i => `<img src="${i.url}" style="width:100%; height:100%; object-fit:cover;">`).join('')}
+            ${previews.length < 4 ? Array(4 - previews.length).fill('<div style="background:rgba(255,255,255,0.05);"></div>').join('') : ''}
+        </div>`;
+    } else {
+        previewHtml = `<div style="height:120px; background:rgba(0,0,0,0.2); border-radius:8px; display:flex; align-items:center; justify-content:center; color:#666; font-size:0.8rem; margin-bottom:8px; flex-direction:column; gap:5px;">
+            <i class="fa-solid fa-image fa-2x" style="opacity:0.3"></i>
+            <span>No Img</span>
+        </div>`;
+    }
+
+    const missingCount = s.items.filter(i => !i.url).length;
+    const warningHtml = missingCount > 0
+        ? `<div style="color:var(--warning-color); font-size:0.75rem; background:rgba(245, 158, 11, 0.1); padding:4px 8px; border-radius:6px; margin-top:5px; display:flex; align-items:center; gap:5px;">
+            <i class="fa-solid fa-triangle-exclamation"></i> ${missingCount} immagini mancanti
+           </div>`
+        : '';
+
+    const tagsHtml = (s.tags && s.tags.length > 0)
+        ? `<div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:4px;">
+            ${s.tags.map(t => `<span class="tag-chip" style="font-size:0.65rem; padding:1px 6px;">${t}</span>`).join('')}
+           </div>`
+        : '';
+
+    // Mode labels
+    const modesHtml = (s.modes && s.modes.length > 0)
+        ? `<div style="display:flex; gap:3px; flex-wrap:wrap; margin-top:2px;">
+            ${s.modes.map(m => `<span style="font-size:0.6rem; padding:1px 5px; border-radius:4px; background:rgba(99,102,241,0.15); color:var(--accent-color);">${getModeLabel ? getModeLabel(m) : m}</span>`).join('')}
+           </div>`
+        : '';
+
+    // Reorder buttons (only in category sort)
+    let reorderHtml = '';
+    if (idxInCat !== undefined && catLength !== undefined) {
+        reorderHtml = `<div style="position:absolute; top:6px; right:6px; display:flex; gap:2px; z-index:2;">
+            <button onclick="event.stopPropagation(); moveSetInCategory('${s.id}',-1)" style="width:24px; height:24px; border:1px solid var(--glass-border); border-radius:6px; background:rgba(0,0,0,0.4); color:${idxInCat > 0 ? 'var(--text-secondary)' : '#333'}; cursor:${idxInCat > 0 ? 'pointer' : 'default'}; font-size:0.6rem; display:flex; align-items:center; justify-content:center;" title="Sposta su" ${idxInCat === 0 ? 'disabled' : ''}>
+                <i class="fa-solid fa-arrow-left"></i>
+            </button>
+            <button onclick="event.stopPropagation(); moveSetInCategory('${s.id}',1)" style="width:24px; height:24px; border:1px solid var(--glass-border); border-radius:6px; background:rgba(0,0,0,0.4); color:${idxInCat < catLength - 1 ? 'var(--text-secondary)' : '#333'}; cursor:${idxInCat < catLength - 1 ? 'pointer' : 'default'}; font-size:0.6rem; display:flex; align-items:center; justify-content:center;" title="Sposta giù" ${idxInCat >= catLength - 1 ? 'disabled' : ''}>
+                <i class="fa-solid fa-arrow-right"></i>
+            </button>
+        </div>`;
+    }
+
+    return `
+    <div class="lib-card ${s.isClinical ? 'clinical' : ''}">
+        ${reorderHtml}
+        ${previewHtml}
+        <div class="lib-title" style="font-weight:bold; font-size:1rem;">${s.name}</div>
+        <div class="lib-cat" style="color:var(--text-secondary); font-size:0.8rem;">${s.category || 'Generale'}</div>
+        <div style="font-size:0.8rem; color:#aaa; margin-top:2px;">${s.items.length} items</div>
+        ${modesHtml}
+        ${tagsHtml}
+        ${warningHtml}
+
+        <div style="display:flex; gap:5px; margin-top:10px;">
+            <button class="btn btn-primary" style="flex:1; padding:6px;" onclick="loadSet('${s.id}')" title="Carica">
+                <i class="fa-solid fa-play"></i>
+            </button>
+            <button class="btn btn-ghost" style="padding:6px 12px;" onclick="editSet('${s.id}')" title="Modifica">
+                <i class="fa-solid fa-pen"></i>
+            </button>
+            <button class="btn btn-ghost" style="padding:6px 12px;" onclick="exportSingleSet('${s.id}')" title="Esporta file">
+                <i class="fa-solid fa-file-export"></i>
+            </button>
+            <button class="btn btn-ghost" style="padding:6px 12px; color:var(--accent-color); border-color:rgba(99,102,241,0.3);" onclick="p2pSendSet('${s.id}')" title="Invia via P2P">
+                <i class="fa-solid fa-wifi"></i>
+            </button>
+            <button class="btn btn-danger" style="padding:6px 12px;" onclick="deleteSet('${s.id}')" title="Elimina">
+                <i class="fa-solid fa-trash"></i>
+            </button>
+        </div>
+    </div>`;
+}
+
+// Move set position within its category
+window.moveSetInCategory = async (setId, dir) => {
+    const s = state.savedSets.find(x => x.id === setId);
+    if (!s) return;
+    const cat = s.category || 'Altri';
+
+    // Get all sets in same category, sorted by sortOrder
+    const catSets = state.savedSets
+        .filter(x => (x.category || 'Altri') === cat)
+        .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || a.name.localeCompare(b.name));
+
+    const idx = catSets.findIndex(x => x.id === setId);
+    const newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= catSets.length) return;
+
+    // Swap sort orders
+    const swap = catSets[newIdx];
+    const orderA = s.sortOrder || 0;
+    const orderB = swap.sortOrder || 0;
+    // If they have the same order, assign sequential orders first
+    if (orderA === orderB) {
+        catSets.forEach((cs, i) => { cs.sortOrder = i; });
+    }
+    // Now swap
+    const tmpOrder = s.sortOrder;
+    s.sortOrder = swap.sortOrder;
+    swap.sortOrder = tmpOrder;
+
+    await DB.saveSet(s);
+    await DB.saveSet(swap);
+    state.savedSets = await DB.getAllSets();
+    renderLibList();
+};
 
 window.loadSet = async (id) => {
     const s = state.savedSets.find(x => x.id === id);
