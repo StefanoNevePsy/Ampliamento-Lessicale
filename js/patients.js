@@ -1332,29 +1332,11 @@ th { background: #4472c4; color: white; font-weight: bold; }
     html += `</table></body></html>`;
 
     const blob = new Blob(['\uFEFF' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
     const safeName = p.name.replace(/[^a-zA-Z0-9\u00C0-\u024F]/g, '_');
     const fileName = `${safeName}_report_${new Date().toISOString().split('T')[0]}.xls`;
 
-    if (typeof Capacitor !== 'undefined' && navigator.share) {
-        const file = new File([blob], fileName, { type: 'application/vnd.ms-excel' });
-        navigator.share({ files: [file], title: `Report ${p.name}` }).catch(() => {
-            downloadBlob(url, fileName);
-        });
-    } else {
-        downloadBlob(url, fileName);
-    }
+    downloadFile(blob, fileName, `Report ${p.name}`);
 };
-
-function downloadBlob(url, fileName) {
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-}
 
 // ============================================================
 // TASK ANALYSIS - Per-step breakdown across sessions

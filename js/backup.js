@@ -10,33 +10,84 @@ function getTimestampedFilename() {
     return `Terapia_Attiva_${d}_${m}_${y}_${h}_${min}.json`;
 }
 
-async function downloadJSON(data, filename) {
-    const json = JSON.stringify(data, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
+// Universal file download/share helper (works on desktop + Capacitor Android)
+async function downloadFile(blob, filename, title) {
+    const isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 
-    // Try Web Share API first (works on Android/Capacitor)
-    try {
-        const file = new File([blob], filename, { type: 'application/json' });
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-            await navigator.share({ title: 'Backup Terapia Attiva', files: [file] });
+    // Method 1: Web Share API with file (skip canShare - just try directly)
+    if (navigator.share) {
+        try {
+            const file = new File([blob], filename, { type: blob.type });
+            await navigator.share({ title: title || filename, files: [file] });
             return;
+        } catch (e) {
+            if (e.name === 'AbortError') return;
+            console.warn('Share file failed:', e.message);
         }
-    } catch (e) {
-        // Share was cancelled or not supported, fall through to download
-        if (e.name === 'AbortError') return; // User cancelled share
+        // Retry with text/plain mime (some Android versions reject other types)
+        if (blob.type !== 'text/plain') {
+            try {
+                const txtBlob = new Blob([blob], { type: 'text/plain' });
+                const txtFile = new File([txtBlob], filename, { type: 'text/plain' });
+                await navigator.share({ title: title || filename, files: [txtFile] });
+                return;
+            } catch (e2) {
+                if (e2.name === 'AbortError') return;
+                console.warn('Share text fallback failed:', e2.message);
+            }
+        }
     }
 
-    // Fallback: <a> download (works on desktop browsers)
+    // Method 2: Capacitor Filesystem + Share plugins (if installed)
+    if (isNative && window.Capacitor.Plugins) {
+        const FS = window.Capacitor.Plugins.Filesystem;
+        if (FS) {
+            try {
+                const text = await blob.text();
+                const written = await FS.writeFile({
+                    path: filename,
+                    data: text,
+                    directory: 'CACHE',
+                    encoding: 'utf8'
+                });
+                const SharePlugin = window.Capacitor.Plugins.Share;
+                if (SharePlugin) {
+                    await SharePlugin.share({
+                        title: title || filename,
+                        url: written.uri,
+                        dialogTitle: title || 'Salva File'
+                    });
+                } else {
+                    alert('File salvato nella cache: ' + filename);
+                }
+                return;
+            } catch (e) {
+                console.warn('Capacitor Filesystem fallback failed:', e);
+            }
+        }
+    }
+
+    // Method 3: <a> download (desktop browsers)
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
     document.body.appendChild(a);
     a.click();
-    setTimeout(() => {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }, 100);
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+
+    // If native and we got here, <a> download likely didn't work
+    if (isNative) {
+        setTimeout(() => {
+            alert('Se il file non si è scaricato, esegui:\nnpx cap sync\nper attivare il supporto download nativo.');
+        }, 600);
+    }
+}
+
+async function downloadJSON(data, filename) {
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    await downloadFile(blob, filename, 'Backup Terapia Attiva');
 }
 
 // Full backup - opens selective export modal
