@@ -845,13 +845,15 @@ window.toggleDaySessionDetail = (header, patientId, sessionIdx, activityKeyEncod
                 }
             }
 
-            // Task analysis step details
+            // Task analysis step details with percentages
             if (s.mode === 'quaderno_task' && s.taskSteps && s.taskSteps.length > 0) {
                 html += `<div style="margin-bottom:8px;">`;
                 html += `<div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-list-ol"></i> Dettaglio Passaggi:</div>`;
                 html += `<div style="display:flex; flex-direction:column; gap:2px;">`;
                 s.taskSteps.forEach((step, i) => {
                     const v = step.v || 0, x = step.x || 0, p = step.p || 0, na = step.na || 0;
+                    const scored = v + x + p;
+                    const stepPct = scored > 0 ? Math.round(v / scored * 100) : null;
                     let parts = [];
                     if (v > 0) parts.push(`<span style="color:var(--success-color)">${v}V</span>`);
                     if (x > 0) parts.push(`<span style="color:var(--danger-color)">${x}X</span>`);
@@ -861,9 +863,11 @@ window.toggleDaySessionDetail = (header, patientId, sessionIdx, activityKeyEncod
                     if (v > 0 && x === 0 && p === 0) { bg = 'rgba(16,185,129,0.1)'; border = 'rgba(16,185,129,0.3)'; }
                     else if (x > 0) { bg = 'rgba(239,68,68,0.1)'; border = 'rgba(239,68,68,0.3)'; }
                     else if (p > 0) { bg = 'rgba(245,158,11,0.1)'; border = 'rgba(245,158,11,0.3)'; }
+                    const pctColor = stepPct !== null ? (stepPct >= 90 ? 'var(--success-color)' : stepPct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)') : '#888';
+                    const pctHtml = stepPct !== null ? `<span style="font-size:0.7rem; color:${pctColor}; font-weight:bold; margin-left:6px;">${stepPct}%</span>` : '';
                     html += `<div style="padding:4px 8px; border-radius:6px; font-size:0.75rem; background:${bg}; border:1px solid ${border}; display:flex; justify-content:space-between; align-items:center;">
                         <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px;"><b>${i + 1}.</b> ${step.name}</span>
-                        <span style="font-weight:bold; flex-shrink:0;">${parts.length > 0 ? parts.join(' ') : '<span style="color:#888">N/A</span>'}</span>
+                        <span style="font-weight:bold; flex-shrink:0; display:flex; align-items:center; gap:4px;">${parts.length > 0 ? parts.join(' ') : '<span style="color:#888">N/A</span>'}${pctHtml}</span>
                     </div>`;
                 });
                 html += `</div></div>`;
@@ -915,7 +919,7 @@ function renderItemDetailsCollapsible(s, patientId, sessionIdx, isTD) {
     }).join('');
 
     return `
-        <tr class="item-details-row" style="display:none;">
+        <tr class="item-details-row" style="display:table-row;">
             <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(0,0,0,0.15);">
                 <div style="font-size:0.7rem; color:${wrongColor}; margin-bottom:4px; font-weight:bold;">${wrongLabel} (${wrong.length}):</div>
                 <div style="display:flex; flex-wrap:wrap; gap:2px;">${chips}</div>
@@ -953,7 +957,7 @@ function renderTaskStepDetailsCollapsible(s, patientId, sessionIdx, isTD) {
     }).join('');
 
     return `
-        <tr class="item-details-row" style="display:none;">
+        <tr class="item-details-row" style="display:table-row;">
             <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(0,0,0,0.15);">
                 <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-list-ol"></i> Dettaglio Passaggi (V/X/P):</div>
                 <div style="display:flex; flex-direction:column; gap:2px;">${chips}</div>
@@ -1108,7 +1112,7 @@ function renderActivitiesTab(patient, sortBy) {
                 ? renderItemDetailsCollapsible(s, patient.id, s.originalIndex, isTD)
                 : (isTaskAnalysisSession ? renderTaskStepDetailsCollapsible(s, patient.id, s.originalIndex, isTD) : '');
             const detailsBtn = (hasDetails || isTaskAnalysisSession)
-                ? `<button class="btn-icon item-details-toggle" style="width:26px; height:26px; font-size:0.6rem; display:inline-flex; color:${isTD ? 'var(--warning-color)' : (isTaskAnalysisSession ? 'var(--accent-color)' : 'var(--danger-color)')}; border-color:rgba(${isTD ? '245,158,11' : (isTaskAnalysisSession ? '99,102,241' : '239,68,68')},0.3);" title="Dettagli"><i class="fa-solid fa-chevron-down" style="transition:transform 0.2s;"></i></button>`
+                ? `<button class="btn-icon item-details-toggle" style="width:26px; height:26px; font-size:0.6rem; display:inline-flex; color:${isTD ? 'var(--warning-color)' : (isTaskAnalysisSession ? 'var(--accent-color)' : 'var(--danger-color)')}; border-color:rgba(${isTD ? '245,158,11' : (isTaskAnalysisSession ? '99,102,241' : '239,68,68')},0.3);" title="Dettagli"><i class="fa-solid fa-chevron-down" style="transition:transform 0.2s; transform:rotate(180deg);"></i></button>`
                 : '';
             return `
                         <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
@@ -1131,9 +1135,10 @@ function renderActivitiesTab(patient, sortBy) {
 
     content.innerHTML = html;
 
-    // Wire up item detail toggles
+    // Wire up item detail toggles (default open)
     content.querySelectorAll('.item-details-toggle').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
             const row = btn.closest('tr').nextElementSibling;
             if (row && row.classList.contains('item-details-row')) {
                 const isOpen = row.style.display !== 'none';
