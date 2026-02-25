@@ -1,5 +1,31 @@
 // === GAME MODE RENDERERS ===
 
+// Balanced shuffle: distributes items evenly across categories
+// instead of pure random which skews toward categories with more items
+function balancedShuffle(items, getTagFn) {
+    const groups = {};
+    items.forEach(item => {
+        const tag = getTagFn(item) || '_default';
+        if (!groups[tag]) groups[tag] = [];
+        groups[tag].push(item);
+    });
+    // Shuffle within each group
+    Object.values(groups).forEach(arr => arr.sort(() => Math.random() - 0.5));
+    // Weighted random: equal probability per tag at each pick
+    const result = [];
+    const tagKeys = Object.keys(groups);
+    const indices = {};
+    tagKeys.forEach(k => indices[k] = 0);
+    while (result.length < items.length) {
+        const available = tagKeys.filter(k => indices[k] < groups[k].length);
+        if (available.length === 0) break;
+        const tag = available[Math.floor(Math.random() * available.length)];
+        result.push(groups[tag][indices[tag]]);
+        indices[tag]++;
+    }
+    return result;
+}
+
 function getPlaceholderUrl(label) {
     return `https://placehold.co/600x600?text=${encodeURIComponent(label || '?')}`;
 }
@@ -552,7 +578,7 @@ function renderPoolRandom(items, stage) {
 }
 
 function showPoolBatch(stage) {
-    state.poolAllItems.sort(() => Math.random() - 0.5);
+    state.poolAllItems = balancedShuffle(state.poolAllItems, item => (item.sourceTags && item.sourceTags[0]) || item.sourceTag || '_');
     const batch = state.poolAllItems.slice(0, state.poolBatchSize);
     const cols = Math.ceil(Math.sqrt(batch.length));
     const rows = Math.ceil(batch.length / cols);
@@ -1392,7 +1418,7 @@ function renderCategorizzazione(items, stage) {
         });
     });
 
-    allItems.sort(() => Math.random() - 0.5);
+    allItems = balancedShuffle(allItems, item => item.correctTag);
     const numStimuli = parseInt(document.getElementById('num-stimuli').value) || 0;
     if (numStimuli > 0 && allItems.length > numStimuli) {
         allItems = allItems.slice(0, numStimuli);
