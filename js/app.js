@@ -3,6 +3,10 @@
 // --- INIT ---
 window.onload = async () => {
     try {
+        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.StatusBar) {
+            window.Capacitor.Plugins.StatusBar.hide().catch(err => console.error("Impossibile nascondere status bar", err));
+        }
+
         // Init tag image cache (IndexedDB + migrate from localStorage)
         await initTagImageCache();
 
@@ -96,12 +100,14 @@ window.filterSetsByMode = function () {
     }
 
     const compatibleSets = state.savedSets.filter(s => {
-        if (s.modes && Array.isArray(s.modes) && s.modes.length > 0) {
+        if (s.modes && Array.isArray(s.modes)) {
+            // If modes array exists (even empty), use it as the source of truth
+            if (s.modes.length === 0) return false; // No modes assigned = not compatible with anything
             // Resolve engine for compatibility check
             const checkEngine = (engine === 'intraverbal_scenari') ? 'search_find' : engine;
             return s.modes.includes(checkEngine) || s.modes.includes(engine) || s.modes.includes(currentMode);
         }
-        // Fallback for old sets without mode tags
+        // Fallback for old sets without mode tags at all (modes field missing)
         if (engine === 'search_find' || engine === 'intraverbal_scenari') {
             return s.category && (s.category.includes('Scene') || s.category.includes('Cerca'));
         } else {
@@ -120,6 +126,8 @@ window.filterSetsByMode = function () {
             </div>`;
         state.items = [];
         state.activeSetId = null;
+        const lbl = document.getElementById('set-dropdown-label');
+        if (lbl) lbl.textContent = '-- Scegli un Set --';
     }
 };
 
@@ -161,47 +169,208 @@ window.togglePoolTag = (tag) => {
     renderPoolTagSelector();
 };
 
-// --- DROPDOWN WITH INDICATORS ---
+// --- CUSTOM SET DROPDOWN ---
+// Persist sort preference and collapsed categories
+if (!state._setDropdownSort) state._setDropdownSort = 'category';
+if (!state._collapsedCats) state._collapsedCats = {};
+let _dropdownSets = []; // cached for re-sort
+
+function getSetStatus(s, activePatient, currentMode) {
+    const info = { isMastered: false, isRepertorio: false, isNear: false, lastPct: null, lastDate: null, sessions: 0 };
+    if (!activePatient || !activePatient.history) return info;
+    const sessions = activePatient.history.filter(h => h.setId === s.id && h.mode === currentMode);
+    info.sessions = sessions.length;
+    if (sessions.length === 0) return info;
+    info.isMastered = typeof checkCriterion === 'function' && checkCriterion(sessions);
+    info.isRepertorio = typeof checkRepertorio === 'function' && checkRepertorio(sessions);
+    info.isNear = !info.isMastered && typeof isNearCriterion === 'function' && isNearCriterion(sessions);
+    const sorted = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
+    const last = sorted[sorted.length - 1];
+    if (last) {
+        info.lastPct = last.percentage != null ? Math.round(last.percentage) : null;
+        info.lastDate = last.date;
+    }
+    return info;
+}
+
 function updateDropdown(sets) {
-    const select = document.getElementById('category-select');
+    const panel = document.getElementById('set-dropdown-panel');
+    const label = document.getElementById('set-dropdown-label');
+    if (!panel) return;
+
+    _dropdownSets = sets;
     const currentMode = document.getElementById('mode-select').value;
     const activePatient = state.activePatientId ? state.patients.find(p => p.id === state.activePatientId) : null;
+    const sortBy = state._setDropdownSort || 'category';
 
-    select.innerHTML = '<option value="" disabled selected>-- Scegli un Set --</option>';
+    // Enrich sets with status data for sorting
+    const enriched = sets.map(s => ({
+        set: s,
+        status: getSetStatus(s, activePatient, currentMode)
+    }));
 
-    const categories = {};
-    sets.forEach(s => {
-        const cat = s.category || "Altri";
-        if (!categories[cat]) categories[cat] = [];
-        categories[cat].push(s);
+    // Sort
+    const sortFunctions = {
+        'category': (a, b) => (a.set.category || 'ZZZ').localeCompare(b.set.category || 'ZZZ') || a.set.name.localeCompare(b.set.name),
+        'name': (a, b) => a.set.name.localeCompare(b.set.name),
+        'pct-desc': (a, b) => (b.status.lastPct ?? -1) - (a.status.lastPct ?? -1),
+        'pct-asc': (a, b) => (a.status.lastPct ?? 999) - (b.status.lastPct ?? 999),
+        'recent': (a, b) => {
+            const da = a.status.lastDate ? new Date(a.status.lastDate) : new Date(0);
+            const db = b.status.lastDate ? new Date(b.status.lastDate) : new Date(0);
+            return db - da;
+        },
+        'criterion': (a, b) => {
+            const scoreA = a.status.isMastered ? 3 : a.status.isRepertorio ? 2 : a.status.isNear ? 1 : 0;
+            const scoreB = b.status.isMastered ? 3 : b.status.isRepertorio ? 2 : b.status.isNear ? 1 : 0;
+            return scoreB - scoreA || (b.status.lastPct ?? -1) - (a.status.lastPct ?? -1);
+        }
+    };
+    enriched.sort(sortFunctions[sortBy] || sortFunctions['category']);
+
+    // Sort toolbar
+    const sortOpts = [
+        { key: 'category', icon: 'fa-folder', tip: 'Categoria' },
+        { key: 'name', icon: 'fa-font', tip: 'Nome' },
+        { key: 'recent', icon: 'fa-clock', tip: 'Recenti' },
+        { key: 'pct-desc', icon: 'fa-arrow-down-9-1', tip: '% desc' },
+        { key: 'pct-asc', icon: 'fa-arrow-up-1-9', tip: '% asc' },
+        { key: 'criterion', icon: 'fa-trophy', tip: 'Criterio' }
+    ];
+    let html = `<div class="set-dropdown-sort-bar">`;
+    sortOpts.forEach(o => {
+        html += `<button onclick="event.stopPropagation(); changeSetDropdownSort('${o.key}')" class="${sortBy === o.key ? 'active' : ''}" title="${o.tip}"><i class="fa-solid ${o.icon}"></i></button>`;
     });
+    html += `</div>`;
 
-    for (const [catName, catSets] of Object.entries(categories)) {
-        const group = document.createElement('optgroup');
-        group.label = catName;
+    // Group by category (only for 'category' sort)
+    const useGroups = sortBy === 'category';
 
-        catSets.forEach(s => {
-            const opt = document.createElement('option');
-            opt.value = s.id;
-
-            const missingCount = s.items.filter(i => !i.url).length;
-            const warningTag = missingCount > 0 ? ` \u26A0\uFE0F${missingCount}` : '';
-
-            let trophyTag = '';
-            if (activePatient && activePatient.history) {
-                const sessions = activePatient.history.filter(h => h.setId === s.id && h.mode === currentMode);
-                if (typeof checkCriterion === 'function' && checkCriterion(sessions)) {
-                    trophyTag = ' \uD83C\uDFC6';
-                }
-            }
-
-            opt.text = `${s.name}${warningTag}${trophyTag}`;
-            if (state.activeSetId === s.id) opt.selected = true;
-            group.appendChild(opt);
+    if (useGroups) {
+        const categories = {};
+        enriched.forEach(e => {
+            const cat = e.set.category || "Altri";
+            if (!categories[cat]) categories[cat] = [];
+            categories[cat].push(e);
         });
-        select.appendChild(group);
+        for (const [catName, catItems] of Object.entries(categories)) {
+            const collapsed = state._collapsedCats[catName] || false;
+            html += `<div class="set-dropdown-group-label" onclick="event.stopPropagation(); toggleSetCategory('${catName.replace(/'/g, "\\'")}')">
+                <span>${catName}</span>
+                <span style="display:flex; align-items:center; gap:6px;">
+                    <span style="opacity:0.5; font-size:0.6rem;">${catItems.length}</span>
+                    <i class="fa-solid fa-chevron-${collapsed ? 'right' : 'down'}" style="font-size:0.55rem; opacity:0.5;"></i>
+                </span>
+            </div>`;
+            if (!collapsed) {
+                catItems.forEach(e => { html += renderSetDropdownItem(e.set, e.status); });
+            }
+        }
+    } else {
+        enriched.forEach(e => { html += renderSetDropdownItem(e.set, e.status); });
+    }
+
+    if (enriched.length === 0) {
+        html += '<div style="padding:20px; text-align:center; color:var(--text-secondary); font-size:0.85rem;">Nessun set compatibile</div>';
+    }
+
+    panel.innerHTML = html;
+
+    // Update trigger label
+    if (state.activeSetId) {
+        const activeSet = sets.find(s => s.id === state.activeSetId);
+        label.textContent = activeSet ? activeSet.name : '-- Scegli un Set --';
+    } else {
+        label.textContent = '-- Scegli un Set --';
     }
 }
+
+function renderSetDropdownItem(s, status) {
+    const isSelected = state.activeSetId === s.id;
+    const missingCount = s.items.filter(i => !i.url).length;
+
+    const firstImg = s.items.find(i => i.url);
+    const thumbHtml = firstImg
+        ? `<div class="set-item-thumb"><img src="${firstImg.url}" loading="lazy" alt=""></div>`
+        : `<div class="set-item-thumb"><i class="fa-solid fa-images"></i></div>`;
+
+    let badges = '';
+    if (status.isMastered) {
+        badges += '<span class="set-item-badge badge-criterion">\uD83C\uDFC6 Criterio</span>';
+    } else if (status.isRepertorio) {
+        badges += '<span class="set-item-badge badge-repertorio">\u2B50 Repertorio</span>';
+    }
+    if (status.isNear) {
+        badges += '<span class="set-item-badge badge-near">\u2191 Vicino</span>';
+    }
+    if (status.lastPct != null) {
+        const pctColor = status.lastPct >= 90 ? '#10b981' : status.lastPct >= 70 ? '#f59e0b' : '#ef4444';
+        badges += `<span class="set-item-badge badge-pct" style="color:${pctColor}">${status.lastPct}%</span>`;
+    }
+    if (missingCount > 0) {
+        badges += `<span class="set-item-badge badge-warning">\u26A0 ${missingCount}</span>`;
+    }
+
+    return `<div class="set-dropdown-item${isSelected ? ' selected' : ''}" data-set-id="${s.id}" onclick="selectSetFromDropdown('${s.id}')">
+        ${thumbHtml}
+        <div class="set-item-info">
+            <div class="set-item-name">${s.name}</div>
+            <div class="set-item-meta">
+                <span class="set-item-count">${s.items.length} stimoli</span>
+                ${badges}
+            </div>
+        </div>
+    </div>`;
+}
+
+window.changeSetDropdownSort = (sortBy) => {
+    state._setDropdownSort = sortBy;
+    updateDropdown(_dropdownSets);
+};
+
+window.toggleSetCategory = (catName) => {
+    state._collapsedCats[catName] = !state._collapsedCats[catName];
+    updateDropdown(_dropdownSets);
+};
+
+window.toggleSetDropdown = () => {
+    const trigger = document.getElementById('set-dropdown-trigger');
+    const panel = document.getElementById('set-dropdown-panel');
+    if (!trigger || !panel) return;
+    const isOpen = panel.classList.contains('open');
+    if (isOpen) {
+        closeSetDropdown();
+    } else {
+        closeModeDropdown();
+        if (typeof closePatientDropdown === 'function') closePatientDropdown();
+        trigger.classList.add('open');
+        panel.classList.add('open');
+        const sel = panel.querySelector('.set-dropdown-item.selected');
+        if (sel) setTimeout(() => sel.scrollIntoView({ block: 'nearest' }), 50);
+    }
+};
+
+function closeSetDropdown() {
+    const trigger = document.getElementById('set-dropdown-trigger');
+    const panel = document.getElementById('set-dropdown-panel');
+    if (trigger) trigger.classList.remove('open');
+    if (panel) panel.classList.remove('open');
+}
+
+window.selectSetFromDropdown = (setId) => {
+    closeSetDropdown();
+    loadSelectedSet(setId);
+};
+
+// Close all custom dropdowns when clicking outside
+document.addEventListener('click', (e) => {
+    const setDd = document.getElementById('set-dropdown');
+    if (setDd && !setDd.contains(e.target)) closeSetDropdown();
+    const modeDd = document.getElementById('mode-dropdown');
+    if (modeDd && !modeDd.contains(e.target)) closeModeDropdown();
+    const patDd = document.getElementById('patient-dropdown');
+    if (patDd && !patDd.contains(e.target)) { if (typeof closePatientDropdown === 'function') closePatientDropdown(); }
+});
 
 // --- LOAD SET FROM DROPDOWN ---
 window.loadSelectedSet = async (setId) => {
@@ -209,6 +378,15 @@ window.loadSelectedSet = async (setId) => {
     if (s) {
         state.activeSetId = setId;
         state.items = JSON.parse(JSON.stringify(s.items));
+        // Update custom dropdown label & selection highlight
+        const label = document.getElementById('set-dropdown-label');
+        if (label) label.textContent = s.name;
+        const panel = document.getElementById('set-dropdown-panel');
+        if (panel) {
+            panel.querySelectorAll('.set-dropdown-item').forEach(el => {
+                el.classList.toggle('selected', el.dataset.setId === setId);
+            });
+        }
         window.startGame();
     }
 };
@@ -238,7 +416,7 @@ window.startGame = () => {
         updateScoreUI();
         document.getElementById('scoring-controls').classList.remove('hidden');
         document.getElementById('btn-save-session').classList.add('hidden');
-        document.getElementById('btn-undo-marker').classList.add('hidden');
+        document.getElementById('btn-undo-marker').classList.remove('hidden');
 
         if (engine === 'pool_random' || engine === 'pool_intraverbal') {
             let poolItems = getItemsByTags(state.selectedPoolTags);
@@ -298,7 +476,7 @@ window.startGame = () => {
     state.session.playItems = playItems; // Store for per-item detail tracking
 
     const undoBtn = document.getElementById('btn-undo-marker');
-    if (engine === 'search_find' || engine === 'intraverbal_scenari') undoBtn.classList.remove('hidden'); else undoBtn.classList.add('hidden');
+    if (undoBtn) undoBtn.classList.remove('hidden');
     renderGameMode(mode, playItems);
 };
 
@@ -308,9 +486,14 @@ window.recordResponse = (result) => {
     const mode = document.getElementById('mode-select').value;
     const engine = getModeEngine(mode);
 
+    if (!state.session.scoreHistory) state.session.scoreHistory = [];
+
     if (engine === 'tact' || (engine === 'ran' && state.ranMode === 'single')) {
         const currentIndex = (engine === 'tact') ? state.tactIndex : state.ranIndex;
         state.session.itemResults[currentIndex] = result;
+        if (state.session.scoreHistory[state.session.scoreHistory.length - 1] !== currentIndex) {
+            state.session.scoreHistory.push(currentIndex);
+        }
 
         const targetImg = document.querySelector('.tact-card-lg img, .ran-main-img');
         if (targetImg) {
@@ -321,16 +504,26 @@ window.recordResponse = (result) => {
         }
     } else if (engine === 'search_find' || engine === 'intraverbal_scenari') {
         const markers = document.querySelectorAll('.marker-pin');
+        let scoredId = null;
         if (markers.length > 0) {
             const lastMarker = markers[markers.length - 1];
-            if (!lastMarker.dataset.id) lastMarker.dataset.id = Date.now();
-            state.session.itemResults[lastMarker.dataset.id] = result;
+            if (!lastMarker.dataset.id) lastMarker.dataset.id = Date.now().toString();
+            scoredId = lastMarker.dataset.id;
+            state.session.itemResults[scoredId] = result;
             lastMarker.classList.remove('success', 'fail', 'prompt');
             if (result === 'prompt') lastMarker.classList.add('prompt');
             else lastMarker.classList.add(result ? 'success' : 'fail');
+        } else if (engine === 'intraverbal_scenari') {
+            scoredId = Date.now().toString();
+            state.session.itemResults[scoredId] = result;
+        }
+        if (scoredId && state.session.scoreHistory[state.session.scoreHistory.length - 1] !== scoredId) {
+            state.session.scoreHistory.push(scoredId);
         }
     } else {
-        state.session.itemResults[Date.now()] = result;
+        const id = Date.now().toString();
+        state.session.itemResults[id] = result;
+        state.session.scoreHistory.push(id);
     }
 
     const results = Object.values(state.session.itemResults);
@@ -347,11 +540,21 @@ window.recordResponse = (result) => {
 function updateScoreUI() {
     const el = document.getElementById('score-display');
     const prompts = state.session.prompts || 0;
+    const errors = state.session.incorrect || 0;
+
+    let html = `${state.session.correct}`;
+    let tags = [];
     if (prompts > 0) {
-        el.innerHTML = `${state.session.correct} <span style="font-size:0.65rem; color:var(--warning-color);">P${prompts}</span>`;
-    } else {
-        el.innerText = `${state.session.correct}`;
+        tags.push(`<span style="font-size:0.65rem; color:var(--warning-color);">P${prompts}</span>`);
     }
+    if (errors > 0) {
+        tags.push(`<span style="font-size:0.65rem; color:var(--danger-color);">X${errors}</span>`);
+    }
+
+    if (tags.length > 0) {
+        html += ` ${tags.join(' ')}`;
+    }
+    el.innerHTML = html;
 }
 
 // --- SESSION TYPE SELECTOR ---
@@ -403,8 +606,12 @@ function handleShortcuts(e) {
         if (e.key.toLowerCase() === 'x') fluenzaMarkError();
     }
     if (engine === 'search_find' || engine === 'intraverbal_scenari') {
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') removeLastMarker();
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { if (typeof window.undoLastAction === 'function') window.undoLastAction(); }
         if (e.key === 'Delete' || e.key === 'Backspace') clearMarkers();
+    }
+    // Global undo fallback
+    if (!(engine === 'search_find' || engine === 'intraverbal_scenari') && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        if (typeof window.undoLastAction === 'function') window.undoLastAction();
     }
 }
 
@@ -427,10 +634,13 @@ window.confirmSaveSession = async () => {
     const rawTotal = rawV + rawP + rawX;
 
     let defaultName;
+    let setCat = '';
     if (POOL_ENGINES.includes(engine)) {
         defaultName = 'Pool: ' + state.selectedPoolTags.join(', ');
     } else {
-        defaultName = state.savedSets.find(ss => ss.id === state.activeSetId)?.name || "Set Rimosso";
+        const activeSet = state.savedSets.find(ss => ss.id === state.activeSetId);
+        defaultName = activeSet?.name || "Set Rimosso";
+        setCat = activeSet?.category || '';
     }
 
     const nameInput = document.getElementById('session-name-input');
@@ -444,6 +654,7 @@ window.confirmSaveSession = async () => {
         date: new Date().toISOString(),
         setId: state.activeSetId,
         setName: setName,
+        setCat: setCat,
         mode: mode,
         correct: correct,
         prompts: rawP,
@@ -469,6 +680,14 @@ window.confirmSaveSession = async () => {
         sessionData.rawP = 0;
         sessionData.prompts = 0;
         sessionData.percentage = sessionData.total > 0 ? Math.round((sessionData.correct / sessionData.total) * 100) : 0;
+    }
+
+    // Sequenze phase (seriazione / racconto)
+    if (state.session.sequenzePhase) {
+        sessionData.sequenzePhase = state.session.sequenzePhase;
+        const stimCount = state.sequenzeCorrectOrder ? state.sequenzeCorrectOrder.length : sessionData.total;
+        const phaseLabel = state.session.sequenzePhase === 'racconto' ? 'Racconto' : 'Seriazione';
+        sessionData.setName = setName + ` [${phaseLabel} ${stimCount}]`;
     }
 
     // Save per-item details for modes with labeled items
@@ -540,82 +759,213 @@ window.reloadLibrary = async () => {
 };
 
 // --- LIBRARY LIST ---
+if (!state._libSort) state._libSort = 'category';
+if (!state._libCollapsed) state._libCollapsed = {};
+
+function renderLibSortBar() {
+    const bar = document.getElementById('lib-sort-bar');
+    if (!bar) return;
+    const sortBy = state._libSort || 'category';
+    const opts = [
+        { key: 'category', icon: 'fa-folder', label: 'Categoria' },
+        { key: 'name', icon: 'fa-font', label: 'Nome' },
+        { key: 'recent', icon: 'fa-clock', label: 'Recenti' },
+        { key: 'items-desc', icon: 'fa-arrow-down-9-1', label: 'N. stimoli' },
+        { key: 'modes', icon: 'fa-gamepad', label: 'Modalit\u00E0' }
+    ];
+    bar.innerHTML = opts.map(o =>
+        `<button class="${sortBy === o.key ? 'active' : ''}" onclick="changeLibSort('${o.key}')">
+            <i class="fa-solid ${o.icon}"></i> ${o.label}
+        </button>`
+    ).join('');
+}
+
+window.changeLibSort = (sortBy) => {
+    state._libSort = sortBy;
+    renderLibList();
+};
+
+window.toggleLibCategory = (catName) => {
+    state._libCollapsed[catName] = !state._libCollapsed[catName];
+    renderLibList();
+};
+
 function renderLibList() {
     const container = document.getElementById('lib-list');
     if (!container) return;
+    renderLibSortBar();
 
     if (state.savedSets.length === 0) {
-        container.innerHTML = '<p style="grid-column:1/-1; text-align:center; opacity:0.5;">Nessun set in archivio.</p>';
+        container.innerHTML = '<p style="text-align:center; opacity:0.5; padding:40px;">Nessun set in archivio.</p>';
         return;
     }
 
-    container.innerHTML = state.savedSets.map(s => {
-        const previews = s.items.filter(i => i.url).slice(0, 4);
-        let previewHtml = '';
+    const sortBy = state._libSort || 'category';
+    let sets = [...state.savedSets];
 
-        if (previews.length > 0) {
-            previewHtml = `<div class="lib-preview-grid" style="display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:2px; height:120px; border-radius:8px; overflow:hidden; background:rgba(0,0,0,0.3); margin-bottom:8px;">
-                ${previews.map(i => `<img src="${i.url}" style="width:100%; height:100%; object-fit:cover;">`).join('')}
-                ${previews.length < 4 ? Array(4 - previews.length).fill('<div style="background:rgba(255,255,255,0.05);"></div>').join('') : ''}
+    // Sort
+    const sortFn = {
+        'name': (a, b) => a.name.localeCompare(b.name),
+        'recent': (a, b) => (b.date || '').localeCompare(a.date || ''),
+        'items-desc': (a, b) => b.items.length - a.items.length,
+        'modes': (a, b) => ((a.modes || []).join(',') || 'zzz').localeCompare((b.modes || []).join(',') || 'zzz'),
+        'category': (a, b) => (a.category || 'ZZZ').localeCompare(b.category || 'ZZZ') || (a.sortOrder || 0) - (b.sortOrder || 0) || a.name.localeCompare(b.name)
+    };
+    sets.sort(sortFn[sortBy] || sortFn['category']);
+
+    const useGroups = sortBy === 'category';
+    let html = '';
+
+    if (useGroups) {
+        const categories = {};
+        sets.forEach(s => {
+            const cat = s.category || 'Altri';
+            if (!categories[cat]) categories[cat] = [];
+            categories[cat].push(s);
+        });
+        for (const [catName, catSets] of Object.entries(categories)) {
+            const collapsed = state._libCollapsed[catName] || false;
+            html += `<div class="lib-category-header" onclick="toggleLibCategory('${catName.replace(/'/g, "\\'")}')">
+                <h3><i class="fa-solid fa-chevron-${collapsed ? 'right' : 'down'}" style="font-size:0.7rem; margin-right:6px;"></i>${catName}</h3>
+                <span class="cat-count">${catSets.length} set</span>
             </div>`;
-        } else {
-            previewHtml = `<div style="height:120px; background:rgba(0,0,0,0.2); border-radius:8px; display:flex; align-items:center; justify-content:center; color:#666; font-size:0.8rem; margin-bottom:8px; flex-direction:column; gap:5px;">
-                <i class="fa-solid fa-image fa-2x" style="opacity:0.3"></i>
-                <span>No Img</span>
-            </div>`;
+            if (!collapsed) {
+                html += '<div class="lib-grid">';
+                catSets.forEach((s, idx) => {
+                    html += renderLibCard(s, idx, catSets.length);
+                });
+                html += '</div>';
+            }
         }
+    } else {
+        html += '<div class="lib-grid">';
+        sets.forEach(s => { html += renderLibCard(s); });
+        html += '</div>';
+    }
 
-        const missingCount = s.items.filter(i => !i.url).length;
-        const warningHtml = missingCount > 0
-            ? `<div style="color:var(--warning-color); font-size:0.75rem; background:rgba(245, 158, 11, 0.1); padding:4px 8px; border-radius:6px; margin-top:5px; display:flex; align-items:center; gap:5px;">
-                <i class="fa-solid fa-triangle-exclamation"></i> ${missingCount} immagini mancanti
-               </div>`
-            : '';
-
-        // Show tags if present
-        const tagsHtml = (s.tags && s.tags.length > 0)
-            ? `<div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:4px;">
-                ${s.tags.map(t => `<span class="tag-chip" style="font-size:0.65rem; padding:1px 6px;">${t}</span>`).join('')}
-               </div>`
-            : '';
-
-        return `
-        <div class="lib-card ${s.isClinical ? 'clinical' : ''}">
-            ${previewHtml}
-            <div class="lib-title" style="font-weight:bold; font-size:1rem;">${s.name}</div>
-            <div class="lib-cat" style="color:var(--text-secondary); font-size:0.8rem;">${s.category || 'Generale'}</div>
-            <div style="font-size:0.8rem; color:#aaa; margin-top:2px;">${s.items.length} items</div>
-            ${tagsHtml}
-            ${warningHtml}
-
-            <div style="display:flex; gap:5px; margin-top:10px;">
-                <button class="btn btn-primary" style="flex:1; padding:6px;" onclick="loadSet('${s.id}')" title="Carica">
-                    <i class="fa-solid fa-play"></i>
-                </button>
-                <button class="btn btn-ghost" style="padding:6px 12px;" onclick="editSet('${s.id}')" title="Modifica">
-                    <i class="fa-solid fa-pen"></i>
-                </button>
-                <button class="btn btn-ghost" style="padding:6px 12px;" onclick="exportSingleSet('${s.id}')" title="Esporta file">
-                    <i class="fa-solid fa-file-export"></i>
-                </button>
-                <button class="btn btn-ghost" style="padding:6px 12px; color:var(--accent-color); border-color:rgba(99,102,241,0.3);" onclick="p2pSendSet('${s.id}')" title="Invia via P2P">
-                    <i class="fa-solid fa-wifi"></i>
-                </button>
-                <button class="btn btn-danger" style="padding:6px 12px;" onclick="deleteSet('${s.id}')" title="Elimina">
-                    <i class="fa-solid fa-trash"></i>
-                </button>
-            </div>
-        </div>`;
-    }).join('');
+    container.innerHTML = html;
 }
+
+function renderLibCard(s, idxInCat, catLength) {
+    const previews = s.items.filter(i => i.url).slice(0, 4);
+    let previewHtml = '';
+
+    if (previews.length > 0) {
+        previewHtml = `<div class="lib-preview-grid" style="display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:2px; height:120px; border-radius:8px; overflow:hidden; background:rgba(0,0,0,0.3); margin-bottom:8px;">
+            ${previews.map(i => `<img src="${i.url}" style="width:100%; height:100%; object-fit:cover;">`).join('')}
+            ${previews.length < 4 ? Array(4 - previews.length).fill('<div style="background:rgba(255,255,255,0.05);"></div>').join('') : ''}
+        </div>`;
+    } else {
+        previewHtml = `<div style="height:120px; background:rgba(0,0,0,0.2); border-radius:8px; display:flex; align-items:center; justify-content:center; color:#666; font-size:0.8rem; margin-bottom:8px; flex-direction:column; gap:5px;">
+            <i class="fa-solid fa-image fa-2x" style="opacity:0.3"></i>
+            <span>No Img</span>
+        </div>`;
+    }
+
+    const missingCount = s.items.filter(i => !i.url).length;
+    const warningHtml = missingCount > 0
+        ? `<div style="color:var(--warning-color); font-size:0.75rem; background:rgba(245, 158, 11, 0.1); padding:4px 8px; border-radius:6px; margin-top:5px; display:flex; align-items:center; gap:5px;">
+            <i class="fa-solid fa-triangle-exclamation"></i> ${missingCount} immagini mancanti
+           </div>`
+        : '';
+
+    const tagsHtml = (s.tags && s.tags.length > 0)
+        ? `<div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:4px;">
+            ${s.tags.map(t => `<span class="tag-chip" style="font-size:0.65rem; padding:1px 6px;">${t}</span>`).join('')}
+           </div>`
+        : '';
+
+    // Mode labels
+    const modesHtml = (s.modes && s.modes.length > 0)
+        ? `<div style="display:flex; gap:3px; flex-wrap:wrap; margin-top:2px;">
+            ${s.modes.map(m => `<span style="font-size:0.6rem; padding:1px 5px; border-radius:4px; background:rgba(99,102,241,0.15); color:var(--accent-color);">${getModeLabel ? getModeLabel(m) : m}</span>`).join('')}
+           </div>`
+        : '';
+
+    // Reorder buttons (only in category sort)
+    let reorderHtml = '';
+    if (idxInCat !== undefined && catLength !== undefined) {
+        reorderHtml = `<div style="position:absolute; top:6px; right:6px; display:flex; gap:2px; z-index:2;">
+            <button onclick="event.stopPropagation(); moveSetInCategory('${s.id}',-1)" style="width:24px; height:24px; border:1px solid var(--glass-border); border-radius:6px; background:rgba(0,0,0,0.4); color:${idxInCat > 0 ? 'var(--text-secondary)' : '#333'}; cursor:${idxInCat > 0 ? 'pointer' : 'default'}; font-size:0.6rem; display:flex; align-items:center; justify-content:center;" title="Sposta su" ${idxInCat === 0 ? 'disabled' : ''}>
+                <i class="fa-solid fa-arrow-left"></i>
+            </button>
+            <button onclick="event.stopPropagation(); moveSetInCategory('${s.id}',1)" style="width:24px; height:24px; border:1px solid var(--glass-border); border-radius:6px; background:rgba(0,0,0,0.4); color:${idxInCat < catLength - 1 ? 'var(--text-secondary)' : '#333'}; cursor:${idxInCat < catLength - 1 ? 'pointer' : 'default'}; font-size:0.6rem; display:flex; align-items:center; justify-content:center;" title="Sposta giù" ${idxInCat >= catLength - 1 ? 'disabled' : ''}>
+                <i class="fa-solid fa-arrow-right"></i>
+            </button>
+        </div>`;
+    }
+
+    return `
+    <div class="lib-card ${s.isClinical ? 'clinical' : ''}">
+        ${reorderHtml}
+        ${previewHtml}
+        <div class="lib-title" style="font-weight:bold; font-size:1rem;">${s.name}</div>
+        <div class="lib-cat" style="color:var(--text-secondary); font-size:0.8rem;">${s.category || 'Generale'}</div>
+        <div style="font-size:0.8rem; color:#aaa; margin-top:2px;">${s.items.length} items</div>
+        ${modesHtml}
+        ${tagsHtml}
+        ${warningHtml}
+
+        <div style="display:flex; gap:5px; margin-top:10px;">
+            <button class="btn btn-primary" style="flex:1; padding:6px;" onclick="loadSet('${s.id}')" title="Carica">
+                <i class="fa-solid fa-play"></i>
+            </button>
+            <button class="btn btn-ghost" style="padding:6px 12px;" onclick="editSet('${s.id}')" title="Modifica">
+                <i class="fa-solid fa-pen"></i>
+            </button>
+            <button class="btn btn-ghost" style="padding:6px 12px;" onclick="exportSingleSet('${s.id}')" title="Esporta file">
+                <i class="fa-solid fa-file-export"></i>
+            </button>
+            <button class="btn btn-ghost" style="padding:6px 12px; color:var(--accent-color); border-color:rgba(99,102,241,0.3);" onclick="p2pSendSet('${s.id}')" title="Invia via P2P">
+                <i class="fa-solid fa-wifi"></i>
+            </button>
+            <button class="btn btn-danger" style="padding:6px 12px;" onclick="deleteSet('${s.id}')" title="Elimina">
+                <i class="fa-solid fa-trash"></i>
+            </button>
+        </div>
+    </div>`;
+}
+
+// Move set position within its category
+window.moveSetInCategory = async (setId, dir) => {
+    const s = state.savedSets.find(x => x.id === setId);
+    if (!s) return;
+    const cat = s.category || 'Altri';
+
+    // Get all sets in same category, sorted by current sortOrder then name
+    const catSets = state.savedSets
+        .filter(x => (x.category || 'Altri') === cat)
+        .sort((a, b) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999) || a.name.localeCompare(b.name));
+
+    // Always normalize to clean sequential integers first
+    catSets.forEach((cs, i) => { cs.sortOrder = i; });
+
+    const idx = catSets.findIndex(x => x.id === setId);
+    const newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= catSets.length) return;
+
+    // Swap the two adjacent items' sortOrder
+    const other = catSets[newIdx];
+    const tmp = s.sortOrder;
+    s.sortOrder = other.sortOrder;
+    other.sortOrder = tmp;
+
+    // Save all sets in category (normalized orders) to DB
+    for (const cs of catSets) {
+        await DB.saveSet(cs);
+    }
+    state.savedSets = await DB.getAllSets();
+    renderLibList();
+};
 
 window.loadSet = async (id) => {
     const s = state.savedSets.find(x => x.id === id);
     if (s) {
         state.activeSetId = id;
         state.items = JSON.parse(JSON.stringify(s.items));
-        const select = document.getElementById('category-select');
-        if (select) select.value = id;
+        // Update custom dropdown label
+        const label = document.getElementById('set-dropdown-label');
+        if (label) label.textContent = s.name;
         window.closeLibrary();
         window.startGame();
     }
@@ -646,33 +996,146 @@ window.deleteSet = async (id) => {
     }
 };
 
-// --- RENDER MODE SELECT (dynamic from layout) ---
+// --- MODE ICONS MAP ---
+const MODE_ICONS = {
+    tact: 'fa-hand-pointer', ran: 'fa-bolt', fluenza: 'fa-comment-dots',
+    tombola: 'fa-table-cells', tombola_sonora: 'fa-volume-high', memory: 'fa-clone',
+    search_find: 'fa-magnifying-glass', intraverbal_scenari: 'fa-comments',
+    pool_random: 'fa-shuffle', pool_intraverbal: 'fa-random', intruso: 'fa-ban',
+    topologia: 'fa-map-pin', sequenze: 'fa-arrow-right-arrow-left', categorizzazione: 'fa-sitemap',
+    zoom: 'fa-search-plus', quaderno: 'fa-book-open', quaderno_task: 'fa-list-check'
+};
+
+// Curated FA icon list for icon picker
+const FA_ICON_CHOICES = [
+    'fa-hand-pointer','fa-bolt','fa-comment-dots','fa-table-cells','fa-volume-high','fa-clone',
+    'fa-magnifying-glass','fa-comments','fa-shuffle','fa-random','fa-ban','fa-map-pin',
+    'fa-arrow-right-arrow-left','fa-sitemap','fa-search-plus','fa-book-open','fa-list-check',
+    'fa-star','fa-heart','fa-brain','fa-lightbulb','fa-puzzle-piece','fa-music','fa-palette',
+    'fa-image','fa-camera','fa-eye','fa-ear-listen','fa-hand','fa-hands','fa-gamepad',
+    'fa-dice','fa-shapes','fa-icons','fa-wand-magic-sparkles','fa-paintbrush','fa-pen',
+    'fa-book','fa-graduation-cap','fa-chalkboard','fa-school','fa-apple-whole','fa-tree',
+    'fa-sun','fa-moon','fa-cloud','fa-house','fa-car','fa-dog','fa-cat','fa-fish',
+    'fa-bug','fa-feather','fa-leaf','fa-fire','fa-droplet','fa-snowflake','fa-mountain',
+    'fa-basket-shopping','fa-utensils','fa-shirt','fa-person','fa-people-group','fa-child',
+    'fa-face-smile','fa-face-laugh','fa-face-surprise','fa-clock','fa-trophy','fa-medal',
+    'fa-flag','fa-bullseye','fa-chart-line','fa-chart-bar','fa-circle-check','fa-thumbs-up',
+    'fa-rocket','fa-gear','fa-wrench','fa-scissors','fa-ruler','fa-calculator',
+    'fa-phone','fa-envelope','fa-globe','fa-map','fa-location-dot','fa-compass',
+    'fa-bicycle','fa-plane','fa-train','fa-ship','fa-futbol','fa-baseball','fa-basketball',
+    'fa-volleyball','fa-dumbbell','fa-guitar','fa-drum','fa-microphone','fa-headphones',
+    'fa-tv','fa-desktop','fa-tablet','fa-keyboard','fa-robot','fa-user-astronaut'
+];
+
+// Get effective icon for a mode (custom from layout, or default)
+function getModeIcon(modeKey) {
+    const layout = getActivityLayout();
+    if (layout.modeIcons && layout.modeIcons[modeKey]) return layout.modeIcons[modeKey];
+    return MODE_ICONS[getModeEngine(modeKey)] || 'fa-puzzle-piece';
+}
+const DEFAULT_GROUP_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899'];
+
+// --- RENDER MODE SELECT (custom dropdown + hidden select sync) ---
 function renderModeSelect() {
     const select = document.getElementById('mode-select');
     if (!select) return;
     const currentValue = select.value;
     const layout = getActivityLayout();
-    select.innerHTML = '';
 
+    // Keep hidden select in sync for filterSetsByMode
+    select.innerHTML = '';
     layout.groups.forEach(group => {
         const parent = group.name ? document.createElement('optgroup') : select;
-        if (group.name) {
-            parent.label = group.name;
-            select.appendChild(parent);
-        }
+        if (group.name) { parent.label = group.name; select.appendChild(parent); }
         (group.modes || []).forEach(modeKey => {
             if (!MODES_CONFIG[modeKey] && !BUILTIN_MODES[modeKey]) return;
             const opt = document.createElement('option');
-            opt.value = modeKey;
-            opt.text = getModeLabel(modeKey);
+            opt.value = modeKey; opt.text = getModeLabel(modeKey);
             parent.appendChild(opt);
         });
     });
+    if (currentValue && select.querySelector(`option[value="${currentValue}"]`)) select.value = currentValue;
 
-    if (currentValue && select.querySelector(`option[value="${currentValue}"]`)) {
-        select.value = currentValue;
+    // Render custom dropdown
+    const panel = document.getElementById('mode-dropdown-panel');
+    const label = document.getElementById('mode-dropdown-label');
+    if (!panel) return;
+
+    let html = '';
+    layout.groups.forEach((group, gi) => {
+        const color = (layout.groupColors && layout.groupColors[gi]) || DEFAULT_GROUP_COLORS[gi % DEFAULT_GROUP_COLORS.length];
+        if (group.name) {
+            html += `<div class="mode-group-header" style="color:${color};">
+                <span class="mode-group-dot" style="background:${color};"></span>${group.name}
+            </div>`;
+        }
+        (group.modes || []).forEach(modeKey => {
+            if (!MODES_CONFIG[modeKey] && !BUILTIN_MODES[modeKey]) return;
+            const isSelected = select.value === modeKey;
+            const emoji = (layout.modeEmojis && layout.modeEmojis[modeKey]) || '';
+            const iconClass = getModeIcon(modeKey);
+            const iconHtml = emoji
+                ? `<div class="mode-dd-icon" style="font-size:1.1rem;">${emoji}</div>`
+                : `<div class="mode-dd-icon" style="color:${color};"><i class="fa-solid ${iconClass}"></i></div>`;
+
+            // Preview: count compatible sets
+            const engine = getModeEngine(modeKey);
+            const compatCount = state.savedSets.filter(s => {
+                if (s.modes && Array.isArray(s.modes) && s.modes.length > 0) {
+                    return s.modes.includes(engine) || s.modes.includes(modeKey);
+                }
+                return false;
+            }).length;
+
+            html += `<div class="mode-dd-item${isSelected ? ' selected' : ''}" onclick="selectModeFromDropdown('${modeKey}')">
+                ${iconHtml}
+                <div style="flex:1; min-width:0;">
+                    <div class="mode-dd-label">${getModeLabel(modeKey)}</div>
+                    ${compatCount > 0 ? `<div style="font-size:0.65rem; color:var(--text-secondary);">${compatCount} set</div>` : ''}
+                </div>
+            </div>`;
+        });
+    });
+    panel.innerHTML = html;
+
+    // Update trigger label
+    const selVal = select.value;
+    if (selVal) {
+        label.textContent = getModeLabel(selVal);
+    } else {
+        label.textContent = '-- Attivit\u00E0 --';
     }
 }
+
+window.toggleModeDropdown = () => {
+    const trigger = document.getElementById('mode-dropdown-trigger');
+    const panel = document.getElementById('mode-dropdown-panel');
+    if (!trigger || !panel) return;
+    // Close other dropdowns first
+    closeSetDropdown();
+    closePatientDropdown();
+    if (panel.classList.contains('open')) {
+        trigger.classList.remove('open'); panel.classList.remove('open');
+    } else {
+        trigger.classList.add('open'); panel.classList.add('open');
+    }
+};
+
+function closeModeDropdown() {
+    const t = document.getElementById('mode-dropdown-trigger');
+    const p = document.getElementById('mode-dropdown-panel');
+    if (t) t.classList.remove('open');
+    if (p) p.classList.remove('open');
+}
+
+window.selectModeFromDropdown = (modeKey) => {
+    const select = document.getElementById('mode-select');
+    if (select) { select.value = modeKey; }
+    closeModeDropdown();
+    const label = document.getElementById('mode-dropdown-label');
+    if (label) label.textContent = getModeLabel(modeKey);
+    filterSetsByMode();
+};
 
 // --- ACTIVITY LAYOUT EDITOR ---
 let _editingLayout = null;
@@ -700,6 +1163,7 @@ function renderActivityLayoutBody() {
     const groups = _editingLayout.groups;
     const emojis = _editingLayout.modeEmojis || {};
     const customModes = _editingLayout.customModes || {};
+    if (!_editingLayout.groupColors) _editingLayout.groupColors = {};
 
     let html = `
         <div style="display:flex; gap:8px; margin-bottom:15px; flex-wrap:wrap;">
@@ -717,13 +1181,16 @@ function renderActivityLayoutBody() {
 
     groups.forEach((group, gi) => {
         const groupName = group.name || '(Principale)';
+        const groupColor = (_editingLayout.groupColors[gi]) || DEFAULT_GROUP_COLORS[gi % DEFAULT_GROUP_COLORS.length];
         html += `
-        <div style="background:rgba(0,0,0,0.2); border-radius:12px; padding:12px; margin-bottom:10px; border:1px solid rgba(255,255,255,0.08);">
+        <div style="background:rgba(0,0,0,0.2); border-radius:12px; padding:12px; margin-bottom:10px; border:1px solid rgba(255,255,255,0.08); border-left:3px solid ${groupColor};">
             <div style="display:flex; gap:6px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">
                 <div style="display:flex; flex-direction:column; gap:2px;">
                     <button class="btn btn-ghost" onclick="moveGroupUp(${gi})" style="padding:1px 7px; font-size:0.65rem;" ${gi === 0 ? 'disabled style="padding:1px 7px; font-size:0.65rem; opacity:0.3;"' : ''}>&#9650;</button>
                     <button class="btn btn-ghost" onclick="moveGroupDown(${gi})" style="padding:1px 7px; font-size:0.65rem;" ${gi === groups.length - 1 ? 'disabled style="padding:1px 7px; font-size:0.65rem; opacity:0.3;"' : ''}>&#9660;</button>
                 </div>
+                <input type="color" value="${groupColor}" onchange="updateGroupColor(${gi}, this.value)"
+                       style="width:30px; height:30px; border:none; border-radius:6px; background:transparent; cursor:pointer; padding:0;" title="Colore categoria">
                 <input type="text" value="${group.name}" onchange="updateGroupName(${gi}, this.value)"
                        placeholder="Nome categoria..." style="flex:1; min-width:100px; font-weight:bold; font-size:0.95rem; padding:6px 10px;">
                 ${groups.length > 1 ? `<button class="btn btn-ghost" onclick="removeActivityGroup(${gi})" style="color:var(--danger-color); padding:4px 8px;" title="Elimina categoria">
@@ -737,6 +1204,7 @@ function renderActivityLayoutBody() {
             const emoji = emojis[mode] || '';
             const isCustom = !!customModes[mode];
             const engineLabel = isCustom ? ` <span style="font-size:0.65rem; color:var(--text-secondary); opacity:0.7;">(${BUILTIN_MODES[customModes[mode].engine]?.label || customModes[mode].engine})</span>` : '';
+            const modeIconClass = (_editingLayout.modeIcons && _editingLayout.modeIcons[mode]) || MODE_ICONS[getModeEngine(mode)] || 'fa-puzzle-piece';
 
             // Build move-to options
             const moveOpts = groups.map((g, idx) => idx !== gi
@@ -744,6 +1212,9 @@ function renderActivityLayoutBody() {
 
             html += `
                 <div style="display:flex; align-items:center; gap:5px; padding:5px 6px; background:rgba(255,255,255,0.03); border-radius:8px; ${isCustom ? 'border-left:3px solid var(--accent-color);' : ''}">
+                    <button class="btn btn-ghost" onclick="openModeIconPicker('${mode}')" style="width:32px; height:32px; padding:0; font-size:0.9rem; color:${groupColor}; display:flex; align-items:center; justify-content:center; border-radius:6px;" title="Cambia icona">
+                        <i class="fa-solid ${modeIconClass}"></i>
+                    </button>
                     <input type="text" value="${emoji}" onchange="updateModeEmoji('${mode}', this.value)"
                            maxlength="4" style="width:34px; text-align:center; font-size:1rem; padding:3px; border-radius:6px;" placeholder="&#128204;" title="Emoji">
                     <span style="flex:1; font-size:0.82rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${label}${engineLabel}</span>
@@ -771,9 +1242,22 @@ window.removeActivityGroup = (gi) => {
     _editingLayout.groups.splice(gi, 1);
     renderActivityLayoutBody();
 };
-window.moveGroupUp = (gi) => { if (gi <= 0) return; const g = _editingLayout.groups; [g[gi-1], g[gi]] = [g[gi], g[gi-1]]; renderActivityLayoutBody(); };
-window.moveGroupDown = (gi) => { const g = _editingLayout.groups; if (gi >= g.length-1) return; [g[gi], g[gi+1]] = [g[gi+1], g[gi]]; renderActivityLayoutBody(); };
+window.moveGroupUp = (gi) => {
+    if (gi <= 0) return;
+    const g = _editingLayout.groups; [g[gi - 1], g[gi]] = [g[gi], g[gi - 1]];
+    const c = _editingLayout.groupColors || {};
+    const tmp = c[gi]; c[gi] = c[gi - 1]; c[gi - 1] = tmp;
+    renderActivityLayoutBody();
+};
+window.moveGroupDown = (gi) => {
+    const g = _editingLayout.groups; if (gi >= g.length - 1) return;
+    [g[gi], g[gi + 1]] = [g[gi + 1], g[gi]];
+    const c = _editingLayout.groupColors || {};
+    const tmp = c[gi]; c[gi] = c[gi + 1]; c[gi + 1] = tmp;
+    renderActivityLayoutBody();
+};
 window.updateGroupName = (gi, name) => { _editingLayout.groups[gi].name = name; };
+window.updateGroupColor = (gi, color) => { if (!_editingLayout.groupColors) _editingLayout.groupColors = {}; _editingLayout.groupColors[gi] = color; renderActivityLayoutBody(); };
 window.updateModeEmoji = (mode, emoji) => { if (!_editingLayout.modeEmojis) _editingLayout.modeEmojis = {}; _editingLayout.modeEmojis[mode] = emoji.trim(); };
 window.moveModeInGroup = (gi, mi, dir) => {
     const modes = _editingLayout.groups[gi].modes;
@@ -836,13 +1320,52 @@ window.deleteCustomMode = (modeKey, gi, mi) => {
     _editingLayout.groups[gi].modes.splice(mi, 1);
     if (_editingLayout.customModes) delete _editingLayout.customModes[modeKey];
     if (_editingLayout.modeEmojis) delete _editingLayout.modeEmojis[modeKey];
+    if (_editingLayout.modeIcons) delete _editingLayout.modeIcons[modeKey];
+    renderActivityLayoutBody();
+};
+
+// --- MODE ICON PICKER ---
+window.openModeIconPicker = (modeKey) => {
+    const currentIcon = (_editingLayout.modeIcons && _editingLayout.modeIcons[modeKey]) || MODE_ICONS[getModeEngine(modeKey)] || 'fa-puzzle-piece';
+    const iconsHtml = FA_ICON_CHOICES.map(ic =>
+        `<button onclick="selectModeIcon('${modeKey}','${ic}')" style="width:40px; height:40px; display:inline-flex; align-items:center; justify-content:center; border:1px solid ${ic === currentIcon ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)'}; border-radius:8px; background:${ic === currentIcon ? 'rgba(99,102,241,0.25)' : 'rgba(255,255,255,0.03)'}; color:${ic === currentIcon ? 'var(--accent-color)' : '#ccc'}; cursor:pointer; font-size:1rem; transition:all 0.15s;" onmouseover="this.style.background='rgba(99,102,241,0.15)'" onmouseout="this.style.background='${ic === currentIcon ? 'rgba(99,102,241,0.25)' : 'rgba(255,255,255,0.03)'}'" title="${ic}">
+            <i class="fa-solid ${ic}"></i>
+        </button>`
+    ).join('');
+
+    const html = `
+    <div style="position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:20000; display:flex; align-items:center; justify-content:center; padding:20px;" id="icon-picker-overlay" onclick="if(event.target===this)this.remove()">
+        <div style="background:#1e1e2f; border-radius:16px; padding:20px; max-width:500px; width:100%; max-height:80vh; overflow-y:auto; border:1px solid rgba(255,255,255,0.1);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3 style="margin:0;"><i class="fa-solid fa-icons"></i> Scegli Icona</h3>
+                <button class="btn btn-ghost" onclick="selectModeIcon('${modeKey}','')" style="font-size:0.75rem; padding:4px 10px;">
+                    <i class="fa-solid fa-rotate-left"></i> Default
+                </button>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:6px; justify-content:center;">
+                ${iconsHtml}
+            </div>
+        </div>
+    </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+};
+
+window.selectModeIcon = (modeKey, iconClass) => {
+    if (!_editingLayout.modeIcons) _editingLayout.modeIcons = {};
+    if (iconClass) {
+        _editingLayout.modeIcons[modeKey] = iconClass;
+    } else {
+        delete _editingLayout.modeIcons[modeKey];
+    }
+    const overlay = document.getElementById('icon-picker-overlay');
+    if (overlay) overlay.remove();
     renderActivityLayoutBody();
 };
 
 // --- FULLSCREEN ---
 window.toggleFullScreen = () => {
     if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(() => {});
+        document.documentElement.requestFullscreen().catch(() => { });
     } else {
         document.exitFullscreen();
     }
@@ -929,4 +1452,71 @@ document.addEventListener('DOMContentLoaded', () => {
             };
         }
     });
+});
+
+// --- GLOBAL BACK BUTTON & BROWSER HISTORY ---
+document.addEventListener('DOMContentLoaded', () => {
+    // Inizializza la history di base della finestra per evitare popstate vuoti
+    if (!window.history.state || !window.history.state.base) {
+        window.history.replaceState({ base: true }, '');
+    }
+
+    // Creiamo una funzione universale per aggiungere uno "strato" di navigazione (es. quando apriamo un modal)
+    window.pushAppHistory = (hashName) => {
+        window.history.pushState({ hash: hashName }, '', '#' + hashName);
+    };
+
+    // Sovrascriviamo leggermente i metodi di apertura modali per registrare la history
+    const overrideModalOpen = (fnName, hash) => {
+        if (typeof window[fnName] === 'function') {
+            const orig = window[fnName];
+            window[fnName] = (...args) => {
+                window.pushAppHistory(hash);
+                return orig(...args);
+            };
+        }
+    };
+
+    overrideModalOpen('openPatients', 'patients');
+    overrideModalOpen('openLibrary', 'library');
+    overrideModalOpen('openEditor', 'editor');
+    if (typeof openActivityLayout === 'function') overrideModalOpen('openActivityLayout', 'activities');
+    overrideModalOpen('openFirebaseSettings', 'firebase');
+
+    // Funzione globale che prova a chiudere l'ultima cosa aperta
+    const goBackOrClose = () => {
+        const openModals = Array.from(document.querySelectorAll('.modal-fs.open, .modal.open, .modal-small.open'));
+        if (openModals.length > 0) {
+            const topModal = openModals[openModals.length - 1];
+            topModal.classList.remove('open');
+            return true;
+        } else if (typeof state !== 'undefined' && state.session && state.session.active) {
+            if (confirm("Attività in corso. Vuoi tornare al menu e azzerare i dati correnti?")) {
+                window.location.reload();
+            }
+            return true; // We handled it
+        }
+        return false;
+    };
+
+    // Ascolto del tasto indietro sul browser e su Android gestito come popstate
+    window.addEventListener('popstate', (e) => {
+        // Se c'è un modal aperto, chiudiamolo
+        goBackOrClose();
+    });
+
+    // Se Capacitor è disponibile ma per qualche configurazione il "back" nativo non scatena popstate per Android, forziamolo:
+    if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
+        window.Capacitor.Plugins.App.addListener('backButton', ({ canGoBack }) => {
+            if (canGoBack) {
+                // Fai fare alla WebView un passo indietro (scatenerà il popstate nativo su js)
+                window.history.back();
+            } else {
+                // Se non c'è storia, vediamo se c'è un modal fuggito dai tracciamenti (aperto diversamente), o secion attiva
+                if (!goBackOrClose()) {
+                    window.Capacitor.Plugins.App.exitApp();
+                }
+            }
+        });
+    }
 });

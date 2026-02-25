@@ -437,6 +437,7 @@ window.handleMatchClick = (idx, label) => {
     if (cardEl.classList.contains('matched')) return;
 
     const isCorrect = label === state.deck[0].label;
+    const isTimedelay = getSelectedSessionType() === 'timedelay';
 
     if (isCorrect) {
         cardEl.classList.add('matched');
@@ -444,6 +445,11 @@ window.handleMatchClick = (idx, label) => {
         cardEl.style.boxShadow = '0 0 15px rgba(16,185,129,0.4)';
         state.deck.shift();
         document.getElementById('deck-target').innerHTML = getDeckHtml();
+    } else if (isTimedelay) {
+        // Time Delay: highlight as prompt, keep visible
+        cardEl.style.border = '4px solid var(--warning-color)';
+        cardEl.style.boxShadow = '0 0 15px rgba(245,158,11,0.3)';
+        cardEl.style.opacity = '0.5';
     } else {
         cardEl.style.border = '4px solid var(--danger-color)';
         cardEl.style.boxShadow = '0 0 15px rgba(239,68,68,0.4)';
@@ -456,10 +462,11 @@ window.handleMatchClick = (idx, label) => {
     // Auto-score in session
     if (state.session.active) {
         const key = `tombola_${Date.now()}`;
-        state.session.itemResults[key] = isCorrect;
+        state.session.itemResults[key] = isCorrect ? true : (isTimedelay ? 'prompt' : false);
         const results = Object.values(state.session.itemResults);
         state.session.correct = results.filter(v => v === true).length;
         state.session.incorrect = results.filter(v => v === false).length;
+        state.session.prompts = results.filter(v => v === 'prompt').length;
         state.session.total = results.length;
         updateScoreUI();
         document.getElementById('btn-save-session').classList.remove('hidden');
@@ -633,7 +640,7 @@ function generateIntrusoRound(tags, cardsPerRound) {
     const intruder = validIntruders[Math.floor(Math.random() * validIntruders.length)];
 
     const cards = [...targets.map(t => ({ ...t, isIntruder: false, tag: targetTag })),
-                   { ...intruder, isIntruder: true, tag: intruderTag }];
+    { ...intruder, isIntruder: true, tag: intruderTag }];
     cards.sort(() => Math.random() - 0.5);
 
     return { targetTag, intruderTag, cards };
@@ -680,12 +687,26 @@ window.handleIntrusoClick = (idx) => {
 
     const card = round.cards[idx];
     const cardEl = document.getElementById(`intruso-${idx}`);
+    const isTimedelay = getSelectedSessionType() === 'timedelay';
+
+    // In TD mode, ignore already-tried wrong cards
+    if (isTimedelay && cardEl.dataset.tried === '1') return;
 
     if (card.isIntruder) {
         cardEl.style.border = '4px solid var(--success-color)';
         cardEl.style.boxShadow = '0 0 20px rgba(16,185,129,0.5)';
-        state.session.itemResults[state.intrusoRound] = true;
+        const key = isTimedelay ? `intruso_${state.intrusoRound}_ok` : state.intrusoRound;
+        state.session.itemResults[key] = true;
+    } else if (isTimedelay) {
+        // Time Delay: mark as prompt, dim card, don't advance
+        cardEl.style.border = '4px solid var(--warning-color)';
+        cardEl.style.boxShadow = '0 0 15px rgba(245,158,11,0.3)';
+        cardEl.style.opacity = '0.5';
+        cardEl.dataset.tried = '1';
+        const key = `intruso_${state.intrusoRound}_p${Date.now()}`;
+        state.session.itemResults[key] = 'prompt';
     } else {
+        // Independent: mark as error, show correct intruder, advance
         cardEl.style.border = '4px solid var(--danger-color)';
         cardEl.style.boxShadow = '0 0 20px rgba(239,68,68,0.5)';
         state.session.itemResults[state.intrusoRound] = false;
@@ -701,9 +722,13 @@ window.handleIntrusoClick = (idx) => {
     const results = Object.values(state.session.itemResults);
     state.session.correct = results.filter(v => v === true).length;
     state.session.incorrect = results.filter(v => v === false).length;
+    state.session.prompts = results.filter(v => v === 'prompt').length;
     state.session.total = results.length;
     updateScoreUI();
     document.getElementById('btn-save-session').classList.remove('hidden');
+
+    // Don't auto-advance for wrong in TD mode
+    if (isTimedelay && !card.isIntruder) return;
 
     // Generate next round after delay (infinite)
     setTimeout(() => {
@@ -760,7 +785,7 @@ function renderTopologia(items, stage) {
             img.src = item.url || getPlaceholderUrl(item.label);
             img.draggable = false;
             img.style.cssText = 'max-width:100%; max-height:75%; object-fit:contain; pointer-events:none;';
-            img.onerror = function() { handleImgError(this, item.label); };
+            img.onerror = function () { handleImgError(this, item.label); };
 
             const lbl = document.createElement('span');
             lbl.style.cssText = 'font-size:0.65rem; color:#333; font-weight:bold; margin-top:2px; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%; pointer-events:none;';
@@ -853,9 +878,8 @@ window.shuffleTopologia = () => {
     });
 };
 
-// --- SEQUENZE (Progressive number ordering with drag-to-slot) ---
+// --- SEQUENZE (All cards visible, drag/tap to order) ---
 function renderSequenze(items, stage) {
-    // Use only items with seqNumber assigned, sorted by seqNumber
     let numbered = items.filter(i => i.seqNumber && !i.hidden).sort((a, b) => a.seqNumber - b.seqNumber);
 
     if (numbered.length === 0) {
@@ -867,34 +891,30 @@ function renderSequenze(items, stage) {
         return;
     }
 
-    // If N.Stimoli is set and less than available numbered items, pick a random subset
     const numStimuli = parseInt(document.getElementById('num-stimuli').value);
     if (numStimuli > 0 && numStimuli < numbered.length) {
         const shuffled = [...numbered].sort(() => Math.random() - 0.5);
         numbered = shuffled.slice(0, numStimuli).sort((a, b) => a.seqNumber - b.seqNumber);
     }
 
-    // Store correct order (by seqNumber - ascending, even if not consecutive)
     state.sequenzeCorrectOrder = numbered.map(item => ({ ...item }));
-    // Shuffle for presentation (one at a time)
-    state.sequenzeQueue = [...numbered].sort(() => Math.random() - 0.5);
-    state.sequenzePlacements = new Array(numbered.length).fill(null); // slot index -> item
-    state.sequenzeCurrentCard = 0;
+    state.sequenzeSourceCards = [...numbered].sort(() => Math.random() - 0.5);
+    state.sequenzePlacements = new Array(numbered.length).fill(null);
+    state.sequenzeSelectedSource = null;
     state.sequenzeVerified = false;
 
     renderSequenzeUI(stage);
 }
 
+let _seqDragJustEnded = false;
+
 function renderSequenzeUI(stage) {
     const total = state.sequenzeCorrectOrder.length;
     const placed = state.sequenzePlacements.filter(p => p !== null).length;
-    const currentIdx = state.sequenzeCurrentCard;
-    const queue = state.sequenzeQueue;
-    const verified = state.sequenzeVerified;
-
-    // Current card to place (if any remain)
-    const currentCard = currentIdx < queue.length ? queue[currentIdx] : null;
     const allPlaced = placed === total;
+    const verified = state.sequenzeVerified;
+    const sourceCards = state.sequenzeSourceCards;
+    const selectedSeq = state.sequenzeSelectedSource;
 
     stage.innerHTML = `
     <div style="display:flex; height:100%; flex-direction:column;">
@@ -910,334 +930,439 @@ function renderSequenzeUI(stage) {
             <button class="btn btn-sm btn-success" onclick="checkSequenze()" style="padding:6px 16px; font-size:0.85rem; font-weight:bold;">
                 <i class="fa-solid fa-check-double"></i> Conferma
             </button>` : ''}
+            ${verified ? `
+            <button class="btn btn-sm" onclick="startRacconto()" style="padding:6px 16px; font-size:0.85rem; font-weight:bold; background:var(--accent-color); color:white;">
+                <i class="fa-solid fa-book-open"></i> Racconto
+            </button>` : ''}
         </div>
 
-        <!-- Current card to place -->
-        ${currentCard && !allPlaced ? `
-        <div style="padding:15px; background:rgba(99,102,241,0.05); border-bottom:1px solid #ffffff10; display:flex; align-items:center; justify-content:center; gap:15px; flex-shrink:0;">
-            <span style="font-size:0.85rem; color:var(--accent-color); font-weight:bold;">Posiziona:</span>
-            <div style="background:white; border-radius:12px; padding:6px; box-shadow:0 4px 20px rgba(0,0,0,0.4); display:flex; align-items:center; gap:10px; border:3px solid var(--accent-color);">
-                <img src="${currentCard.url || getPlaceholderUrl(currentCard.label)}" style="width:60px; height:60px; object-fit:contain; border-radius:8px;" onerror="handleImgError(this, '${currentCard.label}')">
-                <span style="color:#333; font-weight:bold; padding-right:8px;">${currentCard.label}</span>
-            </div>
+        ${sourceCards.length > 0 ? `
+        <div id="seq-source-area" style="padding:12px; background:rgba(99,102,241,0.03); border-bottom:1px solid #ffffff10; overflow-x:auto; display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:nowrap; flex-shrink:0;">
+            ${sourceCards.map((card, idx) => {
+        const isSelected = selectedSeq === card.seqNumber;
+        return `
+                <div class="seq-source-card" data-seq="${card.seqNumber}" data-source-idx="${idx}"
+                     onclick="selectSourceCard(${card.seqNumber})"
+                     style="background:white; border-radius:14px; padding:8px; cursor:pointer; flex-shrink:0;
+                            border:3px solid ${isSelected ? 'var(--accent-color)' : 'transparent'};
+                            box-shadow:${isSelected ? '0 0 20px rgba(99,102,241,0.5)' : '0 2px 10px rgba(0,0,0,0.25)'};
+                            display:flex; flex-direction:column; align-items:center; gap:6px;
+                            transition:0.15s; user-select:none; ${isSelected ? 'transform:scale(1.05);' : ''}">
+                    <img src="${card.url || getPlaceholderUrl(card.label)}" style="width:100px; height:100px; object-fit:contain; border-radius:10px;" draggable="false" onerror="handleImgError(this, '${card.label}')">
+                    <span style="color:#333; font-weight:bold; font-size:0.8rem; text-align:center; max-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${card.label}</span>
+                </div>`;
+    }).join('')}
         </div>` : ''}
 
-        ${allPlaced && !verified ? `
-        <div style="padding:10px; background:rgba(16,185,129,0.05); border-bottom:1px solid #ffffff10; text-align:center; flex-shrink:0;">
-            <span style="color:var(--success-color); font-weight:bold; font-size:0.9rem;">
-                <i class="fa-solid fa-arrows-left-right"></i> Trascina per scambiare o premi <b>Conferma</b>.
-            </span>
+        ${!verified ? `
+        <div style="padding:6px; text-align:center; font-size:0.75rem; color:#888; flex-shrink:0;">
+            ${allPlaced ? '<i class="fa-solid fa-arrows-left-right"></i> Trascina per riordinare, poi premi <b>Conferma</b>' : selectedSeq !== null ? '<i class="fa-solid fa-hand-pointer"></i> Tocca uno slot per posizionare la carta selezionata' : '<i class="fa-solid fa-hand-pointer"></i> Tocca o trascina una carta verso uno slot'}
         </div>` : ''}
 
-        <!-- Slots (horizontal, centered) -->
-        <div id="seq-slots-container" style="flex:1; min-height:0; padding:15px; overflow-x:auto; overflow-y:hidden; display:flex; flex-direction:row; gap:10px; align-items:stretch; justify-content:center;">
+        <div id="seq-slots-container" style="flex:1; min-height:0; padding:15px; overflow-x:auto; overflow-y:hidden; display:flex; flex-direction:row; gap:12px; align-items:stretch; justify-content:center;">
             ${state.sequenzeCorrectOrder.map((_, slotIdx) => {
-                const placedItem = state.sequenzePlacements[slotIdx];
-                const isCorrect = verified && placedItem && placedItem.seqNumber === state.sequenzeCorrectOrder[slotIdx].seqNumber;
-                const isWrong = verified && placedItem && placedItem.seqNumber !== state.sequenzeCorrectOrder[slotIdx].seqNumber;
-                const slotBorder = verified ? (isCorrect ? '3px solid var(--success-color)' : isWrong ? '3px solid var(--danger-color)' : '2px dashed #555') : (placedItem ? '2px solid var(--accent-color)' : '2px dashed #555');
-                const slotBg = verified ? (isCorrect ? 'rgba(16,185,129,0.1)' : isWrong ? 'rgba(239,68,68,0.1)' : 'rgba(255,255,255,0.02)') : (placedItem ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.02)');
-                const slotShadow = verified ? (isCorrect ? '0 0 12px rgba(16,185,129,0.3)' : isWrong ? '0 0 12px rgba(239,68,68,0.3)' : 'none') : 'none';
+        const placedItem = state.sequenzePlacements[slotIdx];
+        const isCorrect = verified && placedItem && placedItem.seqNumber === state.sequenzeCorrectOrder[slotIdx].seqNumber;
+        const isWrong = verified && placedItem && placedItem.seqNumber !== state.sequenzeCorrectOrder[slotIdx].seqNumber;
+        const _seqTD = getSelectedSessionType() === 'timedelay';
+        const wrongColor = _seqTD ? 'var(--warning-color)' : 'var(--danger-color)';
+        const wrongRgba = _seqTD ? '245,158,11' : '239,68,68';
+        const slotBorder = verified ? (isCorrect ? '3px solid var(--success-color)' : isWrong ? `3px solid ${wrongColor}` : '2px dashed #555') : (placedItem ? '2px solid var(--accent-color)' : '2px dashed #555');
+        const slotBg = verified ? (isCorrect ? 'rgba(16,185,129,0.1)' : isWrong ? `rgba(${wrongRgba},0.1)` : 'rgba(255,255,255,0.02)') : (placedItem ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.02)');
+        const slotShadow = verified ? (isCorrect ? '0 0 12px rgba(16,185,129,0.3)' : isWrong ? `0 0 12px rgba(${wrongRgba},0.3)` : 'none') : 'none';
 
-                return `
+        return `
                 <div id="seq-slot-${slotIdx}" class="seq-slot-card" data-slot="${slotIdx}"
-                     onclick="${!verified ? `placeInSlot(${slotIdx})` : ''}"
-                     style="min-width:110px; flex:1; max-width:160px; border:${slotBorder}; border-radius:14px; background:${slotBg};
-                            display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; padding:10px 8px;
+                     onclick="${!verified ? `tapSlot(${slotIdx})` : ''}"
+                     style="min-width:130px; flex:1; max-width:180px; border:${slotBorder}; border-radius:14px; background:${slotBg};
+                            display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:10px 8px;
                             cursor:${!verified ? 'pointer' : 'default'}; transition:0.2s; box-shadow:${slotShadow}; position:relative; flex-shrink:0; user-select:none;">
-                    <span style="width:28px; height:28px; border-radius:50%; background:rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:0.85rem; color:var(--text-secondary);">${slotIdx + 1}</span>
+                    <span style="width:30px; height:30px; border-radius:50%; background:rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:0.9rem; color:var(--text-secondary);">${slotIdx + 1}</span>
                     ${placedItem ? `
-                        <div style="background:white; border-radius:10px; padding:4px;">
-                            <img src="${placedItem.url || getPlaceholderUrl(placedItem.label)}" style="width:70px; height:70px; object-fit:contain; border-radius:8px;" draggable="false" onerror="handleImgError(this, '${placedItem.label}')">
+                        <div style="background:white; border-radius:12px; padding:5px;">
+                            <img src="${placedItem.url || getPlaceholderUrl(placedItem.label)}" style="width:100px; height:100px; object-fit:contain; border-radius:10px;" draggable="false" onerror="handleImgError(this, '${placedItem.label}')">
                         </div>
-                        <span style="font-weight:bold; font-size:0.75rem; text-align:center; word-break:break-word; line-height:1.1;">${placedItem.label}</span>
-                        ${!verified && !allPlaced ? `<button onclick="event.stopPropagation(); removeFromSlot(${slotIdx})" style="position:absolute; top:4px; right:4px; width:24px; height:24px; border-radius:6px; border:1px solid rgba(239,68,68,0.3); background:rgba(0,0,0,0.3); color:var(--danger-color); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:0.7rem;" title="Rimuovi">
-                            <i class="fa-solid fa-xmark"></i>
-                        </button>` : ''}
-                        ${verified && isWrong ? `<span style="font-size:0.65rem; color:var(--danger-color); text-align:center;"><i class="fa-solid fa-arrow-down"></i> ${state.sequenzeCorrectOrder[slotIdx].label}</span>` : ''}
+                        <span style="font-weight:bold; font-size:0.8rem; text-align:center; word-break:break-word; line-height:1.1;">${placedItem.label}</span>
+                        ${verified && isWrong ? `<span style="font-size:0.65rem; color:${wrongColor}; text-align:center;"><i class="fa-solid fa-arrow-down"></i> ${state.sequenzeCorrectOrder[slotIdx].label}</span>` : ''}
                     ` : `
+                        <div style="width:100px; height:100px; border:2px dashed #444; border-radius:12px; display:flex; align-items:center; justify-content:center;">
+                            <i class="fa-solid fa-plus" style="color:#555; font-size:1.5rem; opacity:0.3;"></i>
+                        </div>
                         <span style="color:#555; font-size:0.75rem; font-style:italic; text-align:center;">Tocca</span>
                     `}
                 </div>`;
-            }).join('')}
+    }).join('')}
         </div>
     </div>`;
 
-    // Setup drag-to-swap when all cards are placed and not yet verified
-    if (allPlaced && !verified) {
-        setupSequenzeDragSwap();
+    if (!verified) {
+        setupSequenzeDrag();
     }
 }
 
-window.placeInSlot = (slotIdx) => {
-    if (state.sequenzeVerified) return;
-    const queue = state.sequenzeQueue;
-    const currentIdx = state.sequenzeCurrentCard;
-
-    // If slot already has an item, put it back in queue and replace
-    if (state.sequenzePlacements[slotIdx] !== null) {
-        // Remove existing item from slot, put back in queue
-        removeFromSlot(slotIdx);
-    }
-
-    if (currentIdx >= queue.length) return; // No more cards
-
-    // Place current card in this slot
-    state.sequenzePlacements[slotIdx] = queue[currentIdx];
-    state.sequenzeCurrentCard++;
-
+window.selectSourceCard = (seqNum) => {
+    if (_seqDragJustEnded || state.sequenzeVerified) return;
+    state.sequenzeSelectedSource = (state.sequenzeSelectedSource === seqNum) ? null : seqNum;
     renderSequenzeUI(document.getElementById('game-stage'));
 };
 
-window.removeFromSlot = (slotIdx) => {
-    if (state.sequenzeVerified) return;
-    const removed = state.sequenzePlacements[slotIdx];
-    if (!removed) return;
+window.tapSlot = (slotIdx) => {
+    if (_seqDragJustEnded || state.sequenzeVerified) return;
+    const selectedSeq = state.sequenzeSelectedSource;
+    const currentItem = state.sequenzePlacements[slotIdx];
 
-    state.sequenzePlacements[slotIdx] = null;
-    // Put it back as current card (insert at current position)
-    state.sequenzeCurrentCard--;
-    state.sequenzeQueue.splice(state.sequenzeCurrentCard, 0, removed);
-    // Remove duplicate if it was already in queue
-    const dupIdx = state.sequenzeQueue.findIndex((item, i) => i !== state.sequenzeCurrentCard && item.seqNumber === removed.seqNumber);
-    if (dupIdx >= 0) state.sequenzeQueue.splice(dupIdx, 1);
-
+    if (selectedSeq !== null) {
+        const sourceIdx = state.sequenzeSourceCards.findIndex(c => c.seqNumber === selectedSeq);
+        if (sourceIdx < 0) return;
+        const card = state.sequenzeSourceCards[sourceIdx];
+        if (currentItem) state.sequenzeSourceCards.push(currentItem);
+        state.sequenzePlacements[slotIdx] = card;
+        state.sequenzeSourceCards.splice(sourceIdx, 1);
+        state.sequenzeSelectedSource = null;
+    } else {
+        if (currentItem) {
+            state.sequenzePlacements[slotIdx] = null;
+            state.sequenzeSourceCards.push(currentItem);
+        }
+    }
     renderSequenzeUI(document.getElementById('game-stage'));
 };
 
 window.resetSequenze = () => {
-    if (state.sequenzeVerified) {
-        state.sequenzeVerified = false;
-    }
+    if (state.sequenzeVerified) state.sequenzeVerified = false;
     state.sequenzePlacements = new Array(state.sequenzeCorrectOrder.length).fill(null);
-    state.sequenzeQueue = [...state.sequenzeCorrectOrder].sort(() => Math.random() - 0.5);
-    state.sequenzeCurrentCard = 0;
+    state.sequenzeSourceCards = [...state.sequenzeCorrectOrder].sort(() => Math.random() - 0.5);
+    state.sequenzeSelectedSource = null;
     renderSequenzeUI(document.getElementById('game-stage'));
 };
 
 window.checkSequenze = () => {
-    // Check that all slots are filled
     const allPlaced = state.sequenzePlacements.every(p => p !== null);
-    if (!allPlaced) {
-        alert('Posiziona tutte le carte prima di confermare.');
-        return;
-    }
+    if (!allPlaced) { alert('Posiziona tutte le carte prima di confermare.'); return; }
 
+    const isTimedelay = getSelectedSessionType() === 'timedelay';
     state.sequenzeVerified = true;
-
-    // Count correct placements
     let correct = 0;
     state.sequenzePlacements.forEach((placed, slotIdx) => {
-        if (placed && placed.seqNumber === state.sequenzeCorrectOrder[slotIdx].seqNumber) {
-            correct++;
-        }
+        if (placed && placed.seqNumber === state.sequenzeCorrectOrder[slotIdx].seqNumber) correct++;
     });
 
-    // Record score in session
     if (state.session.active) {
         state.session.correct = correct;
         state.session.total = state.sequenzeCorrectOrder.length;
-        state.session.incorrect = state.session.total - correct;
+        state.session.incorrect = isTimedelay ? 0 : (state.session.total - correct);
+        state.session.prompts = isTimedelay ? (state.session.total - correct) : 0;
+        state.session.sequenzePhase = 'seriazione';
+        state.session.playItems = [...state.sequenzeCorrectOrder];
         state.session.itemResults = {};
         state.sequenzePlacements.forEach((placed, slotIdx) => {
-            state.session.itemResults[slotIdx] = placed && placed.seqNumber === state.sequenzeCorrectOrder[slotIdx].seqNumber;
+            const ok = placed && placed.seqNumber === state.sequenzeCorrectOrder[slotIdx].seqNumber;
+            state.session.itemResults[slotIdx] = ok ? true : (isTimedelay ? 'prompt' : false);
         });
         updateScoreUI();
         document.getElementById('btn-save-session').classList.remove('hidden');
         if (typeof showSessionNameInput === 'function') showSessionNameInput();
     }
-
     renderSequenzeUI(document.getElementById('game-stage'));
 };
 
-// Drag-to-swap between filled slots (touch + mouse) with floating ghost card
+// --- RACCONTO PHASE ---
+window.startRacconto = async () => {
+    // Auto-save seriazione session inline (avoid confirmSaveSession's setTimeout issues)
+    if (state.session.active && state.session.total > 0 && state.activePatientId) {
+        const p = state.patients.find(x => x.id === state.activePatientId);
+        if (p) {
+            const mode = document.getElementById('mode-select').value;
+            const engine = getModeEngine(mode);
+            const type = getSelectedSessionType();
+            const results = Object.values(state.session.itemResults);
+            const rawV = results.filter(v => v === true).length;
+            const rawP = results.filter(v => v === 'prompt').length;
+            const rawX = results.filter(v => v === false).length;
+            const rawTotal = rawV + rawP + rawX;
+            const activeSet = state.savedSets.find(ss => ss.id === state.activeSetId);
+            const defaultSetName = activeSet?.name || "Set Rimosso";
+            const setCat = activeSet?.category || '';
+            const nameInput = document.getElementById('session-name-input');
+            const customName = nameInput ? nameInput.value.trim() : '';
+            const setName = customName || defaultSetName;
+            const stimCount = state.sequenzeCorrectOrder ? state.sequenzeCorrectOrder.length : rawTotal;
+
+            const sessionData = {
+                date: new Date().toISOString(),
+                setId: state.activeSetId,
+                setName: setName + ` [Seriazione ${stimCount}]`,
+                setCat: setCat,
+                mode: mode,
+                correct: rawV,
+                prompts: rawP,
+                total: rawTotal,
+                percentage: Math.round((rawV / rawTotal) * 100),
+                sessionType: type,
+                rawV, rawP, rawX,
+                sequenzePhase: 'seriazione'
+            };
+            if (type === 'timedelay') sessionData.timeDelaySeconds = getSelectedTDSeconds();
+
+            const playItems = state.session.playItems || [];
+            if (playItems.length > 0) {
+                const itemDetails = [];
+                for (const [key, result] of Object.entries(state.session.itemResults)) {
+                    const idx = parseInt(key);
+                    const item = !isNaN(idx) ? playItems[idx] : null;
+                    const label = item ? (item.label || item.l || `Item ${idx + 1}`) : null;
+                    if (label) itemDetails.push({ label, result });
+                }
+                if (itemDetails.length > 0) sessionData.itemDetails = itemDetails;
+            }
+
+            if (!p.history) p.history = [];
+            p.history.push(sessionData);
+            await DB.savePatient(p);
+            if (nameInput) nameInput.value = '';
+        }
+    }
+
+    // Reset session for racconto phase
+    state.session = { correct: 0, incorrect: 0, total: 0, prompts: 0, active: true, itemResults: {}, scoreHistory: [], sequenzePhase: 'racconto' };
+    state.session.playItems = [...state.sequenzeCorrectOrder];
+    state.raccontoSelectedIdx = null;
+    state.raccontoScored = {};
+
+    updateScoreUI();
+    document.getElementById('scoring-controls').classList.remove('hidden');
+    document.getElementById('btn-save-session').classList.add('hidden');
+    const undoBtn = document.getElementById('btn-undo-marker');
+    if (undoBtn) undoBtn.classList.remove('hidden');
+    const sessionNameWrapper = document.getElementById('session-name-wrapper');
+    if (sessionNameWrapper) sessionNameWrapper.classList.add('hidden');
+
+    renderRaccontoUI(document.getElementById('game-stage'));
+};
+
+function renderRaccontoUI(stage) {
+    const items = state.sequenzeCorrectOrder;
+    const selectedIdx = state.raccontoSelectedIdx;
+    const scored = state.raccontoScored || {};
+    const allScored = Object.keys(scored).length === items.length;
+
+    stage.innerHTML = `
+    <div style="display:flex; height:100%; flex-direction:column;">
+        <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
+            <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
+                <i class="fa-solid fa-book-open"></i> Racconto
+            </span>
+            <span style="color:var(--text-secondary); font-size:0.75rem;">${Object.keys(scored).length}/${items.length} valutate</span>
+        </div>
+
+        <div style="padding:8px; text-align:center; font-size:0.75rem; color:#888; flex-shrink:0;">
+            ${selectedIdx !== null ? '<i class="fa-solid fa-check-circle"></i> Usa i pulsanti <b>V</b> / <b>X</b> / <b>P</b> per valutare il racconto di questa scena' : '<i class="fa-solid fa-hand-pointer"></i> Tocca un\'immagine per evidenziarla e valutarla'}
+        </div>
+
+        <div style="flex:1; min-height:0; padding:15px; overflow-x:auto; display:flex; flex-direction:row; gap:14px; align-items:center; justify-content:center;">
+            ${items.map((item, idx) => {
+        const isSelected = selectedIdx === idx;
+        const result = scored[idx];
+        const resultBorder = result === true ? '3px solid var(--success-color)' : result === false ? '3px solid var(--danger-color)' : result === 'prompt' ? '3px solid var(--warning-color)' : (isSelected ? '3px solid var(--accent-color)' : '2px solid rgba(255,255,255,0.1)');
+        const resultBg = result === true ? 'rgba(16,185,129,0.1)' : result === false ? 'rgba(239,68,68,0.1)' : result === 'prompt' ? 'rgba(245,158,11,0.1)' : (isSelected ? 'rgba(99,102,241,0.1)' : 'rgba(255,255,255,0.03)');
+        const resultIcon = result === true ? '<i class="fa-solid fa-check" style="color:var(--success-color);"></i>' : result === false ? '<i class="fa-solid fa-xmark" style="color:var(--danger-color);"></i>' : result === 'prompt' ? '<i class="fa-solid fa-hand" style="color:var(--warning-color);"></i>' : '';
+        const shadow = isSelected ? '0 0 25px rgba(99,102,241,0.5)' : 'none';
+        const scale = isSelected ? 'transform:scale(1.08);' : '';
+
+        return `
+                <div onclick="selectRaccontoCard(${idx})"
+                     style="min-width:140px; max-width:200px; flex-shrink:0; border:${resultBorder}; border-radius:16px; background:${resultBg};
+                            display:flex; flex-direction:column; align-items:center; gap:8px; padding:12px 10px; cursor:pointer;
+                            transition:0.2s; box-shadow:${shadow}; ${scale} user-select:none; position:relative;">
+                    <span style="width:28px; height:28px; border-radius:50%; background:rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:0.85rem; color:var(--text-secondary);">${idx + 1}</span>
+                    <div style="background:white; border-radius:12px; padding:5px;">
+                        <img src="${item.url || getPlaceholderUrl(item.label)}" style="width:120px; height:120px; object-fit:contain; border-radius:10px;" draggable="false" onerror="handleImgError(this, '${item.label}')">
+                    </div>
+                    <span style="font-weight:bold; font-size:0.85rem; text-align:center; word-break:break-word; line-height:1.1;">${item.label}</span>
+                    ${resultIcon ? `<div style="position:absolute; top:6px; right:6px;">${resultIcon}</div>` : ''}
+                </div>`;
+    }).join('')}
+        </div>
+
+        ${allScored ? `
+        <div style="padding:10px; text-align:center; flex-shrink:0;">
+            <span style="font-size:0.85rem; color:var(--success-color);"><i class="fa-solid fa-check-double"></i> Tutte le scene valutate</span>
+        </div>` : ''}
+    </div>`;
+}
+
+window.selectRaccontoCard = (idx) => {
+    state.raccontoSelectedIdx = (state.raccontoSelectedIdx === idx) ? null : idx;
+    renderRaccontoUI(document.getElementById('game-stage'));
+};
+
+// Hook into recordResponse for racconto scoring
+const _origRecordResponse = window.recordResponse;
+window.recordResponse = (result) => {
+    if (state.session.sequenzePhase === 'racconto' && state.raccontoSelectedIdx !== null) {
+        const idx = state.raccontoSelectedIdx;
+        const prevResult = state.raccontoScored[idx];
+
+        // If already scored, remove old score from session counts
+        if (prevResult !== undefined) {
+            delete state.session.itemResults[idx];
+        }
+
+        state.raccontoScored[idx] = result;
+        state.session.itemResults[idx] = result;
+
+        // Recount
+        const results = Object.values(state.session.itemResults);
+        state.session.correct = results.filter(v => v === true).length;
+        state.session.incorrect = results.filter(v => v === false).length;
+        state.session.prompts = results.filter(v => v === 'prompt').length;
+        state.session.total = results.length;
+
+        if (!state.session.scoreHistory) state.session.scoreHistory = [];
+        state.session.scoreHistory.push(idx);
+
+        updateScoreUI();
+
+        // Auto-advance to next unscored card
+        const items = state.sequenzeCorrectOrder;
+        let nextIdx = null;
+        for (let i = 1; i <= items.length; i++) {
+            const candidate = (idx + i) % items.length;
+            if (state.raccontoScored[candidate] === undefined) { nextIdx = candidate; break; }
+        }
+        state.raccontoSelectedIdx = nextIdx;
+
+        // Check if all scored
+        if (Object.keys(state.raccontoScored).length === items.length) {
+            document.getElementById('btn-save-session').classList.remove('hidden');
+            if (typeof showSessionNameInput === 'function') showSessionNameInput();
+        }
+
+        renderRaccontoUI(document.getElementById('game-stage'));
+        return;
+    }
+    _origRecordResponse(result);
+};
+
 let _seqDragCleanup = null;
 
-function setupSequenzeDragSwap() {
-    // Clean up previous document-level listeners
+function setupSequenzeDrag() {
     if (_seqDragCleanup) { _seqDragCleanup(); _seqDragCleanup = null; }
 
-    const container = document.getElementById('seq-slots-container');
-    if (!container) return;
+    const slotsContainer = document.getElementById('seq-slots-container');
+    const sourceArea = document.getElementById('seq-source-area');
+    if (!slotsContainer) return;
 
-    let dragSlotIdx = null;
+    let dragType = null;
+    let dragData = null;
     let dragEl = null;
     let startX = 0, startY = 0;
     let isDragging = false;
     let ghostEl = null;
 
-    function createGhost(slot, x, y) {
-        const slotIdx = parseInt(slot.dataset.slot);
-        const item = state.sequenzePlacements[slotIdx];
-        if (!item) return null;
-
+    function createGhost(item, x, y) {
         const ghost = document.createElement('div');
-        ghost.style.cssText = `
-            position:fixed; z-index:9999; pointer-events:none;
-            width:90px;
-            left:${x - 45}px; top:${y - 55}px;
-            opacity:0.92; transform:scale(1.1) rotate(3deg);
-            border-radius:12px; overflow:hidden;
-            box-shadow:0 12px 40px rgba(99,102,241,0.5);
-            background:white;
-            display:flex; flex-direction:column; align-items:center; justify-content:center;
-            padding:6px; gap:4px;
-            transition:none;
-        `;
-        ghost.innerHTML = `
-            <img src="${item.url || getPlaceholderUrl(item.label)}" style="width:70px; height:70px; object-fit:contain; border-radius:8px;" draggable="false">
-            <span style="font-weight:bold; font-size:0.7rem; color:#333; text-align:center; line-height:1.1;">${item.label}</span>
-        `;
+        ghost.style.cssText = `position:fixed; z-index:9999; pointer-events:none; width:110px; left:${x-55}px; top:${y-65}px; opacity:0.92; transform:scale(1.1) rotate(3deg); border-radius:14px; overflow:hidden; box-shadow:0 12px 40px rgba(99,102,241,0.5); background:white; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:6px; gap:4px; transition:none;`;
+        ghost.innerHTML = `<img src="${item.url || getPlaceholderUrl(item.label)}" style="width:90px; height:90px; object-fit:contain; border-radius:10px;" draggable="false"><span style="font-weight:bold; font-size:0.75rem; color:#333; text-align:center; line-height:1.1;">${item.label}</span>`;
         document.body.appendChild(ghost);
         return ghost;
     }
 
-    function moveGhost(x, y) {
-        if (!ghostEl) return;
-        ghostEl.style.left = (x - 45) + 'px';
-        ghostEl.style.top = (y - 55) + 'px';
-    }
+    function moveGhost(x, y) { if (ghostEl) { ghostEl.style.left = (x-55)+'px'; ghostEl.style.top = (y-65)+'px'; } }
+    function removeGhost() { if (ghostEl) { ghostEl.remove(); ghostEl = null; } }
 
-    function removeGhost() {
-        if (ghostEl) { ghostEl.remove(); ghostEl = null; }
-    }
-
-    function highlightTarget(cx, cy) {
-        // Need to hide ghost briefly so elementFromPoint finds the slot underneath
+    function findSlotTarget(cx, cy) {
         if (ghostEl) ghostEl.style.display = 'none';
         const el = document.elementFromPoint(cx, cy);
         if (ghostEl) ghostEl.style.display = '';
-        const target = el ? el.closest('.seq-slot-card[data-slot]') : null;
-        slots.forEach(s => {
+        return el ? el.closest('.seq-slot-card[data-slot]') : null;
+    }
+
+    function highlightSlots(cx, cy) {
+        const target = findSlotTarget(cx, cy);
+        slotsContainer.querySelectorAll('.seq-slot-card[data-slot]').forEach(s => {
             if (s === dragEl) return;
-            s.style.outline = '';
-            s.style.boxShadow = '';
+            s.style.outline = ''; s.style.boxShadow = '';
         });
         if (target && target !== dragEl) {
             target.style.outline = '3px dashed var(--accent-color)';
             target.style.boxShadow = '0 0 20px rgba(99,102,241,0.3)';
         }
-        return target;
     }
 
     function resetVisuals() {
         removeGhost();
         if (dragEl) { dragEl.style.opacity = ''; dragEl.style.transform = ''; }
-        slots.forEach(s => { s.style.outline = ''; s.style.boxShadow = ''; });
+        slotsContainer.querySelectorAll('.seq-slot-card[data-slot]').forEach(s => { s.style.outline = ''; s.style.boxShadow = ''; });
     }
 
-    const slots = container.querySelectorAll('.seq-slot-card[data-slot]');
+    function handleDrop(cx, cy) {
+        const target = findSlotTarget(cx, cy);
+        resetVisuals();
+        _seqDragJustEnded = true;
+        setTimeout(() => { _seqDragJustEnded = false; }, 150);
+        if (!target) return;
+        const targetSlotIdx = parseInt(target.dataset.slot);
 
-    slots.forEach(slot => {
+        if (dragType === 'source') {
+            const card = state.sequenzeSourceCards.find(c => c.seqNumber === dragData.seqNum);
+            if (!card) return;
+            const sourceIdx = state.sequenzeSourceCards.indexOf(card);
+            const existing = state.sequenzePlacements[targetSlotIdx];
+            if (existing) state.sequenzeSourceCards.push(existing);
+            state.sequenzePlacements[targetSlotIdx] = card;
+            state.sequenzeSourceCards.splice(sourceIdx, 1);
+            state.sequenzeSelectedSource = null;
+            renderSequenzeUI(document.getElementById('game-stage'));
+        } else if (dragType === 'slot') {
+            if (targetSlotIdx !== dragData.slotIdx) swapSequenzeSlots(dragData.slotIdx, targetSlotIdx);
+        }
+    }
+
+    function beginDrag(type, data, el, x, y) {
+        dragType = type; dragData = data; dragEl = el; startX = x; startY = y; isDragging = false;
+    }
+
+    function checkMove(x, y, threshold) {
+        if (!dragType) return;
+        if (!isDragging && (Math.abs(x-startX) > threshold || Math.abs(y-startY) > threshold)) {
+            isDragging = true;
+            let item = dragType === 'source' ? state.sequenzeSourceCards.find(c => c.seqNumber === dragData.seqNum) : state.sequenzePlacements[dragData.slotIdx];
+            if (item) ghostEl = createGhost(item, x, y);
+            if (dragEl) { dragEl.style.opacity = '0.3'; if (dragType === 'slot') dragEl.style.transform = 'scale(0.9)'; }
+        }
+        if (isDragging) { moveGhost(x, y); highlightSlots(x, y); }
+    }
+
+    // Source card drag
+    if (sourceArea) {
+        sourceArea.querySelectorAll('.seq-source-card[data-seq]').forEach(card => {
+            const seqNum = parseInt(card.dataset.seq);
+            card.addEventListener('touchstart', (e) => { if (!e.target.closest('button')) { const t=e.touches[0]; beginDrag('source',{seqNum},card,t.clientX,t.clientY); } }, { passive: true });
+            card.addEventListener('touchmove', (e) => { if (dragType==='source') { const t=e.touches[0]; checkMove(t.clientX,t.clientY,10); if (isDragging) e.preventDefault(); } }, { passive: false });
+            card.addEventListener('touchend', (e) => { if (isDragging && dragType==='source') handleDrop(e.changedTouches[0].clientX,e.changedTouches[0].clientY); dragType=null; isDragging=false; });
+            card.addEventListener('mousedown', (e) => { if (!e.target.closest('button')) { beginDrag('source',{seqNum},card,e.clientX,e.clientY); e.preventDefault(); } });
+        });
+    }
+
+    // Slot card drag (swap)
+    slotsContainer.querySelectorAll('.seq-slot-card[data-slot]').forEach(slot => {
         const slotIdx = parseInt(slot.dataset.slot);
         if (state.sequenzePlacements[slotIdx] === null) return;
-
-        // Touch
-        slot.addEventListener('touchstart', (e) => {
-            if (state.sequenzeVerified) return;
-            if (e.target.closest('button')) return;
-            const touch = e.touches[0];
-            startX = touch.clientX;
-            startY = touch.clientY;
-            dragSlotIdx = slotIdx;
-            dragEl = slot;
-            isDragging = false;
-        }, { passive: true });
-
-        slot.addEventListener('touchmove', (e) => {
-            if (dragSlotIdx === null) return;
-            const touch = e.touches[0];
-            const dx = Math.abs(touch.clientX - startX);
-            const dy = Math.abs(touch.clientY - startY);
-            if (dx > 10 || dy > 10) {
-                if (!isDragging) {
-                    isDragging = true;
-                    ghostEl = createGhost(dragEl, touch.clientX, touch.clientY);
-                    dragEl.style.opacity = '0.3';
-                    dragEl.style.transform = 'scale(0.9)';
-                }
-                e.preventDefault();
-                moveGhost(touch.clientX, touch.clientY);
-                highlightTarget(touch.clientX, touch.clientY);
-            }
-        }, { passive: false });
-
-        slot.addEventListener('touchend', (e) => {
-            if (dragSlotIdx === null || !isDragging) {
-                dragSlotIdx = null;
-                return;
-            }
-            const touch = e.changedTouches[0];
-            if (ghostEl) ghostEl.style.display = 'none';
-            const el = document.elementFromPoint(touch.clientX, touch.clientY);
-            if (ghostEl) ghostEl.style.display = '';
-            const target = el ? el.closest('.seq-slot-card[data-slot]') : null;
-            removeGhost();
-            if (target && target !== dragEl) {
-                swapSequenzeSlots(dragSlotIdx, parseInt(target.dataset.slot));
-            } else {
-                resetVisuals();
-            }
-            dragSlotIdx = null;
-            isDragging = false;
-        });
-
-        // Mouse
-        slot.addEventListener('mousedown', (e) => {
-            if (state.sequenzeVerified) return;
-            if (e.target.closest('button')) return;
-            startX = e.clientX;
-            startY = e.clientY;
-            dragSlotIdx = slotIdx;
-            dragEl = slot;
-            isDragging = false;
-            e.preventDefault();
-        });
+        slot.addEventListener('touchstart', (e) => { if (!state.sequenzeVerified && !e.target.closest('button')) { const t=e.touches[0]; beginDrag('slot',{slotIdx},slot,t.clientX,t.clientY); } }, { passive: true });
+        slot.addEventListener('touchmove', (e) => { if (dragType==='slot') { const t=e.touches[0]; checkMove(t.clientX,t.clientY,10); if (isDragging) e.preventDefault(); } }, { passive: false });
+        slot.addEventListener('touchend', (e) => { if (isDragging && dragType==='slot') handleDrop(e.changedTouches[0].clientX,e.changedTouches[0].clientY); dragType=null; isDragging=false; });
+        slot.addEventListener('mousedown', (e) => { if (!state.sequenzeVerified && !e.target.closest('button')) { beginDrag('slot',{slotIdx},slot,e.clientX,e.clientY); e.preventDefault(); } });
     });
 
-    // Document-level mouse handlers (so drag works even outside container)
-    function onDocMouseMove(e) {
-        if (dragSlotIdx === null) return;
-        const dx = Math.abs(e.clientX - startX);
-        const dy = Math.abs(e.clientY - startY);
-        if (dx > 5 || dy > 5) {
-            if (!isDragging) {
-                isDragging = true;
-                ghostEl = createGhost(dragEl, e.clientX, e.clientY);
-                dragEl.style.opacity = '0.3';
-                dragEl.style.transform = 'scale(0.9)';
-            }
-            moveGhost(e.clientX, e.clientY);
-            highlightTarget(e.clientX, e.clientY);
-        }
-    }
-
+    function onDocMouseMove(e) { checkMove(e.clientX, e.clientY, 5); }
     function onDocMouseUp(e) {
-        if (dragSlotIdx === null) return;
-        if (isDragging) {
-            if (ghostEl) ghostEl.style.display = 'none';
-            const el = document.elementFromPoint(e.clientX, e.clientY);
-            if (ghostEl) ghostEl.style.display = '';
-            const target = el ? el.closest('.seq-slot-card[data-slot]') : null;
-            removeGhost();
-            if (target && target !== dragEl) {
-                swapSequenzeSlots(dragSlotIdx, parseInt(target.dataset.slot));
-            } else {
-                resetVisuals();
-            }
-        }
-        dragSlotIdx = null;
-        isDragging = false;
+        if (isDragging && dragType) handleDrop(e.clientX, e.clientY); else resetVisuals();
+        dragType = null; isDragging = false;
     }
-
     document.addEventListener('mousemove', onDocMouseMove);
     document.addEventListener('mouseup', onDocMouseUp);
-
-    _seqDragCleanup = () => {
-        document.removeEventListener('mousemove', onDocMouseMove);
-        document.removeEventListener('mouseup', onDocMouseUp);
-        removeGhost();
-    };
+    _seqDragCleanup = () => { document.removeEventListener('mousemove', onDocMouseMove); document.removeEventListener('mouseup', onDocMouseUp); removeGhost(); };
 }
 
 window.swapSequenzeSlots = (fromIdx, toIdx) => {
@@ -1247,7 +1372,6 @@ window.swapSequenzeSlots = (fromIdx, toIdx) => {
     state.sequenzePlacements[toIdx] = temp;
     renderSequenzeUI(document.getElementById('game-stage'));
 };
-
 // --- CATEGORIZZAZIONE (Sorting by Tag) ---
 function renderCategorizzazione(items, stage) {
     const tags = state.selectedPoolTags;
@@ -1343,27 +1467,39 @@ window.handleCatChoice = (chosenTag) => {
     const item = state.catItems[state.catIndex];
     const card = document.getElementById('cat-card');
     const isCorrect = chosenTag === item.correctTag;
-
-    state.session.itemResults[state.catIndex] = isCorrect;
+    const isTimedelay = getSelectedSessionType() === 'timedelay';
 
     if (isCorrect) {
         card.style.border = '4px solid var(--success-color)';
         card.style.boxShadow = '0 0 30px rgba(16,185,129,0.5)';
+        const key = isTimedelay ? `cat_${state.catIndex}_ok` : state.catIndex;
+        state.session.itemResults[key] = true;
+    } else if (isTimedelay) {
+        // Time Delay: highlight as prompt, don't advance
+        card.style.border = '4px solid var(--warning-color)';
+        card.style.boxShadow = '0 0 30px rgba(245,158,11,0.3)';
+        const key = `cat_${state.catIndex}_p${Date.now()}`;
+        state.session.itemResults[key] = 'prompt';
     } else {
         card.style.border = '4px solid var(--danger-color)';
         card.style.boxShadow = '0 0 30px rgba(239,68,68,0.5)';
+        state.session.itemResults[state.catIndex] = false;
     }
 
     // Update score
     const results = Object.values(state.session.itemResults);
     state.session.correct = results.filter(v => v === true).length;
     state.session.incorrect = results.filter(v => v === false).length;
+    state.session.prompts = results.filter(v => v === 'prompt').length;
     state.session.total = results.length;
     updateScoreUI();
     document.getElementById('btn-save-session').classList.remove('hidden');
 
     setTimeout(() => {
-        state.catIndex++;
+        // In TD mode, don't advance on wrong answer
+        if (isCorrect || !isTimedelay) {
+            state.catIndex++;
+        }
         showCategorizzazioneItem(document.getElementById('game-stage'));
     }, 800);
 };
@@ -1393,12 +1529,14 @@ function setupSearchFindTouch() {
     let lastTouchEnd = 0;
 
     vp.addEventListener('touchstart', (e) => {
+        if (e.target.classList.contains('marker-pin')) return;
         const touch = e.touches[0];
         touchStartX = touch.clientX;
         touchStartY = touch.clientY;
     }, { passive: true });
 
     vp.addEventListener('touchend', (e) => {
+        if (e.target.classList.contains('marker-pin')) return;
         const touch = e.changedTouches[0];
         const dx = Math.abs(touch.clientX - touchStartX);
         const dy = Math.abs(touch.clientY - touchStartY);
@@ -1412,6 +1550,7 @@ function setupSearchFindTouch() {
 
     // Mouse click for desktop (skip if just handled by touch)
     vp.addEventListener('click', (e) => {
+        if (e.target.classList.contains('marker-pin')) return;
         if (Date.now() - lastTouchEnd < 500) return;
         placeMarkerAt(e.clientX, e.clientY);
     });
@@ -1425,20 +1564,147 @@ function placeMarkerAt(clientX, clientY) {
     m.className = 'marker-pin';
     m.style.left = (clientX - r.left) + 'px';
     m.style.top = (clientY - r.top) + 'px';
-    m.onclick = (ev) => { ev.stopPropagation(); m.remove(); };
+
+    const removeThisMarker = (ev) => {
+        ev.stopPropagation();
+        ev.preventDefault();
+
+        if (m.dataset.id && state.session && state.session.active && state.session.itemResults) {
+            const removedId = m.dataset.id;
+            delete state.session.itemResults[removedId];
+
+            if (state.session.scoreHistory) {
+                state.session.scoreHistory = state.session.scoreHistory.filter(id => id !== removedId);
+            }
+
+            const results = Object.values(state.session.itemResults);
+            state.session.correct = results.filter(v => v === true).length;
+            state.session.incorrect = results.filter(v => v === false).length;
+            state.session.prompts = results.filter(v => v === 'prompt').length;
+            state.session.total = results.length;
+
+            if (typeof updateScoreUI === 'function') updateScoreUI();
+        }
+
+        m.remove();
+    };
+
+    m.onclick = removeThisMarker;
+    m.addEventListener('touchend', removeThisMarker);
+
     vp.appendChild(m);
 }
 
 // Keep backward compat
 window.placeMarker = (e) => { placeMarkerAt(e.clientX, e.clientY); };
 
-window.removeLastMarker = () => {
-    const m = document.querySelectorAll('.marker-pin');
-    if (m.length) m[m.length - 1].remove();
+window.undoLastAction = () => {
+    if (!state.session || !state.session.active) return;
+    const mode = document.getElementById('mode-select').value;
+    const engine = getModeEngine(mode);
+
+    if (engine === 'quaderno') {
+        if (state._quadernoType === 'task') {
+            if (typeof window.undoLastTaskStep === 'function') window.undoLastTaskStep();
+        }
+        return;
+    }
+
+    // Racconto phase undo
+    if (state.session.sequenzePhase === 'racconto') {
+        if (state.session.scoreHistory && state.session.scoreHistory.length > 0) {
+            const lastIdx = state.session.scoreHistory.pop();
+            delete state.raccontoScored[lastIdx];
+            delete state.session.itemResults[lastIdx];
+            const results = Object.values(state.session.itemResults);
+            state.session.correct = results.filter(v => v === true).length;
+            state.session.incorrect = results.filter(v => v === false).length;
+            state.session.prompts = results.filter(v => v === 'prompt').length;
+            state.session.total = results.length;
+            state.raccontoSelectedIdx = lastIdx;
+            if (typeof updateScoreUI === 'function') updateScoreUI();
+            document.getElementById('btn-save-session').classList.add('hidden');
+            renderRaccontoUI(document.getElementById('game-stage'));
+        }
+        return;
+    }
+
+    let removedId = null;
+
+    if (engine === 'search_find' || engine === 'intraverbal_scenari') {
+        const markers = document.querySelectorAll('.marker-pin');
+        let markerToRemove = null;
+
+        if (state.session.scoreHistory && state.session.scoreHistory.length > 0) {
+            removedId = state.session.scoreHistory.pop();
+
+            if (markers.length > 0) {
+                for (let i = markers.length - 1; i >= 0; i--) {
+                    if (markers[i].dataset.id === removedId) {
+                        markerToRemove = markers[i];
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!markerToRemove && markers.length > 0) {
+            markerToRemove = markers[markers.length - 1];
+            removedId = markerToRemove.dataset.id;
+
+            if (removedId && state.session.scoreHistory) {
+                state.session.scoreHistory = state.session.scoreHistory.filter(id => id !== removedId);
+            }
+        }
+
+        if (markerToRemove) markerToRemove.remove();
+    } else {
+        if (state.session.scoreHistory && state.session.scoreHistory.length > 0) {
+            removedId = state.session.scoreHistory.pop();
+
+            const currentIndex = (engine === 'tact') ? state.tactIndex : state.ranIndex;
+            if (removedId === currentIndex) {
+                const targetImg = document.querySelector('.tact-card-lg img, .ran-main-img');
+                if (targetImg) targetImg.classList.remove('feedback-success', 'feedback-fail', 'feedback-prompt');
+            }
+        }
+    }
+
+    if (removedId && state.session.itemResults[removedId] !== undefined) {
+        delete state.session.itemResults[removedId];
+    }
+
+    const results = Object.values(state.session.itemResults);
+    state.session.correct = results.filter(v => v === true).length;
+    state.session.incorrect = results.filter(v => v === false).length;
+    state.session.prompts = results.filter(v => v === 'prompt').length;
+    state.session.total = results.length;
+
+    if (typeof updateScoreUI === 'function') updateScoreUI();
 };
 
+window.removeLastMarker = window.undoLastAction;
+
 window.clearMarkers = () => {
-    document.querySelectorAll('.marker-pin').forEach(e => e.remove());
+    document.querySelectorAll('.marker-pin').forEach(m => {
+        if (m.dataset.id && state.session && state.session.active && state.session.itemResults) {
+            const removedId = m.dataset.id;
+            delete state.session.itemResults[removedId];
+            if (state.session.scoreHistory) {
+                state.session.scoreHistory = state.session.scoreHistory.filter(id => id !== removedId);
+            }
+        }
+        m.remove();
+    });
+
+    if (state.session && state.session.active && state.session.itemResults) {
+        const results = Object.values(state.session.itemResults);
+        state.session.correct = results.filter(v => v === true).length;
+        state.session.incorrect = results.filter(v => v === false).length;
+        state.session.prompts = results.filter(v => v === 'prompt').length;
+        state.session.total = results.length;
+        if (typeof updateScoreUI === 'function') updateScoreUI();
+    }
 };
 
 // --- TOMBOLA SONORA (Audio matching) ---
@@ -1510,6 +1776,7 @@ window.handleAudioMatchClick = (idx, label) => {
     if (cardEl.classList.contains('matched')) return;
 
     const isCorrect = label === state.deck[0].label;
+    const isTimedelay = getSelectedSessionType() === 'timedelay';
 
     if (isCorrect) {
         cardEl.classList.add('matched');
@@ -1518,10 +1785,13 @@ window.handleAudioMatchClick = (idx, label) => {
         state.deck.shift();
         const remaining = document.getElementById('audio-remaining');
         if (remaining) remaining.textContent = state.deck.length > 0 ? state.deck.length + ' rimasti' : 'FINITO!';
-        // Play next audio after delay
         if (state.deck.length > 0) {
             setTimeout(() => playCurrentAudio(), 800);
         }
+    } else if (isTimedelay) {
+        cardEl.style.border = '4px solid var(--warning-color)';
+        cardEl.style.boxShadow = '0 0 15px rgba(245,158,11,0.3)';
+        cardEl.style.opacity = '0.5';
     } else {
         cardEl.style.border = '4px solid var(--danger-color)';
         cardEl.style.boxShadow = '0 0 15px rgba(239,68,68,0.4)';
@@ -1533,10 +1803,11 @@ window.handleAudioMatchClick = (idx, label) => {
 
     if (state.session.active) {
         const key = `tombola_sonora_${Date.now()}`;
-        state.session.itemResults[key] = isCorrect;
+        state.session.itemResults[key] = isCorrect ? true : (isTimedelay ? 'prompt' : false);
         const results = Object.values(state.session.itemResults);
         state.session.correct = results.filter(v => v === true).length;
         state.session.incorrect = results.filter(v => v === false).length;
+        state.session.prompts = results.filter(v => v === 'prompt').length;
         state.session.total = results.length;
         updateScoreUI();
         document.getElementById('btn-save-session').classList.remove('hidden');
@@ -1594,7 +1865,7 @@ function showZoomItem(stage) {
         </div>
         <div id="zoom-display" style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; min-height:0; cursor:pointer;" onclick="revealZoom()">
             <div id="zoom-image-container" style="position:relative; max-width:90%; max-height:70%; overflow:hidden; border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,0.5); background:white;">
-                <img id="zoom-img" src="${item.url}" style="display:block; width:100%; height:auto; transform-origin:${area.x + area.w/2}% ${area.y + area.h/2}%; transform:scale(${Math.round(100/area.w * 2.5)}); transition:transform 0.8s ease;" onerror="handleImgError(this, '${item.label}')">
+                <img id="zoom-img" src="${item.url}" style="display:block; width:100%; height:auto; transform-origin:${area.x + area.w / 2}% ${area.y + area.h / 2}%; transform:scale(${Math.round(100 / area.w * 2.5)}); transition:transform 0.8s ease;" onerror="handleImgError(this, '${item.label}')">
             </div>
             <div id="zoom-label" style="margin-top:15px; font-size:1.5rem; font-weight:800; color:white; text-transform:uppercase; opacity:0; transition:opacity 0.5s;">${item.label}</div>
             <div id="zoom-hint" style="margin-top:10px; color:var(--text-secondary); font-size:0.85rem;">
@@ -1631,7 +1902,11 @@ window.nextZoomItem = () => {
 // --- QUADERNO (Manual scoring + Task Analysis) ---
 // ============================================================
 function renderQuaderno(stage) {
-    const savedLists = getSavedQuadernoLists();
+    // Gather saved quaderno sets from IndexedDB
+    const quadernoSets = state.savedSets.filter(s => s.modes && (s.modes.includes('quaderno') || s.modes.includes('quaderno_task')));
+    // Also check localStorage for legacy lists not yet migrated
+    const legacyLists = getSavedQuadernoLists();
+    const hasLegacy = legacyLists.some(l => !quadernoSets.find(s => s.name === l.name));
 
     stage.innerHTML = `
     <div style="height:100%; display:flex; flex-direction:column; overflow:hidden;">
@@ -1644,20 +1919,27 @@ function renderQuaderno(stage) {
                 <button class="btn btn-ghost" onclick="openQuadernoSheet('task')" style="padding:8px 16px; font-size:0.9rem; border-color:var(--warning-color); color:var(--warning-color);">
                     <i class="fa-solid fa-list-check"></i> Task Analysis
                 </button>
-                ${savedLists.length > 0 ? `
-                    <select id="quaderno-load-select" onchange="loadQuadernoList(this.value)" style="padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.85rem; max-width:200px;">
-                        <option value="">-- Carica Lista Salvata --</option>
-                        ${savedLists.map(l => `<option value="${l.name}">${l.name} (${l.type === 'task' ? 'Task' : 'Generale'})</option>`).join('')}
-                    </select>
-                ` : ''}
             </div>
         </div>
+        <!-- Saved lists area -->
+        ${quadernoSets.length > 0 || hasLegacy ? `
+        <div style="padding:10px 12px; border-bottom:1px solid #ffffff08; flex-shrink:0; overflow-x:auto;">
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                ${quadernoSets.map(s => {
+                    const isTask = s.modes.includes('quaderno_task');
+                    return `<button class="btn btn-ghost" onclick="loadQuadernoSet('${s.id}')" style="padding:6px 12px; font-size:0.8rem; white-space:nowrap; ${isTask ? 'border-color:var(--warning-color); color:var(--warning-color);' : ''}">
+                        <i class="fa-solid ${isTask ? 'fa-list-check' : 'fa-clipboard-list'}" style="margin-right:4px;"></i>${s.name}
+                        <span style="opacity:0.5; font-size:0.7rem; margin-left:4px;">${s.items.length}</span>
+                    </button>`;
+                }).join('')}
+            </div>
+        </div>` : ''}
         <!-- Content area -->
         <div id="quaderno-content" style="flex:1; overflow-y:auto; padding:15px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--text-secondary);">
             <i class="fa-solid fa-book-open fa-3x" style="margin-bottom:15px; opacity:0.3;"></i>
             <p style="text-align:center;">Scegli <b>Quaderno Generale</b> per registrare attivit&agrave; manuali<br>
             o <b>Task Analysis</b> per sequenze operazionalizzate.</p>
-            ${savedLists.length > 0 ? '<p style="font-size:0.8rem; opacity:0.6;">Oppure carica una lista salvata dal menu sopra.</p>' : ''}
+            ${quadernoSets.length > 0 ? '<p style="font-size:0.8rem; opacity:0.6;">Oppure carica una lista salvata dai pulsanti sopra.</p>' : ''}
         </div>
     </div>`;
 }
@@ -1671,18 +1953,20 @@ window.openQuadernoSheet = (type) => {
         state._quadernoType = 'general';
         state._quadernoRows = [];
         state._quadernoName = '';
+        state._quadernoSetId = null;
         renderQuadernoGeneral(content);
     } else if (type === 'task') {
         state._quadernoType = 'task';
         state._quadernoSteps = [];
         state._quadernoName = '';
+        state._quadernoSetId = null;
         state._taskCurrentStep = 0;
         state._taskCycleCount = 0;
         renderQuadernoTask(content);
     }
 };
 
-// --- Load saved list ---
+// --- Load saved list (legacy localStorage) ---
 window.loadQuadernoList = (name) => {
     if (!name) return;
     const lists = getSavedQuadernoLists();
@@ -1691,6 +1975,7 @@ window.loadQuadernoList = (name) => {
 
     const content = document.getElementById('quaderno-content');
     state._quadernoName = list.name;
+    state._quadernoSetId = null;
 
     if (list.type === 'task') {
         state._quadernoType = 'task';
@@ -1701,6 +1986,30 @@ window.loadQuadernoList = (name) => {
     } else {
         state._quadernoType = 'general';
         state._quadernoRows = list.items.map(item => ({ ...item, results: [] }));
+        renderQuadernoGeneral(content);
+    }
+};
+
+// --- Load quaderno from IndexedDB set ---
+window.loadQuadernoSet = (setId) => {
+    const s = state.savedSets.find(x => x.id === setId);
+    if (!s) return;
+
+    const content = document.getElementById('quaderno-content');
+    const isTask = s.modes && s.modes.includes('quaderno_task');
+
+    state._quadernoName = s.name;
+    state._quadernoSetId = s.id;
+
+    if (isTask) {
+        state._quadernoType = 'task';
+        state._quadernoSteps = s.items.map(item => ({ name: item.name || item.label || item.l || '', results: [] }));
+        state._taskCurrentStep = 0;
+        state._taskCycleCount = 0;
+        renderQuadernoTask(content);
+    } else {
+        state._quadernoType = 'general';
+        state._quadernoRows = s.items.map(item => ({ name: item.name || item.label || item.l || '', results: [] }));
         renderQuadernoGeneral(content);
     }
 };
@@ -1729,13 +2038,16 @@ window.onQuadernoTypeChange = () => {
 };
 
 function renderQuadernoGeneral(container) {
+    container.style.justifyContent = 'flex-start';
+    container.style.alignItems = 'stretch';
     const rows = state._quadernoRows || [];
     const savedNames = getSavedQuadernoLists().filter(l => l.type !== 'task').map(l => l.name);
     const qType = getQuadernoSessionType();
+    const quadernoTemplates = state.savedSets.filter(s => s.modes && s.modes.includes('quaderno'));
 
     container.innerHTML = `
     <div style="width:100%; max-width:700px; margin:0 auto;">
-        <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
+        <div style="display:flex; gap:8px; margin-bottom:8px; align-items:center; flex-wrap:wrap;">
             <input type="text" id="quaderno-name-input" value="${state._quadernoName || ''}" placeholder="Nome lista (es. Seduta 15 Feb)"
                 list="quaderno-names-list"
                 style="flex:1; min-width:150px; padding:8px 12px; border-radius:8px; font-size:0.9rem;">
@@ -1743,6 +2055,15 @@ function renderQuadernoGeneral(container) {
                 ${savedNames.map(n => `<option value="${n}">`).join('')}
             </datalist>
         </div>
+        ${quadernoTemplates.length > 0 ? `
+        <div style="display:flex; gap:6px; margin-bottom:10px; align-items:center; overflow-x:auto; padding-bottom:4px;">
+            <span style="font-size:0.75rem; color:var(--text-secondary); white-space:nowrap; flex-shrink:0;"><i class="fa-solid fa-folder-open"></i> Carica:</span>
+            ${quadernoTemplates.map(s => {
+                return `<button class="btn btn-ghost" onclick="loadQuadernoSet('${s.id}')" style="padding:4px 10px; font-size:0.78rem; white-space:nowrap; flex-shrink:0;">
+                    <i class="fa-solid fa-clipboard-list" style="margin-right:3px;"></i>${s.name} <span style="opacity:0.5; font-size:0.7rem;">${s.items.length}</span>
+                </button>`;
+            }).join('')}
+        </div>` : ''}
 
         <div id="quaderno-rows-list">
             ${rows.map((row, i) => renderQuadernoRow(row, i, qType)).join('')}
@@ -1802,10 +2123,19 @@ function renderQuadernoRow(row, idx, sessionType) {
                 </button>
             </div>`;
 
+    const totalRows = (state._quadernoType === 'general' ? state._quadernoRows : state._quadernoSteps || []).length;
     return `
     <div style="display:flex; flex-direction:column; gap:6px; padding:12px 14px; margin-bottom:8px; background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); border-radius:14px; transition:0.2s;">
-        <div style="display:flex; align-items:center; gap:8px;">
-            <span style="flex:1; font-size:1.05rem; font-weight:700;">${row.name}</span>
+        <div style="display:flex; align-items:center; gap:6px;">
+            <div style="display:flex; flex-direction:column; gap:2px; flex-shrink:0;">
+                <button onclick="moveQuadernoRow(${idx},-1)" style="width:24px; height:16px; border:none; background:transparent; color:${idx > 0 ? 'var(--text-secondary)' : '#333'}; cursor:${idx > 0 ? 'pointer' : 'default'}; font-size:0.6rem; display:flex; align-items:center; justify-content:center; padding:0;" title="Sposta su" ${idx === 0 ? 'disabled' : ''}>
+                    <i class="fa-solid fa-chevron-up"></i>
+                </button>
+                <button onclick="moveQuadernoRow(${idx},1)" style="width:24px; height:16px; border:none; background:transparent; color:${idx < totalRows - 1 ? 'var(--text-secondary)' : '#333'}; cursor:${idx < totalRows - 1 ? 'pointer' : 'default'}; font-size:0.6rem; display:flex; align-items:center; justify-content:center; padding:0;" title="Sposta giù" ${idx >= totalRows - 1 ? 'disabled' : ''}>
+                    <i class="fa-solid fa-chevron-down"></i>
+                </button>
+            </div>
+            <span onclick="renameQuadernoRow(${idx})" style="flex:1; font-size:1.05rem; font-weight:700; cursor:pointer;" title="Rinomina">${row.name}</span>
             <span style="background:rgba(99,102,241,0.2); color:var(--accent-color); padding:3px 10px; border-radius:8px; font-size:0.85rem; font-weight:bold; min-width:35px; text-align:center;" title="Totale LU">${total}</span>
             <button onclick="undoQuadernoResult(${idx})" style="width:34px; height:34px; border-radius:10px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.05); color:var(--text-secondary); cursor:pointer; font-size:0.85rem; display:flex; align-items:center; justify-content:center;" title="Annulla ultimo" ${total === 0 ? 'disabled style="opacity:0.3; width:34px; height:34px; border-radius:10px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.05); color:var(--text-secondary); cursor:default; font-size:0.85rem; display:flex; align-items:center; justify-content:center;"' : ''}>
                 <i class="fa-solid fa-rotate-left"></i>
@@ -1871,8 +2201,40 @@ window.removeQuadernoRow = (idx) => {
         renderQuadernoGeneral(document.getElementById('quaderno-content'));
     } else {
         state._quadernoSteps.splice(idx, 1);
+        // Adjust current step pointer if needed
+        if (state._taskCurrentStep >= (state._quadernoSteps || []).length) {
+            state._taskCurrentStep = 0;
+        }
         renderQuadernoTask(document.getElementById('quaderno-content'));
     }
+};
+
+window.moveQuadernoRow = (idx, dir) => {
+    const rows = state._quadernoType === 'general' ? state._quadernoRows : state._quadernoSteps;
+    if (!rows) return;
+    const newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= rows.length) return;
+    // Swap
+    [rows[idx], rows[newIdx]] = [rows[newIdx], rows[idx]];
+    // Adjust task current step pointer if needed
+    if (state._quadernoType === 'task') {
+        if (state._taskCurrentStep === idx) state._taskCurrentStep = newIdx;
+        else if (state._taskCurrentStep === newIdx) state._taskCurrentStep = idx;
+    }
+    const content = document.getElementById('quaderno-content');
+    if (state._quadernoType === 'general') renderQuadernoGeneral(content);
+    else renderQuadernoTask(content);
+};
+
+window.renameQuadernoRow = (idx) => {
+    const rows = state._quadernoType === 'general' ? state._quadernoRows : state._quadernoSteps;
+    if (!rows || !rows[idx]) return;
+    const newName = prompt('Rinomina:', rows[idx].name);
+    if (!newName || newName.trim() === '' || newName.trim() === rows[idx].name) return;
+    rows[idx].name = newName.trim();
+    const content = document.getElementById('quaderno-content');
+    if (state._quadernoType === 'general') renderQuadernoGeneral(content);
+    else renderQuadernoTask(content);
 };
 
 function getUsedActivityNames() {
@@ -1950,7 +2312,7 @@ window.saveQuadernoSession = async () => {
         p.history.push(sessionData);
 
         await DB.savePatient(p);
-        alert(`Task Analysis salvata!\n${totalScored} LU (escl. N/A), ${totalCorrect} corrette (${Math.round((totalCorrect/totalScored)*100)}%)\nCicli completati: ${(state._taskCycleCount || 0) + (state._taskCurrentStep > 0 ? 1 : 0)}`);
+        alert(`Task Analysis salvata!\n${totalScored} LU (escl. N/A), ${totalCorrect} corrette (${Math.round((totalCorrect / totalScored) * 100)}%)\nCicli completati: ${(state._taskCycleCount || 0) + (state._taskCurrentStep > 0 ? 1 : 0)}`);
 
     } else {
         // General Quaderno: save each row as a separate session (original behavior)
@@ -1992,38 +2354,64 @@ window.saveQuadernoSession = async () => {
         });
 
         await DB.savePatient(p);
-        alert(`Sessione salvata!\n${totalLU} LU, ${totalCorrect} corrette (${totalLU > 0 ? Math.round((totalCorrect/totalLU)*100) : 0}%)`);
+        alert(`Sessione salvata!\n${totalLU} LU, ${totalCorrect} corrette (${totalLU > 0 ? Math.round((totalCorrect / totalLU) * 100) : 0}%)`);
     }
 };
 
-// Save quaderno template for reuse
-window.saveQuadernoTemplate = () => {
+// Save quaderno template as a proper set (IndexedDB) for reuse and editing
+window.saveQuadernoTemplate = async () => {
     const nameInput = document.getElementById('quaderno-name-input');
-    const name = nameInput ? nameInput.value.trim() : '';
-    if (!name) return alert("Inserisci un nome per la lista.");
+    let name = nameInput ? nameInput.value.trim() : '';
+    if (!name) {
+        name = prompt("Nome per la lista:");
+        if (!name || !name.trim()) return;
+        name = name.trim();
+        if (nameInput) nameInput.value = name;
+    }
 
     const rows = state._quadernoType === 'task' ? state._quadernoSteps : state._quadernoRows;
     if (rows.length === 0) return alert("Aggiungi almeno un'attivit\u00E0.");
 
-    const list = {
+    const modeTag = state._quadernoType === 'task' ? 'quaderno_task' : 'quaderno';
+
+    // Check if we're editing an existing set (matched by _quadernoSetId)
+    let setId = state._quadernoSetId || null;
+    let existingSet = setId ? state.savedSets.find(s => s.id === setId) : null;
+
+    if (!existingSet) {
+        // Also check by name + mode for backward compatibility
+        existingSet = state.savedSets.find(s => s.name === name && s.modes && s.modes.includes(modeTag));
+        if (existingSet) setId = existingSet.id;
+    }
+
+    const setData = {
+        id: setId || Date.now().toString(),
         name: name,
-        type: state._quadernoType,
-        items: rows.map(r => ({ name: r.name }))
+        category: state._quadernoType === 'task' ? 'Task Analysis' : 'Quaderno',
+        items: rows.map(r => ({ label: r.name, name: r.name })),
+        modes: [modeTag],
+        tags: [],
+        date: new Date().toLocaleDateString(),
+        isClinical: false
     };
+
+    await DB.saveSet(setData);
+    state.savedSets = await DB.getAllSets();
+    state._quadernoSetId = setData.id;
+    state._quadernoName = name;
+
+    // Also save to localStorage for backward compat
+    const list = { name, type: state._quadernoType, items: rows.map(r => ({ name: r.name })) };
     saveQuadernoList(list);
+
     alert(`Lista "${name}" salvata!`);
-    renderQuaderno(document.getElementById('game-stage'));
-    // Re-open the current sheet with data
+
+    // Re-render keeping current data
+    const content = document.getElementById('quaderno-content');
     if (state._quadernoType === 'task') {
-        openQuadernoSheet('task');
-        state._quadernoName = name;
-        state._quadernoSteps = rows;
-        renderQuadernoTask(document.getElementById('quaderno-content'));
+        renderQuadernoTask(content);
     } else {
-        openQuadernoSheet('general');
-        state._quadernoName = name;
-        state._quadernoRows = rows;
-        renderQuadernoGeneral(document.getElementById('quaderno-content'));
+        renderQuadernoGeneral(content);
     }
 };
 
@@ -2031,11 +2419,14 @@ window.saveQuadernoTemplate = () => {
 // QUADERNO TASK ANALYSIS (one LU per step, auto-repeat cycles)
 // ============================================================
 function renderQuadernoTask(container) {
+    container.style.justifyContent = 'flex-start';
+    container.style.alignItems = 'stretch';
     const steps = state._quadernoSteps || [];
     const savedNames = getSavedQuadernoLists().filter(l => l.type === 'task').map(l => l.name);
     const qType = getQuadernoSessionType();
     const currentStep = state._taskCurrentStep || 0;
     const cycleCount = state._taskCycleCount || 0;
+    const taskTemplates = state.savedSets.filter(s => s.modes && s.modes.includes('quaderno_task'));
 
     // Compute totals excluding N/A
     let totalScored = 0, totalCorrect = 0;
@@ -2048,7 +2439,7 @@ function renderQuadernoTask(container) {
 
     container.innerHTML = `
     <div style="width:100%; max-width:700px; margin:0 auto;">
-        <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
+        <div style="display:flex; gap:8px; margin-bottom:8px; align-items:center; flex-wrap:wrap;">
             <input type="text" id="quaderno-name-input" value="${state._quadernoName || ''}" placeholder="Nome Task Analysis (es. Memory - Procedura)"
                 list="quaderno-task-names-list"
                 style="flex:1; min-width:150px; padding:8px 12px; border-radius:8px; font-size:0.9rem;">
@@ -2056,6 +2447,15 @@ function renderQuadernoTask(container) {
                 ${savedNames.map(n => `<option value="${n}">`).join('')}
             </datalist>
         </div>
+        ${taskTemplates.length > 0 ? `
+        <div style="display:flex; gap:6px; margin-bottom:10px; align-items:center; overflow-x:auto; padding-bottom:4px;">
+            <span style="font-size:0.75rem; color:var(--text-secondary); white-space:nowrap; flex-shrink:0;"><i class="fa-solid fa-folder-open"></i> Carica:</span>
+            ${taskTemplates.map(s => {
+                return `<button class="btn btn-ghost" onclick="loadQuadernoSet('${s.id}')" style="padding:4px 10px; font-size:0.78rem; white-space:nowrap; flex-shrink:0; border-color:var(--warning-color); color:var(--warning-color);">
+                    <i class="fa-solid fa-list-check" style="margin-right:3px;"></i>${s.name} <span style="opacity:0.5; font-size:0.7rem;">${s.items.length}</span>
+                </button>`;
+            }).join('')}
+        </div>` : ''}
 
         <!-- Legend + Cycle counter -->
         <div style="display:flex; gap:12px; margin-bottom:10px; font-size:0.75rem; color:var(--text-secondary); justify-content:center; align-items:center; flex-wrap:wrap;">
@@ -2126,8 +2526,8 @@ function renderQuadernoTaskStep(step, idx, sessionType, isActive) {
     const lastResult = res.length > 0 ? res[res.length - 1] : null;
     const lastIcon = lastResult === true ? '<i class="fa-solid fa-check" style="color:var(--success-color);"></i>'
         : lastResult === false ? '<i class="fa-solid fa-xmark" style="color:var(--danger-color);"></i>'
-        : lastResult === 'prompt' ? '<span style="color:var(--warning-color); font-weight:800;">P</span>'
-        : lastResult === 'na' ? '<span style="color:#888; font-size:0.7rem;">N/A</span>' : '';
+            : lastResult === 'prompt' ? '<span style="color:var(--warning-color); font-weight:800;">P</span>'
+                : lastResult === 'na' ? '<span style="color:#888; font-size:0.7rem;">N/A</span>' : '';
 
     const activeBorder = isActive ? 'border:2px solid var(--accent-color); background:rgba(99,102,241,0.1);' : 'border:1px solid var(--glass-border); background:rgba(255,255,255,0.05);';
     const activeGlow = isActive ? 'box-shadow:0 0 12px rgba(99,102,241,0.3);' : '';
@@ -2159,11 +2559,20 @@ function renderQuadernoTaskStep(step, idx, sessionType, isActive) {
             ${naCount > 0 ? `<span style="color:#888;">N/A:${naCount}</span>` : ''}
         </div>` : '';
 
+    const totalSteps = (state._quadernoSteps || []).length;
     return `
     <div id="task-step-${idx}" style="display:flex; flex-direction:column; gap:4px; padding:12px 14px; margin-bottom:8px; ${activeBorder} border-radius:14px; transition:0.2s; ${activeGlow}">
-        <div style="display:flex; align-items:center; gap:8px;">
-            <span style="width:28px; height:28px; border-radius:50%; background:${isActive ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)'}; display:flex; align-items:center; justify-content:center; font-size:0.85rem; font-weight:bold; color:${isActive ? 'white' : 'var(--text-secondary)'}; flex-shrink:0;">${idx + 1}</span>
-            <span style="flex:1; font-size:1.05rem; font-weight:700;">${step.name}</span>
+        <div style="display:flex; align-items:center; gap:6px;">
+            <div style="display:flex; flex-direction:column; gap:1px; flex-shrink:0;">
+                <button onclick="moveQuadernoRow(${idx},-1)" style="width:22px; height:14px; border:none; background:transparent; color:${idx > 0 ? 'var(--text-secondary)' : '#333'}; cursor:${idx > 0 ? 'pointer' : 'default'}; font-size:0.55rem; display:flex; align-items:center; justify-content:center; padding:0;" ${idx === 0 ? 'disabled' : ''}>
+                    <i class="fa-solid fa-chevron-up"></i>
+                </button>
+                <span style="width:22px; height:22px; border-radius:50%; background:${isActive ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)'}; display:flex; align-items:center; justify-content:center; font-size:0.75rem; font-weight:bold; color:${isActive ? 'white' : 'var(--text-secondary)'};">${idx + 1}</span>
+                <button onclick="moveQuadernoRow(${idx},1)" style="width:22px; height:14px; border:none; background:transparent; color:${idx < totalSteps - 1 ? 'var(--text-secondary)' : '#333'}; cursor:${idx < totalSteps - 1 ? 'pointer' : 'default'}; font-size:0.55rem; display:flex; align-items:center; justify-content:center; padding:0;" ${idx >= totalSteps - 1 ? 'disabled' : ''}>
+                    <i class="fa-solid fa-chevron-down"></i>
+                </button>
+            </div>
+            <span onclick="renameQuadernoRow(${idx})" style="flex:1; font-size:1.05rem; font-weight:700; cursor:pointer;" title="Rinomina">${step.name}</span>
             ${lastIcon ? `<span style="font-size:1rem;">${lastIcon}</span>` : ''}
             ${scoredCount > 0 ? `<span style="background:rgba(99,102,241,0.2); color:var(--accent-color); padding:2px 8px; border-radius:8px; font-size:0.75rem; font-weight:bold;">${scoredCount}</span>` : ''}
             <button onclick="removeQuadernoRow(${idx})" style="width:28px; height:28px; border-radius:8px; border:none; background:transparent; color:#555; cursor:pointer; font-size:0.75rem; display:flex; align-items:center; justify-content:center;" title="Rimuovi">

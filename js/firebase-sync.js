@@ -58,19 +58,18 @@ async function syncPatientToFirebase(patient) {
     if (!initFirebase()) return;
 
     try {
-        // Only sync essential data (no large blobs)
+        // Sync full patient data including session details
+        // (taskSteps, itemDetails, sessionType, setCat, etc.)
         const syncData = {
             id: patient.id,
             name: patient.name,
-            history: (patient.history || []).map(h => ({
-                date: h.date,
-                setId: h.setId,
-                setName: h.setName,
-                mode: h.mode,
-                correct: h.correct,
-                total: h.total,
-                percentage: h.percentage
-            })),
+            history: (patient.history || []).map(h => {
+                // Clone session but exclude any accidental large fields
+                const session = { ...h };
+                // Remove transient/internal fields that shouldn't sync
+                delete session.originalIndex;
+                return session;
+            }),
             lastSync: new Date().toISOString(),
             deviceId: getDeviceId()
         };
@@ -125,11 +124,31 @@ window.syncWithFirebase = async () => {
         for (const remote of remotePatients) {
             const local = localPatients.find(p => p.id === remote.id);
             if (local) {
-                // Merge histories: add remote sessions not in local
-                const localDates = new Set(local.history.map(h => h.date));
-                const newSessions = (remote.history || []).filter(h => !localDates.has(h.date));
-                if (newSessions.length > 0) {
-                    local.history.push(...newSessions);
+                // Merge histories: add new sessions + enrich existing ones with more data
+                const localByDate = {};
+                local.history.forEach((h, i) => { localByDate[h.date] = i; });
+                let changed = false;
+
+                for (const rh of (remote.history || [])) {
+                    if (localByDate[rh.date] !== undefined) {
+                        // Session exists locally - check if remote has richer data
+                        const localIdx = localByDate[rh.date];
+                        const lh = local.history[localIdx];
+                        const remoteKeys = Object.keys(rh).length;
+                        const localKeys = Object.keys(lh).length;
+                        // Replace if remote has more fields (taskSteps, itemDetails, etc.)
+                        if (remoteKeys > localKeys) {
+                            local.history[localIdx] = rh;
+                            changed = true;
+                        }
+                    } else {
+                        // New session from remote
+                        local.history.push(rh);
+                        changed = true;
+                    }
+                }
+
+                if (changed) {
                     local.history.sort((a, b) => new Date(a.date) - new Date(b.date));
                     await DB.savePatient(local);
                     mergedCount++;

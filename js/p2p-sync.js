@@ -190,14 +190,25 @@ window.updateP2PSizeEstimate = () => {
     const sizeStr = formatBytes(totalSize);
     const infoEl = document.getElementById('p2p-size-info');
 
+    // Estimate compressed size (~20-30% of original for JSON with base64 images)
+    const compressCheckbox = document.getElementById('p2p-compress');
+    const willCompress = compressCheckbox ? compressCheckbox.checked : false;
+    const estCompressedSize = Math.round(totalSize * 0.25); // conservative estimate
+    const effectiveSize = willCompress ? estCompressedSize : totalSize;
+
     let speedNote = '';
-    if (totalSize > 50 * 1024 * 1024) {
+    if (effectiveSize > 50 * 1024 * 1024) {
         speedNote = `<div style="margin-top:6px; color:var(--warning-color);"><i class="fa-solid fa-triangle-exclamation"></i> Dati molto grandi. Per trasferimenti &gt;50 MB consigliamo l'esportazione file (Backup) e condivisione manuale.</div>`;
-    } else if (totalSize > 10 * 1024 * 1024) {
-        speedNote = `<div style="margin-top:6px; color:#f59e0b;"><i class="fa-solid fa-info-circle"></i> Trasferimento di ~${sizeStr}: potrebbe richiedere qualche minuto via P2P.</div>`;
+    } else if (effectiveSize > 10 * 1024 * 1024) {
+        speedNote = `<div style="margin-top:6px; color:#f59e0b;"><i class="fa-solid fa-info-circle"></i> Trasferimento di ~${formatBytes(effectiveSize)}: potrebbe richiedere qualche minuto via P2P.</div>`;
     }
 
-    infoEl.innerHTML = `<i class="fa-solid fa-weight-hanging"></i> Dimensione stimata: <b>${sizeStr}</b>${speedNote}`;
+    let compressNote = '';
+    if (willCompress) {
+        compressNote = ` <span style="color:var(--success-color); font-size:0.75rem;">(<i class="fa-solid fa-compress"></i> ~${formatBytes(estCompressedSize)} compressi)</span>`;
+    }
+
+    infoEl.innerHTML = `<i class="fa-solid fa-weight-hanging"></i> Dimensione stimata: <b>${sizeStr}</b>${compressNote}${speedNote}`;
 };
 
 // ===============================
@@ -277,13 +288,37 @@ window.startP2PSend = async (mode) => {
     startP2PSendWithPayload(payload);
 };
 
-function startP2PSendWithPayload(payload) {
+function startP2PSendWithPayload(payload, forceCompress) {
     document.getElementById('p2p-role-select').style.display = 'none';
     document.getElementById('p2p-select-panel').style.display = 'none';
     document.getElementById('p2p-sender-panel').style.display = '';
-    document.getElementById('p2p-sender-status').textContent = 'Connessione in corso...';
+    document.getElementById('p2p-sender-status').textContent = 'Preparazione dati...';
     document.getElementById('p2p-qr-container').innerHTML = '';
     document.getElementById('p2p-sender-code').textContent = '';
+
+    // Check compression preference
+    const compressCheckbox = document.getElementById('p2p-compress');
+    const useCompression = forceCompress !== undefined ? forceCompress : (compressCheckbox ? compressCheckbox.checked : false);
+
+    const json = JSON.stringify(payload);
+    const originalSize = json.length;
+    let sendData, compressed = false, compressedSize = 0;
+
+    if (useCompression && typeof pako !== 'undefined') {
+        try {
+            const uint8 = pako.deflate(json);
+            compressedSize = uint8.length;
+            // Convert to base64 for safe transfer over WebRTC data channel
+            const binStr = Array.from(uint8, b => String.fromCharCode(b)).join('');
+            sendData = btoa(binStr);
+            compressed = true;
+        } catch (e) {
+            console.warn('Compression failed, sending uncompressed:', e);
+            sendData = json;
+        }
+    } else {
+        sendData = json;
+    }
 
     const syncId = generateSyncId();
 
@@ -295,8 +330,12 @@ function startP2PSendWithPayload(payload) {
     }
 
     _p2pPeer.on('open', (id) => {
-        const payloadSize = formatBytes(JSON.stringify(payload).length);
-        document.getElementById('p2p-sender-status').innerHTML = `In attesa di connessione... (${payloadSize})<br><span style="font-size:0.75rem; opacity:0.6;">L'altro dispositivo deve scansionare il QR o inserire il codice.</span>`;
+        let sizeInfo = formatBytes(originalSize);
+        if (compressed) {
+            const ratio = Math.round((1 - compressedSize / originalSize) * 100);
+            sizeInfo = `${formatBytes(compressedSize)} (compressi da ${formatBytes(originalSize)}, -${ratio}%)`;
+        }
+        document.getElementById('p2p-sender-status').innerHTML = `In attesa di connessione... (${sizeInfo})<br><span style="font-size:0.75rem; opacity:0.6;">L'altro dispositivo deve scansionare il QR o inserire il codice.</span>`;
         document.getElementById('p2p-sender-code').textContent = id;
 
         // Generate QR code
@@ -317,18 +356,22 @@ function startP2PSendWithPayload(payload) {
         document.getElementById('p2p-sender-status').textContent = 'Dispositivo connesso! Invio dati...';
 
         conn.on('open', () => {
-            const json = JSON.stringify(payload);
             const chunkSize = 64 * 1024; // 64KB chunks
-            const totalChunks = Math.ceil(json.length / chunkSize);
+            const totalChunks = Math.ceil(sendData.length / chunkSize);
 
-            conn.send({ type: 'meta', totalChunks: totalChunks, totalSize: json.length });
+            conn.send({ type: 'meta', totalChunks: totalChunks, totalSize: sendData.length, compressed: compressed });
 
             for (let i = 0; i < totalChunks; i++) {
-                conn.send({ type: 'chunk', index: i, data: json.substring(i * chunkSize, (i + 1) * chunkSize) });
+                conn.send({ type: 'chunk', index: i, data: sendData.substring(i * chunkSize, (i + 1) * chunkSize) });
             }
 
             conn.send({ type: 'done' });
-            document.getElementById('p2p-sender-status').innerHTML = '<i class="fa-solid fa-check" style="color:var(--success-color);"></i> Dati inviati con successo!';
+            let doneMsg = '<i class="fa-solid fa-check" style="color:var(--success-color);"></i> Dati inviati con successo!';
+            if (compressed) {
+                const ratio = Math.round((1 - compressedSize / originalSize) * 100);
+                doneMsg += ` <span style="font-size:0.75rem; opacity:0.6;">(compressi -${ratio}%)</span>`;
+            }
+            document.getElementById('p2p-sender-status').innerHTML = doneMsg;
         });
 
         conn.on('error', (err) => {
@@ -418,12 +461,16 @@ function performReceive(senderId) {
             document.getElementById('p2p-progress-text').textContent = 'Connesso! Ricezione dati...';
         });
 
+        let isCompressed = false;
+
         _p2pConn.on('data', async (msg) => {
             if (msg.type === 'meta') {
                 totalChunks = msg.totalChunks;
                 totalSize = msg.totalSize;
+                isCompressed = !!msg.compressed;
                 chunks = new Array(totalChunks).fill(null);
-                document.getElementById('p2p-progress-text').textContent = `Ricezione: 0/${totalChunks} (${formatBytes(totalSize)})`;
+                const compressLabel = isCompressed ? ' (compressi)' : '';
+                document.getElementById('p2p-progress-text').textContent = `Ricezione: 0/${totalChunks} (${formatBytes(totalSize)}${compressLabel})`;
             } else if (msg.type === 'chunk') {
                 chunks[msg.index] = msg.data;
                 const received = chunks.filter(c => c !== null).length;
@@ -431,12 +478,23 @@ function performReceive(senderId) {
                 document.getElementById('p2p-progress-bar-fill').style.width = pct + '%';
                 document.getElementById('p2p-progress-text').textContent = `Ricezione: ${received}/${totalChunks} (${pct}%)`;
             } else if (msg.type === 'done') {
-                document.getElementById('p2p-progress-text').textContent = 'Sincronizzazione in corso...';
+                document.getElementById('p2p-progress-text').textContent = isCompressed ? 'Decompressione e sincronizzazione...' : 'Sincronizzazione in corso...';
                 document.getElementById('p2p-progress-bar-fill').style.width = '100%';
 
                 try {
-                    const fullJson = chunks.join('');
-                    const data = JSON.parse(fullJson);
+                    const fullData = chunks.join('');
+                    let jsonStr;
+
+                    if (isCompressed && typeof pako !== 'undefined') {
+                        const binStr = atob(fullData);
+                        const uint8 = new Uint8Array(binStr.length);
+                        for (let i = 0; i < binStr.length; i++) uint8[i] = binStr.charCodeAt(i);
+                        jsonStr = pako.inflate(uint8, { to: 'string' });
+                    } else {
+                        jsonStr = fullData;
+                    }
+
+                    const data = JSON.parse(jsonStr);
                     const result = await mergeReceivedData(data);
                     document.getElementById('p2p-progress-text').innerHTML =
                         `<i class="fa-solid fa-check" style="color:var(--success-color);"></i> ${result}`;
@@ -536,6 +594,14 @@ async function mergeReceivedData(data) {
         if (data.activityLayout.modeEmojis) {
             if (!local.modeEmojis) local.modeEmojis = {};
             Object.assign(local.modeEmojis, data.activityLayout.modeEmojis);
+        }
+        if (data.activityLayout.modeIcons) {
+            if (!local.modeIcons) local.modeIcons = {};
+            Object.assign(local.modeIcons, data.activityLayout.modeIcons);
+        }
+        if (data.activityLayout.groupColors) {
+            if (!local.groupColors) local.groupColors = {};
+            Object.assign(local.groupColors, data.activityLayout.groupColors);
         }
         saveActivityLayout(local);
         renderModeSelect();

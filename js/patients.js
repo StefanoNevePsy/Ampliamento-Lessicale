@@ -1,23 +1,237 @@
 // === PATIENT MANAGEMENT & CHARTS ===
 
-// --- GLOBAL PATIENT SELECTOR ---
+// --- GLOBAL PATIENT SELECTOR (custom dropdown) ---
 function populateGlobalPatientSelect() {
-    const sel = document.getElementById('global-patient-select');
-    sel.innerHTML = '<option value="">-- Ospite --</option>' +
-        state.patients.map(p => `<option value="${p.id}" ${state.activePatientId === p.id ? 'selected' : ''}>${p.name}</option>`).join('');
+    const panel = document.getElementById('patient-dropdown-panel');
+    const label = document.getElementById('patient-dropdown-label');
+    const avatar = document.getElementById('patient-dropdown-avatar');
+    if (!panel) return;
+
+    const activeP = state.activePatientId ? state.patients.find(p => p.id === state.activePatientId) : null;
+
+    // Guest option
+    let html = `<div class="patient-dd-item${!state.activePatientId ? ' selected' : ''}" onclick="selectPatientFromDropdown('')">
+        <div class="patient-dd-avatar"><i class="fa-solid fa-user-slash" style="font-size:0.8rem; opacity:0.5;"></i></div>
+        <div class="patient-dd-info"><div class="patient-dd-name" style="opacity:0.6;">Ospite</div></div>
+    </div>`;
+
+    // Group by category
+    const catMap = {};
+    state.patients.forEach(p => {
+        const cat = p.category || '';
+        if (!catMap[cat]) catMap[cat] = [];
+        catMap[cat].push(p);
+    });
+
+    for (const [catName, catPatients] of Object.entries(catMap)) {
+        if (catName) {
+            html += `<div class="mode-group-header" style="color:var(--success-color); top:0;">
+                <span class="mode-group-dot" style="background:var(--success-color);"></span>${catName}
+            </div>`;
+        }
+        catPatients.forEach(p => {
+            const isSelected = state.activePatientId === p.id;
+            const sessCount = (p.history || []).length;
+            const photoHtml = p.photo
+                ? `<div class="patient-dd-avatar"><img src="${p.photo}" alt=""></div>`
+                : `<div class="patient-dd-avatar"><i class="fa-solid fa-user"></i></div>`;
+
+            html += `<div class="patient-dd-item${isSelected ? ' selected' : ''}" onclick="selectPatientFromDropdown('${p.id}')">
+                ${photoHtml}
+                <div class="patient-dd-info">
+                    <div class="patient-dd-name">${p.name}</div>
+                    ${p.category ? `<div class="patient-dd-cat">${p.category}</div>` : ''}
+                    ${sessCount > 0 ? `<div class="patient-dd-cat">${sessCount} sessioni</div>` : ''}
+                </div>
+                <button class="patient-dd-photo-btn" onclick="event.stopPropagation(); startPatientPhotoUpload('${p.id}')" title="Cambia foto">
+                    <i class="fa-solid fa-camera"></i>
+                </button>
+            </div>`;
+        });
+    }
+
+    panel.innerHTML = html;
+
+    // Update trigger
+    if (activeP) {
+        label.textContent = activeP.name;
+        avatar.innerHTML = activeP.photo
+            ? `<img src="${activeP.photo}" alt="">`
+            : `<i class="fa-solid fa-user"></i>`;
+    } else {
+        label.textContent = '-- Ospite --';
+        avatar.innerHTML = '<i class="fa-solid fa-user"></i>';
+    }
 }
+
+window.togglePatientDropdown = () => {
+    const trigger = document.getElementById('patient-dropdown-trigger');
+    const panel = document.getElementById('patient-dropdown-panel');
+    if (!trigger || !panel) return;
+    if (typeof closeModeDropdown === 'function') closeModeDropdown();
+    if (typeof closeSetDropdown === 'function') closeSetDropdown();
+    if (panel.classList.contains('open')) {
+        trigger.classList.remove('open'); panel.classList.remove('open');
+    } else {
+        trigger.classList.add('open'); panel.classList.add('open');
+    }
+};
+
+function closePatientDropdown() {
+    const t = document.getElementById('patient-dropdown-trigger');
+    const p = document.getElementById('patient-dropdown-panel');
+    if (t) t.classList.remove('open');
+    if (p) p.classList.remove('open');
+}
+
+window.selectPatientFromDropdown = (pid) => {
+    closePatientDropdown();
+    setGlobalPatient(pid);
+    populateGlobalPatientSelect();
+};
 
 window.setGlobalPatient = (pid) => {
     state.activePatientId = pid || null;
     if (typeof filterSetsByMode === 'function') filterSetsByMode();
 };
 
+// --- PATIENT PHOTO UPLOAD ---
+window._patientPhotoTarget = null;
+
+window.startPatientPhotoUpload = (pid) => {
+    window._patientPhotoTarget = pid;
+    document.getElementById('patient-photo-upload').click();
+};
+
+window.onPatientPhotoSelected = async (input) => {
+    if (!input.files || !input.files[0] || !window._patientPhotoTarget) return;
+    const file = input.files[0];
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        await savePatientPhoto(window._patientPhotoTarget, e.target.result);
+        window._patientPhotoTarget = null;
+    };
+    reader.readAsDataURL(file);
+    input.value = '';
+};
+
+async function savePatientPhoto(pid, dataUrl) {
+    // Resize to max 200px for storage efficiency
+    const resized = await resizeImage(dataUrl, 200);
+    const p = state.patients.find(x => x.id === pid);
+    if (!p) return;
+    p.photo = resized;
+    await DB.savePatient(p);
+    populateGlobalPatientSelect();
+}
+
+function resizeImage(dataUrl, maxSize) {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let w = img.width, h = img.height;
+            if (w > h) { if (w > maxSize) { h = h * maxSize / w; w = maxSize; } }
+            else { if (h > maxSize) { w = w * maxSize / h; h = maxSize; } }
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', 0.8));
+        };
+        img.src = dataUrl;
+    });
+}
+
 // --- PATIENT MODAL ---
+let _patientModalSelectedId = null;
+
+function renderPatientModalDropdown(selectedId) {
+    _patientModalSelectedId = selectedId || null;
+    const panel = document.getElementById('patient-modal-panel');
+    const label = document.getElementById('patient-modal-label');
+    const avatar = document.getElementById('patient-modal-avatar');
+    if (!panel) return;
+
+    const selP = selectedId ? state.patients.find(p => p.id === selectedId) : null;
+
+    // Group by category
+    const catMap = {};
+    state.patients.forEach(p => {
+        const cat = p.category || '';
+        if (!catMap[cat]) catMap[cat] = [];
+        catMap[cat].push(p);
+    });
+
+    let html = '';
+    for (const [catName, catPatients] of Object.entries(catMap)) {
+        if (catName) {
+            html += `<div class="mode-group-header" style="color:var(--success-color); top:0;">
+                <span class="mode-group-dot" style="background:var(--success-color);"></span>${catName}
+            </div>`;
+        }
+        catPatients.forEach(p => {
+            const isSel = selectedId === p.id;
+            const sessCount = (p.history || []).length;
+            const photoHtml = p.photo
+                ? `<div class="patient-dd-avatar"><img src="${p.photo}" alt=""></div>`
+                : `<div class="patient-dd-avatar"><i class="fa-solid fa-user"></i></div>`;
+            html += `<div class="patient-dd-item${isSel ? ' selected' : ''}" onclick="selectPatientModal('${p.id}')">
+                ${photoHtml}
+                <div class="patient-dd-info">
+                    <div class="patient-dd-name">${p.name}</div>
+                    ${p.category ? `<div class="patient-dd-cat">${p.category}</div>` : ''}
+                    ${sessCount > 0 ? `<div class="patient-dd-cat">${sessCount} sessioni</div>` : ''}
+                </div>
+            </div>`;
+        });
+    }
+    if (state.patients.length === 0) {
+        html = '<div style="padding:20px; text-align:center; color:var(--text-secondary);">Nessun paziente</div>';
+    }
+    panel.innerHTML = html;
+
+    if (selP) {
+        label.textContent = selP.name;
+        avatar.innerHTML = selP.photo ? `<img src="${selP.photo}" alt="">` : '<i class="fa-solid fa-user"></i>';
+    } else {
+        label.textContent = '-- Seleziona Paziente --';
+        avatar.innerHTML = '<i class="fa-solid fa-user"></i>';
+    }
+}
+
+window.togglePatientModalDropdown = () => {
+    const trigger = document.getElementById('patient-modal-trigger');
+    const panel = document.getElementById('patient-modal-panel');
+    if (!trigger || !panel) return;
+    if (panel.classList.contains('open')) {
+        trigger.classList.remove('open'); panel.classList.remove('open');
+    } else {
+        trigger.classList.add('open'); panel.classList.add('open');
+    }
+};
+
+window.selectPatientModal = (pid) => {
+    const trigger = document.getElementById('patient-modal-trigger');
+    const panel = document.getElementById('patient-modal-panel');
+    if (trigger) trigger.classList.remove('open');
+    if (panel) panel.classList.remove('open');
+    renderPatientModalDropdown(pid);
+    loadPatientData(pid);
+};
+
+// Close modal dropdown on outside click
+document.addEventListener('click', (e) => {
+    const dd = document.getElementById('patient-modal-dropdown');
+    if (dd && !dd.contains(e.target)) {
+        const t = document.getElementById('patient-modal-trigger');
+        const p = document.getElementById('patient-modal-panel');
+        if (t) t.classList.remove('open');
+        if (p) p.classList.remove('open');
+    }
+});
+
 window.openPatients = async () => {
     state.patients = await DB.getAllPatients();
-    const sel = document.getElementById('patient-select');
-    sel.innerHTML = '<option value="">-- Seleziona Paziente --</option>' +
-        state.patients.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+    renderPatientModalDropdown(_patientModalSelectedId);
     document.getElementById('modal-patients').classList.add('open');
 };
 
@@ -30,10 +244,7 @@ window.createNewPatient = async () => {
         await DB.savePatient(newPatient);
         state.patients = await DB.getAllPatients();
         populateGlobalPatientSelect();
-        const sel = document.getElementById('patient-select');
-        sel.innerHTML = '<option value="">-- Seleziona Paziente --</option>' +
-            state.patients.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-        sel.value = newPatient.id;
+        renderPatientModalDropdown(newPatient.id);
         loadPatientData(newPatient.id);
     }
 };
@@ -48,10 +259,24 @@ window.renamePatient = async (patientId) => {
     await DB.savePatient(p);
     state.patients = await DB.getAllPatients();
     populateGlobalPatientSelect();
-    const sel = document.getElementById('patient-select');
-    sel.innerHTML = '<option value="">-- Seleziona Paziente --</option>' +
-        state.patients.map(pt => `<option value="${pt.id}" ${pt.id === patientId ? 'selected' : ''}>${pt.name}</option>`).join('');
+    renderPatientModalDropdown(patientId);
     document.getElementById('patient-title').innerText = `Cartella: ${p.name}`;
+};
+
+// --- PATIENT CATEGORY ---
+window.editPatientCategory = async (patientId) => {
+    const p = state.patients.find(x => x.id === patientId);
+    if (!p) return;
+    // Gather existing categories for suggestions
+    const existingCats = [...new Set(state.patients.map(x => x.category).filter(Boolean))];
+    const suggestion = existingCats.length > 0 ? `\n\nCategorie esistenti: ${existingCats.join(', ')}` : '';
+    const newCat = prompt(`Categoria per ${p.name}:${suggestion}`, p.category || '');
+    if (newCat === null) return;
+    p.category = newCat.trim();
+    await DB.savePatient(p);
+    state.patients = await DB.getAllPatients();
+    populateGlobalPatientSelect();
+    loadPatientData(patientId);
 };
 
 // --- DELETE PATIENT ---
@@ -61,9 +286,7 @@ window.deletePatient = async (patientId) => {
     state.patients = await DB.getAllPatients();
     if (state.activePatientId === patientId) state.activePatientId = null;
     populateGlobalPatientSelect();
-    const sel = document.getElementById('patient-select');
-    sel.innerHTML = '<option value="">-- Seleziona Paziente --</option>' +
-        state.patients.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+    renderPatientModalDropdown(null);
     document.getElementById('patient-dashboard').classList.add('hidden');
 };
 
@@ -158,6 +381,21 @@ function checkCriterion(sessions) {
     return false;
 }
 
+// --- REPERTORIO CHECK (>= 90% on first session) ---
+function checkRepertorio(sessions) {
+    if (sessions.length === 0) return false;
+    const sorted = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
+    return sorted[0].percentage >= 90;
+}
+
+// --- NEAR CRITERION CHECK (last session >= 90%) ---
+function isNearCriterion(sessions) {
+    if (sessions.length === 0) return false;
+    const sorted = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
+    const last = sorted[sorted.length - 1];
+    return last.percentage >= 90;
+}
+
 // ============================================================
 // --- LOAD PATIENT DATA (New Dashboard) ---
 // ============================================================
@@ -170,18 +408,36 @@ window.loadPatientData = (pid) => {
     const container = document.getElementById('charts-container');
     container.innerHTML = '';
 
-    // Patient action buttons
+    // Patient header with photo + category + actions
+    const photoSrc = p.photo || '';
+    const photoHtml = photoSrc
+        ? `<img src="${photoSrc}" style="width:60px; height:60px; border-radius:50%; object-fit:cover; border:2px solid var(--glass-border);" onclick="startPatientPhotoUpload('${pid}')" title="Cambia foto">`
+        : `<div onclick="startPatientPhotoUpload('${pid}')" title="Aggiungi foto" style="width:60px; height:60px; border-radius:50%; background:rgba(99,102,241,0.15); display:flex; align-items:center; justify-content:center; cursor:pointer; border:2px dashed var(--glass-border); color:var(--accent-color); font-size:1.3rem;">
+            <i class="fa-solid fa-camera"></i>
+        </div>`;
+
     container.innerHTML += `
-        <div style="display:flex; gap:8px; margin-bottom:15px; flex-wrap:wrap;">
-            <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem;" onclick="renamePatient('${pid}')">
-                <i class="fa-solid fa-pen"></i> Rinomina
-            </button>
-            <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(16,185,129,0.3); color:var(--success-color);" onclick="exportPatientExcel('${pid}')">
-                <i class="fa-solid fa-file-excel"></i> Esporta Excel
-            </button>
-            <button class="btn btn-danger" style="padding:6px 12px; font-size:0.85rem;" onclick="deletePatient('${pid}')">
-                <i class="fa-solid fa-user-minus"></i> Elimina
-            </button>
+        <div style="display:flex; gap:15px; margin-bottom:15px; align-items:center;">
+            ${photoHtml}
+            <div style="flex:1;">
+                <div style="font-size:1.1rem; font-weight:700;">${p.name}</div>
+                <div style="display:flex; gap:6px; align-items:center; margin-top:4px;">
+                    <span onclick="editPatientCategory('${pid}')" style="font-size:0.75rem; padding:2px 8px; border-radius:6px; background:rgba(99,102,241,0.15); color:var(--accent-color); cursor:pointer;" title="Cambia categoria">
+                        <i class="fa-solid fa-tag" style="margin-right:3px;"></i>${p.category || 'Nessuna categoria'}
+                    </span>
+                </div>
+            </div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem;" onclick="renamePatient('${pid}')">
+                    <i class="fa-solid fa-pen"></i>
+                </button>
+                <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(16,185,129,0.3); color:var(--success-color);" onclick="exportPatientExcel('${pid}')">
+                    <i class="fa-solid fa-file-excel"></i>
+                </button>
+                <button class="btn btn-danger" style="padding:6px 12px; font-size:0.85rem;" onclick="deletePatient('${pid}')">
+                    <i class="fa-solid fa-user-minus"></i>
+                </button>
+            </div>
         </div>
     `;
 
@@ -305,6 +561,7 @@ function renderOverviewTab(patient) {
 
     if (lastSession) {
         const modeName = MODES_CONFIG[lastSession.mode] || lastSession.mode;
+        const lastModeIcon = (typeof getModeIcon === 'function') ? getModeIcon(lastSession.mode) : 'fa-puzzle-piece';
         html += `
         <div class="chart-wrapper" style="margin-bottom:15px; border-left:4px solid var(--accent-color);">
             <h4 style="margin:0 0 8px 0; color:var(--accent-color); font-size:0.9rem;">
@@ -312,8 +569,8 @@ function renderOverviewTab(patient) {
             </h4>
             <div style="display:flex; gap:15px; flex-wrap:wrap; font-size:0.9rem;">
                 <div><span style="color:var(--text-secondary);">Data:</span> <b>${formatDateEU(lastSession.date)}</b></div>
-                <div><span style="color:var(--text-secondary);">Attivit&agrave;:</span> <b>${modeName}</b></div>
-                <div><span style="color:var(--text-secondary);">Set:</span> <b>${lastSession.setName}</b></div>
+                <div><span style="color:var(--text-secondary);">Attivit&agrave;:</span> <b><i class="fa-solid ${lastModeIcon}" style="font-size:0.8rem; margin-right:3px; opacity:0.7;"></i>${modeName}</b></div>
+                <div><span style="color:var(--text-secondary);">Set:</span> <b>${lastSession.setName}</b>${lastSession.setCat ? ` <span style="color:var(--text-secondary); font-size:0.8em;">(${lastSession.setCat})</span>` : ''}</div>
                 <div><span style="color:var(--text-secondary);">Score:</span> <b style="color:${lastSession.percentage >= 90 ? 'var(--success-color)' : 'white'}">${lastSession.correct}/${lastSession.total} (${lastSession.percentage}%)</b></div>
             </div>
         </div>`;
@@ -483,16 +740,27 @@ function renderDatesTab(patient) {
             </div>
             <div class="date-detail-panel" style="display:none; padding:0 15px 12px; border-top:1px solid rgba(255,255,255,0.05);">
                 ${sessions.map(s => {
-                    const modeName = MODES_CONFIG[s.mode] || s.mode;
-                    const typeTag = s.sessionType === 'timedelay' ? `<span style="font-size:0.6rem; background:rgba(245,158,11,0.2); color:var(--warning-color); padding:1px 5px; border-radius:4px; margin-left:4px;">TD${s.timeDelaySeconds || ''}s</span>` : '';
-                    const activityKey = encodeURIComponent(s.setName + '::' + s.mode + '::' + getSessionTypeGroup(s));
-                    return `
+            const modeName = MODES_CONFIG[s.mode] || s.mode;
+            const dayModeIcon = (typeof getModeIcon === 'function') ? getModeIcon(s.mode) : 'fa-puzzle-piece';
+            const typeTag = s.sessionType === 'timedelay' ? `<span style="font-size:0.6rem; background:rgba(245,158,11,0.2); color:var(--warning-color); padding:1px 5px; border-radius:4px; margin-left:4px;">TD${s.timeDelaySeconds || ''}s</span>` : '';
+            const activityKey = encodeURIComponent(s.setName + '::' + s.mode + '::' + getSessionTypeGroup(s));
+            // Set thumbnail for Giornate
+            let dayThumb = '';
+            if (s.setId && state.savedSets) {
+                const daySet = state.savedSets.find(ss => ss.id === s.setId);
+                if (daySet && daySet.items && daySet.items.length > 0) {
+                    const fi = daySet.items.find(it => it.img || it.image);
+                    if (fi) dayThumb = `<img src="${fi.img || fi.image}" style="width:22px; height:22px; border-radius:4px; object-fit:cover; border:1px solid rgba(255,255,255,0.1); flex-shrink:0;" alt="">`;
+                }
+            }
+            return `
                     <div style="margin-top:8px; border:1px solid rgba(255,255,255,0.05); border-radius:10px; overflow:hidden;">
                         <div onclick="toggleDayActivityChart(this, '${patient.id}', '${activityKey}')" style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; cursor:pointer; transition:background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background=''">
                             <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:0;">
                                 <i class="fa-solid fa-chevron-right day-act-icon" style="transition:transform 0.2s; font-size:0.6rem; color:#555;"></i>
-                                <span style="background:rgba(99,102,241,0.15); padding:2px 8px; border-radius:6px; font-size:0.7rem; color:var(--accent-color); flex-shrink:0;">${modeName}</span>
-                                <span style="font-size:0.9rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.setName}</span>${typeTag}
+                                ${dayThumb}
+                                <span style="background:rgba(99,102,241,0.15); padding:2px 8px; border-radius:6px; font-size:0.7rem; color:var(--accent-color); flex-shrink:0; display:inline-flex; align-items:center; gap:4px;"><i class="fa-solid ${dayModeIcon}" style="font-size:0.65rem;"></i>${modeName}</span>
+                                <span style="font-size:0.9rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.setName}</span>${s.setCat ? `<span style="font-size:0.65rem; color:var(--text-secondary); background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:4px; flex-shrink:0;">${s.setCat}</span>` : ''}${typeTag}
                             </div>
                             <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
                                 <span style="font-size:0.85rem;">${s.correct}/${s.total}</span>
@@ -503,7 +771,7 @@ function renderDatesTab(patient) {
                         </div>
                         <div class="day-activity-chart-panel" style="display:none; padding:8px 12px 12px; border-top:1px solid rgba(255,255,255,0.03);"></div>
                     </div>`;
-                }).join('')}
+        }).join('')}
             </div>
         </div>`;
     });
@@ -587,14 +855,53 @@ function renderItemDetailsCollapsible(s, patientId, sessionIdx, isTD) {
         </tr>`;
 }
 
+function renderTaskStepDetailsCollapsible(s, patientId, sessionIdx, isTD) {
+    if (!s.taskSteps || s.taskSteps.length === 0) return '';
+    const colSpan = isTD ? 6 : 5;
+
+    const chips = s.taskSteps.map((step, i) => {
+        const v = step.v || 0;
+        const x = step.x || 0;
+        const p = step.p || 0;
+        const na = step.na || 0;
+
+        let parts = [];
+        if (v > 0) parts.push(`<span style="color:var(--success-color)">${v}V</span>`);
+        if (x > 0) parts.push(`<span style="color:var(--danger-color)">${x}X</span>`);
+        if (p > 0) parts.push(`<span style="color:var(--warning-color)">${p}P</span>`);
+        if (parts.length === 0 && na > 0) parts.push(`<span style="color:#888">N/A</span>`);
+
+        let bg = 'rgba(255,255,255,0.05)';
+        let border = 'rgba(255,255,255,0.1)';
+
+        if (v > 0 && x === 0 && p === 0) { bg = 'rgba(16,185,129,0.1)'; border = 'rgba(16,185,129,0.3)'; }
+        else if (x > 0) { bg = 'rgba(239,68,68,0.1)'; border = 'rgba(239,68,68,0.3)'; }
+        else if (p > 0) { bg = 'rgba(245,158,11,0.1)'; border = 'rgba(245,158,11,0.3)'; }
+
+        return `<div style="padding:4px 8px; margin:2px 0; border-radius:6px; font-size:0.75rem; background:${bg}; border:1px solid ${border}; display:flex; justify-content:space-between; align-items:center;">
+            <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px;"><b>${i + 1}.</b> ${step.name}</span>
+            <span style="font-weight:bold; flex-shrink:0;">${parts.length > 0 ? parts.join(' ') : (step.scored ? '-' : '<span style="color:#888">N/A</span>')}</span>
+        </div>`;
+    }).join('');
+
+    return `
+        <tr class="item-details-row" style="display:none;">
+            <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(0,0,0,0.15);">
+                <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-list-ol"></i> Dettaglio Passaggi (V/X/P):</div>
+                <div style="display:flex; flex-direction:column; gap:2px;">${chips}</div>
+            </td>
+        </tr>`;
+}
+
 // ============================================================
 // TAB 3: ATTIVITA - Per-activity charts separated by session type
 // ============================================================
-function renderActivitiesTab(patient) {
+function renderActivitiesTab(patient, sortBy) {
     const content = document.getElementById('report-content');
     if (!content) return;
 
     const history = patient.history;
+    if (!sortBy) sortBy = state._activitiesSortBy || 'recent-desc';
 
     // Group by setName::mode::sessionType
     const groups = {};
@@ -607,26 +914,73 @@ function renderActivitiesTab(patient) {
 
     let chartList = Object.entries(groups).map(([key, sessions]) => {
         const [setName, modeCode, typeGroup] = key.split('::');
+        const sortedSess = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
         const lastDate = Math.max(...sessions.map(s => new Date(s.date).getTime()));
-        return { key, sessions, setName, modeCode, typeGroup, lastDate };
+        const setCat = sessions.find(s => s.setCat)?.setCat || '';
+        const isMastered = checkCriterion(sortedSess);
+        const isRepertorio = checkRepertorio(sortedSess);
+        const lastSession = sortedSess[sortedSess.length - 1];
+        const lastPct = lastSession ? lastSession.percentage : 0;
+        const avgPct = sessions.length > 0 ? Math.round(sessions.reduce((a, s) => a + s.percentage, 0) / sessions.length) : 0;
+        const criterionScore = isMastered ? 2 : isRepertorio ? 1 : 0;
+        return { key, sessions, setName, modeCode, typeGroup, lastDate, setCat, isMastered, isRepertorio, lastPct, avgPct, criterionScore };
     });
 
-    chartList.sort((a, b) => b.lastDate - a.lastDate);
+    // Sort
+    if (sortBy === 'recent-desc') chartList.sort((a, b) => b.lastDate - a.lastDate);
+    else if (sortBy === 'recent-asc') chartList.sort((a, b) => a.lastDate - b.lastDate);
+    else if (sortBy === 'category') chartList.sort((a, b) => (a.setCat || 'zzz').localeCompare(b.setCat || 'zzz') || b.lastDate - a.lastDate);
+    else if (sortBy === 'criterion-desc') chartList.sort((a, b) => b.criterionScore - a.criterionScore || b.lastDate - a.lastDate);
+    else if (sortBy === 'criterion-asc') chartList.sort((a, b) => a.criterionScore - b.criterionScore || b.lastDate - a.lastDate);
+    else if (sortBy === 'pct-desc') chartList.sort((a, b) => b.lastPct - a.lastPct || b.lastDate - a.lastDate);
+    else if (sortBy === 'pct-asc') chartList.sort((a, b) => a.lastPct - b.lastPct || b.lastDate - a.lastDate);
 
-    let html = '';
+    // Sort toolbar
+    let html = `
+    <div style="display:flex; gap:6px; margin-bottom:12px; align-items:center; flex-wrap:wrap; background:rgba(0,0,0,0.2); padding:8px; border-radius:10px;">
+        <span style="font-size:0.75rem; color:var(--text-secondary); margin-right:4px;"><i class="fa-solid fa-sort"></i> Ordina:</span>
+        ${[
+            ['recent-desc', 'Recenti ↓'],
+            ['recent-asc', 'Recenti ↑'],
+            ['category', 'Categoria'],
+            ['criterion-desc', 'Criterio ↓'],
+            ['criterion-asc', 'Criterio ↑'],
+            ['pct-desc', '% ↓'],
+            ['pct-asc', '% ↑']
+        ].map(([val, label]) => `<button onclick="changeActivitiesSort('${val}', '${patient.id}')" style="padding:4px 10px; border-radius:6px; font-size:0.7rem; border:1px solid ${sortBy === val ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)'}; background:${sortBy === val ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.03)'}; color:${sortBy === val ? 'var(--accent-color)' : 'var(--text-secondary)'}; cursor:pointer; font-weight:${sortBy === val ? 'bold' : 'normal'};">${label}</button>`).join('')}
+    </div>`;
 
     chartList.forEach(item => {
-        const { sessions, setName, modeCode, typeGroup } = item;
+        const { sessions, setName, modeCode, typeGroup, setCat, isMastered, isRepertorio, lastPct } = item;
         const modeName = MODES_CONFIG[modeCode] || modeCode;
         sessions.sort((a, b) => new Date(a.date) - new Date(b.date));
-        const isMastered = checkCriterion(sessions);
+        const lastSession = sessions[sessions.length - 1];
+        const nearCrit = !isMastered && isNearCriterion(sessions);
 
-        const badgeHtml = isMastered ?
-            `<span class="criterion-badge"><i class="fa-solid fa-trophy"></i> CRITERIO</span>` : '';
+        let badgeHtml = '';
+        if (isMastered) badgeHtml += `<span class="criterion-badge"><i class="fa-solid fa-trophy"></i> CRITERIO</span>`;
+        if (isRepertorio) badgeHtml += `<span class="repertorio-badge"><i class="fa-solid fa-star"></i> REPERTORIO</span>`;
 
         const typeColor = typeGroup === 'timedelay' ? 'var(--warning-color)' : 'var(--success-color)';
         const typeLbl = getSessionTypeLabel(typeGroup);
         const chartId = 'activity-chart-' + item.key.replace(/[^a-zA-Z0-9]/g, '_');
+
+        // Mode icon
+        const modeIconClass = (typeof getModeIcon === 'function') ? getModeIcon(modeCode) : 'fa-puzzle-piece';
+
+        // Set thumbnail from first item image (if set still exists)
+        let setThumbHtml = '';
+        const setId = sessions.find(s => s.setId)?.setId;
+        if (setId && state.savedSets) {
+            const setObj = state.savedSets.find(ss => ss.id === setId);
+            if (setObj && setObj.items && setObj.items.length > 0) {
+                const firstImg = setObj.items.find(it => it.img || it.image);
+                if (firstImg) {
+                    const imgSrc = firstImg.img || firstImg.image;
+                    setThumbHtml = `<img src="${imgSrc}" style="width:28px; height:28px; border-radius:6px; object-fit:cover; border:1px solid rgba(255,255,255,0.1); flex-shrink:0;" alt="">`;
+                }
+            }
+        }
 
         // Check if this is a task analysis group with step data
         const isTaskAnalysis = modeCode === 'quaderno_task';
@@ -643,11 +997,18 @@ function renderActivitiesTab(patient) {
             fluenzaObiettivoHtml = `<span style="font-size:0.7rem; background:rgba(99,102,241,0.15); color:var(--accent-color); padding:2px 8px; border-radius:6px; font-weight:bold;"><i class="fa-solid fa-bullseye"></i> Ob: ${obiettivo}</span>`;
         }
 
+        // Quick status: last session + near criterion
+        const lastPctColor = lastPct >= 90 ? 'var(--success-color)' : lastPct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
+        const nearCritHtml = nearCrit ? `<span style="font-size:0.65rem; background:rgba(16,185,129,0.15); color:var(--success-color); padding:1px 6px; border-radius:4px;"><i class="fa-solid fa-arrow-trend-up"></i> Vicino al criterio</span>` : '';
+        const lastInfoHtml = lastSession ? `<span style="font-size:0.7rem; color:var(--text-secondary);">${formatDateEU(lastSession.date)}</span> <span style="font-size:0.75rem; font-weight:bold; color:${lastPctColor};">${lastPct}%</span>` : '';
+
         html += `
         <div class="chart-wrapper" style="margin-bottom:12px; border-left:3px solid ${typeColor};">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <h4 style="margin:0; color:var(--accent-color); font-size:0.95rem;">
-                    ${setName} <span style="color:#666; font-size:0.8em;">(${modeName})</span> ${badgeHtml} ${fluenzaObiettivoHtml}
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <h4 style="margin:0; color:var(--accent-color); font-size:0.95rem; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                    ${setThumbHtml}
+                    <i class="fa-solid ${modeIconClass}" style="font-size:0.85rem; opacity:0.7;"></i>
+                    ${setName} ${setCat ? `<span style="color:var(--text-secondary); font-size:0.7em; background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:4px;">${setCat}</span>` : ''}<span style="color:#666; font-size:0.8em;">(${modeName})</span> ${badgeHtml} ${fluenzaObiettivoHtml}
                 </h4>
                 <div style="display:flex; align-items:center; gap:6px;">
                     <span style="font-size:0.65rem; background:rgba(${typeGroup === 'timedelay' ? '245,158,11' : '16,185,129'},0.15); color:${typeColor}; padding:2px 8px; border-radius:6px; font-weight:bold;">${typeLbl}</span>
@@ -657,27 +1018,31 @@ function renderActivitiesTab(patient) {
                     </button>
                 </div>
             </div>
+            <div style="display:flex; gap:8px; align-items:center; margin-bottom:6px; flex-wrap:wrap;">
+                ${lastInfoHtml} ${nearCritHtml}
+            </div>
             <div id="${chartId}"></div>
-            ${taskStepsAnalysisHtml}
             <div class="activity-details-panel" style="display:none; margin-top:10px; border-top:1px solid rgba(255,255,255,0.05); padding-top:8px;">
+                ${taskStepsAnalysisHtml}
                 <table style="width:100%; font-size:0.85rem; color:#ccc; border-collapse:collapse;">
                     <tr style="border-bottom:1px solid #444; text-align:left; color:#888; font-size:0.75rem;">
                         <th style="padding:5px;">Data</th><th>Score</th><th>%</th>${typeGroup === 'timedelay' ? '<th>TD</th>' : ''}<th style="text-align:right;">Azioni</th>
                     </tr>
                     ${[...sessions].reverse().map(s => {
-                        const isTD = typeGroup === 'timedelay';
-                        const nonCorrect = s.total - s.correct;
-                        const scoreExtra = isTD
-                            ? (nonCorrect > 0 ? ` <span style="color:var(--warning-color); font-size:0.75rem;">${nonCorrect}P</span>` : '')
-                            : (nonCorrect > 0 ? ` <span style="color:var(--danger-color); font-size:0.75rem;">${nonCorrect}X</span>` : '');
-                        const hasDetails = s.itemDetails && s.itemDetails.length > 0 && s.itemDetails.some(d => d.result !== true);
-                        const itemDetailsHtml = hasDetails
-                            ? renderItemDetailsCollapsible(s, patient.id, s.originalIndex, isTD)
-                            : '';
-                        const detailsBtn = hasDetails
-                            ? `<button class="btn-icon item-details-toggle" style="width:26px; height:26px; font-size:0.6rem; display:inline-flex; color:${isTD ? 'var(--warning-color)' : 'var(--danger-color)'}; border-color:rgba(${isTD ? '245,158,11' : '239,68,68'},0.3);" title="Stimoli sbagliati"><i class="fa-solid fa-chevron-down" style="transition:transform 0.2s;"></i></button>`
-                            : '';
-                        return `
+            const isTD = typeGroup === 'timedelay';
+            const nonCorrect = s.total - s.correct;
+            const scoreExtra = isTD
+                ? (nonCorrect > 0 ? ` <span style="color:var(--warning-color); font-size:0.75rem;">${nonCorrect}P</span>` : '')
+                : (nonCorrect > 0 ? ` <span style="color:var(--danger-color); font-size:0.75rem;">${nonCorrect}X</span>` : '');
+            const isTaskAnalysisSession = s.mode === 'quaderno_task' && s.taskSteps && s.taskSteps.length > 0;
+            const hasDetails = s.itemDetails && s.itemDetails.length > 0 && s.itemDetails.some(d => d.result !== true);
+            const itemDetailsHtml = hasDetails
+                ? renderItemDetailsCollapsible(s, patient.id, s.originalIndex, isTD)
+                : (isTaskAnalysisSession ? renderTaskStepDetailsCollapsible(s, patient.id, s.originalIndex, isTD) : '');
+            const detailsBtn = (hasDetails || isTaskAnalysisSession)
+                ? `<button class="btn-icon item-details-toggle" style="width:26px; height:26px; font-size:0.6rem; display:inline-flex; color:${isTD ? 'var(--warning-color)' : (isTaskAnalysisSession ? 'var(--accent-color)' : 'var(--danger-color)')}; border-color:rgba(${isTD ? '245,158,11' : (isTaskAnalysisSession ? '99,102,241' : '239,68,68')},0.3);" title="Dettagli"><i class="fa-solid fa-chevron-down" style="transition:transform 0.2s;"></i></button>`
+                : '';
+            return `
                         <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
                             <td style="padding:6px 5px;">${formatDateEU(s.date)}</td>
                             <td>${s.correct}/${s.total}${scoreExtra}</td>
@@ -749,6 +1114,54 @@ function renderActivitySVGChart(container, sessions, typeGroup, modeCode) {
     axisX.setAttribute("x2", "300"); axisX.setAttribute("y2", "130");
     axisX.setAttribute("stroke", "#666"); axisX.setAttribute("stroke-width", "1");
     svg.appendChild(axisX);
+
+    // Gridlines with labels
+    if (!isFluenza) {
+        [25, 50, 75].forEach(pct => {
+            const gy = 130 - (1.3 * pct);
+            const gl = document.createElementNS(svgNS, "line");
+            gl.setAttribute("x1", "20"); gl.setAttribute("x2", "300");
+            gl.setAttribute("y1", gy); gl.setAttribute("y2", gy);
+            gl.setAttribute("stroke", "rgba(255,255,255,0.08)");
+            gl.setAttribute("stroke-width", "1");
+            gl.setAttribute("stroke-dasharray", "3,4");
+            svg.appendChild(gl);
+            const gt = document.createElementNS(svgNS, "text");
+            gt.setAttribute("x", "17"); gt.setAttribute("y", gy + 3);
+            gt.setAttribute("text-anchor", "end");
+            gt.setAttribute("fill", "rgba(255,255,255,0.25)");
+            gt.setAttribute("font-size", "7");
+            gt.textContent = pct + '%';
+            svg.appendChild(gt);
+        });
+        // 90% label next to threshold
+        const lbl90 = document.createElementNS(svgNS, "text");
+        lbl90.setAttribute("x", "17"); lbl90.setAttribute("y", "16");
+        lbl90.setAttribute("text-anchor", "end");
+        lbl90.setAttribute("fill", "var(--danger-color)");
+        lbl90.setAttribute("font-size", "7"); lbl90.setAttribute("opacity", "0.7");
+        lbl90.textContent = '90%';
+        svg.appendChild(lbl90);
+    } else if (fluenzaMax > 0) {
+        const step = Math.max(1, Math.ceil(fluenzaMax / 5));
+        for (let val = step; val < fluenzaMax; val += step) {
+            const gy = 130 - (130 * val / fluenzaMax);
+            const gl = document.createElementNS(svgNS, "line");
+            gl.setAttribute("x1", "20"); gl.setAttribute("x2", "300");
+            gl.setAttribute("y1", gy); gl.setAttribute("y2", gy);
+            gl.setAttribute("stroke", "rgba(255,255,255,0.08)");
+            gl.setAttribute("stroke-width", "1");
+            gl.setAttribute("stroke-dasharray", "3,4");
+            svg.appendChild(gl);
+            const gt = document.createElementNS(svgNS, "text");
+            gt.setAttribute("x", "17"); gt.setAttribute("y", gy + 3);
+            gt.setAttribute("text-anchor", "end");
+            gt.setAttribute("fill", "rgba(255,255,255,0.25)");
+            gt.setAttribute("font-size", "7");
+            gt.textContent = val;
+            svg.appendChild(gt);
+        }
+    }
 
     if (isFluenza) {
         // Obiettivo line instead of 90% threshold
@@ -881,6 +1294,12 @@ window.toggleActivityDetails = (btn) => {
     }
 };
 
+window.changeActivitiesSort = (sortBy, patientId) => {
+    state._activitiesSortBy = sortBy;
+    const p = state.patients.find(x => x.id === patientId);
+    if (p) renderActivitiesTab(p, sortBy);
+};
+
 // ============================================================
 // --- EXCEL EXPORT ---
 // ============================================================
@@ -904,13 +1323,14 @@ th { background: #4472c4; color: white; font-weight: bold; }
 
     sorted.forEach(s => {
         const d = new Date(s.date);
-        const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
-        const timeStr = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+        const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
         const modeName = MODES_CONFIG[s.mode] || s.mode;
         const typeLabel = s.sessionType === 'timedelay' ? `Time Delay (${s.timeDelaySeconds || '?'}s)` : (s.sessionType === 'independent' ? 'Indipendente' : '-');
         const pctClass = s.percentage >= 90 ? 'pct-high' : (s.percentage < 50 ? 'pct-low' : '');
         const prompts = s.prompts || s.rawP || '-';
-        html += `<tr><td>${dateStr}</td><td>${timeStr}</td><td>${s.setName}</td><td>${modeName}</td><td>${typeLabel}</td><td>${s.correct}</td><td>${prompts}</td><td>${s.total}</td><td class="${pctClass}">${s.percentage}%</td></tr>`;
+        const catStr = s.setCat ? ` (${s.setCat})` : '';
+        html += `<tr><td>${dateStr}</td><td>${timeStr}</td><td>${s.setName}${catStr}</td><td>${modeName}</td><td>${typeLabel}</td><td>${s.correct}</td><td>${prompts}</td><td>${s.total}</td><td class="${pctClass}">${s.percentage}%</td></tr>`;
     });
     html += `</table><br>`;
 
@@ -924,12 +1344,12 @@ th { background: #4472c4; color: white; font-weight: bold; }
         byDate[dk].push(s);
     });
 
-    Object.entries(byDate).sort(([a],[b]) => a.localeCompare(b)).forEach(([dk, sessions]) => {
+    Object.entries(byDate).sort(([a], [b]) => a.localeCompare(b)).forEach(([dk, sessions]) => {
         const totalLU = sessions.reduce((acc, s) => acc + s.total, 0);
         const totalCorrect = sessions.reduce((acc, s) => acc + s.correct, 0);
         const avgPct = totalLU > 0 ? Math.round((totalCorrect / totalLU) * 100) : 0;
         const d = new Date(dk);
-        const dateStr = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+        const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
         const pctClass = avgPct >= 90 ? 'pct-high' : (avgPct < 50 ? 'pct-low' : '');
         html += `<tr><td>${dateStr}</td><td>${totalLU}</td><td>${totalCorrect}</td><td class="${pctClass}">${avgPct}%</td><td>${sessions.length}</td></tr>`;
     });
@@ -952,35 +1372,19 @@ th { background: #4472c4; color: white; font-weight: bold; }
         const avgPct = Math.round(sessions.reduce((a, s) => a + s.percentage, 0) / sessions.length);
         const hasCriterion = checkCriterion(sessions);
         const lastD = new Date(last.date);
-        const lastDateStr = `${String(lastD.getDate()).padStart(2,'0')}/${String(lastD.getMonth()+1).padStart(2,'0')}/${lastD.getFullYear()}`;
-        html += `<tr><td>${name}</td><td>${modeName}</td><td>${getSessionTypeLabel(typeGroup)}</td><td>${sessions.length}</td><td>${lastDateStr}</td><td>${last.percentage}%</td><td>${avgPct}%</td><td>${hasCriterion ? 'RAGGIUNTO' : '-'}</td></tr>`;
+        const lastDateStr = `${String(lastD.getDate()).padStart(2, '0')}/${String(lastD.getMonth() + 1).padStart(2, '0')}/${lastD.getFullYear()}`;
+        const aCat = sessions.find(s => s.setCat)?.setCat || '';
+        const aCatStr = aCat ? ` (${aCat})` : '';
+        html += `<tr><td>${name}${aCatStr}</td><td>${modeName}</td><td>${getSessionTypeLabel(typeGroup)}</td><td>${sessions.length}</td><td>${lastDateStr}</td><td>${last.percentage}%</td><td>${avgPct}%</td><td>${hasCriterion ? 'RAGGIUNTO' : '-'}</td></tr>`;
     });
     html += `</table></body></html>`;
 
     const blob = new Blob(['\uFEFF' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
     const safeName = p.name.replace(/[^a-zA-Z0-9\u00C0-\u024F]/g, '_');
     const fileName = `${safeName}_report_${new Date().toISOString().split('T')[0]}.xls`;
 
-    if (typeof Capacitor !== 'undefined' && navigator.share) {
-        const file = new File([blob], fileName, { type: 'application/vnd.ms-excel' });
-        navigator.share({ files: [file], title: `Report ${p.name}` }).catch(() => {
-            downloadBlob(url, fileName);
-        });
-    } else {
-        downloadBlob(url, fileName);
-    }
+    downloadFile(blob, fileName, `Report ${p.name}`);
 };
-
-function downloadBlob(url, fileName) {
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-}
 
 // ============================================================
 // TASK ANALYSIS - Per-step breakdown across sessions
@@ -996,12 +1400,10 @@ function renderTaskStepsAnalysis(sessions) {
         sessions.forEach(session => {
             if (session.taskSteps && session.taskSteps[stepIdx]) {
                 const step = session.taskSteps[stepIdx];
-                // Count each result from the results array, excluding N/A
                 (step.results || []).forEach(r => {
                     if (r === true) { totalV++; totalScored++; }
                     else if (r === false) { totalX++; totalScored++; }
                     else if (r === 'prompt') { totalP++; totalScored++; }
-                    // r === 'na' is excluded
                 });
             }
         });
@@ -1034,7 +1436,61 @@ function renderTaskStepsAnalysis(sessions) {
         </div>`;
     }
 
-    // Per-step table
+    // Aggregate table (always visible)
+    html += renderTaskStepTable(stepAggregates, 'Riepilogo Totale');
+
+    // Per-session collapsible sections
+    if (sessions.length > 0) {
+        html += `<div style="margin-top:10px;">`;
+        [...sessions].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach((session, si) => {
+            const steps = session.taskSteps || [];
+            const sessionStepData = steps.map((step, stepIdx) => {
+                let totalV = 0, totalX = 0, totalP = 0, totalScored = 0;
+                (step.results || []).forEach(r => {
+                    if (r === true) { totalV++; totalScored++; }
+                    else if (r === false) { totalX++; totalScored++; }
+                    else if (r === 'prompt') { totalP++; totalScored++; }
+                });
+                const pctCorrect = totalScored > 0 ? Math.round((totalV / totalScored) * 100) : 0;
+                const pctError = totalScored > 0 ? Math.round(((totalX + totalP) / totalScored) * 100) : 0;
+                return { name: step.name, totalV, totalX, totalP, totalScored, pctCorrect, pctError };
+            });
+            const sTotalScored = sessionStepData.reduce((s, x) => s + x.totalScored, 0);
+            const sTotalV = sessionStepData.reduce((s, x) => s + x.totalV, 0);
+            const sPct = sTotalScored > 0 ? Math.round((sTotalV / sTotalScored) * 100) : 0;
+            const pctColor = sPct >= 90 ? 'var(--success-color)' : sPct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
+
+            html += `
+            <div style="border:1px solid rgba(255,255,255,0.05); border-radius:8px; margin-bottom:6px; overflow:hidden;">
+                <div onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? '' : 'none'; this.querySelector('.ta-sess-icon').style.transform = this.nextElementSibling.style.display === 'none' ? '' : 'rotate(90deg)';"
+                     style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; cursor:pointer; background:rgba(255,255,255,0.02);"
+                     onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='rgba(255,255,255,0.02)'">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <i class="fa-solid fa-chevron-right ta-sess-icon" style="font-size:0.6rem; color:var(--text-secondary); transition:transform 0.2s;"></i>
+                        <span style="font-size:0.8rem; font-weight:600;">${formatDateEU(session.date)}</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:0.8rem;">${sTotalV}/${sTotalScored}</span>
+                        <span style="font-weight:bold; font-size:0.8rem; color:${pctColor};">${sPct}%</span>
+                    </div>
+                </div>
+                <div style="display:none; padding:6px;">
+                    ${renderTaskStepTable(sessionStepData)}
+                </div>
+            </div>`;
+        });
+        html += `</div>`;
+    }
+
+    html += `</div>`;
+    return html;
+}
+
+function renderTaskStepTable(stepAggregates, title) {
+    let html = '';
+    if (title) {
+        html += `<div style="font-size:0.75rem; color:var(--text-secondary); font-weight:bold; margin-bottom:4px; margin-top:4px;">${title}</div>`;
+    }
     html += `<table style="width:100%; font-size:0.8rem; color:#ccc; border-collapse:collapse;">
         <tr style="border-bottom:1px solid #444; color:#888; font-size:0.7rem;">
             <th style="padding:4px; text-align:left;">#</th>
@@ -1066,6 +1522,6 @@ function renderTaskStepsAnalysis(sessions) {
         </tr>`;
     });
 
-    html += `</table></div>`;
+    html += `</table>`;
     return html;
 }

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 
-    <title>Ampliamento Lessicale v40</title>
+    <title>Terapia Attiva v40</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#1e1e2f">
@@ -21,7 +21,7 @@
 
     <div class="app-shell">
         <header>
-            <h1><i class="fa-solid fa-brain logo-icon"></i> Stimolatore v40</h1>
+            <h1><i class="fa-solid fa-brain logo-icon"></i> Terapia Attiva v40</h1>
 
             <div class="header-actions">
                 <!-- INFO BUTTON -->
@@ -31,9 +31,15 @@
 
                 <!-- PATIENT SELECTOR -->
                 <div class="patient-selector-wrapper">
-                    <select id="global-patient-select" onchange="setGlobalPatient(this.value)">
-                        <option value="">-- Ospite --</option>
-                    </select>
+                    <div class="custom-dropdown" id="patient-dropdown">
+                        <button class="custom-dropdown-trigger" id="patient-dropdown-trigger" onclick="togglePatientDropdown()">
+                            <span id="patient-dropdown-avatar" class="patient-avatar-mini"><i class="fa-solid fa-user"></i></span>
+                            <span id="patient-dropdown-label">-- Ospite --</span>
+                            <i class="fa-solid fa-chevron-down custom-dropdown-arrow"></i>
+                        </button>
+                        <div class="custom-dropdown-panel" id="patient-dropdown-panel"></div>
+                    </div>
+                    <input type="file" id="patient-photo-upload" class="hidden" accept="image/*" onchange="onPatientPhotoSelected(this)">
                 </div>
 
                 <!-- ACTION BUTTONS -->
@@ -62,16 +68,27 @@
                         <i class="fa-solid fa-gear"></i>
                     </button>
                 </label>
-                <select id="mode-select" onchange="filterSetsByMode()">
+                <div class="custom-dropdown" id="mode-dropdown">
+                    <button class="custom-dropdown-trigger" id="mode-dropdown-trigger" onclick="toggleModeDropdown()">
+                        <span id="mode-dropdown-label">-- Attivit&agrave; --</span>
+                        <i class="fa-solid fa-chevron-down custom-dropdown-arrow"></i>
+                    </button>
+                    <div class="custom-dropdown-panel" id="mode-dropdown-panel"></div>
+                </div>
+                <select id="mode-select" class="hidden" style="display:none;">
                 </select>
             </div>
 
             <!-- Set selector (hidden for pool modes) -->
             <div class="select-wrapper" style="flex: 2;" id="set-selector-wrapper">
                 <label><i class="fa-solid fa-layer-group"></i> Set Disponibili</label>
-                <select id="category-select" onchange="loadSelectedSet(this.value)">
-                    <option value="" disabled selected>-- Scegli un Set --</option>
-                </select>
+                <div class="custom-dropdown" id="set-dropdown">
+                    <button class="custom-dropdown-trigger" id="set-dropdown-trigger" onclick="toggleSetDropdown()">
+                        <span id="set-dropdown-label">-- Scegli un Set --</span>
+                        <i class="fa-solid fa-chevron-down custom-dropdown-arrow"></i>
+                    </button>
+                    <div class="custom-dropdown-panel" id="set-dropdown-panel"></div>
+                </div>
             </div>
 
             <!-- Tag selector (shown for pool modes) -->
@@ -180,10 +197,15 @@
             <button class="btn btn-danger" onclick="closePatients()">Chiudi</button>
         </div>
         <div class="modal-body">
-            <div style="display:flex; gap:10px; margin-bottom:20px;">
-                <select id="patient-select" onchange="loadPatientData(this.value)" style="flex:1;">
-                    <option value="">-- Seleziona Paziente --</option>
-                </select>
+            <div style="display:flex; gap:10px; margin-bottom:20px; align-items:center;">
+                <div class="custom-dropdown" id="patient-modal-dropdown" style="flex:1;">
+                    <button class="custom-dropdown-trigger" id="patient-modal-trigger" onclick="togglePatientModalDropdown()">
+                        <span id="patient-modal-avatar" class="patient-avatar-mini"><i class="fa-solid fa-user"></i></span>
+                        <span id="patient-modal-label">-- Seleziona Paziente --</span>
+                        <i class="fa-solid fa-chevron-down custom-dropdown-arrow"></i>
+                    </button>
+                    <div class="custom-dropdown-panel" id="patient-modal-panel"></div>
+                </div>
                 <button class="btn btn-primary" onclick="createNewPatient()">+ Nuovo</button>
             </div>
             <div id="patient-dashboard" class="hidden">
@@ -207,7 +229,8 @@
                 <input type="file" id="file-upload" class="hidden" accept=".json" onchange="importSets(this)">
                 <button class="btn btn-ghost" onclick="openP2PSync()" style="border-color:rgba(99,102,241,0.3); color:var(--accent-color);"><i class="fa-solid fa-wifi"></i> Sync Diretto</button>
             </div>
-            <div id="lib-list" class="lib-grid"></div>
+            <div id="lib-sort-bar" class="lib-sort-bar"></div>
+            <div id="lib-list"></div>
         </div>
     </div>
 
@@ -281,56 +304,77 @@
             <div style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(99, 102, 241, 0.05) 100%); padding: 20px; border-radius: 16px; margin-bottom: 30px; border: 1px solid rgba(99, 102, 241, 0.2); display: flex; gap: 20px; align-items: center;">
                 <div style="font-size: 2.5rem; color: var(--accent-color); padding: 0 10px;"><i class="fa-solid fa-brain"></i></div>
                 <div>
-                    <h3 style="margin: 0 0 10px 0; color: white;">Stimolatore Clinico v40</h3>
-                    <p style="margin: 0; opacity: 0.8;">Piattaforma per la riabilitazione neuropsicologica e il potenziamento cognitivo. Gestisci pazienti, crea set personalizzati e monitora i progressi con strumenti clinici avanzati.</p>
+                    <h3 style="margin: 0 0 10px 0; color: white;">Terapia Attiva v40</h3>
+                    <p style="margin: 0; opacity: 0.8;">Piattaforma per la terapia psicoeducativa, il precision teaching e la riabilitazione neuropsicologica. Gestisci pazienti, crea set personalizzati e monitora i progressi con strumenti clinici avanzati.</p>
                 </div>
             </div>
 
             <!-- Instructions Grid -->
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
 
+                <!-- INTERFACE -->
+                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--accent-color);">
+                    <h3 style="margin-top: 0; color: var(--accent-color); display: flex; align-items: center; gap: 10px;">
+                        <i class="fa-solid fa-display"></i> Interfaccia
+                    </h3>
+                    <ul style="padding-left: 20px; line-height: 1.8;">
+                        <li><i class="fa-solid fa-gamepad" style="color:var(--accent-color); width:20px;"></i> <strong>Selettore Attivit&agrave;:</strong> Dropdown ricco con icone, colori per categoria e conteggio set compatibili.</li>
+                        <li><i class="fa-solid fa-images" style="color:var(--accent-color); width:20px;"></i> <strong>Selettore Set:</strong> Anteprima immagine, conteggio stimoli e <b>badge di stato</b> per paziente:<br>
+                            <span style="font-size:0.85em; display:flex; gap:8px; flex-wrap:wrap; margin-top:4px;">
+                                <span style="background:rgba(251,191,36,0.15); color:#fbbf24; padding:1px 8px; border-radius:6px;"><i class="fa-solid fa-trophy"></i> Criterio</span>
+                                <span style="background:rgba(251,191,36,0.15); color:#fbbf24; padding:1px 8px; border-radius:6px;"><i class="fa-solid fa-star"></i> Repertorio</span>
+                                <span style="background:rgba(16,185,129,0.15); color:#10b981; padding:1px 8px; border-radius:6px;"><i class="fa-solid fa-arrow-trend-up"></i> Vicino</span>
+                                <span style="background:rgba(99,102,241,0.15); color:var(--accent-color); padding:1px 8px; border-radius:6px;">85%</span>
+                            </span>
+                        </li>
+                        <li><i class="fa-solid fa-sort" style="color:var(--accent-color); width:20px;"></i> <strong>Ordinamento set:</strong> Per categoria, nome, % recente, ultimi usati, criterio.</li>
+                        <li><i class="fa-solid fa-user" style="color:var(--accent-color); width:20px;"></i> <strong>Selettore Paziente:</strong> Con foto, categorie raggruppate e accesso rapido ai dati.</li>
+                        <li><i class="fa-solid fa-expand" style="color:var(--accent-color); width:20px;"></i> <strong>Fullscreen:</strong> Premi <i class="fa-solid fa-expand"></i> per lo schermo intero.</li>
+                        <li><i class="fa-solid fa-lock" style="color:var(--accent-color); width:20px;"></i> <strong>Child Lock:</strong> Blocca scroll/tocchi accidentali durante la seduta.</li>
+                    </ul>
+                </div>
+
                 <!-- PATIENTS -->
                 <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--success-color);">
                     <h3 style="margin-top: 0; color: var(--success-color); display: flex; align-items: center; gap: 10px;">
                         <i class="fa-solid fa-user-doctor"></i> Gestione Pazienti
                     </h3>
-                    <ul style="padding-left: 20px; line-height: 1.6;">
-                        <li><strong>Selettore Rapido:</strong> In alto a destra trovi il menu a tendina.<br><span style="font-size: 0.85em; opacity: 0.7;">Seleziona "Ospite" per sessioni senza salvataggio.</span></li>
-                        <li><strong>Cartella Clinica:</strong> Clicca <i class="fa-solid fa-user-doctor"></i> per gestire l'anagrafica.</li>
-                        <li><strong>Dashboard (3 schede):</strong><br>
-                            <b>Panoramica</b> - Riepilogo, grafico giornaliero, ultima sessione.<br>
-                            <b>Giornate</b> - Storico espandibile per data.<br>
-                            <b>Attivit&agrave;</b> - Grafici di progressione per attivit&agrave; con badge criterio.</li>
-                        <li><strong>Criterio (Mastery):</strong> <i class="fa-solid fa-trophy" style="color: #fbbf24;"></i> Assegnato automaticamente dopo 2 sessioni consecutive con &gt;90% in giorni diversi.</li>
-                        <li><strong>Editing Dati:</strong> Espandi i grafici (<i class="fa-solid fa-chevron-down"></i>) per correggere errori, date o eliminare sessioni.</li>
+                    <ul style="padding-left: 20px; line-height: 1.8;">
+                        <li><i class="fa-solid fa-camera" style="color:var(--success-color); width:20px;"></i> <strong>Foto Paziente:</strong> Carica una foto dal selettore o incolla con <b>Ctrl+V</b>. La foto appare nei dropdown e nella cartella.</li>
+                        <li><i class="fa-solid fa-tag" style="color:var(--success-color); width:20px;"></i> <strong>Categorie:</strong> Assegna una categoria ai pazienti (es. tipo di intervento). I pazienti appaiono raggruppati nei selettori.</li>
+                        <li><i class="fa-solid fa-chart-line" style="color:var(--success-color); width:20px;"></i> <strong>Dashboard (3 schede):</strong><br>
+                            <span style="font-size:0.9em;"><i class="fa-solid fa-chart-line" style="width:16px;"></i> <b>Panoramica</b> &ndash; Statistiche giornaliere, grafico LU, ultima sessione.<br>
+                            <i class="fa-solid fa-calendar-days" style="width:16px;"></i> <b>Giornate</b> &ndash; Storico espandibile per data, con icone modalit&agrave; e anteprima set.<br>
+                            <i class="fa-solid fa-list-check" style="width:16px;"></i> <b>Attivit&agrave;</b> &ndash; Grafici di progressione con badge criterio, icone modalit&agrave; e miniatura del set.</span></li>
+                        <li><i class="fa-solid fa-trophy" style="color:#fbbf24; width:20px;"></i> <strong>Criterio (Mastery):</strong> 2 sessioni consecutive &ge;90% in giorni diversi.</li>
+                        <li><i class="fa-solid fa-star" style="color:#fbbf24; width:20px;"></i> <strong>Repertorio:</strong> Prima sessione in assoluto &ge;90%.</li>
+                        <li><i class="fa-solid fa-file-excel" style="color:var(--success-color); width:20px;"></i> <strong>Export Excel:</strong> Esporta i dati del paziente in formato tabellare.</li>
                     </ul>
                 </div>
 
                 <!-- MODES -->
-                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--accent-color);">
-                    <h3 style="margin-top: 0; color: var(--accent-color); display: flex; align-items: center; gap: 10px;">
+                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid #a855f7;">
+                    <h3 style="margin-top: 0; color: #a855f7; display: flex; align-items: center; gap: 10px;">
                         <i class="fa-solid fa-gamepad"></i> Modalit&agrave; (17)
                     </h3>
-                    <ul style="padding-left: 20px; line-height: 1.6;">
-                        <li><strong>TACT:</strong> Flashcards sequenziali per denominazione pura.</li>
-                        <li><strong>RAN:</strong> Denominazione rapida.<br><span style="font-size: 0.85em; opacity: 0.7;">Usa il tasto <i class="fa-solid fa-table-cells"></i> per passare da vista Griglia a Sequenza.</span></li>
-                        <li><strong>Fluenza:</strong> Denominazione a tempo. Scegli la durata (15s-120s o personalizzata), premi Avanti per iniziare il timer. Conta le risposte corrette/errate. Mostra l'<b>obiettivo</b> per la volta successiva (max storico + 2). La barra tempo pu&ograve; essere nascosta per ridurre l'ansia.</li>
-                        <li><strong>Tombola:</strong> Matching visivo. Trova l'immagine target nella griglia.</li>
-                        <li><strong>Tombola Sonora:</strong> Ascolta un suono e tocca la carta corrispondente. Richiede audio (<i class="fa-solid fa-music"></i>).</li>
-                        <li><strong>Memory:</strong> Gioco di memoria per funzioni esecutive.</li>
-                        <li><strong>Cerca Trova:</strong> Esplorazione visiva su scene. Tocca per marcare i bersagli.</li>
-                        <li><strong>Intraverbal-Scenari:</strong> Come Cerca Trova, con dati tracciati separatamente.</li>
-                        <li><strong>Zoom:</strong> Immagine zoomata su un dettaglio. Il bambino indovina l'intera immagine. Area zoom definibile nell'editor (<i class="fa-solid fa-crop"></i>).</li>
-                        <li><strong>Topologia:</strong> Trascina le immagini per disporle spazialmente.</li>
-                        <li><strong>Sequenze:</strong> Ordina le immagini per numero progressivo. Se N.Stimoli &lt; totale, estrae un sottoinsieme casuale. Corretto = ordine crescente (anche non consecutivo).</li>
-                        <li><strong>Pool Random:</strong> Griglia di stimoli casuali dai tag. N. Stimoli = carte a schermo. Avanza all'infinito.</li>
-                        <li><strong>Pool Intraverbal:</strong> Come Pool Random, con dati tracciati separatamente.</li>
-                        <li><strong>Intruso:</strong> Trova l'intruso! N. Stimoli = carte per round. Richiede 2+ tag.</li>
-                        <li><strong>Categorizzazione:</strong> Assegna ogni immagine alla categoria corretta. Richiede 2+ tag.</li>
-                        <li><strong>Quaderno:</strong> Registro manuale:<br>
-                            <b>Generale</b> - Righe di attivit&agrave; con X/Prompt/V.<br>
-                            <b>Task Analysis</b> - Passi operazionalizzati (X/P/V/N.A.).<br>
-                            Le liste si salvano come template ricaricabili.</li>
+                    <ul style="padding-left: 20px; line-height: 1.8;">
+                        <li><i class="fa-solid fa-hand-pointer" style="color:#a855f7; width:20px;"></i> <strong>TACT:</strong> Flashcards sequenziali per denominazione pura.</li>
+                        <li><i class="fa-solid fa-bolt" style="color:#a855f7; width:20px;"></i> <strong>RAN:</strong> Denominazione rapida. <i class="fa-solid fa-table-cells"></i> per Griglia/Sequenza.</li>
+                        <li><i class="fa-solid fa-comment-dots" style="color:#a855f7; width:20px;"></i> <strong>Fluenza:</strong> A tempo (15s-120s). Obiettivo = max storico + 2. Barra tempo nascondibile.</li>
+                        <li><i class="fa-solid fa-table-cells" style="color:#a855f7; width:20px;"></i> <strong>Tombola:</strong> Matching visivo target-griglia.</li>
+                        <li><i class="fa-solid fa-volume-high" style="color:#a855f7; width:20px;"></i> <strong>Tombola Sonora:</strong> Ascolta e tocca. Richiede audio <i class="fa-solid fa-music"></i>.</li>
+                        <li><i class="fa-solid fa-clone" style="color:#a855f7; width:20px;"></i> <strong>Memory:</strong> Gioco di memoria per funzioni esecutive.</li>
+                        <li><i class="fa-solid fa-magnifying-glass" style="color:#a855f7; width:20px;"></i> <strong>Cerca Trova:</strong> Esplorazione visiva su scene con marker.</li>
+                        <li><i class="fa-solid fa-comments" style="color:#a855f7; width:20px;"></i> <strong>Intraverbal-Scenari:</strong> Come Cerca Trova, dati separati.</li>
+                        <li><i class="fa-solid fa-search-plus" style="color:#a855f7; width:20px;"></i> <strong>Zoom:</strong> Dettaglio zoomato da indovinare. Area definibile nell'editor (<i class="fa-solid fa-crop"></i>).</li>
+                        <li><i class="fa-solid fa-map-pin" style="color:#a855f7; width:20px;"></i> <strong>Topologia:</strong> Trascina per disposizione spaziale.</li>
+                        <li><i class="fa-solid fa-arrow-right-arrow-left" style="color:#a855f7; width:20px;"></i> <strong>Sequenze:</strong> Ordina per numero progressivo. Sottoinsieme casuale se N.Stimoli &lt; totale.</li>
+                        <li><i class="fa-solid fa-shuffle" style="color:#a855f7; width:20px;"></i> <strong>Pool Random:</strong> Griglia casuale dai tag. Avanza all'infinito.</li>
+                        <li><i class="fa-solid fa-random" style="color:#a855f7; width:20px;"></i> <strong>Pool Intraverbal:</strong> Come Pool Random, dati separati.</li>
+                        <li><i class="fa-solid fa-ban" style="color:#a855f7; width:20px;"></i> <strong>Intruso:</strong> Trova l'intruso! 2+ tag richiesti.</li>
+                        <li><i class="fa-solid fa-sitemap" style="color:#a855f7; width:20px;"></i> <strong>Categorizzazione:</strong> Assegna a categoria corretta. 2+ tag richiesti.</li>
+                        <li><i class="fa-solid fa-book-open" style="color:#a855f7; width:20px;"></i> <strong>Quaderno:</strong> Registro manuale (Generale: X/P/V, Task Analysis: X/P/V/N.A.).<br>
+                            <span style="font-size:0.85em; opacity:0.8;"><i class="fa-solid fa-floppy-disk" style="width:14px;"></i> I template si salvano come set nella libreria, modificabili e riordinabili.</span></li>
                     </ul>
                 </div>
 
@@ -339,50 +383,89 @@
                     <h3 style="margin-top: 0; color: var(--warning-color); display: flex; align-items: center; gap: 10px;">
                         <i class="fa-solid fa-stopwatch"></i> Sessione & Scoring
                     </h3>
-                    <ul style="padding-left: 20px; line-height: 1.6;">
-                        <li><strong>Valutazione:</strong> Usa i tasti a schermo o la tastiera.<br><span style="color: var(--success-color);"><b>V</b></span> = Corretto (Tasto 'V')<br><span style="color: var(--warning-color);"><b>P</b></span> = Prompt (Tasto 'P', in Time Delay)<br><span style="color: var(--danger-color);"><b>X</b></span> = Errato (Tasto 'X')</li>
-                        <li><strong>Tipo Sessione:</strong><br>
-                            <b>Indipendente</b> - Scoring V/X standard.<br>
-                            <b>Time Delay</b> - Scoring V/P con secondi TD configurabili.</li>
-                        <li><strong>N. Stimoli:</strong> Scegli quanti stimoli presentare (3, 4, 6, 8... o Tutti).</li>
-                        <li><strong>Griglia:</strong> Layout visivo (Auto, 3x3, 4x4, 5x5) per modalit&agrave; a griglia.</li>
-                        <li><strong>Child Lock <i class="fa-solid fa-lock-open"></i>:</strong> Blocca lo scroll per evitare tocchi accidentali.</li>
-                        <li><strong>Salvataggio <i class="fa-solid fa-floppy-disk"></i>:</strong> Salva i dati nella cartella del paziente attivo. Puoi inserire un nome personalizzato.</li>
+                    <ul style="padding-left: 20px; line-height: 1.8;">
+                        <li><i class="fa-solid fa-keyboard" style="color:var(--warning-color); width:20px;"></i> <strong>Valutazione:</strong> Tasti a schermo o tastiera.<br>
+                            <span style="display:flex; gap:10px; margin-top:4px; font-size:0.9em;">
+                                <span style="color:var(--success-color);"><b>V</b> = Corretto</span>
+                                <span style="color:var(--warning-color);"><b>P</b> = Prompt (TD)</span>
+                                <span style="color:var(--danger-color);"><b>X</b> = Errato</span>
+                            </span></li>
+                        <li><i class="fa-solid fa-clock-rotate-left" style="color:var(--warning-color); width:20px;"></i> <strong>Tipo Sessione:</strong><br>
+                            <b>Indipendente</b> &ndash; Scoring V/X standard.<br>
+                            <b>Time Delay</b> &ndash; Scoring V/P con secondi TD configurabili.</li>
+                        <li><i class="fa-solid fa-sliders" style="color:var(--warning-color); width:20px;"></i> <strong>N. Stimoli:</strong> 3, 4, 6, 8&hellip; o Tutti.</li>
+                        <li><i class="fa-solid fa-table-cells-large" style="color:var(--warning-color); width:20px;"></i> <strong>Griglia:</strong> Layout visivo (Auto, 3&times;3, 4&times;4, 5&times;5).</li>
+                        <li><i class="fa-solid fa-rotate-left" style="color:var(--warning-color); width:20px;"></i> <strong>Undo:</strong> <b>Ctrl+Z</b> per annullare l'ultimo punteggio.</li>
+                        <li><i class="fa-solid fa-floppy-disk" style="color:var(--warning-color); width:20px;"></i> <strong>Salvataggio:</strong> Salva nella cartella del paziente attivo. Nome personalizzabile.</li>
+                        <li><i class="fa-solid fa-pen-nib" style="color:var(--warning-color); width:20px;"></i> <strong>S Pen:</strong> Singolo clic = V, doppio clic = X (Samsung S Pen).</li>
                     </ul>
                 </div>
 
-                <!-- LIBRARY & BACKUP -->
-                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid #a855f7;">
-                    <h3 style="margin-top: 0; color: #a855f7; display: flex; align-items: center; gap: 10px;">
-                        <i class="fa-solid fa-folder-open"></i> Editor, Libreria & Backup
+                <!-- EDITOR & LIBRARY -->
+                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid #ec4899;">
+                    <h3 style="margin-top: 0; color: #ec4899; display: flex; align-items: center; gap: 10px;">
+                        <i class="fa-solid fa-pen-ruler"></i> Editor & Libreria
                     </h3>
-                    <ul style="padding-left: 20px; line-height: 1.6;">
-                        <li><strong>Creazione:</strong> Crea set personalizzati caricando le tue immagini.</li>
-                        <li><strong>Tag Semantici:</strong> Assegna tag (es. "animali", "verbi") per organizzare i set e abilitare le modalit&agrave; Pool, Intruso e Categorizzazione.</li>
-                        <li><strong>Caricamento Rapido:</strong><br>- Clicca sull'icona fotocamera <i class="fa-solid fa-camera"></i>.<br>- <b>Ctrl+V</b> su una riga per incollare dagli appunti.<br>- <b>Bulk:</b> Carica intere cartelle in una volta.</li>
-                        <li><strong>Audio (<i class="fa-solid fa-music"></i>):</strong> Carica file audio per ogni item (Tombola Sonora).</li>
-                        <li><strong>Zoom Area (<i class="fa-solid fa-crop"></i>):</strong> Definisci l'area di zoom per la modalit&agrave; Zoom.</li>
-                        <li><strong>Sequenze (#):</strong> Assegna numeri progressivi agli item per la modalit&agrave; Sequenze.</li>
-                        <li><strong>Esporta Singolo Set (<i class="fa-solid fa-file-export"></i>):</strong> Ogni set ha un pulsante per esportarlo singolarmente (con le immagini dei tag). Ideale per condividere set tra colleghi.</li>
-                        <li><strong>Backup Completo:</strong> Esporta un unico file con <b>tutti</b> i Set, Pazienti, Tag Images, Template Quaderno e Nomi Sessione.</li>
-                        <li><strong>Importa / Sincronizza:</strong> L'importazione &egrave; <b>non distruttiva</b>:<br>
-                            - I set e pazienti gi&agrave; presenti vengono <b>aggiornati</b> (nuovi item aggiunti, esistenti aggiornati).<br>
-                            - Set e dati locali <b>non presenti</b> nel backup vengono <b>mantenuti</b>.<br>
-                            - Nessun dato viene cancellato.<br>
-                            - Funziona sia con backup completi che con singoli set esportati.</li>
-                        <li><strong>Sync Diretto (<i class="fa-solid fa-wifi"></i>):</strong> Trasferisci set e dati direttamente tra due dispositivi via connessione peer-to-peer (WebRTC).<br>
-                            - Un dispositivo preme <b>Invia</b> e mostra un QR code.<br>
-                            - L'altro preme <b>Ricevi</b> e scansiona il QR (o inserisce il codice).<br>
-                            - I dati viaggiano direttamente tra i due dispositivi.<br>
-                            - Ogni set ha anche il pulsante <i class="fa-solid fa-wifi"></i> per inviare solo quel set.<br>
-                            - La sincronizzazione &egrave; non distruttiva (merge).</li>
-                        <li><strong>Firebase Sync (<i class="fa-solid fa-cloud"></i>):</strong> Sincronizzazione automatica dei dati pazienti tra dispositivi via Firebase Realtime Database.</li>
+                    <ul style="padding-left: 20px; line-height: 1.8;">
+                        <li><i class="fa-solid fa-plus-circle" style="color:#ec4899; width:20px;"></i> <strong>Creazione:</strong> Crea set personalizzati caricando immagini, con nome e categoria.</li>
+                        <li><i class="fa-solid fa-tags" style="color:#ec4899; width:20px;"></i> <strong>Tag Semantici:</strong> Assegna tag (es. "animali", "verbi") per le modalit&agrave; Pool, Intruso e Categorizzazione.</li>
+                        <li><i class="fa-solid fa-upload" style="color:#ec4899; width:20px;"></i> <strong>Caricamento:</strong> Fotocamera <i class="fa-solid fa-camera"></i>, <b>Ctrl+V</b> per incollare, o <b>Bulk</b> per intere cartelle.</li>
+                        <li><i class="fa-solid fa-music" style="color:#ec4899; width:20px;"></i> <strong>Audio:</strong> Carica file audio per ogni item (Tombola Sonora).</li>
+                        <li><i class="fa-solid fa-crop" style="color:#ec4899; width:20px;"></i> <strong>Zoom Area:</strong> Definisci il dettaglio per la modalit&agrave; Zoom.</li>
+                        <li><i class="fa-solid fa-arrow-down-1-9" style="color:#ec4899; width:20px;"></i> <strong>Sequenze (#):</strong> Numeri progressivi per la modalit&agrave; Sequenze.</li>
+                        <li><i class="fa-solid fa-folder" style="color:#ec4899; width:20px;"></i> <strong>Libreria:</strong> Ordinamento per categoria, nome, recenti, N.stimoli, modalit&agrave;. Categorie collassabili. Riordina i set con le frecce <i class="fa-solid fa-arrow-left"></i><i class="fa-solid fa-arrow-right"></i>.</li>
                     </ul>
                 </div>
+
+                <!-- ACTIVITY LAYOUT -->
+                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid #f59e0b;">
+                    <h3 style="margin-top: 0; color: #f59e0b; display: flex; align-items: center; gap: 10px;">
+                        <i class="fa-solid fa-sliders"></i> Personalizzazione Attivit&agrave;
+                    </h3>
+                    <ul style="padding-left: 20px; line-height: 1.8;">
+                        <li><i class="fa-solid fa-palette" style="color:#f59e0b; width:20px;"></i> <strong>Categorie Attivit&agrave;:</strong> Raggruppa le modalit&agrave; in categorie con <b>nome</b> e <b>colore</b> personalizzati.</li>
+                        <li><i class="fa-solid fa-icons" style="color:#f59e0b; width:20px;"></i> <strong>Icone Modalit&agrave;:</strong> Clicca sull'icona di una modalit&agrave; per scegliere tra 90+ icone Font Awesome. L'icona appare nel selettore e nella cartella clinica.</li>
+                        <li><i class="fa-solid fa-face-smile" style="color:#f59e0b; width:20px;"></i> <strong>Emoji:</strong> Aggiungi un emoji personalizzato per ogni modalit&agrave;.</li>
+                        <li><i class="fa-solid fa-plus-circle" style="color:#f59e0b; width:20px;"></i> <strong>Attivit&agrave; Personalizzate:</strong> Crea attivit&agrave; con nome personalizzato basate su una modalit&agrave; base (es. "Scena Azioni" basata su Cerca Trova).</li>
+                        <li><i class="fa-solid fa-arrows-up-down" style="color:#f59e0b; width:20px;"></i> <strong>Riordina:</strong> Sposta categorie e modalit&agrave; con le frecce. Trasferisci attivit&agrave; tra categorie.</li>
+                    </ul>
+                </div>
+
+                <!-- BACKUP & SYNC -->
+                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid #06b6d4;">
+                    <h3 style="margin-top: 0; color: #06b6d4; display: flex; align-items: center; gap: 10px;">
+                        <i class="fa-solid fa-cloud-arrow-up"></i> Backup & Sincronizzazione
+                    </h3>
+                    <ul style="padding-left: 20px; line-height: 1.8;">
+                        <li><i class="fa-solid fa-file-export" style="color:#06b6d4; width:20px;"></i> <strong>Esporta Singolo Set:</strong> Con immagini, tag e ordinamento inclusi.</li>
+                        <li><i class="fa-solid fa-box-archive" style="color:#06b6d4; width:20px;"></i> <strong>Backup Completo:</strong> Tutti i set, pazienti, tag images, template, nomi sessione, layout attivit&agrave; (icone, colori, emoji).</li>
+                        <li><i class="fa-solid fa-arrows-rotate" style="color:#06b6d4; width:20px;"></i> <strong>Importazione:</strong> <b>Non distruttiva</b> &ndash; set e pazienti aggiornati, dati locali mantenuti, nessuna cancellazione.</li>
+                        <li><i class="fa-solid fa-wifi" style="color:#06b6d4; width:20px;"></i> <strong>Sync Diretto (P2P):</strong> Trasferisci via QR code tra dispositivi. Ogni set ha il bottone <i class="fa-solid fa-wifi"></i>.<br>
+                            <span style="font-size:0.85em; opacity:0.8;">Invia &rarr; QR &rarr; Ricevi scansiona &rarr; Merge automatico.</span></li>
+                        <li><i class="fa-solid fa-cloud" style="color:#06b6d4; width:20px;"></i> <strong>Firebase Sync:</strong> Sincronizzazione automatica dati pazienti tra dispositivi via Firebase Realtime Database.</li>
+                    </ul>
+                </div>
+
+                <!-- SHORTCUTS -->
+                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid #64748b;">
+                    <h3 style="margin-top: 0; color: #94a3b8; display: flex; align-items: center; gap: 10px;">
+                        <i class="fa-solid fa-keyboard"></i> Scorciatoie Tastiera
+                    </h3>
+                    <div style="display:grid; grid-template-columns:auto 1fr; gap:8px 15px; font-size:0.9rem; line-height:1.6;">
+                        <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">V</kbd> <span>Risposta corretta</span>
+                        <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">X</kbd> <span>Risposta errata (Indipendente)</span>
+                        <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">P</kbd> <span>Prompt (Time Delay)</span>
+                        <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">Ctrl+Z</kbd> <span>Annulla ultimo punteggio</span>
+                        <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">Ctrl+V</kbd> <span>Incolla immagine (editor/foto paziente)</span>
+                        <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">&larr; &rarr;</kbd> <span>Naviga TACT/RAN/Fluenza</span>
+                        <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">Del</kbd> <span>Cancella marker (Cerca Trova)</span>
+                    </div>
+                </div>
+
             </div>
 
             <div style="text-align: center; margin-top: 40px; color: #666; font-size: 0.8rem;">
-                Design e Sviluppo per uso Professionale - v40
+                Design e Sviluppo per uso Professionale &ndash; Terapia Attiva v40
             </div>
         </div>
     </div>
@@ -444,6 +527,10 @@
             <div id="p2p-select-panel" style="display:none;">
                 <div id="p2p-select-body" style="margin-bottom:12px;"></div>
                 <div id="p2p-size-info" style="background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.3); border-radius:10px; padding:10px; margin-bottom:12px; font-size:0.8rem; color:#aaa; text-align:center;"></div>
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.8rem; color:#ccc; margin-bottom:10px; padding:8px 10px; background:rgba(0,0,0,0.2); border-radius:8px;">
+                    <input type="checkbox" id="p2p-compress" checked onchange="updateP2PSizeEstimate()" style="width:16px; height:16px;">
+                    <i class="fa-solid fa-compress"></i> Comprimi dati (consigliato per trasferimenti grandi)
+                </label>
                 <div style="display:flex; gap:8px;">
                     <button class="btn btn-primary" onclick="startP2PSendSelected()" style="flex:1; padding:12px;">
                         <i class="fa-solid fa-paper-plane"></i> Invia Selezionati
@@ -525,6 +612,7 @@
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
 
     <!-- JS MODULES -->
     <script src="js/db.js"></script>

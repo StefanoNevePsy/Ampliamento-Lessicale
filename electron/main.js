@@ -7,7 +7,7 @@ function createWindow() {
         height: 900,
         minWidth: 800,
         minHeight: 600,
-        title: 'Stimolatore Clinico',
+        title: 'Terapia Attiva',
         icon: path.join(__dirname, '..', 'icon.png'),
         webPreferences: {
             nodeIntegration: false,

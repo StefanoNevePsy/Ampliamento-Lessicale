@@ -7,36 +7,87 @@ function getTimestampedFilename() {
     const y = now.getFullYear();
     const h = String(now.getHours()).padStart(2, '0');
     const min = String(now.getMinutes()).padStart(2, '0');
-    return `Ampliamento_Lessicale_${d}_${m}_${y}_${h}_${min}.json`;
+    return `Terapia_Attiva_${d}_${m}_${y}_${h}_${min}.json`;
 }
 
-async function downloadJSON(data, filename) {
-    const json = JSON.stringify(data, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
+// Universal file download/share helper (works on desktop + Capacitor Android)
+async function downloadFile(blob, filename, title) {
+    const isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 
-    // Try Web Share API first (works on Android/Capacitor)
-    try {
-        const file = new File([blob], filename, { type: 'application/json' });
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-            await navigator.share({ title: 'Backup Stimolatore', files: [file] });
+    // Method 1: Web Share API with file (skip canShare - just try directly)
+    if (navigator.share) {
+        try {
+            const file = new File([blob], filename, { type: blob.type });
+            await navigator.share({ title: title || filename, files: [file] });
             return;
+        } catch (e) {
+            if (e.name === 'AbortError') return;
+            console.warn('Share file failed:', e.message);
         }
-    } catch (e) {
-        // Share was cancelled or not supported, fall through to download
-        if (e.name === 'AbortError') return; // User cancelled share
+        // Retry with text/plain mime (some Android versions reject other types)
+        if (blob.type !== 'text/plain') {
+            try {
+                const txtBlob = new Blob([blob], { type: 'text/plain' });
+                const txtFile = new File([txtBlob], filename, { type: 'text/plain' });
+                await navigator.share({ title: title || filename, files: [txtFile] });
+                return;
+            } catch (e2) {
+                if (e2.name === 'AbortError') return;
+                console.warn('Share text fallback failed:', e2.message);
+            }
+        }
     }
 
-    // Fallback: <a> download (works on desktop browsers)
+    // Method 2: Capacitor Filesystem + Share plugins (if installed)
+    if (isNative && window.Capacitor.Plugins) {
+        const FS = window.Capacitor.Plugins.Filesystem;
+        if (FS) {
+            try {
+                const text = await blob.text();
+                const written = await FS.writeFile({
+                    path: filename,
+                    data: text,
+                    directory: 'CACHE',
+                    encoding: 'utf8'
+                });
+                const SharePlugin = window.Capacitor.Plugins.Share;
+                if (SharePlugin) {
+                    await SharePlugin.share({
+                        title: title || filename,
+                        url: written.uri,
+                        dialogTitle: title || 'Salva File'
+                    });
+                } else {
+                    alert('File salvato nella cache: ' + filename);
+                }
+                return;
+            } catch (e) {
+                console.warn('Capacitor Filesystem fallback failed:', e);
+            }
+        }
+    }
+
+    // Method 3: <a> download (desktop browsers)
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
     document.body.appendChild(a);
     a.click();
-    setTimeout(() => {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }, 100);
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+
+    // If native and we got here, <a> download likely didn't work
+    if (isNative) {
+        setTimeout(() => {
+            alert('Se il file non si è scaricato, esegui:\nnpx cap sync\nper attivare il supporto download nativo.');
+        }, 600);
+    }
+}
+
+async function downloadJSON(data, filename) {
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    await downloadFile(blob, filename, 'Backup Terapia Attiva');
 }
 
 // Full backup - opens selective export modal
@@ -174,7 +225,7 @@ window.executeSelectiveExport = async () => {
 
         const dateStr = new Date().toLocaleDateString('it-IT').replace(/\//g, '-');
         const timeStr = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }).replace(/:/g, '-');
-        const filename = `Backup_Stimolatore_${dateStr}_${timeStr}.json`;
+        const filename = `Backup_TerapiaAttiva_${dateStr}_${timeStr}.json`;
 
         await downloadJSON(backup, filename);
         document.getElementById('modal-export-select').classList.remove('open');
@@ -239,6 +290,10 @@ function mergeSets(local, incoming) {
     if (incoming.modes && incoming.modes.length > 0) {
         merged.modes = [...new Set([...(merged.modes || []), ...incoming.modes])];
     }
+    // Preserve sortOrder from incoming if local doesn't have one
+    if (incoming.sortOrder != null && merged.sortOrder == null) {
+        merged.sortOrder = incoming.sortOrder;
+    }
     return merged;
 }
 
@@ -247,13 +302,20 @@ function mergePatients(local, incoming) {
     const merged = JSON.parse(JSON.stringify(local));
     if (incoming.history && Array.isArray(incoming.history)) {
         if (!merged.history) merged.history = [];
-        // Deduplicate by date+mode+setName
-        const existingKeys = new Set(merged.history.map(h => `${h.date}::${h.mode}::${h.setName}`));
+        // Deduplicate by date+mode+setName, but enrich if incoming has more data
+        const existingByKey = {};
+        merged.history.forEach((h, i) => { existingByKey[`${h.date}::${h.mode}::${h.setName}`] = i; });
         incoming.history.forEach(h => {
             const key = `${h.date}::${h.mode}::${h.setName}`;
-            if (!existingKeys.has(key)) {
+            if (existingByKey[key] !== undefined) {
+                // Replace local with incoming if incoming has more fields (taskSteps, itemDetails, etc.)
+                const localIdx = existingByKey[key];
+                if (Object.keys(h).length > Object.keys(merged.history[localIdx]).length) {
+                    merged.history[localIdx] = h;
+                }
+            } else {
+                existingByKey[key] = merged.history.length;
                 merged.history.push(h);
-                existingKeys.add(key);
             }
         });
     }
@@ -366,6 +428,14 @@ window.importSets = (input) => {
                 if (data.activityLayout.modeEmojis) {
                     if (!local.modeEmojis) local.modeEmojis = {};
                     Object.assign(local.modeEmojis, data.activityLayout.modeEmojis);
+                }
+                if (data.activityLayout.modeIcons) {
+                    if (!local.modeIcons) local.modeIcons = {};
+                    Object.assign(local.modeIcons, data.activityLayout.modeIcons);
+                }
+                if (data.activityLayout.groupColors) {
+                    if (!local.groupColors) local.groupColors = {};
+                    Object.assign(local.groupColors, data.activityLayout.groupColors);
                 }
                 saveActivityLayout(local);
                 renderModeSelect();
