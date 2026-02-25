@@ -437,6 +437,7 @@ window.handleMatchClick = (idx, label) => {
     if (cardEl.classList.contains('matched')) return;
 
     const isCorrect = label === state.deck[0].label;
+    const isTimedelay = getSelectedSessionType() === 'timedelay';
 
     if (isCorrect) {
         cardEl.classList.add('matched');
@@ -444,6 +445,11 @@ window.handleMatchClick = (idx, label) => {
         cardEl.style.boxShadow = '0 0 15px rgba(16,185,129,0.4)';
         state.deck.shift();
         document.getElementById('deck-target').innerHTML = getDeckHtml();
+    } else if (isTimedelay) {
+        // Time Delay: highlight as prompt, keep visible
+        cardEl.style.border = '4px solid var(--warning-color)';
+        cardEl.style.boxShadow = '0 0 15px rgba(245,158,11,0.3)';
+        cardEl.style.opacity = '0.5';
     } else {
         cardEl.style.border = '4px solid var(--danger-color)';
         cardEl.style.boxShadow = '0 0 15px rgba(239,68,68,0.4)';
@@ -456,10 +462,11 @@ window.handleMatchClick = (idx, label) => {
     // Auto-score in session
     if (state.session.active) {
         const key = `tombola_${Date.now()}`;
-        state.session.itemResults[key] = isCorrect;
+        state.session.itemResults[key] = isCorrect ? true : (isTimedelay ? 'prompt' : false);
         const results = Object.values(state.session.itemResults);
         state.session.correct = results.filter(v => v === true).length;
         state.session.incorrect = results.filter(v => v === false).length;
+        state.session.prompts = results.filter(v => v === 'prompt').length;
         state.session.total = results.length;
         updateScoreUI();
         document.getElementById('btn-save-session').classList.remove('hidden');
@@ -680,12 +687,26 @@ window.handleIntrusoClick = (idx) => {
 
     const card = round.cards[idx];
     const cardEl = document.getElementById(`intruso-${idx}`);
+    const isTimedelay = getSelectedSessionType() === 'timedelay';
+
+    // In TD mode, ignore already-tried wrong cards
+    if (isTimedelay && cardEl.dataset.tried === '1') return;
 
     if (card.isIntruder) {
         cardEl.style.border = '4px solid var(--success-color)';
         cardEl.style.boxShadow = '0 0 20px rgba(16,185,129,0.5)';
-        state.session.itemResults[state.intrusoRound] = true;
+        const key = isTimedelay ? `intruso_${state.intrusoRound}_ok` : state.intrusoRound;
+        state.session.itemResults[key] = true;
+    } else if (isTimedelay) {
+        // Time Delay: mark as prompt, dim card, don't advance
+        cardEl.style.border = '4px solid var(--warning-color)';
+        cardEl.style.boxShadow = '0 0 15px rgba(245,158,11,0.3)';
+        cardEl.style.opacity = '0.5';
+        cardEl.dataset.tried = '1';
+        const key = `intruso_${state.intrusoRound}_p${Date.now()}`;
+        state.session.itemResults[key] = 'prompt';
     } else {
+        // Independent: mark as error, show correct intruder, advance
         cardEl.style.border = '4px solid var(--danger-color)';
         cardEl.style.boxShadow = '0 0 20px rgba(239,68,68,0.5)';
         state.session.itemResults[state.intrusoRound] = false;
@@ -701,9 +722,13 @@ window.handleIntrusoClick = (idx) => {
     const results = Object.values(state.session.itemResults);
     state.session.correct = results.filter(v => v === true).length;
     state.session.incorrect = results.filter(v => v === false).length;
+    state.session.prompts = results.filter(v => v === 'prompt').length;
     state.session.total = results.length;
     updateScoreUI();
     document.getElementById('btn-save-session').classList.remove('hidden');
+
+    // Don't auto-advance for wrong in TD mode
+    if (isTimedelay && !card.isIntruder) return;
 
     // Generate next round after delay (infinite)
     setTimeout(() => {
@@ -939,9 +964,12 @@ function renderSequenzeUI(stage) {
         const placedItem = state.sequenzePlacements[slotIdx];
         const isCorrect = verified && placedItem && placedItem.seqNumber === state.sequenzeCorrectOrder[slotIdx].seqNumber;
         const isWrong = verified && placedItem && placedItem.seqNumber !== state.sequenzeCorrectOrder[slotIdx].seqNumber;
-        const slotBorder = verified ? (isCorrect ? '3px solid var(--success-color)' : isWrong ? '3px solid var(--danger-color)' : '2px dashed #555') : (placedItem ? '2px solid var(--accent-color)' : '2px dashed #555');
-        const slotBg = verified ? (isCorrect ? 'rgba(16,185,129,0.1)' : isWrong ? 'rgba(239,68,68,0.1)' : 'rgba(255,255,255,0.02)') : (placedItem ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.02)');
-        const slotShadow = verified ? (isCorrect ? '0 0 12px rgba(16,185,129,0.3)' : isWrong ? '0 0 12px rgba(239,68,68,0.3)' : 'none') : 'none';
+        const _seqTD = getSelectedSessionType() === 'timedelay';
+        const wrongColor = _seqTD ? 'var(--warning-color)' : 'var(--danger-color)';
+        const wrongRgba = _seqTD ? '245,158,11' : '239,68,68';
+        const slotBorder = verified ? (isCorrect ? '3px solid var(--success-color)' : isWrong ? `3px solid ${wrongColor}` : '2px dashed #555') : (placedItem ? '2px solid var(--accent-color)' : '2px dashed #555');
+        const slotBg = verified ? (isCorrect ? 'rgba(16,185,129,0.1)' : isWrong ? `rgba(${wrongRgba},0.1)` : 'rgba(255,255,255,0.02)') : (placedItem ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.02)');
+        const slotShadow = verified ? (isCorrect ? '0 0 12px rgba(16,185,129,0.3)' : isWrong ? `0 0 12px rgba(${wrongRgba},0.3)` : 'none') : 'none';
 
         return `
                 <div id="seq-slot-${slotIdx}" class="seq-slot-card" data-slot="${slotIdx}"
@@ -955,7 +983,7 @@ function renderSequenzeUI(stage) {
                             <img src="${placedItem.url || getPlaceholderUrl(placedItem.label)}" style="width:100px; height:100px; object-fit:contain; border-radius:10px;" draggable="false" onerror="handleImgError(this, '${placedItem.label}')">
                         </div>
                         <span style="font-weight:bold; font-size:0.8rem; text-align:center; word-break:break-word; line-height:1.1;">${placedItem.label}</span>
-                        ${verified && isWrong ? `<span style="font-size:0.65rem; color:var(--danger-color); text-align:center;"><i class="fa-solid fa-arrow-down"></i> ${state.sequenzeCorrectOrder[slotIdx].label}</span>` : ''}
+                        ${verified && isWrong ? `<span style="font-size:0.65rem; color:${wrongColor}; text-align:center;"><i class="fa-solid fa-arrow-down"></i> ${state.sequenzeCorrectOrder[slotIdx].label}</span>` : ''}
                     ` : `
                         <div style="width:100px; height:100px; border:2px dashed #444; border-radius:12px; display:flex; align-items:center; justify-content:center;">
                             <i class="fa-solid fa-plus" style="color:#555; font-size:1.5rem; opacity:0.3;"></i>
@@ -1012,6 +1040,7 @@ window.checkSequenze = () => {
     const allPlaced = state.sequenzePlacements.every(p => p !== null);
     if (!allPlaced) { alert('Posiziona tutte le carte prima di confermare.'); return; }
 
+    const isTimedelay = getSelectedSessionType() === 'timedelay';
     state.sequenzeVerified = true;
     let correct = 0;
     state.sequenzePlacements.forEach((placed, slotIdx) => {
@@ -1021,12 +1050,14 @@ window.checkSequenze = () => {
     if (state.session.active) {
         state.session.correct = correct;
         state.session.total = state.sequenzeCorrectOrder.length;
-        state.session.incorrect = state.session.total - correct;
+        state.session.incorrect = isTimedelay ? 0 : (state.session.total - correct);
+        state.session.prompts = isTimedelay ? (state.session.total - correct) : 0;
         state.session.sequenzePhase = 'seriazione';
         state.session.playItems = [...state.sequenzeCorrectOrder];
         state.session.itemResults = {};
         state.sequenzePlacements.forEach((placed, slotIdx) => {
-            state.session.itemResults[slotIdx] = placed && placed.seqNumber === state.sequenzeCorrectOrder[slotIdx].seqNumber;
+            const ok = placed && placed.seqNumber === state.sequenzeCorrectOrder[slotIdx].seqNumber;
+            state.session.itemResults[slotIdx] = ok ? true : (isTimedelay ? 'prompt' : false);
         });
         updateScoreUI();
         document.getElementById('btn-save-session').classList.remove('hidden');
@@ -1436,27 +1467,39 @@ window.handleCatChoice = (chosenTag) => {
     const item = state.catItems[state.catIndex];
     const card = document.getElementById('cat-card');
     const isCorrect = chosenTag === item.correctTag;
-
-    state.session.itemResults[state.catIndex] = isCorrect;
+    const isTimedelay = getSelectedSessionType() === 'timedelay';
 
     if (isCorrect) {
         card.style.border = '4px solid var(--success-color)';
         card.style.boxShadow = '0 0 30px rgba(16,185,129,0.5)';
+        const key = isTimedelay ? `cat_${state.catIndex}_ok` : state.catIndex;
+        state.session.itemResults[key] = true;
+    } else if (isTimedelay) {
+        // Time Delay: highlight as prompt, don't advance
+        card.style.border = '4px solid var(--warning-color)';
+        card.style.boxShadow = '0 0 30px rgba(245,158,11,0.3)';
+        const key = `cat_${state.catIndex}_p${Date.now()}`;
+        state.session.itemResults[key] = 'prompt';
     } else {
         card.style.border = '4px solid var(--danger-color)';
         card.style.boxShadow = '0 0 30px rgba(239,68,68,0.5)';
+        state.session.itemResults[state.catIndex] = false;
     }
 
     // Update score
     const results = Object.values(state.session.itemResults);
     state.session.correct = results.filter(v => v === true).length;
     state.session.incorrect = results.filter(v => v === false).length;
+    state.session.prompts = results.filter(v => v === 'prompt').length;
     state.session.total = results.length;
     updateScoreUI();
     document.getElementById('btn-save-session').classList.remove('hidden');
 
     setTimeout(() => {
-        state.catIndex++;
+        // In TD mode, don't advance on wrong answer
+        if (isCorrect || !isTimedelay) {
+            state.catIndex++;
+        }
         showCategorizzazioneItem(document.getElementById('game-stage'));
     }, 800);
 };
@@ -1733,6 +1776,7 @@ window.handleAudioMatchClick = (idx, label) => {
     if (cardEl.classList.contains('matched')) return;
 
     const isCorrect = label === state.deck[0].label;
+    const isTimedelay = getSelectedSessionType() === 'timedelay';
 
     if (isCorrect) {
         cardEl.classList.add('matched');
@@ -1741,10 +1785,13 @@ window.handleAudioMatchClick = (idx, label) => {
         state.deck.shift();
         const remaining = document.getElementById('audio-remaining');
         if (remaining) remaining.textContent = state.deck.length > 0 ? state.deck.length + ' rimasti' : 'FINITO!';
-        // Play next audio after delay
         if (state.deck.length > 0) {
             setTimeout(() => playCurrentAudio(), 800);
         }
+    } else if (isTimedelay) {
+        cardEl.style.border = '4px solid var(--warning-color)';
+        cardEl.style.boxShadow = '0 0 15px rgba(245,158,11,0.3)';
+        cardEl.style.opacity = '0.5';
     } else {
         cardEl.style.border = '4px solid var(--danger-color)';
         cardEl.style.boxShadow = '0 0 15px rgba(239,68,68,0.4)';
@@ -1756,10 +1803,11 @@ window.handleAudioMatchClick = (idx, label) => {
 
     if (state.session.active) {
         const key = `tombola_sonora_${Date.now()}`;
-        state.session.itemResults[key] = isCorrect;
+        state.session.itemResults[key] = isCorrect ? true : (isTimedelay ? 'prompt' : false);
         const results = Object.values(state.session.itemResults);
         state.session.correct = results.filter(v => v === true).length;
         state.session.incorrect = results.filter(v => v === false).length;
+        state.session.prompts = results.filter(v => v === 'prompt').length;
         state.session.total = results.length;
         updateScoreUI();
         document.getElementById('btn-save-session').classList.remove('hidden');
@@ -1995,10 +2043,11 @@ function renderQuadernoGeneral(container) {
     const rows = state._quadernoRows || [];
     const savedNames = getSavedQuadernoLists().filter(l => l.type !== 'task').map(l => l.name);
     const qType = getQuadernoSessionType();
+    const quadernoTemplates = state.savedSets.filter(s => s.modes && s.modes.includes('quaderno'));
 
     container.innerHTML = `
     <div style="width:100%; max-width:700px; margin:0 auto;">
-        <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
+        <div style="display:flex; gap:8px; margin-bottom:8px; align-items:center; flex-wrap:wrap;">
             <input type="text" id="quaderno-name-input" value="${state._quadernoName || ''}" placeholder="Nome lista (es. Seduta 15 Feb)"
                 list="quaderno-names-list"
                 style="flex:1; min-width:150px; padding:8px 12px; border-radius:8px; font-size:0.9rem;">
@@ -2006,6 +2055,15 @@ function renderQuadernoGeneral(container) {
                 ${savedNames.map(n => `<option value="${n}">`).join('')}
             </datalist>
         </div>
+        ${quadernoTemplates.length > 0 ? `
+        <div style="display:flex; gap:6px; margin-bottom:10px; align-items:center; overflow-x:auto; padding-bottom:4px;">
+            <span style="font-size:0.75rem; color:var(--text-secondary); white-space:nowrap; flex-shrink:0;"><i class="fa-solid fa-folder-open"></i> Carica:</span>
+            ${quadernoTemplates.map(s => {
+                return `<button class="btn btn-ghost" onclick="loadQuadernoSet('${s.id}')" style="padding:4px 10px; font-size:0.78rem; white-space:nowrap; flex-shrink:0;">
+                    <i class="fa-solid fa-clipboard-list" style="margin-right:3px;"></i>${s.name} <span style="opacity:0.5; font-size:0.7rem;">${s.items.length}</span>
+                </button>`;
+            }).join('')}
+        </div>` : ''}
 
         <div id="quaderno-rows-list">
             ${rows.map((row, i) => renderQuadernoRow(row, i, qType)).join('')}
@@ -2368,6 +2426,7 @@ function renderQuadernoTask(container) {
     const qType = getQuadernoSessionType();
     const currentStep = state._taskCurrentStep || 0;
     const cycleCount = state._taskCycleCount || 0;
+    const taskTemplates = state.savedSets.filter(s => s.modes && s.modes.includes('quaderno_task'));
 
     // Compute totals excluding N/A
     let totalScored = 0, totalCorrect = 0;
@@ -2380,7 +2439,7 @@ function renderQuadernoTask(container) {
 
     container.innerHTML = `
     <div style="width:100%; max-width:700px; margin:0 auto;">
-        <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
+        <div style="display:flex; gap:8px; margin-bottom:8px; align-items:center; flex-wrap:wrap;">
             <input type="text" id="quaderno-name-input" value="${state._quadernoName || ''}" placeholder="Nome Task Analysis (es. Memory - Procedura)"
                 list="quaderno-task-names-list"
                 style="flex:1; min-width:150px; padding:8px 12px; border-radius:8px; font-size:0.9rem;">
@@ -2388,6 +2447,15 @@ function renderQuadernoTask(container) {
                 ${savedNames.map(n => `<option value="${n}">`).join('')}
             </datalist>
         </div>
+        ${taskTemplates.length > 0 ? `
+        <div style="display:flex; gap:6px; margin-bottom:10px; align-items:center; overflow-x:auto; padding-bottom:4px;">
+            <span style="font-size:0.75rem; color:var(--text-secondary); white-space:nowrap; flex-shrink:0;"><i class="fa-solid fa-folder-open"></i> Carica:</span>
+            ${taskTemplates.map(s => {
+                return `<button class="btn btn-ghost" onclick="loadQuadernoSet('${s.id}')" style="padding:4px 10px; font-size:0.78rem; white-space:nowrap; flex-shrink:0; border-color:var(--warning-color); color:var(--warning-color);">
+                    <i class="fa-solid fa-list-check" style="margin-right:3px;"></i>${s.name} <span style="opacity:0.5; font-size:0.7rem;">${s.items.length}</span>
+                </button>`;
+            }).join('')}
+        </div>` : ''}
 
         <!-- Legend + Cycle counter -->
         <div style="display:flex; gap:12px; margin-bottom:10px; font-size:0.75rem; color:var(--text-secondary); justify-content:center; align-items:center; flex-wrap:wrap;">

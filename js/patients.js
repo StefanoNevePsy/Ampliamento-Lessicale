@@ -1115,6 +1115,54 @@ function renderActivitySVGChart(container, sessions, typeGroup, modeCode) {
     axisX.setAttribute("stroke", "#666"); axisX.setAttribute("stroke-width", "1");
     svg.appendChild(axisX);
 
+    // Gridlines with labels
+    if (!isFluenza) {
+        [25, 50, 75].forEach(pct => {
+            const gy = 130 - (1.3 * pct);
+            const gl = document.createElementNS(svgNS, "line");
+            gl.setAttribute("x1", "20"); gl.setAttribute("x2", "300");
+            gl.setAttribute("y1", gy); gl.setAttribute("y2", gy);
+            gl.setAttribute("stroke", "rgba(255,255,255,0.08)");
+            gl.setAttribute("stroke-width", "1");
+            gl.setAttribute("stroke-dasharray", "3,4");
+            svg.appendChild(gl);
+            const gt = document.createElementNS(svgNS, "text");
+            gt.setAttribute("x", "17"); gt.setAttribute("y", gy + 3);
+            gt.setAttribute("text-anchor", "end");
+            gt.setAttribute("fill", "rgba(255,255,255,0.25)");
+            gt.setAttribute("font-size", "7");
+            gt.textContent = pct + '%';
+            svg.appendChild(gt);
+        });
+        // 90% label next to threshold
+        const lbl90 = document.createElementNS(svgNS, "text");
+        lbl90.setAttribute("x", "17"); lbl90.setAttribute("y", "16");
+        lbl90.setAttribute("text-anchor", "end");
+        lbl90.setAttribute("fill", "var(--danger-color)");
+        lbl90.setAttribute("font-size", "7"); lbl90.setAttribute("opacity", "0.7");
+        lbl90.textContent = '90%';
+        svg.appendChild(lbl90);
+    } else if (fluenzaMax > 0) {
+        const step = Math.max(1, Math.ceil(fluenzaMax / 5));
+        for (let val = step; val < fluenzaMax; val += step) {
+            const gy = 130 - (130 * val / fluenzaMax);
+            const gl = document.createElementNS(svgNS, "line");
+            gl.setAttribute("x1", "20"); gl.setAttribute("x2", "300");
+            gl.setAttribute("y1", gy); gl.setAttribute("y2", gy);
+            gl.setAttribute("stroke", "rgba(255,255,255,0.08)");
+            gl.setAttribute("stroke-width", "1");
+            gl.setAttribute("stroke-dasharray", "3,4");
+            svg.appendChild(gl);
+            const gt = document.createElementNS(svgNS, "text");
+            gt.setAttribute("x", "17"); gt.setAttribute("y", gy + 3);
+            gt.setAttribute("text-anchor", "end");
+            gt.setAttribute("fill", "rgba(255,255,255,0.25)");
+            gt.setAttribute("font-size", "7");
+            gt.textContent = val;
+            svg.appendChild(gt);
+        }
+    }
+
     if (isFluenza) {
         // Obiettivo line instead of 90% threshold
         const obY = fluenzaMax > 0 ? 130 - (130 * fluenzaObiettivo / fluenzaMax) : 10;
