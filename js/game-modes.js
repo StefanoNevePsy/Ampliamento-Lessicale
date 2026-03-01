@@ -1,5 +1,31 @@
 // === GAME MODE RENDERERS ===
 
+// Balanced shuffle: distributes items evenly across categories
+// instead of pure random which skews toward categories with more items
+function balancedShuffle(items, getTagFn) {
+    const groups = {};
+    items.forEach(item => {
+        const tag = getTagFn(item) || '_default';
+        if (!groups[tag]) groups[tag] = [];
+        groups[tag].push(item);
+    });
+    // Shuffle within each group
+    Object.values(groups).forEach(arr => arr.sort(() => Math.random() - 0.5));
+    // Weighted random: equal probability per tag at each pick
+    const result = [];
+    const tagKeys = Object.keys(groups);
+    const indices = {};
+    tagKeys.forEach(k => indices[k] = 0);
+    while (result.length < items.length) {
+        const available = tagKeys.filter(k => indices[k] < groups[k].length);
+        if (available.length === 0) break;
+        const tag = available[Math.floor(Math.random() * available.length)];
+        result.push(groups[tag][indices[tag]]);
+        indices[tag]++;
+    }
+    return result;
+}
+
 function getPlaceholderUrl(label) {
     return `https://placehold.co/600x600?text=${encodeURIComponent(label || '?')}`;
 }
@@ -396,6 +422,7 @@ function fluenzaStop() {
 
 // --- TOMBOLA ---
 function renderTombola(items, stage) {
+    state._autoScoreErrored = false;
     state.deck = [...items].sort(() => Math.random() - 0.5);
     const cols = Math.ceil(Math.sqrt(items.length));
     const rows = Math.ceil(items.length / cols);
@@ -459,16 +486,22 @@ window.handleMatchClick = (idx, label) => {
         }, 600);
     }
 
-    // Auto-score in session
+    // Auto-score in session (skip V after correction)
     if (state.session.active) {
-        const key = `tombola_${Date.now()}`;
-        state.session.itemResults[key] = isCorrect ? true : (isTimedelay ? 'prompt' : false);
-        const results = Object.values(state.session.itemResults);
-        state.session.correct = results.filter(v => v === true).length;
-        state.session.incorrect = results.filter(v => v === false).length;
-        state.session.prompts = results.filter(v => v === 'prompt').length;
-        state.session.total = results.length;
-        updateScoreUI();
+        const shouldScore = isCorrect ? !state._autoScoreErrored : true;
+        if (isCorrect) state._autoScoreErrored = false;
+        else state._autoScoreErrored = true;
+
+        if (shouldScore) {
+            const key = `tombola_${Date.now()}`;
+            state.session.itemResults[key] = isCorrect ? true : (isTimedelay ? 'prompt' : false);
+            const results = Object.values(state.session.itemResults);
+            state.session.correct = results.filter(v => v === true).length;
+            state.session.incorrect = results.filter(v => v === false).length;
+            state.session.prompts = results.filter(v => v === 'prompt').length;
+            state.session.total = results.length;
+            updateScoreUI();
+        }
         document.getElementById('btn-save-session').classList.remove('hidden');
         if (typeof showSessionNameInput === 'function') showSessionNameInput();
     }
@@ -552,7 +585,7 @@ function renderPoolRandom(items, stage) {
 }
 
 function showPoolBatch(stage) {
-    state.poolAllItems.sort(() => Math.random() - 0.5);
+    state.poolAllItems = balancedShuffle(state.poolAllItems, item => (item.sourceTags && item.sourceTags[0]) || item.sourceTag || '_');
     const batch = state.poolAllItems.slice(0, state.poolBatchSize);
     const cols = Math.ceil(Math.sqrt(batch.length));
     const rows = Math.ceil(batch.length / cols);
@@ -589,6 +622,7 @@ window.nextPoolBatch = () => {
 
 // --- INTRUSO (infinite rounds, variable card count) ---
 function renderIntruso(items, stage) {
+    state._autoScoreErrored = false;
     const tags = state.selectedPoolTags;
     if (tags.length < 2) {
         stage.innerHTML = `
@@ -695,8 +729,12 @@ window.handleIntrusoClick = (idx) => {
     if (card.isIntruder) {
         cardEl.style.border = '4px solid var(--success-color)';
         cardEl.style.boxShadow = '0 0 20px rgba(16,185,129,0.5)';
-        const key = isTimedelay ? `intruso_${state.intrusoRound}_ok` : state.intrusoRound;
-        state.session.itemResults[key] = true;
+        // Score V only if no prior wrong in this round
+        if (!state._autoScoreErrored) {
+            const key = isTimedelay ? `intruso_${state.intrusoRound}_ok` : state.intrusoRound;
+            state.session.itemResults[key] = true;
+        }
+        state._autoScoreErrored = false;
     } else if (isTimedelay) {
         // Time Delay: mark as prompt, dim card, don't advance
         cardEl.style.border = '4px solid var(--warning-color)';
@@ -705,11 +743,13 @@ window.handleIntrusoClick = (idx) => {
         cardEl.dataset.tried = '1';
         const key = `intruso_${state.intrusoRound}_p${Date.now()}`;
         state.session.itemResults[key] = 'prompt';
+        state._autoScoreErrored = true;
     } else {
         // Independent: mark as error, show correct intruder, advance
         cardEl.style.border = '4px solid var(--danger-color)';
         cardEl.style.boxShadow = '0 0 20px rgba(239,68,68,0.5)';
         state.session.itemResults[state.intrusoRound] = false;
+        state._autoScoreErrored = true;
         round.cards.forEach((c, i) => {
             if (c.isIntruder) {
                 const el = document.getElementById(`intruso-${i}`);
@@ -732,6 +772,7 @@ window.handleIntrusoClick = (idx) => {
 
     // Generate next round after delay (infinite)
     setTimeout(() => {
+        state._autoScoreErrored = false;
         state.intrusoRound++;
         const nextRound = generateIntrusoRound(state.selectedPoolTags, state.intrusoCardsPerRound);
         if (nextRound) {
@@ -1374,6 +1415,7 @@ window.swapSequenzeSlots = (fromIdx, toIdx) => {
 };
 // --- CATEGORIZZAZIONE (Sorting by Tag) ---
 function renderCategorizzazione(items, stage) {
+    state._autoScoreErrored = false;
     const tags = state.selectedPoolTags;
     if (tags.length < 2) {
         stage.innerHTML = `
@@ -1392,7 +1434,7 @@ function renderCategorizzazione(items, stage) {
         });
     });
 
-    allItems.sort(() => Math.random() - 0.5);
+    allItems = balancedShuffle(allItems, item => item.correctTag);
     const numStimuli = parseInt(document.getElementById('num-stimuli').value) || 0;
     if (numStimuli > 0 && allItems.length > numStimuli) {
         allItems = allItems.slice(0, numStimuli);
@@ -1472,18 +1514,24 @@ window.handleCatChoice = (chosenTag) => {
     if (isCorrect) {
         card.style.border = '4px solid var(--success-color)';
         card.style.boxShadow = '0 0 30px rgba(16,185,129,0.5)';
-        const key = isTimedelay ? `cat_${state.catIndex}_ok` : state.catIndex;
-        state.session.itemResults[key] = true;
+        // Score V only if no prior wrong on this item
+        if (!state._autoScoreErrored) {
+            const key = isTimedelay ? `cat_${state.catIndex}_ok` : state.catIndex;
+            state.session.itemResults[key] = true;
+        }
+        state._autoScoreErrored = false;
     } else if (isTimedelay) {
         // Time Delay: highlight as prompt, don't advance
         card.style.border = '4px solid var(--warning-color)';
         card.style.boxShadow = '0 0 30px rgba(245,158,11,0.3)';
         const key = `cat_${state.catIndex}_p${Date.now()}`;
         state.session.itemResults[key] = 'prompt';
+        state._autoScoreErrored = true;
     } else {
         card.style.border = '4px solid var(--danger-color)';
         card.style.boxShadow = '0 0 30px rgba(239,68,68,0.5)';
         state.session.itemResults[state.catIndex] = false;
+        state._autoScoreErrored = true;
     }
 
     // Update score
@@ -1499,6 +1547,7 @@ window.handleCatChoice = (chosenTag) => {
         // In TD mode, don't advance on wrong answer
         if (isCorrect || !isTimedelay) {
             state.catIndex++;
+            state._autoScoreErrored = false;
         }
         showCategorizzazioneItem(document.getElementById('game-stage'));
     }, 800);
@@ -1709,6 +1758,7 @@ window.clearMarkers = () => {
 
 // --- TOMBOLA SONORA (Audio matching) ---
 function renderTombolaSonora(items, stage) {
+    state._autoScoreErrored = false;
     // Filter items that have audio
     const audioItems = items.filter(i => i.audio);
     if (audioItems.length === 0) {
@@ -1801,15 +1851,22 @@ window.handleAudioMatchClick = (idx, label) => {
         }, 600);
     }
 
+    // Auto-score in session (skip V after correction)
     if (state.session.active) {
-        const key = `tombola_sonora_${Date.now()}`;
-        state.session.itemResults[key] = isCorrect ? true : (isTimedelay ? 'prompt' : false);
-        const results = Object.values(state.session.itemResults);
-        state.session.correct = results.filter(v => v === true).length;
-        state.session.incorrect = results.filter(v => v === false).length;
-        state.session.prompts = results.filter(v => v === 'prompt').length;
-        state.session.total = results.length;
-        updateScoreUI();
+        const shouldScore = isCorrect ? !state._autoScoreErrored : true;
+        if (isCorrect) state._autoScoreErrored = false;
+        else state._autoScoreErrored = true;
+
+        if (shouldScore) {
+            const key = `tombola_sonora_${Date.now()}`;
+            state.session.itemResults[key] = isCorrect ? true : (isTimedelay ? 'prompt' : false);
+            const results = Object.values(state.session.itemResults);
+            state.session.correct = results.filter(v => v === true).length;
+            state.session.incorrect = results.filter(v => v === false).length;
+            state.session.prompts = results.filter(v => v === 'prompt').length;
+            state.session.total = results.length;
+            updateScoreUI();
+        }
         document.getElementById('btn-save-session').classList.remove('hidden');
         if (typeof showSessionNameInput === 'function') showSessionNameInput();
     }

@@ -755,7 +755,7 @@ function renderDatesTab(patient) {
             }
             return `
                     <div style="margin-top:8px; border:1px solid rgba(255,255,255,0.05); border-radius:10px; overflow:hidden;">
-                        <div onclick="toggleDayActivityChart(this, '${patient.id}', '${activityKey}')" style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; cursor:pointer; transition:background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background=''">
+                        <div onclick="toggleDaySessionDetail(this, '${patient.id}', ${s.originalIndex}, '${activityKey}')" style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; cursor:pointer; transition:background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background=''">
                             <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:0;">
                                 <i class="fa-solid fa-chevron-right day-act-icon" style="transition:transform 0.2s; font-size:0.6rem; color:#555;"></i>
                                 ${dayThumb}
@@ -798,27 +798,99 @@ window.toggleDateExpand = (header) => {
 };
 
 // Toggle activity chart inside a date row in Giornate tab
-window.toggleDayActivityChart = (header, patientId, activityKeyEncoded) => {
+window.toggleDaySessionDetail = (header, patientId, sessionIdx, activityKeyEncoded) => {
     const panel = header.nextElementSibling;
     const icon = header.querySelector('.day-act-icon');
     if (panel.style.display === 'none') {
         panel.style.display = 'block';
         if (icon) icon.style.transform = 'rotate(90deg)';
-        // Render chart if empty
         if (panel.innerHTML.trim() === '') {
-            const activityKey = decodeURIComponent(activityKeyEncoded);
             const p = state.patients.find(x => x.id === patientId);
             if (!p) return;
+            const s = p.history[sessionIdx];
+            if (!s) return;
+
+            const isTD = s.sessionType === 'timedelay';
+            const prompts = s.rawP || 0;
+            const errors = s.rawX || 0;
+            let html = '';
+
+            // Score breakdown
+            html += `<div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">`;
+            html += `<span style="font-size:0.8rem;"><i class="fa-solid fa-check" style="color:var(--success-color);"></i> ${s.correct}</span>`;
+            if (prompts > 0) html += `<span style="font-size:0.8rem; color:var(--warning-color);"><b>P</b> ${prompts}</span>`;
+            if (errors > 0) html += `<span style="font-size:0.8rem; color:var(--danger-color);"><b>X</b> ${errors}</span>`;
+            html += `<span style="font-size:0.8rem; color:var(--text-secondary);">Tot: ${s.total}</span>`;
+            if (isTD && s.timeDelaySeconds) html += `<span style="font-size:0.75rem; background:rgba(245,158,11,0.15); color:var(--warning-color); padding:2px 8px; border-radius:6px;">TD ${s.timeDelaySeconds}s</span>`;
+            html += `</div>`;
+
+            // Item details (wrong/prompted items)
+            if (s.itemDetails && s.itemDetails.length > 0) {
+                const wrong = s.itemDetails.filter(d => d.result !== true);
+                if (wrong.length > 0) {
+                    const wrongLabel = isTD ? 'Promptati' : 'Sbagliati';
+                    const wrongColor = isTD ? 'var(--warning-color)' : 'var(--danger-color)';
+                    const wrongRgba = isTD ? '245,158,11' : '239,68,68';
+                    html += `<div style="margin-bottom:8px;">`;
+                    html += `<div style="font-size:0.7rem; color:${wrongColor}; margin-bottom:4px; font-weight:bold;">${wrongLabel} (${wrong.length}):</div>`;
+                    html += `<div style="display:flex; flex-wrap:wrap; gap:2px;">`;
+                    wrong.forEach(d => {
+                        const isPrompt = d.result === 'prompt';
+                        const color = isTD ? 'var(--warning-color)' : (isPrompt ? 'var(--warning-color)' : 'var(--danger-color)');
+                        const rgba = isTD ? '245,158,11' : (isPrompt ? '245,158,11' : '239,68,68');
+                        const tag = isTD ? 'P' : (isPrompt ? 'P' : 'X');
+                        html += `<span style="display:inline-block; padding:2px 8px; margin:2px; border-radius:6px; font-size:0.75rem; background:rgba(${rgba},0.12); color:${color}; border:1px solid rgba(${rgba},0.3);">${d.label} <span style="opacity:0.6;">${tag}</span></span>`;
+                    });
+                    html += `</div></div>`;
+                }
+            }
+
+            // Task analysis step details with percentages
+            if (s.mode === 'quaderno_task' && s.taskSteps && s.taskSteps.length > 0) {
+                html += `<div style="margin-bottom:8px;">`;
+                html += `<div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-list-ol"></i> Dettaglio Passaggi:</div>`;
+                html += `<div style="display:flex; flex-direction:column; gap:2px;">`;
+                s.taskSteps.forEach((step, i) => {
+                    const v = step.v || 0, x = step.x || 0, p = step.p || 0, na = step.na || 0;
+                    const scored = v + x + p;
+                    const stepPct = scored > 0 ? Math.round(v / scored * 100) : null;
+                    let parts = [];
+                    if (v > 0) parts.push(`<span style="color:var(--success-color)">${v}V</span>`);
+                    if (x > 0) parts.push(`<span style="color:var(--danger-color)">${x}X</span>`);
+                    if (p > 0) parts.push(`<span style="color:var(--warning-color)">${p}P</span>`);
+                    if (parts.length === 0 && na > 0) parts.push(`<span style="color:#888">N/A</span>`);
+                    let bg = 'rgba(255,255,255,0.05)', border = 'rgba(255,255,255,0.1)';
+                    if (v > 0 && x === 0 && p === 0) { bg = 'rgba(16,185,129,0.1)'; border = 'rgba(16,185,129,0.3)'; }
+                    else if (x > 0) { bg = 'rgba(239,68,68,0.1)'; border = 'rgba(239,68,68,0.3)'; }
+                    else if (p > 0) { bg = 'rgba(245,158,11,0.1)'; border = 'rgba(245,158,11,0.3)'; }
+                    const pctColor = stepPct !== null ? (stepPct >= 90 ? 'var(--success-color)' : stepPct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)') : '#888';
+                    const pctHtml = stepPct !== null ? `<span style="font-size:0.7rem; color:${pctColor}; font-weight:bold; margin-left:6px;">${stepPct}%</span>` : '';
+                    html += `<div style="padding:4px 8px; border-radius:6px; font-size:0.75rem; background:${bg}; border:1px solid ${border}; display:flex; justify-content:space-between; align-items:center;">
+                        <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px;"><b>${i + 1}.</b> ${step.name}</span>
+                        <span style="font-weight:bold; flex-shrink:0; display:flex; align-items:center; gap:4px;">${parts.length > 0 ? parts.join(' ') : '<span style="color:#888">N/A</span>'}${pctHtml}</span>
+                    </div>`;
+                });
+                html += `</div></div>`;
+            }
+
+            // Activity chart (full history for this activity)
+            const activityKey = decodeURIComponent(activityKeyEncoded);
             const [setName, modeCode, typeGroup] = activityKey.split('::');
-            const sessions = p.history.filter(h =>
-                h.setName === setName &&
-                h.mode === modeCode &&
-                getSessionTypeGroup(h) === typeGroup
+            const allSessions = p.history.filter(h =>
+                h.setName === setName && h.mode === modeCode && getSessionTypeGroup(h) === typeGroup
             ).sort((a, b) => new Date(a.date) - new Date(b.date));
-            if (sessions.length > 0) {
-                renderActivitySVGChart(panel, sessions, typeGroup);
-            } else {
-                panel.innerHTML = '<span style="font-size:0.8rem; color:#666;">Nessun dato.</span>';
+            if (allSessions.length > 1) {
+                html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.05);">
+                    <div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:4px;"><i class="fa-solid fa-chart-line"></i> Andamento (${allSessions.length} sess.)</div>
+                    <div id="day-chart-${sessionIdx}"></div>
+                </div>`;
+            }
+
+            panel.innerHTML = html;
+
+            if (allSessions.length > 1) {
+                const chartEl = document.getElementById(`day-chart-${sessionIdx}`);
+                if (chartEl) renderActivitySVGChart(chartEl, allSessions, typeGroup, modeCode);
             }
         }
     } else {
@@ -847,7 +919,7 @@ function renderItemDetailsCollapsible(s, patientId, sessionIdx, isTD) {
     }).join('');
 
     return `
-        <tr class="item-details-row" style="display:none;">
+        <tr class="item-details-row" style="display:table-row;">
             <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(0,0,0,0.15);">
                 <div style="font-size:0.7rem; color:${wrongColor}; margin-bottom:4px; font-weight:bold;">${wrongLabel} (${wrong.length}):</div>
                 <div style="display:flex; flex-wrap:wrap; gap:2px;">${chips}</div>
@@ -885,7 +957,7 @@ function renderTaskStepDetailsCollapsible(s, patientId, sessionIdx, isTD) {
     }).join('');
 
     return `
-        <tr class="item-details-row" style="display:none;">
+        <tr class="item-details-row" style="display:table-row;">
             <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(0,0,0,0.15);">
                 <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-list-ol"></i> Dettaglio Passaggi (V/X/P):</div>
                 <div style="display:flex; flex-direction:column; gap:2px;">${chips}</div>
@@ -1040,7 +1112,7 @@ function renderActivitiesTab(patient, sortBy) {
                 ? renderItemDetailsCollapsible(s, patient.id, s.originalIndex, isTD)
                 : (isTaskAnalysisSession ? renderTaskStepDetailsCollapsible(s, patient.id, s.originalIndex, isTD) : '');
             const detailsBtn = (hasDetails || isTaskAnalysisSession)
-                ? `<button class="btn-icon item-details-toggle" style="width:26px; height:26px; font-size:0.6rem; display:inline-flex; color:${isTD ? 'var(--warning-color)' : (isTaskAnalysisSession ? 'var(--accent-color)' : 'var(--danger-color)')}; border-color:rgba(${isTD ? '245,158,11' : (isTaskAnalysisSession ? '99,102,241' : '239,68,68')},0.3);" title="Dettagli"><i class="fa-solid fa-chevron-down" style="transition:transform 0.2s;"></i></button>`
+                ? `<button class="btn-icon item-details-toggle" style="width:26px; height:26px; font-size:0.6rem; display:inline-flex; color:${isTD ? 'var(--warning-color)' : (isTaskAnalysisSession ? 'var(--accent-color)' : 'var(--danger-color)')}; border-color:rgba(${isTD ? '245,158,11' : (isTaskAnalysisSession ? '99,102,241' : '239,68,68')},0.3);" title="Dettagli"><i class="fa-solid fa-chevron-down" style="transition:transform 0.2s; transform:rotate(180deg);"></i></button>`
                 : '';
             return `
                         <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
@@ -1063,9 +1135,10 @@ function renderActivitiesTab(patient, sortBy) {
 
     content.innerHTML = html;
 
-    // Wire up item detail toggles
+    // Wire up item detail toggles (default open)
     content.querySelectorAll('.item-details-toggle').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
             const row = btn.closest('tr').nextElementSibling;
             if (row && row.classList.contains('item-details-row')) {
                 const isOpen = row.style.display !== 'none';
