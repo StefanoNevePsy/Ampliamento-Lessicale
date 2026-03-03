@@ -183,19 +183,32 @@ if (!state._collapsedCats) state._collapsedCats = {};
 let _dropdownSets = []; // cached for re-sort
 
 function getSetStatus(s, activePatient, currentMode) {
-    const info = { isMastered: false, isRepertorio: false, isNear: false, lastPct: null, lastDate: null, sessions: 0 };
+    const info = { isMastered: false, isRepertorio: false, isNear: false, lastPct: null, lastDate: null, sessions: 0, ranErrorCount: null };
     if (!activePatient || !activePatient.history) return info;
+    const engine = typeof getModeEngine === 'function' ? getModeEngine(currentMode) : currentMode;
     const sessions = activePatient.history.filter(h => h.setId === s.id && h.mode === currentMode);
     info.sessions = sessions.length;
-    if (sessions.length === 0) return info;
-    info.isMastered = typeof checkCriterion === 'function' && checkCriterion(sessions);
-    info.isRepertorio = typeof checkRepertorio === 'function' && checkRepertorio(sessions);
-    info.isNear = !info.isMastered && typeof isNearCriterion === 'function' && isNearCriterion(sessions);
-    const sorted = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
-    const last = sorted[sorted.length - 1];
-    if (last) {
-        info.lastPct = last.percentage != null ? Math.round(last.percentage) : null;
-        info.lastDate = last.date;
+    if (sessions.length === 0 && engine !== 'ran_intensivo') return info;
+    if (sessions.length > 0) {
+        info.isMastered = typeof checkCriterion === 'function' && checkCriterion(sessions);
+        info.isRepertorio = typeof checkRepertorio === 'function' && checkRepertorio(sessions);
+        info.isNear = !info.isMastered && typeof isNearCriterion === 'function' && isNearCriterion(sessions);
+        const sorted = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
+        const last = sorted[sorted.length - 1];
+        if (last) {
+            info.lastPct = last.percentage != null ? Math.round(last.percentage) : null;
+            info.lastDate = last.date;
+        }
+    }
+    // For RAN Intensivo: count errors from last RAN/RAN Intensivo session
+    if (engine === 'ran_intensivo') {
+        const ranSessions = activePatient.history.filter(h => h.setId === s.id && (h.mode === 'ran' || h.mode === 'ran_intensivo'));
+        if (ranSessions.length > 0) {
+            const lastRan = [...ranSessions].sort((a, b) => new Date(a.date) - new Date(b.date)).pop();
+            if (lastRan.itemDetails && lastRan.itemDetails.length > 0) {
+                info.ranErrorCount = lastRan.itemDetails.filter(d => d.result !== true).length;
+            }
+        }
     }
     return info;
 }
@@ -313,6 +326,13 @@ function renderSetDropdownItem(s, status) {
     if (status.lastPct != null) {
         const pctColor = status.lastPct >= 90 ? '#10b981' : status.lastPct >= 70 ? '#f59e0b' : '#ef4444';
         badges += `<span class="set-item-badge badge-pct" style="color:${pctColor}">${status.lastPct}%</span>`;
+    }
+    if (status.ranErrorCount != null) {
+        if (status.ranErrorCount > 0) {
+            badges += `<span class="set-item-badge badge-ran-errors" style="color:var(--warning-color);"><i class="fa-solid fa-circle-exclamation" style="margin-right:2px;"></i>${status.ranErrorCount} err</span>`;
+        } else {
+            badges += `<span class="set-item-badge badge-ran-errors" style="color:var(--success-color);"><i class="fa-solid fa-circle-check" style="margin-right:2px;"></i>0 err</span>`;
+        }
     }
     if (missingCount > 0) {
         badges += `<span class="set-item-badge badge-warning">\u26A0 ${missingCount}</span>`;
