@@ -86,11 +86,16 @@ function setupCustomAutocomplete(inputId, options) {
     function openPanel() {
         if (options.length === 0) return;
         renderOptions(input.value);
-        // Constrain max-height so panel stays within viewport (below toolbar)
+        // Use fixed positioning so panels aren't clipped by overflow:hidden on #game-stage
         const rect = input.getBoundingClientRect();
-        const topBarHeight = 56; // approximate toolbar height
-        const available = rect.top - topBarHeight - 8;
-        panel.style.maxHeight = Math.max(80, Math.min(available, 200)) + 'px';
+        const controlsRow = document.querySelector('.controls-row');
+        const topLimit = controlsRow ? controlsRow.getBoundingClientRect().bottom + 4 : 60;
+        const available = rect.top - topLimit;
+        panel.style.position = 'fixed';
+        panel.style.left = rect.left + 'px';
+        panel.style.width = rect.width + 'px';
+        panel.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+        panel.style.maxHeight = Math.max(80, Math.min(available, 250)) + 'px';
         panel.classList.add('open');
         panel.scrollTop = 0;
     }
@@ -136,6 +141,9 @@ function setupCustomAutocomplete(inputId, options) {
 
 function renderGameMode(mode, items) {
     const stage = document.getElementById('game-stage');
+    // Preserve pointer canvas before clearing stage (detach so innerHTML doesn't destroy it)
+    const pointerCanvas = document.getElementById('pointer-canvas');
+    if (pointerCanvas) pointerCanvas.remove();
     stage.innerHTML = '';
     // Resolve custom modes to their engine
     const engine = (typeof getModeEngine === 'function') ? getModeEngine(mode) : mode;
@@ -156,6 +164,13 @@ function renderGameMode(mode, items) {
     else if (engine === 'categorizzazione') renderCategorizzazione(items, stage);
     else if (engine === 'zoom') renderZoom(items, stage);
     else if (engine === 'quaderno') renderQuaderno(stage);
+    // Re-insert pointer canvas on top after renderer runs (preserves event listeners and state)
+    if (pointerCanvas) stage.appendChild(pointerCanvas);
+    else {
+        const c = document.createElement('canvas');
+        c.id = 'pointer-canvas';
+        stage.appendChild(c);
+    }
 }
 
 // --- TACT ---
@@ -266,10 +281,9 @@ function renderRanIntensivo(items, stage) {
 
     const current = ri.deck[ri.deckIndex];
     const target = ri.target;
-    const correctSoFar = ri.totalCorrect;
-    const pct = target > 0 ? Math.round((correctSoFar / target) * 100) : 0;
-    const status = state.session.itemResults ? state.session.itemResults[ri.deckIndex] : undefined;
-    const feedbackClass = status === true ? 'feedback-success' : (status === false ? 'feedback-fail' : (status === 'prompt' ? 'feedback-prompt' : ''));
+    const presented = ri.deckIndex + 1;
+    const pct = target > 0 ? Math.round((presented / target) * 100) : 0;
+    const uniqueErrorItems = ri.errorCount || ri.deck.length;
 
     stage.innerHTML = `
     <div class="ran-container">
@@ -280,27 +294,27 @@ function renderRanIntensivo(items, stage) {
             </div>
             <div style="display:flex; align-items:center; gap:10px;">
                 <div style="background:rgba(0,0,0,0.3); border-radius:8px; padding:4px 12px; font-size:0.8rem; display:flex; align-items:center; gap:6px;">
-                    <span style="color:var(--success-color); font-weight:bold;">${correctSoFar}</span>
+                    <span style="font-weight:bold;">${presented}</span>
                     <span style="color:var(--text-secondary);">/</span>
                     <span style="font-weight:bold;">${target}</span>
                 </div>
                 <div style="width:80px; height:8px; border-radius:4px; background:rgba(255,255,255,0.1); overflow:hidden;">
-                    <div style="width:${pct}%; height:100%; background:var(--success-color); border-radius:4px; transition:width 0.3s;"></div>
+                    <div style="width:${pct}%; height:100%; background:var(--accent-color); border-radius:4px; transition:width 0.3s;"></div>
                 </div>
-                <span style="font-size:0.75rem; color:var(--text-secondary);">${ri.deck.length} item nel mazzo</span>
+                <span style="font-size:0.75rem; color:var(--text-secondary);">${uniqueErrorItems} item, ${ri.totalCorrect} <i class="fa-solid fa-check" style="color:var(--success-color);"></i></span>
             </div>
         </div>
         <div id="ran-content" style="flex:1; min-height:0;">
             <div class="ran-single-stage">
                 <div style="flex:1; display:flex; flex-direction:column; justify-content:center; width:100%; overflow:hidden;">
                     <img src="${current.url || getPlaceholderUrl(current.label)}"
-                         class="ran-main-img ${feedbackClass}"
+                         class="ran-main-img"
                          style="transition:0.3s;"
                          onerror="handleImgError(this,'${current.label}')">
                     <h2 style="text-align:center;">${current.label}</h2>
                 </div>
                 <div class="ran-controls-bar">
-                    <div class="ran-counter">${ri.deckIndex + 1}/${ri.deck.length}</div>
+                    <div class="ran-counter">${presented}/${target}</div>
                 </div>
             </div>
         </div>

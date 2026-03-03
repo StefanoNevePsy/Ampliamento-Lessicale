@@ -301,7 +301,7 @@ select optgroup { background: #1e1e2f; color: var(--text-secondary); }
 /* Custom autocomplete dropdown */
 .custom-autocomplete-wrap { position: relative; flex: 1; min-width: 120px; }
 .custom-autocomplete-wrap input { width: 100%; }
-.custom-ac-panel { display: none; position: absolute; bottom: 100%; left: 0; right: 0; z-index: 600; max-height: 200px; overflow-y: auto; background: #22223a; border: 1px solid var(--accent-color); border-radius: 12px 12px 0 0; box-shadow: 0 -8px 24px rgba(0,0,0,0.5); margin-bottom: 4px; }
+.custom-ac-panel { display: none; position: absolute; bottom: 100%; left: 0; right: 0; z-index: 10001; max-height: 200px; overflow-y: auto; background: #22223a; border: 1px solid var(--accent-color); border-radius: 12px 12px 0 0; box-shadow: 0 -8px 24px rgba(0,0,0,0.5); margin-bottom: 4px; }
 .custom-ac-panel.open { display: block; }
 .custom-ac-item { padding: 10px 14px; font-size: 0.85rem; color: #ccc; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.04); display: flex; align-items: center; gap: 8px; }
 .custom-ac-item:hover, .custom-ac-item.highlighted { background: rgba(99,102,241,0.15); color: white; }

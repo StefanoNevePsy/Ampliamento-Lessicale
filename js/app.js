@@ -773,10 +773,10 @@ window.startGame = () => {
     state.ranIndex = 0;
     state.session.playItems = playItems; // Store for per-item detail tracking
 
-    // RAN Intensivo: build deck from last session's errors
+    // RAN Intensivo: build deck of exactly 20 stimuli from last session's errors
     if (engine === 'ran_intensivo') {
         const TARGET = 20;
-        let difficultItems = [];
+        let errorItems = [];
         const patient = state.activePatientId ? state.patients.find(p => p.id === state.activePatientId) : null;
         if (patient && patient.history) {
             // Find last RAN or RAN Intensivo session for this set
@@ -786,7 +786,7 @@ window.startGame = () => {
                 if (lastSession.itemDetails && lastSession.itemDetails.length > 0) {
                     const errorLabels = lastSession.itemDetails.filter(d => d.result !== true).map(d => d.label);
                     if (errorLabels.length > 0) {
-                        difficultItems = playItems.filter(item => {
+                        errorItems = playItems.filter(item => {
                             const label = item.label || item.l || '';
                             return errorLabels.includes(label);
                         });
@@ -795,17 +795,23 @@ window.startGame = () => {
             }
         }
         // If no errors found or no history, use all items
-        if (difficultItems.length === 0) difficultItems = [...playItems];
-        difficultItems.sort(() => Math.random() - 0.5);
+        if (errorItems.length === 0) errorItems = [...playItems];
+        // Build a fixed deck of exactly TARGET items by cycling through error items
+        const deck = [];
+        const shuffled = [...errorItems].sort(() => Math.random() - 0.5);
+        for (let i = 0; i < TARGET; i++) {
+            deck.push(shuffled[i % shuffled.length]);
+        }
 
         state._ranIntensivo = {
-            deck: difficultItems,
+            deck: deck,
             deckIndex: 0,
             totalCorrect: 0,
             totalErrors: 0,
             totalPrompts: 0,
             target: TARGET,
-            allItems: playItems, // full set for reference
+            errorCount: errorItems.length,
+            allItems: playItems,
             completed: false
         };
     } else {
@@ -856,10 +862,10 @@ window.recordResponse = (result) => {
             ri.totalErrors++;
         }
 
-        // Check completion
-        if (ri.totalCorrect >= ri.target) {
+        // Check completion: stop after presenting all stimuli in the fixed deck
+        const totalPresented = ri.totalCorrect + ri.totalErrors + ri.totalPrompts;
+        if (totalPresented >= ri.target || ri.deckIndex >= ri.deck.length - 1) {
             ri.completed = true;
-            // Aggregate counts for score display
             const results = Object.values(state.session.itemResults);
             state.session.correct = results.filter(v => v === true).length;
             state.session.incorrect = results.filter(v => v === false).length;
@@ -868,29 +874,22 @@ window.recordResponse = (result) => {
             updateScoreUI();
             document.getElementById('btn-save-session').classList.remove('hidden');
             if (typeof showSessionNameInput === 'function') showSessionNameInput();
-            // Show completion screen
             const stage = document.getElementById('game-stage');
             if (stage) {
                 stage.innerHTML = `<div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:20px;">
                     <i class="fa-solid fa-trophy fa-3x" style="color:var(--warning-color); margin-bottom:15px;"></i>
-                    <p style="font-size:1.3rem; font-weight:bold; color:var(--success-color);">Obiettivo raggiunto!</p>
-                    <p style="color:var(--text-secondary);">${ri.totalCorrect} risposte corrette su ${ri.totalCorrect + ri.totalErrors + ri.totalPrompts} totali</p>
+                    <p style="font-size:1.3rem; font-weight:bold; color:var(--success-color);">Sessione completata!</p>
+                    <p style="color:var(--text-secondary);">${ri.totalCorrect} corrette, ${ri.totalErrors} errori, ${ri.totalPrompts} prompt su ${totalPresented} stimoli</p>
                     <p style="font-size:0.85rem; color:var(--text-secondary); margin-top:10px;">Salva la sessione per registrare i risultati.</p>
                 </div>`;
             }
             return;
         }
 
-        // Advance to next item
+        // Advance to next item in the fixed deck
         setTimeout(() => {
             ri.deckIndex++;
-            // If we reached the end of the deck, reshuffle and restart
-            if (ri.deckIndex >= ri.deck.length) {
-                ri.deck.sort(() => Math.random() - 0.5);
-                ri.deckIndex = 0;
-            }
             renderGameMode(mode, ri.allItems);
-            // Update score
             const results2 = Object.values(state.session.itemResults);
             state.session.correct = results2.filter(v => v === true).length;
             state.session.incorrect = results2.filter(v => v === false).length;
@@ -1593,11 +1592,32 @@ function renderModeSelect() {
                 return false;
             }).length;
 
+            // For RAN Intensivo, show error count from last RAN session of active set
+            let extraInfo = '';
+            if (engine === 'ran_intensivo' && state.activeSetId) {
+                const patient = state.activePatientId ? state.patients.find(p => p.id === state.activePatientId) : null;
+                if (patient && patient.history) {
+                    const ranSessions = patient.history.filter(h => h.setId === state.activeSetId && (h.mode === 'ran' || h.mode === 'ran_intensivo'));
+                    if (ranSessions.length > 0) {
+                        const lastSession = [...ranSessions].sort((a, b) => new Date(a.date) - new Date(b.date)).pop();
+                        if (lastSession.itemDetails && lastSession.itemDetails.length > 0) {
+                            const errCount = lastSession.itemDetails.filter(d => d.result !== true).length;
+                            if (errCount > 0) {
+                                extraInfo = `<div style="font-size:0.65rem; color:var(--warning-color);"><i class="fa-solid fa-circle-exclamation" style="margin-right:3px;"></i>${errCount} errori nell'ultima RAN</div>`;
+                            } else {
+                                extraInfo = `<div style="font-size:0.65rem; color:var(--success-color);"><i class="fa-solid fa-circle-check" style="margin-right:3px;"></i>Nessun errore nell'ultima RAN</div>`;
+                            }
+                        }
+                    }
+                }
+            }
+
             html += `<div class="mode-dd-item${isSelected ? ' selected' : ''}" onclick="selectModeFromDropdown('${modeKey}')">
                 ${iconHtml}
                 <div style="flex:1; min-width:0;">
                     <div class="mode-dd-label">${getModeLabel(modeKey)}</div>
                     ${compatCount > 0 ? `<div style="font-size:0.65rem; color:var(--text-secondary);">${compatCount} set</div>` : ''}
+                    ${extraInfo}
                 </div>
             </div>`;
         });
