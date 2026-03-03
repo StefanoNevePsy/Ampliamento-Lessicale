@@ -1138,7 +1138,7 @@ function renderActivitiesTab(patient, sortBy) {
         const lastInfoHtml = lastSession ? `<span style="font-size:0.7rem; color:var(--text-secondary);">${formatDateEU(lastSession.date)}</span> <span style="font-size:0.75rem; font-weight:bold; color:${lastPctColor};">${lastPct}%</span>` : '';
 
         html += `
-        <div class="chart-wrapper" style="margin-bottom:12px; border-left:3px solid ${typeColor};">
+        <div class="chart-wrapper" data-set-id="${setId || ''}" style="margin-bottom:12px; border-left:3px solid ${typeColor};">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                 <h4 style="margin:0; color:var(--accent-color); font-size:0.95rem; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                     ${setThumbHtml}

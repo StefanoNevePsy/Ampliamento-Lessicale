@@ -109,7 +109,9 @@ window.filterSetsByMode = function () {
             // If modes array exists (even empty), use it as the source of truth
             if (s.modes.length === 0) return false; // No modes assigned = not compatible with anything
             // Resolve engine for compatibility check
-            const checkEngine = (engine === 'intraverbal_scenari') ? 'search_find' : engine;
+            let checkEngine = engine;
+            if (engine === 'intraverbal_scenari') checkEngine = 'search_find';
+            else if (engine === 'ran_intensivo') checkEngine = 'ran';
             return s.modes.includes(checkEngine) || s.modes.includes(engine) || s.modes.includes(currentMode);
         }
         // Fallback for old sets without mode tags at all (modes field missing)
@@ -316,6 +318,12 @@ function renderSetDropdownItem(s, status) {
         badges += `<span class="set-item-badge badge-warning">\u26A0 ${missingCount}</span>`;
     }
 
+    // Show data button only when a patient is selected and has sessions for this set
+    let dataBtn = '';
+    if (status.sessions > 0) {
+        dataBtn = `<button class="set-item-data-btn" onclick="event.stopPropagation(); viewSetQuickData('${s.id}')" title="Vedi dati"><i class="fa-solid fa-chart-line"></i></button>`;
+    }
+
     return `<div class="set-dropdown-item${isSelected ? ' selected' : ''}" data-set-id="${s.id}" onclick="selectSetFromDropdown('${s.id}')">
         ${thumbHtml}
         <div class="set-item-info">
@@ -325,6 +333,7 @@ function renderSetDropdownItem(s, status) {
                 ${badges}
             </div>
         </div>
+        ${dataBtn}
     </div>`;
 }
 
@@ -365,6 +374,34 @@ function closeSetDropdown() {
 window.selectSetFromDropdown = (setId) => {
     closeSetDropdown();
     loadSelectedSet(setId);
+};
+
+// Quick data access: open patient modal on activities tab, scrolled to this set
+window.viewSetQuickData = async (setId) => {
+    closeSetDropdown();
+    const pid = state.activePatientId;
+    if (!pid) return;
+    state.patients = await DB.getAllPatients();
+    if (typeof renderPatientModalDropdown === 'function') renderPatientModalDropdown(pid);
+    document.getElementById('modal-patients').classList.add('open');
+    loadPatientData(pid);
+    // Wait for DOM, then switch to activities tab and scroll to this set
+    setTimeout(() => {
+        switchReportTab('activities', pid);
+        setTimeout(() => {
+            state._highlightSetId = setId;
+            const content = document.getElementById('report-content');
+            if (content) {
+                const target = content.querySelector(`[data-set-id="${setId}"]`);
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    target.style.outline = '2px solid var(--accent-color)';
+                    target.style.borderRadius = '12px';
+                    setTimeout(() => { target.style.outline = ''; }, 3000);
+                }
+            }
+        }, 150);
+    }, 100);
 };
 
 // Close all custom dropdowns when clicking outside
@@ -474,7 +511,7 @@ function _updateMultiSetScoreUI() {
 }
 
 // --- LABEL TOGGLE ---
-const LABEL_ENGINES = ['tact', 'ran', 'tombola', 'topologia', 'zoom'];
+const LABEL_ENGINES = ['tact', 'ran', 'ran_intensivo', 'tombola', 'topologia', 'zoom'];
 
 window.toggleLabelsVisibility = () => {
     const stage = document.getElementById('game-stage');
@@ -484,6 +521,148 @@ window.toggleLabelsVisibility = () => {
     if (btn) btn.classList.toggle('labels-off', isHidden);
     state._labelsHidden = isHidden;
 };
+
+// --- POINTER / PEN TOOL ---
+(function initPointerPen() {
+    let penActive = false;
+    let drawing = false;
+    let strokes = []; // { points: [{x,y,t}], color }
+    let currentStroke = null;
+    const FADE_MS = 2500;
+    const LINE_WIDTH = 4;
+    const PEN_COLOR = '#ff4444';
+    let animFrameId = null;
+
+    function getCanvas() { return document.getElementById('pointer-canvas'); }
+
+    function resizeCanvas() {
+        const canvas = getCanvas();
+        if (!canvas) return;
+        const rect = canvas.parentElement.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+    }
+
+    function getPos(e, canvas) {
+        const rect = canvas.getBoundingClientRect();
+        if (e.touches && e.touches.length > 0) {
+            return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+        }
+        return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    }
+
+    function startDraw(e) {
+        if (!penActive) return;
+        e.preventDefault();
+        drawing = true;
+        const canvas = getCanvas();
+        const pos = getPos(e, canvas);
+        currentStroke = { points: [{ x: pos.x, y: pos.y, t: Date.now() }], color: PEN_COLOR };
+    }
+
+    function moveDraw(e) {
+        if (!drawing || !currentStroke) return;
+        e.preventDefault();
+        const canvas = getCanvas();
+        const pos = getPos(e, canvas);
+        currentStroke.points.push({ x: pos.x, y: pos.y, t: Date.now() });
+    }
+
+    function endDraw(e) {
+        if (!drawing || !currentStroke) return;
+        if (e) e.preventDefault();
+        drawing = false;
+        if (currentStroke.points.length > 0) strokes.push(currentStroke);
+        currentStroke = null;
+    }
+
+    function renderLoop() {
+        const canvas = getCanvas();
+        if (!canvas) { animFrameId = null; return; }
+        const ctx = canvas.getContext('2d');
+        const now = Date.now();
+
+        // Check if canvas needs resize
+        const rect = canvas.parentElement.getBoundingClientRect();
+        if (canvas.width !== Math.round(rect.width) || canvas.height !== Math.round(rect.height)) {
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Remove fully faded strokes
+        strokes = strokes.filter(s => {
+            const lastT = s.points[s.points.length - 1].t;
+            return now - lastT < FADE_MS;
+        });
+
+        // Draw strokes with fading
+        [...strokes, ...(currentStroke ? [currentStroke] : [])].forEach(stroke => {
+            if (stroke.points.length < 2) return;
+            for (let i = 1; i < stroke.points.length; i++) {
+                const p0 = stroke.points[i - 1];
+                const p1 = stroke.points[i];
+                const age = now - p1.t;
+                const alpha = Math.max(0, 1 - age / FADE_MS);
+                if (alpha <= 0) continue;
+                ctx.beginPath();
+                ctx.strokeStyle = stroke.color;
+                ctx.globalAlpha = alpha;
+                ctx.lineWidth = LINE_WIDTH;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.moveTo(p0.x, p0.y);
+                ctx.lineTo(p1.x, p1.y);
+                ctx.stroke();
+            }
+        });
+        ctx.globalAlpha = 1;
+
+        if (penActive || strokes.length > 0 || currentStroke) {
+            animFrameId = requestAnimationFrame(renderLoop);
+        } else {
+            animFrameId = null;
+        }
+    }
+
+    window.togglePointerPen = () => {
+        const canvas = getCanvas();
+        const btn = document.getElementById('btn-pointer-pen');
+        if (!canvas) return;
+        penActive = !penActive;
+        canvas.classList.toggle('active', penActive);
+        if (btn) btn.classList.toggle('pen-active', penActive);
+        if (penActive) {
+            resizeCanvas();
+            canvas.addEventListener('mousedown', startDraw);
+            canvas.addEventListener('mousemove', moveDraw);
+            canvas.addEventListener('mouseup', endDraw);
+            canvas.addEventListener('mouseleave', endDraw);
+            canvas.addEventListener('touchstart', startDraw, { passive: false });
+            canvas.addEventListener('touchmove', moveDraw, { passive: false });
+            canvas.addEventListener('touchend', endDraw);
+            canvas.addEventListener('touchcancel', endDraw);
+            if (!animFrameId) animFrameId = requestAnimationFrame(renderLoop);
+        } else {
+            canvas.removeEventListener('mousedown', startDraw);
+            canvas.removeEventListener('mousemove', moveDraw);
+            canvas.removeEventListener('mouseup', endDraw);
+            canvas.removeEventListener('mouseleave', endDraw);
+            canvas.removeEventListener('touchstart', startDraw);
+            canvas.removeEventListener('touchmove', moveDraw);
+            canvas.removeEventListener('touchend', endDraw);
+            canvas.removeEventListener('touchcancel', endDraw);
+            strokes = [];
+            currentStroke = null;
+            const ctx = canvas.getContext('2d');
+            if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+    };
+
+    // Keep canvas sized on window resize
+    window.addEventListener('resize', () => { if (penActive) resizeCanvas(); });
+})();
 
 // --- START GAME ---
 window.startGame = () => {
@@ -594,6 +773,45 @@ window.startGame = () => {
     state.ranIndex = 0;
     state.session.playItems = playItems; // Store for per-item detail tracking
 
+    // RAN Intensivo: build deck from last session's errors
+    if (engine === 'ran_intensivo') {
+        const TARGET = 20;
+        let difficultItems = [];
+        const patient = state.activePatientId ? state.patients.find(p => p.id === state.activePatientId) : null;
+        if (patient && patient.history) {
+            // Find last RAN or RAN Intensivo session for this set
+            const ranSessions = patient.history.filter(h => h.setId === state.activeSetId && (h.mode === 'ran' || h.mode === 'ran_intensivo'));
+            if (ranSessions.length > 0) {
+                const lastSession = [...ranSessions].sort((a, b) => new Date(a.date) - new Date(b.date)).pop();
+                if (lastSession.itemDetails && lastSession.itemDetails.length > 0) {
+                    const errorLabels = lastSession.itemDetails.filter(d => d.result !== true).map(d => d.label);
+                    if (errorLabels.length > 0) {
+                        difficultItems = playItems.filter(item => {
+                            const label = item.label || item.l || '';
+                            return errorLabels.includes(label);
+                        });
+                    }
+                }
+            }
+        }
+        // If no errors found or no history, use all items
+        if (difficultItems.length === 0) difficultItems = [...playItems];
+        difficultItems.sort(() => Math.random() - 0.5);
+
+        state._ranIntensivo = {
+            deck: difficultItems,
+            deckIndex: 0,
+            totalCorrect: 0,
+            totalErrors: 0,
+            totalPrompts: 0,
+            target: TARGET,
+            allItems: playItems, // full set for reference
+            completed: false
+        };
+    } else {
+        state._ranIntensivo = null;
+    }
+
     const undoBtn = document.getElementById('btn-undo-marker');
     if (undoBtn) undoBtn.classList.remove('hidden');
     renderGameMode(mode, playItems);
@@ -607,7 +825,83 @@ window.recordResponse = (result) => {
 
     if (!state.session.scoreHistory) state.session.scoreHistory = [];
 
-    if (engine === 'tact' || (engine === 'ran' && state.ranMode === 'single')) {
+    if (engine === 'ran_intensivo' && state._ranIntensivo) {
+        const ri = state._ranIntensivo;
+        if (ri.completed) return;
+        const currentItem = ri.deck[ri.deckIndex];
+        const label = currentItem.label || currentItem.l || '';
+
+        // Record per-item result using a unique key
+        const resultKey = 'ri_' + Date.now();
+        state.session.itemResults[resultKey] = result;
+        state.session.scoreHistory.push(resultKey);
+        // Also track label-keyed details for itemDetails saving
+        if (!state.session._riDetails) state.session._riDetails = [];
+        state.session._riDetails.push({ label, result });
+
+        // Visual feedback
+        const targetImg = document.querySelector('.ran-main-img');
+        if (targetImg) {
+            targetImg.classList.remove('feedback-success', 'feedback-fail', 'feedback-prompt');
+            void targetImg.offsetWidth;
+            if (result === 'prompt') targetImg.classList.add('feedback-prompt');
+            else targetImg.classList.add(result ? 'feedback-success' : 'feedback-fail');
+        }
+
+        if (result === true) {
+            ri.totalCorrect++;
+        } else if (result === 'prompt') {
+            ri.totalPrompts++;
+        } else {
+            ri.totalErrors++;
+        }
+
+        // Check completion
+        if (ri.totalCorrect >= ri.target) {
+            ri.completed = true;
+            // Aggregate counts for score display
+            const results = Object.values(state.session.itemResults);
+            state.session.correct = results.filter(v => v === true).length;
+            state.session.incorrect = results.filter(v => v === false).length;
+            state.session.prompts = results.filter(v => v === 'prompt').length;
+            state.session.total = results.length;
+            updateScoreUI();
+            document.getElementById('btn-save-session').classList.remove('hidden');
+            if (typeof showSessionNameInput === 'function') showSessionNameInput();
+            // Show completion screen
+            const stage = document.getElementById('game-stage');
+            if (stage) {
+                stage.innerHTML = `<div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:20px;">
+                    <i class="fa-solid fa-trophy fa-3x" style="color:var(--warning-color); margin-bottom:15px;"></i>
+                    <p style="font-size:1.3rem; font-weight:bold; color:var(--success-color);">Obiettivo raggiunto!</p>
+                    <p style="color:var(--text-secondary);">${ri.totalCorrect} risposte corrette su ${ri.totalCorrect + ri.totalErrors + ri.totalPrompts} totali</p>
+                    <p style="font-size:0.85rem; color:var(--text-secondary); margin-top:10px;">Salva la sessione per registrare i risultati.</p>
+                </div>`;
+            }
+            return;
+        }
+
+        // Advance to next item
+        setTimeout(() => {
+            ri.deckIndex++;
+            // If we reached the end of the deck, reshuffle and restart
+            if (ri.deckIndex >= ri.deck.length) {
+                ri.deck.sort(() => Math.random() - 0.5);
+                ri.deckIndex = 0;
+            }
+            renderGameMode(mode, ri.allItems);
+            // Update score
+            const results2 = Object.values(state.session.itemResults);
+            state.session.correct = results2.filter(v => v === true).length;
+            state.session.incorrect = results2.filter(v => v === false).length;
+            state.session.prompts = results2.filter(v => v === 'prompt').length;
+            state.session.total = results2.length;
+            updateScoreUI();
+            document.getElementById('btn-save-session').classList.remove('hidden');
+            if (typeof showSessionNameInput === 'function') showSessionNameInput();
+        }, 600);
+        return;
+    } else if (engine === 'tact' || (engine === 'ran' && state.ranMode === 'single')) {
         const currentIndex = (engine === 'tact') ? state.tactIndex : state.ranIndex;
         state.session.itemResults[currentIndex] = result;
         if (state.session.scoreHistory[state.session.scoreHistory.length - 1] !== currentIndex) {
@@ -903,19 +1197,23 @@ window.confirmSaveSession = async () => {
     }
 
     // Save per-item details for modes with labeled items
-    const playItems = state.session.playItems || [];
-    if (playItems.length > 0 && Object.keys(state.session.itemResults).length > 0) {
-        const itemDetails = [];
-        for (const [key, result] of Object.entries(state.session.itemResults)) {
-            const idx = parseInt(key);
-            const item = !isNaN(idx) ? playItems[idx] : null;
-            const label = item ? (item.label || item.l || `Item ${idx + 1}`) : null;
-            if (label) {
-                itemDetails.push({ label, result });
+    if (engine === 'ran_intensivo' && state.session._riDetails && state.session._riDetails.length > 0) {
+        sessionData.itemDetails = state.session._riDetails;
+    } else {
+        const playItems = state.session.playItems || [];
+        if (playItems.length > 0 && Object.keys(state.session.itemResults).length > 0) {
+            const itemDetails = [];
+            for (const [key, result] of Object.entries(state.session.itemResults)) {
+                const idx = parseInt(key);
+                const item = !isNaN(idx) ? playItems[idx] : null;
+                const label = item ? (item.label || item.l || `Item ${idx + 1}`) : null;
+                if (label) {
+                    itemDetails.push({ label, result });
+                }
             }
-        }
-        if (itemDetails.length > 0) {
-            sessionData.itemDetails = itemDetails;
+            if (itemDetails.length > 0) {
+                sessionData.itemDetails = itemDetails;
+            }
         }
     }
 
@@ -1206,7 +1504,7 @@ window.deleteSet = async (id) => {
 
 // --- MODE ICONS MAP ---
 const MODE_ICONS = {
-    tact: 'fa-hand-pointer', ran: 'fa-bolt', fluenza: 'fa-comment-dots',
+    tact: 'fa-hand-pointer', ran: 'fa-bolt', ran_intensivo: 'fa-dumbbell', fluenza: 'fa-comment-dots',
     tombola: 'fa-table-cells', tombola_sonora: 'fa-volume-high', memory: 'fa-clone',
     search_find: 'fa-magnifying-glass', intraverbal_scenari: 'fa-comments',
     pool_random: 'fa-shuffle', pool_intraverbal: 'fa-random', intruso: 'fa-ban',

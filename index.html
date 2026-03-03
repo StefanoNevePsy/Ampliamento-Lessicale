@@ -145,6 +145,7 @@
 
         <!-- GAME STAGE -->
         <div id="game-stage">
+            <canvas id="pointer-canvas"></canvas>
             <div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; color:var(--text-secondary); text-align:center;">
                 <i class="fa-solid fa-shapes" style="font-size:4rem; margin-bottom:20px; opacity:0.2;"></i>
                 <p style="font-size:1.2rem;">Seleziona un'<b>Attivit&agrave;</b> e un <b>Set</b><br>per iniziare la sessione clinica.</p>
@@ -188,6 +189,9 @@
             </button>
             <button class="btn-float hidden" id="btn-toggle-labels" onclick="toggleLabelsVisibility()" title="Mostra/Nascondi Etichette">
                 <i class="fa-solid fa-font"></i>
+            </button>
+            <button class="btn-float" id="btn-pointer-pen" onclick="togglePointerPen()" title="Puntatore/Penna">
+                <i class="fa-solid fa-pen-fancy"></i>
             </button>
             <button class="btn-float" id="btn-global-lock" onclick="toggleGlobalScrollLock()" title="Blocca Schermo">
                 <i class="fa-solid fa-lock-open"></i>

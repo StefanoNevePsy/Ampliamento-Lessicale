@@ -127,6 +127,8 @@ select optgroup { background: #1e1e2f; color: var(--text-secondary); }
 .badge-repertorio { background: linear-gradient(135deg, #6366f1, #4f46e5); color: white; }
 .badge-near { background: rgba(16,185,129,0.2); color: #10b981; border: 1px solid rgba(16,185,129,0.3); }
 .badge-pct { background: rgba(255,255,255,0.08); color: var(--text-secondary); }
+.set-item-data-btn { background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3); color: var(--accent-color); width: 32px; height: 32px; border-radius: 8px; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; transition: all 0.15s; }
+.set-item-data-btn:hover { background: rgba(99,102,241,0.3); color: white; }
 .badge-warning { background: rgba(245,158,11,0.15); color: #f59e0b; }
 
 /* PATIENT DROPDOWN */
@@ -185,6 +187,9 @@ select optgroup { background: #1e1e2f; color: var(--text-secondary); }
 
 /* STAGE */
 #game-stage { flex: 1; background: rgba(0,0,0,0.2); border-radius: 16px; position: relative; overflow: hidden; border: 2px dashed var(--glass-border); display: flex; flex-direction: column; min-height: 0; }
+#pointer-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 500; pointer-events: none; border-radius: 16px; }
+#pointer-canvas.active { pointer-events: auto; cursor: crosshair; }
+#btn-pointer-pen.pen-active { background: var(--accent-color); box-shadow: 0 0 12px rgba(99,102,241,0.6); }
 
 /* MODES */
 .grid-adaptive { display: grid; gap: 10px; width: 100%; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); align-content: start; }

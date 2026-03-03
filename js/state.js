@@ -17,6 +17,7 @@ const BUILTIN_MODES = {
     'sequenze': { label: 'Sequenze', engine: 'sequenze' },
     'categorizzazione': { label: 'Categorizzazione', engine: 'categorizzazione' },
     'zoom': { label: 'Zoom', engine: 'zoom' },
+    'ran_intensivo': { label: 'RAN Intensivo', engine: 'ran_intensivo' },
     'quaderno': { label: 'Quaderno', engine: 'quaderno' },
     'quaderno_task': { label: 'Task Analysis', engine: 'quaderno_task' }
 };
@@ -44,7 +45,7 @@ function rebuildModesConfig() {
 function getDefaultActivityLayout() {
     return {
         groups: [
-            { name: '', modes: ['tact', 'ran', 'fluenza', 'tombola', 'tombola_sonora', 'memory', 'search_find', 'intraverbal_scenari', 'zoom', 'quaderno'] },
+            { name: '', modes: ['tact', 'ran', 'ran_intensivo', 'fluenza', 'tombola', 'tombola_sonora', 'memory', 'search_find', 'intraverbal_scenari', 'zoom', 'quaderno'] },
             { name: 'Avanzate', modes: ['topologia', 'sequenze', 'quaderno_task'] },
             { name: 'Pool da Tag', modes: ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione'] }
         ],
@@ -60,6 +61,17 @@ function getActivityLayout() {
             const parsed = JSON.parse(saved);
             if (!parsed.customModes) parsed.customModes = {};
             if (!parsed.modeEmojis) parsed.modeEmojis = {};
+            // Auto-inject any new built-in modes not present in any group
+            const allModes = (parsed.groups || []).flatMap(g => g.modes || []);
+            const defaultLayout = getDefaultActivityLayout();
+            const defaultModes = defaultLayout.groups.flatMap(g => g.modes || []);
+            const missing = defaultModes.filter(m => !allModes.includes(m));
+            if (missing.length > 0) {
+                // Add missing modes to the first group
+                if (parsed.groups && parsed.groups.length > 0) {
+                    parsed.groups[0].modes = [...(parsed.groups[0].modes || []), ...missing];
+                }
+            }
             return parsed;
         }
     } catch(e) {}

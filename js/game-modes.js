@@ -86,8 +86,12 @@ function setupCustomAutocomplete(inputId, options) {
     function openPanel() {
         if (options.length === 0) return;
         renderOptions(input.value);
+        // Constrain max-height so panel stays within viewport (below toolbar)
+        const rect = input.getBoundingClientRect();
+        const topBarHeight = 56; // approximate toolbar height
+        const available = rect.top - topBarHeight - 8;
+        panel.style.maxHeight = Math.max(80, Math.min(available, 200)) + 'px';
         panel.classList.add('open');
-        // Scroll panel to top
         panel.scrollTop = 0;
     }
 
@@ -139,6 +143,7 @@ function renderGameMode(mode, items) {
     if (window._topoCleanup) { window._topoCleanup(); window._topoCleanup = null; }
     if (engine === 'tact') renderTact(items, stage);
     else if (engine === 'ran') renderRan(items, stage);
+    else if (engine === 'ran_intensivo') renderRanIntensivo(items, stage);
     else if (engine === 'fluenza') renderFluenza(items, stage);
     else if (engine === 'tombola') renderTombola(items, stage);
     else if (engine === 'tombola_sonora') renderTombolaSonora(items, stage);
@@ -246,6 +251,61 @@ function updateRanContent() {
 
 window.nextRan = () => { if (state.ranIndex < state.ranDisplayItems.length - 1) { state.ranIndex++; updateRanContent(); } };
 window.prevRan = () => { if (state.ranIndex > 0) { state.ranIndex--; updateRanContent(); } };
+
+// --- RAN INTENSIVO ---
+function renderRanIntensivo(items, stage) {
+    const ri = state._ranIntensivo;
+    if (!ri || !ri.deck || ri.deck.length === 0) {
+        stage.innerHTML = `<div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:20px; color:var(--text-secondary);">
+            <i class="fa-solid fa-circle-check fa-3x" style="color:var(--success-color); margin-bottom:15px;"></i>
+            <p style="font-size:1.1rem;">Nessun item da esercitare!</p>
+            <p style="font-size:0.85rem;">Nell'ultima sessione RAN tutti gli item erano corretti.</p>
+        </div>`;
+        return;
+    }
+
+    const current = ri.deck[ri.deckIndex];
+    const target = ri.target;
+    const correctSoFar = ri.totalCorrect;
+    const pct = target > 0 ? Math.round((correctSoFar / target) * 100) : 0;
+    const status = state.session.itemResults ? state.session.itemResults[ri.deckIndex] : undefined;
+    const feedbackClass = status === true ? 'feedback-success' : (status === false ? 'feedback-fail' : (status === 'prompt' ? 'feedback-prompt' : ''));
+
+    stage.innerHTML = `
+    <div class="ran-container">
+        <div class="ran-toolbar" style="gap:10px; flex-wrap:wrap;">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <i class="fa-solid fa-dumbbell" style="color:var(--accent-color);"></i>
+                <span style="font-weight:700; font-size:0.9rem;">RAN Intensivo</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <div style="background:rgba(0,0,0,0.3); border-radius:8px; padding:4px 12px; font-size:0.8rem; display:flex; align-items:center; gap:6px;">
+                    <span style="color:var(--success-color); font-weight:bold;">${correctSoFar}</span>
+                    <span style="color:var(--text-secondary);">/</span>
+                    <span style="font-weight:bold;">${target}</span>
+                </div>
+                <div style="width:80px; height:8px; border-radius:4px; background:rgba(255,255,255,0.1); overflow:hidden;">
+                    <div style="width:${pct}%; height:100%; background:var(--success-color); border-radius:4px; transition:width 0.3s;"></div>
+                </div>
+                <span style="font-size:0.75rem; color:var(--text-secondary);">${ri.deck.length} item nel mazzo</span>
+            </div>
+        </div>
+        <div id="ran-content" style="flex:1; min-height:0;">
+            <div class="ran-single-stage">
+                <div style="flex:1; display:flex; flex-direction:column; justify-content:center; width:100%; overflow:hidden;">
+                    <img src="${current.url || getPlaceholderUrl(current.label)}"
+                         class="ran-main-img ${feedbackClass}"
+                         style="transition:0.3s;"
+                         onerror="handleImgError(this,'${current.label}')">
+                    <h2 style="text-align:center;">${current.label}</h2>
+                </div>
+                <div class="ran-controls-bar">
+                    <div class="ran-counter">${ri.deckIndex + 1}/${ri.deck.length}</div>
+                </div>
+            </div>
+        </div>
+    </div>`;
+}
 
 // --- FLUENZA (Timed fluency - count items within time limit) ---
 function renderFluenza(items, stage) {
