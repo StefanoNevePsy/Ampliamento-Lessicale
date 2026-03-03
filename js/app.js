@@ -207,6 +207,9 @@ function getSetStatus(s, activePatient, currentMode) {
             const lastRan = [...ranSessions].sort((a, b) => new Date(a.date) - new Date(b.date)).pop();
             if (lastRan.itemDetails && lastRan.itemDetails.length > 0) {
                 info.ranErrorCount = lastRan.itemDetails.filter(d => d.result !== true).length;
+            } else {
+                // Fallback: use session error counts when itemDetails not available (e.g. old RAN grid sessions)
+                info.ranErrorCount = lastRan.rawX != null ? lastRan.rawX : (lastRan.incorrect || 0);
             }
         }
     }
@@ -757,6 +760,7 @@ window.startGame = () => {
     if (!state.items.length) return;
 
     state.session = { correct: 0, incorrect: 0, total: 0, active: true, itemResults: {} };
+    state._ranGridIndex = 0; // Reset RAN grid scoring index
     updateScoreUI();
     // Fluenza has its own built-in controls
     if (engine === 'fluenza') {
@@ -952,6 +956,14 @@ window.recordResponse = (result) => {
         if (scoredId && state.session.scoreHistory[state.session.scoreHistory.length - 1] !== scoredId) {
             state.session.scoreHistory.push(scoredId);
         }
+    } else if (engine === 'ran' && state.ranMode === 'grid') {
+        // RAN grid mode: track per-item results using a running index
+        // so itemDetails can be saved for RAN Intensivo error tracking
+        if (state._ranGridIndex == null) state._ranGridIndex = 0;
+        const currentIndex = state._ranGridIndex;
+        state.session.itemResults[currentIndex] = result;
+        state.session.scoreHistory.push(currentIndex);
+        state._ranGridIndex++;
     } else {
         const id = Date.now().toString();
         state.session.itemResults[id] = result;
@@ -1620,8 +1632,14 @@ function renderModeSelect() {
                     const ranSessions = patient.history.filter(h => h.setId === state.activeSetId && (h.mode === 'ran' || h.mode === 'ran_intensivo'));
                     if (ranSessions.length > 0) {
                         const lastSession = [...ranSessions].sort((a, b) => new Date(a.date) - new Date(b.date)).pop();
+                        let errCount = null;
                         if (lastSession.itemDetails && lastSession.itemDetails.length > 0) {
-                            const errCount = lastSession.itemDetails.filter(d => d.result !== true).length;
+                            errCount = lastSession.itemDetails.filter(d => d.result !== true).length;
+                        } else {
+                            // Fallback: use session error counts when itemDetails not available
+                            errCount = lastSession.rawX != null ? lastSession.rawX : (lastSession.incorrect || 0);
+                        }
+                        if (errCount != null) {
                             if (errCount > 0) {
                                 extraInfo = `<div style="font-size:0.65rem; color:var(--warning-color);"><i class="fa-solid fa-circle-exclamation" style="margin-right:3px;"></i>${errCount} errori nell'ultima RAN</div>`;
                             } else {
