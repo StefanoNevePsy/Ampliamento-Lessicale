@@ -76,6 +76,11 @@ window.filterSetsByMode = function () {
     const isPoolMode = POOL_ENGINES.includes(engine);
     const isQuaderno = engine === 'quaderno';
 
+    // Clean up multi-set session when switching away from scenario modes
+    if (engine !== 'search_find' && engine !== 'intraverbal_scenari') {
+        state.multiSetSession = null;
+    }
+
     // Toggle set selector vs tag selector visibility
     const setWrapper = document.getElementById('set-selector-wrapper');
     const tagWrapper = document.getElementById('tag-selector-wrapper');
@@ -104,7 +109,9 @@ window.filterSetsByMode = function () {
             // If modes array exists (even empty), use it as the source of truth
             if (s.modes.length === 0) return false; // No modes assigned = not compatible with anything
             // Resolve engine for compatibility check
-            const checkEngine = (engine === 'intraverbal_scenari') ? 'search_find' : engine;
+            let checkEngine = engine;
+            if (engine === 'intraverbal_scenari') checkEngine = 'search_find';
+            else if (engine === 'ran_intensivo') checkEngine = 'ran';
             return s.modes.includes(checkEngine) || s.modes.includes(engine) || s.modes.includes(currentMode);
         }
         // Fallback for old sets without mode tags at all (modes field missing)
@@ -176,19 +183,35 @@ if (!state._collapsedCats) state._collapsedCats = {};
 let _dropdownSets = []; // cached for re-sort
 
 function getSetStatus(s, activePatient, currentMode) {
-    const info = { isMastered: false, isRepertorio: false, isNear: false, lastPct: null, lastDate: null, sessions: 0 };
+    const info = { isMastered: false, isRepertorio: false, isNear: false, lastPct: null, lastDate: null, sessions: 0, ranErrorCount: null };
     if (!activePatient || !activePatient.history) return info;
+    const engine = typeof getModeEngine === 'function' ? getModeEngine(currentMode) : currentMode;
     const sessions = activePatient.history.filter(h => h.setId === s.id && h.mode === currentMode);
     info.sessions = sessions.length;
-    if (sessions.length === 0) return info;
-    info.isMastered = typeof checkCriterion === 'function' && checkCriterion(sessions);
-    info.isRepertorio = typeof checkRepertorio === 'function' && checkRepertorio(sessions);
-    info.isNear = !info.isMastered && typeof isNearCriterion === 'function' && isNearCriterion(sessions);
-    const sorted = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
-    const last = sorted[sorted.length - 1];
-    if (last) {
-        info.lastPct = last.percentage != null ? Math.round(last.percentage) : null;
-        info.lastDate = last.date;
+    if (sessions.length === 0 && engine !== 'ran_intensivo') return info;
+    if (sessions.length > 0) {
+        info.isMastered = typeof checkCriterion === 'function' && checkCriterion(sessions);
+        info.isRepertorio = typeof checkRepertorio === 'function' && checkRepertorio(sessions);
+        info.isNear = !info.isMastered && typeof isNearCriterion === 'function' && isNearCriterion(sessions);
+        const sorted = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
+        const last = sorted[sorted.length - 1];
+        if (last) {
+            info.lastPct = last.percentage != null ? Math.round(last.percentage) : null;
+            info.lastDate = last.date;
+        }
+    }
+    // For RAN Intensivo: count errors from last RAN/RAN Intensivo session
+    if (engine === 'ran_intensivo') {
+        const ranSessions = activePatient.history.filter(h => h.setId === s.id && (h.mode === 'ran' || h.mode === 'ran_intensivo'));
+        if (ranSessions.length > 0) {
+            const lastRan = [...ranSessions].sort((a, b) => new Date(a.date) - new Date(b.date)).pop();
+            if (lastRan.itemDetails && lastRan.itemDetails.length > 0) {
+                info.ranErrorCount = lastRan.itemDetails.filter(d => d.result !== true).length;
+            } else {
+                // Fallback: use session error counts when itemDetails not available (e.g. old RAN grid sessions)
+                info.ranErrorCount = lastRan.rawX != null ? lastRan.rawX : (lastRan.incorrect || 0);
+            }
+        }
     }
     return info;
 }
@@ -307,8 +330,21 @@ function renderSetDropdownItem(s, status) {
         const pctColor = status.lastPct >= 90 ? '#10b981' : status.lastPct >= 70 ? '#f59e0b' : '#ef4444';
         badges += `<span class="set-item-badge badge-pct" style="color:${pctColor}">${status.lastPct}%</span>`;
     }
+    if (status.ranErrorCount != null) {
+        if (status.ranErrorCount > 0) {
+            badges += `<span class="set-item-badge badge-ran-errors" style="color:var(--warning-color);"><i class="fa-solid fa-circle-exclamation" style="margin-right:2px;"></i>${status.ranErrorCount} err</span>`;
+        } else {
+            badges += `<span class="set-item-badge badge-ran-errors" style="color:var(--success-color);"><i class="fa-solid fa-circle-check" style="margin-right:2px;"></i>0 err</span>`;
+        }
+    }
     if (missingCount > 0) {
         badges += `<span class="set-item-badge badge-warning">\u26A0 ${missingCount}</span>`;
+    }
+
+    // Show data button only when a patient is selected and has sessions for this set
+    let dataBtn = '';
+    if (status.sessions > 0) {
+        dataBtn = `<button class="set-item-data-btn" onclick="event.stopPropagation(); viewSetQuickData('${s.id}')" title="Vedi dati"><i class="fa-solid fa-chart-line"></i></button>`;
     }
 
     return `<div class="set-dropdown-item${isSelected ? ' selected' : ''}" data-set-id="${s.id}" onclick="selectSetFromDropdown('${s.id}')">
@@ -320,6 +356,7 @@ function renderSetDropdownItem(s, status) {
                 ${badges}
             </div>
         </div>
+        ${dataBtn}
     </div>`;
 }
 
@@ -362,6 +399,34 @@ window.selectSetFromDropdown = (setId) => {
     loadSelectedSet(setId);
 };
 
+// Quick data access: open patient modal on activities tab, scrolled to this set
+window.viewSetQuickData = async (setId) => {
+    closeSetDropdown();
+    const pid = state.activePatientId;
+    if (!pid) return;
+    state.patients = await DB.getAllPatients();
+    if (typeof renderPatientModalDropdown === 'function') renderPatientModalDropdown(pid);
+    document.getElementById('modal-patients').classList.add('open');
+    loadPatientData(pid);
+    // Wait for DOM, then switch to activities tab and scroll to this set
+    setTimeout(() => {
+        switchReportTab('activities', pid);
+        setTimeout(() => {
+            state._highlightSetId = setId;
+            const content = document.getElementById('report-content');
+            if (content) {
+                const target = content.querySelector(`[data-set-id="${setId}"]`);
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    target.style.outline = '2px solid var(--accent-color)';
+                    target.style.borderRadius = '12px';
+                    setTimeout(() => { target.style.outline = ''; }, 3000);
+                }
+            }
+        }, 150);
+    }, 100);
+};
+
 // Close all custom dropdowns when clicking outside
 document.addEventListener('click', (e) => {
     const setDd = document.getElementById('set-dropdown');
@@ -376,6 +441,15 @@ document.addEventListener('click', (e) => {
 window.loadSelectedSet = async (setId) => {
     const s = state.savedSets.find(x => x.id === setId);
     if (s) {
+        const mode = document.getElementById('mode-select').value;
+        const engine = getModeEngine(mode);
+        const isScenarioMode = (engine === 'search_find' || engine === 'intraverbal_scenari');
+
+        // For search_find / intraverbal_scenari: snapshot current set data before switching
+        if (isScenarioMode && state.session.active && state.multiSetSession && state.multiSetSession.active) {
+            _snapshotCurrentSetData();
+        }
+
         state.activeSetId = setId;
         state.items = JSON.parse(JSON.stringify(s.items));
         // Update custom dropdown label & selection highlight
@@ -387,9 +461,231 @@ window.loadSelectedSet = async (setId) => {
                 el.classList.toggle('selected', el.dataset.setId === setId);
             });
         }
-        window.startGame();
+
+        if (isScenarioMode && state.multiSetSession && state.multiSetSession.active) {
+            // Continue multi-set session: reset per-set scoring but keep accumulated totals
+            state.session.itemResults = {};
+            state.session.scoreHistory = [];
+            state.session.correct = 0;
+            state.session.incorrect = 0;
+            state.session.prompts = 0;
+            state.session.total = 0;
+            // Recalculate display totals from all accumulated sets
+            _updateMultiSetScoreUI();
+            document.getElementById('btn-save-session').classList.remove('hidden');
+            if (typeof showSessionNameInput === 'function') showSessionNameInput();
+            let playItems = state.items.filter(i => !i.hidden);
+            state.session.playItems = playItems;
+            renderGameMode(mode, playItems);
+        } else {
+            window.startGame();
+        }
     }
 };
+
+// Snapshot current set's scoring data into multiSetSession
+function _snapshotCurrentSetData() {
+    if (!state.multiSetSession || !state.activeSetId) return;
+    const results = Object.values(state.session.itemResults);
+    if (results.length === 0) return; // nothing scored on this set
+
+    const activeSet = state.savedSets.find(ss => ss.id === state.activeSetId);
+    const rawV = results.filter(v => v === true).length;
+    const rawP = results.filter(v => v === 'prompt').length;
+    const rawX = results.filter(v => v === false).length;
+    const total = rawV + rawP + rawX;
+
+    state.multiSetSession.sets.push({
+        setId: state.activeSetId,
+        setName: activeSet?.name || 'Set Rimosso',
+        setCat: activeSet?.category || '',
+        correct: rawV,
+        prompts: rawP,
+        incorrect: rawX,
+        total: total,
+        percentage: total > 0 ? Math.round((rawV / total) * 100) : 0
+    });
+}
+
+// Update score display to show accumulated totals across all sets
+function _updateMultiSetScoreUI() {
+    if (!state.multiSetSession) return;
+    // Sum all snapshotted sets + current set
+    let totalV = 0, totalP = 0, totalX = 0;
+    state.multiSetSession.sets.forEach(s => {
+        totalV += s.correct;
+        totalP += s.prompts;
+        totalX += s.incorrect;
+    });
+    // Add current (not yet snapshotted) set
+    const currentResults = Object.values(state.session.itemResults);
+    totalV += currentResults.filter(v => v === true).length;
+    totalP += currentResults.filter(v => v === 'prompt').length;
+    totalX += currentResults.filter(v => v === false).length;
+
+    // Update the score display with accumulated totals
+    const el = document.getElementById('score-display');
+    let html = `${totalV}`;
+    let tags = [];
+    if (totalP > 0) tags.push(`<span style="font-size:0.65rem; color:var(--warning-color);">P${totalP}</span>`);
+    if (totalX > 0) tags.push(`<span style="font-size:0.65rem; color:var(--danger-color);">X${totalX}</span>`);
+    if (tags.length > 0) html += ` ${tags.join(' ')}`;
+    el.innerHTML = html;
+}
+
+// --- LABEL TOGGLE ---
+const LABEL_ENGINES = ['tact', 'ran', 'ran_intensivo', 'tombola', 'topologia', 'zoom'];
+
+window.toggleLabelsVisibility = () => {
+    const stage = document.getElementById('game-stage');
+    const btn = document.getElementById('btn-toggle-labels');
+    if (!stage) return;
+    const isHidden = stage.classList.toggle('labels-hidden');
+    if (btn) btn.classList.toggle('labels-off', isHidden);
+    state._labelsHidden = isHidden;
+};
+
+// --- POINTER / PEN TOOL ---
+(function initPointerPen() {
+    let penActive = false;
+    let drawing = false;
+    let strokes = []; // { points: [{x,y,t}], color }
+    let currentStroke = null;
+    const FADE_MS = 2500;
+    const LINE_WIDTH = 4;
+    const PEN_COLOR = '#ff4444';
+    let animFrameId = null;
+
+    function getCanvas() { return document.getElementById('pointer-canvas'); }
+
+    function resizeCanvas() {
+        const canvas = getCanvas();
+        if (!canvas) return;
+        const rect = canvas.parentElement.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+    }
+
+    function getPos(e, canvas) {
+        const rect = canvas.getBoundingClientRect();
+        if (e.touches && e.touches.length > 0) {
+            return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+        }
+        return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    }
+
+    function startDraw(e) {
+        if (!penActive) return;
+        e.preventDefault();
+        drawing = true;
+        const canvas = getCanvas();
+        const pos = getPos(e, canvas);
+        currentStroke = { points: [{ x: pos.x, y: pos.y, t: Date.now() }], color: PEN_COLOR };
+    }
+
+    function moveDraw(e) {
+        if (!drawing || !currentStroke) return;
+        e.preventDefault();
+        const canvas = getCanvas();
+        const pos = getPos(e, canvas);
+        currentStroke.points.push({ x: pos.x, y: pos.y, t: Date.now() });
+    }
+
+    function endDraw(e) {
+        if (!drawing || !currentStroke) return;
+        if (e) e.preventDefault();
+        drawing = false;
+        if (currentStroke.points.length > 0) strokes.push(currentStroke);
+        currentStroke = null;
+    }
+
+    function renderLoop() {
+        const canvas = getCanvas();
+        if (!canvas) { animFrameId = null; return; }
+        const ctx = canvas.getContext('2d');
+        const now = Date.now();
+
+        // Check if canvas needs resize
+        const rect = canvas.parentElement.getBoundingClientRect();
+        if (canvas.width !== Math.round(rect.width) || canvas.height !== Math.round(rect.height)) {
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+        }
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Remove fully faded strokes
+        strokes = strokes.filter(s => {
+            const lastT = s.points[s.points.length - 1].t;
+            return now - lastT < FADE_MS;
+        });
+
+        // Draw strokes with fading
+        [...strokes, ...(currentStroke ? [currentStroke] : [])].forEach(stroke => {
+            if (stroke.points.length < 2) return;
+            for (let i = 1; i < stroke.points.length; i++) {
+                const p0 = stroke.points[i - 1];
+                const p1 = stroke.points[i];
+                const age = now - p1.t;
+                const alpha = Math.max(0, 1 - age / FADE_MS);
+                if (alpha <= 0) continue;
+                ctx.beginPath();
+                ctx.strokeStyle = stroke.color;
+                ctx.globalAlpha = alpha;
+                ctx.lineWidth = LINE_WIDTH;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.moveTo(p0.x, p0.y);
+                ctx.lineTo(p1.x, p1.y);
+                ctx.stroke();
+            }
+        });
+        ctx.globalAlpha = 1;
+
+        if (penActive || strokes.length > 0 || currentStroke) {
+            animFrameId = requestAnimationFrame(renderLoop);
+        } else {
+            animFrameId = null;
+        }
+    }
+
+    window.togglePointerPen = () => {
+        const canvas = getCanvas();
+        const btn = document.getElementById('btn-pointer-pen');
+        if (!canvas) return;
+        penActive = !penActive;
+        canvas.classList.toggle('active', penActive);
+        if (btn) btn.classList.toggle('pen-active', penActive);
+        if (penActive) {
+            resizeCanvas();
+            canvas.addEventListener('mousedown', startDraw);
+            canvas.addEventListener('mousemove', moveDraw);
+            canvas.addEventListener('mouseup', endDraw);
+            canvas.addEventListener('mouseleave', endDraw);
+            canvas.addEventListener('touchstart', startDraw, { passive: false });
+            canvas.addEventListener('touchmove', moveDraw, { passive: false });
+            canvas.addEventListener('touchend', endDraw);
+            canvas.addEventListener('touchcancel', endDraw);
+            if (!animFrameId) animFrameId = requestAnimationFrame(renderLoop);
+        } else {
+            canvas.removeEventListener('mousedown', startDraw);
+            canvas.removeEventListener('mousemove', moveDraw);
+            canvas.removeEventListener('mouseup', endDraw);
+            canvas.removeEventListener('mouseleave', endDraw);
+            canvas.removeEventListener('touchstart', startDraw);
+            canvas.removeEventListener('touchmove', moveDraw);
+            canvas.removeEventListener('touchend', endDraw);
+            canvas.removeEventListener('touchcancel', endDraw);
+            strokes = [];
+            currentStroke = null;
+            const ctx = canvas.getContext('2d');
+            if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+    };
+
+    // Keep canvas sized on window resize
+    window.addEventListener('resize', () => { if (penActive) resizeCanvas(); });
+})();
 
 // --- START GAME ---
 window.startGame = () => {
@@ -398,6 +694,24 @@ window.startGame = () => {
 
     const mode = document.getElementById('mode-select').value;
     const engine = getModeEngine(mode);
+
+    // Show/hide label toggle button
+    const labelBtn = document.getElementById('btn-toggle-labels');
+    if (labelBtn) {
+        if (LABEL_ENGINES.includes(engine)) {
+            labelBtn.classList.remove('hidden');
+            // Restore previous label visibility state
+            const stage = document.getElementById('game-stage');
+            if (stage && state._labelsHidden) {
+                stage.classList.add('labels-hidden');
+                labelBtn.classList.add('labels-off');
+            }
+        } else {
+            labelBtn.classList.add('hidden');
+            const stage = document.getElementById('game-stage');
+            if (stage) stage.classList.remove('labels-hidden');
+        }
+    }
     const isPoolMode = POOL_ENGINES.includes(engine);
     const numStimuli = parseInt(document.getElementById('num-stimuli').value);
 
@@ -446,6 +760,7 @@ window.startGame = () => {
     if (!state.items.length) return;
 
     state.session = { correct: 0, incorrect: 0, total: 0, active: true, itemResults: {} };
+    state._ranGridIndex = 0; // Reset RAN grid scoring index
     updateScoreUI();
     // Fluenza has its own built-in controls
     if (engine === 'fluenza') {
@@ -454,6 +769,13 @@ window.startGame = () => {
         document.getElementById('scoring-controls').classList.remove('hidden');
     }
     document.getElementById('btn-save-session').classList.add('hidden');
+
+    // Initialize multi-set session for search_find / intraverbal_scenari
+    if (engine === 'search_find' || engine === 'intraverbal_scenari') {
+        state.multiSetSession = { sets: [], active: true, mode: mode, engine: engine };
+    } else {
+        state.multiSetSession = null;
+    }
 
     let playItems = state.items.filter(i => !i.hidden);
 
@@ -475,6 +797,51 @@ window.startGame = () => {
     state.ranIndex = 0;
     state.session.playItems = playItems; // Store for per-item detail tracking
 
+    // RAN Intensivo: build deck of exactly 20 stimuli from last session's errors
+    if (engine === 'ran_intensivo') {
+        const TARGET = 20;
+        let errorItems = [];
+        const patient = state.activePatientId ? state.patients.find(p => p.id === state.activePatientId) : null;
+        if (patient && patient.history) {
+            // Find last RAN or RAN Intensivo session for this set
+            const ranSessions = patient.history.filter(h => h.setId === state.activeSetId && (h.mode === 'ran' || h.mode === 'ran_intensivo'));
+            if (ranSessions.length > 0) {
+                const lastSession = [...ranSessions].sort((a, b) => new Date(a.date) - new Date(b.date)).pop();
+                if (lastSession.itemDetails && lastSession.itemDetails.length > 0) {
+                    const errorLabels = lastSession.itemDetails.filter(d => d.result !== true).map(d => d.label);
+                    if (errorLabels.length > 0) {
+                        errorItems = playItems.filter(item => {
+                            const label = item.label || item.l || '';
+                            return errorLabels.includes(label);
+                        });
+                    }
+                }
+            }
+        }
+        // If no errors found or no history, use all items
+        if (errorItems.length === 0) errorItems = [...playItems];
+        // Build a fixed deck of exactly TARGET items by cycling through error items
+        const deck = [];
+        const shuffled = [...errorItems].sort(() => Math.random() - 0.5);
+        for (let i = 0; i < TARGET; i++) {
+            deck.push(shuffled[i % shuffled.length]);
+        }
+
+        state._ranIntensivo = {
+            deck: deck,
+            deckIndex: 0,
+            totalCorrect: 0,
+            totalErrors: 0,
+            totalPrompts: 0,
+            target: TARGET,
+            errorCount: errorItems.length,
+            allItems: playItems,
+            completed: false
+        };
+    } else {
+        state._ranIntensivo = null;
+    }
+
     const undoBtn = document.getElementById('btn-undo-marker');
     if (undoBtn) undoBtn.classList.remove('hidden');
     renderGameMode(mode, playItems);
@@ -488,7 +855,76 @@ window.recordResponse = (result) => {
 
     if (!state.session.scoreHistory) state.session.scoreHistory = [];
 
-    if (engine === 'tact' || (engine === 'ran' && state.ranMode === 'single')) {
+    if (engine === 'ran_intensivo' && state._ranIntensivo) {
+        const ri = state._ranIntensivo;
+        if (ri.completed) return;
+        const currentItem = ri.deck[ri.deckIndex];
+        const label = currentItem.label || currentItem.l || '';
+
+        // Record per-item result using a unique key
+        const resultKey = 'ri_' + Date.now();
+        state.session.itemResults[resultKey] = result;
+        state.session.scoreHistory.push(resultKey);
+        // Also track label-keyed details for itemDetails saving
+        if (!state.session._riDetails) state.session._riDetails = [];
+        state.session._riDetails.push({ label, result });
+
+        // Visual feedback
+        const targetImg = document.querySelector('.ran-main-img');
+        if (targetImg) {
+            targetImg.classList.remove('feedback-success', 'feedback-fail', 'feedback-prompt');
+            void targetImg.offsetWidth;
+            if (result === 'prompt') targetImg.classList.add('feedback-prompt');
+            else targetImg.classList.add(result ? 'feedback-success' : 'feedback-fail');
+        }
+
+        if (result === true) {
+            ri.totalCorrect++;
+        } else if (result === 'prompt') {
+            ri.totalPrompts++;
+        } else {
+            ri.totalErrors++;
+        }
+
+        // Check completion: stop after presenting all stimuli in the fixed deck
+        const totalPresented = ri.totalCorrect + ri.totalErrors + ri.totalPrompts;
+        if (totalPresented >= ri.target || ri.deckIndex >= ri.deck.length - 1) {
+            ri.completed = true;
+            const results = Object.values(state.session.itemResults);
+            state.session.correct = results.filter(v => v === true).length;
+            state.session.incorrect = results.filter(v => v === false).length;
+            state.session.prompts = results.filter(v => v === 'prompt').length;
+            state.session.total = results.length;
+            updateScoreUI();
+            document.getElementById('btn-save-session').classList.remove('hidden');
+            if (typeof showSessionNameInput === 'function') showSessionNameInput();
+            const stage = document.getElementById('game-stage');
+            if (stage) {
+                stage.innerHTML = `<div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:20px;">
+                    <i class="fa-solid fa-trophy fa-3x" style="color:var(--warning-color); margin-bottom:15px;"></i>
+                    <p style="font-size:1.3rem; font-weight:bold; color:var(--success-color);">Sessione completata!</p>
+                    <p style="color:var(--text-secondary);">${ri.totalCorrect} corrette, ${ri.totalErrors} errori, ${ri.totalPrompts} prompt su ${totalPresented} stimoli</p>
+                    <p style="font-size:0.85rem; color:var(--text-secondary); margin-top:10px;">Salva la sessione per registrare i risultati.</p>
+                </div>`;
+            }
+            return;
+        }
+
+        // Advance to next item in the fixed deck
+        setTimeout(() => {
+            ri.deckIndex++;
+            renderGameMode(mode, ri.allItems);
+            const results2 = Object.values(state.session.itemResults);
+            state.session.correct = results2.filter(v => v === true).length;
+            state.session.incorrect = results2.filter(v => v === false).length;
+            state.session.prompts = results2.filter(v => v === 'prompt').length;
+            state.session.total = results2.length;
+            updateScoreUI();
+            document.getElementById('btn-save-session').classList.remove('hidden');
+            if (typeof showSessionNameInput === 'function') showSessionNameInput();
+        }, 600);
+        return;
+    } else if (engine === 'tact' || (engine === 'ran' && state.ranMode === 'single')) {
         const currentIndex = (engine === 'tact') ? state.tactIndex : state.ranIndex;
         state.session.itemResults[currentIndex] = result;
         if (state.session.scoreHistory[state.session.scoreHistory.length - 1] !== currentIndex) {
@@ -520,6 +956,14 @@ window.recordResponse = (result) => {
         if (scoredId && state.session.scoreHistory[state.session.scoreHistory.length - 1] !== scoredId) {
             state.session.scoreHistory.push(scoredId);
         }
+    } else if (engine === 'ran' && state.ranMode === 'grid') {
+        // RAN grid mode: track per-item results using a running index
+        // so itemDetails can be saved for RAN Intensivo error tracking
+        if (state._ranGridIndex == null) state._ranGridIndex = 0;
+        const currentIndex = state._ranGridIndex;
+        state.session.itemResults[currentIndex] = result;
+        state.session.scoreHistory.push(currentIndex);
+        state._ranGridIndex++;
     } else {
         const id = Date.now().toString();
         state.session.itemResults[id] = result;
@@ -532,7 +976,12 @@ window.recordResponse = (result) => {
     state.session.prompts = results.filter(v => v === 'prompt').length;
     state.session.total = results.length;
 
-    updateScoreUI();
+    // For multi-set scenario modes, show accumulated totals
+    if (state.multiSetSession && state.multiSetSession.active) {
+        _updateMultiSetScoreUI();
+    } else {
+        updateScoreUI();
+    }
     document.getElementById('btn-save-session').classList.remove('hidden');
     if (typeof showSessionNameInput === 'function') showSessionNameInput();
 };
@@ -618,14 +1067,102 @@ function handleShortcuts(e) {
 // --- SAVE SESSION (uses dropdown type, no modal) ---
 window.confirmSaveSession = async () => {
     if (!state.activePatientId) return alert("Seleziona prima un paziente in alto.");
-    const total = state.session.total;
-    if (total === 0) return;
 
     const p = state.patients.find(x => x.id === state.activePatientId);
     const mode = document.getElementById('mode-select').value;
     const engine = getModeEngine(mode);
     const type = getSelectedSessionType();
     if (!p) return;
+
+    const isMultiSet = state.multiSetSession && state.multiSetSession.active &&
+        (engine === 'search_find' || engine === 'intraverbal_scenari');
+
+    // --- Multi-set session save (search_find / intraverbal_scenari) ---
+    if (isMultiSet) {
+        // Snapshot current set data first
+        _snapshotCurrentSetData();
+
+        const allSets = state.multiSetSession.sets;
+        if (allSets.length === 0) return alert("Nessun dato registrato.");
+
+        // Calculate totals across all sets
+        let totalV = 0, totalP = 0, totalX = 0;
+        allSets.forEach(s => {
+            totalV += s.correct;
+            totalP += s.prompts;
+            totalX += s.incorrect;
+        });
+        const totalAll = totalV + totalP + totalX;
+        if (totalAll === 0) return;
+
+        const nameInput = document.getElementById('session-name-input');
+        let customName = nameInput ? nameInput.value.trim() : '';
+        // Default name: list of set names
+        const setNames = allSets.map(s => s.setName);
+        const defaultName = setNames.length > 1
+            ? setNames[0] + ` (+${setNames.length - 1})`
+            : setNames[0] || 'Scenari';
+        const setName = customName || defaultName;
+        if (customName) saveCustomSessionName(customName);
+
+        const sessionData = {
+            date: new Date().toISOString(),
+            setId: 'multi_' + allSets.map(s => s.setId).join('_'),
+            setName: setName,
+            setCat: allSets[0]?.setCat || '',
+            mode: mode,
+            correct: totalV,
+            prompts: totalP,
+            total: totalAll,
+            percentage: Math.round((totalV / totalAll) * 100),
+            sessionType: type,
+            rawV: totalV,
+            rawP: totalP,
+            rawX: totalX,
+            // Per-set breakdown (like taskSteps for task analysis)
+            setBreakdown: allSets.map(s => ({
+                setId: s.setId,
+                setName: s.setName,
+                setCat: s.setCat,
+                correct: s.correct,
+                prompts: s.prompts,
+                incorrect: s.incorrect,
+                total: s.total,
+                percentage: s.percentage
+            }))
+        };
+
+        if (type === 'timedelay') {
+            sessionData.timeDelaySeconds = getSelectedTDSeconds();
+        }
+
+        if (!p.history) p.history = [];
+        p.history.push(sessionData);
+        await DB.savePatient(p);
+
+        const btn = document.getElementById('btn-save-session');
+        btn.innerHTML = '<i class="fa-solid fa-check"></i>';
+        btn.style.background = 'var(--success-color)';
+        if (nameInput) nameInput.value = '';
+
+        // Reset multi-set session
+        state.multiSetSession = null;
+
+        setTimeout(() => {
+            btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i>';
+            btn.style.background = '#2563eb';
+            state.session.active = false;
+            document.getElementById('scoring-controls').classList.add('hidden');
+            btn.classList.add('hidden');
+            const sessionNameWrapper = document.getElementById('session-name-wrapper');
+            if (sessionNameWrapper) sessionNameWrapper.classList.add('hidden');
+        }, 1000);
+        return;
+    }
+
+    // --- Standard single-set session save ---
+    const total = state.session.total;
+    if (total === 0) return;
 
     const results = Object.values(state.session.itemResults);
     const rawV = results.filter(v => v === true).length;
@@ -691,19 +1228,23 @@ window.confirmSaveSession = async () => {
     }
 
     // Save per-item details for modes with labeled items
-    const playItems = state.session.playItems || [];
-    if (playItems.length > 0 && Object.keys(state.session.itemResults).length > 0) {
-        const itemDetails = [];
-        for (const [key, result] of Object.entries(state.session.itemResults)) {
-            const idx = parseInt(key);
-            const item = !isNaN(idx) ? playItems[idx] : null;
-            const label = item ? (item.label || item.l || `Item ${idx + 1}`) : null;
-            if (label) {
-                itemDetails.push({ label, result });
+    if (engine === 'ran_intensivo' && state.session._riDetails && state.session._riDetails.length > 0) {
+        sessionData.itemDetails = state.session._riDetails;
+    } else {
+        const playItems = state.session.playItems || [];
+        if (playItems.length > 0 && Object.keys(state.session.itemResults).length > 0) {
+            const itemDetails = [];
+            for (const [key, result] of Object.entries(state.session.itemResults)) {
+                const idx = parseInt(key);
+                const item = !isNaN(idx) ? playItems[idx] : null;
+                const label = item ? (item.label || item.l || `Item ${idx + 1}`) : null;
+                if (label) {
+                    itemDetails.push({ label, result });
+                }
             }
-        }
-        if (itemDetails.length > 0) {
-            sessionData.itemDetails = itemDetails;
+            if (itemDetails.length > 0) {
+                sessionData.itemDetails = itemDetails;
+            }
         }
     }
 
@@ -731,13 +1272,9 @@ window.showSessionNameInput = () => {
     const wrapper = document.getElementById('session-name-wrapper');
     if (wrapper) {
         wrapper.classList.remove('hidden');
-        // Update datalist with recent names
-        const datalist = document.getElementById('session-names-list');
-        if (datalist) {
-            datalist.innerHTML = getRecentSessionNames()
-                .map(n => `<option value="${n}">`)
-                .join('');
-        }
+        // Setup custom autocomplete with recent names
+        const names = getRecentSessionNames();
+        setupCustomAutocomplete('session-name-input', names);
     }
 };
 
@@ -998,7 +1535,7 @@ window.deleteSet = async (id) => {
 
 // --- MODE ICONS MAP ---
 const MODE_ICONS = {
-    tact: 'fa-hand-pointer', ran: 'fa-bolt', fluenza: 'fa-comment-dots',
+    tact: 'fa-hand-pointer', ran: 'fa-bolt', ran_intensivo: 'fa-dumbbell', fluenza: 'fa-comment-dots',
     tombola: 'fa-table-cells', tombola_sonora: 'fa-volume-high', memory: 'fa-clone',
     search_find: 'fa-magnifying-glass', intraverbal_scenari: 'fa-comments',
     pool_random: 'fa-shuffle', pool_intraverbal: 'fa-random', intruso: 'fa-ban',
@@ -1087,11 +1624,38 @@ function renderModeSelect() {
                 return false;
             }).length;
 
+            // For RAN Intensivo, show error count from last RAN session of active set
+            let extraInfo = '';
+            if (engine === 'ran_intensivo' && state.activeSetId) {
+                const patient = state.activePatientId ? state.patients.find(p => p.id === state.activePatientId) : null;
+                if (patient && patient.history) {
+                    const ranSessions = patient.history.filter(h => h.setId === state.activeSetId && (h.mode === 'ran' || h.mode === 'ran_intensivo'));
+                    if (ranSessions.length > 0) {
+                        const lastSession = [...ranSessions].sort((a, b) => new Date(a.date) - new Date(b.date)).pop();
+                        let errCount = null;
+                        if (lastSession.itemDetails && lastSession.itemDetails.length > 0) {
+                            errCount = lastSession.itemDetails.filter(d => d.result !== true).length;
+                        } else {
+                            // Fallback: use session error counts when itemDetails not available
+                            errCount = lastSession.rawX != null ? lastSession.rawX : (lastSession.incorrect || 0);
+                        }
+                        if (errCount != null) {
+                            if (errCount > 0) {
+                                extraInfo = `<div style="font-size:0.65rem; color:var(--warning-color);"><i class="fa-solid fa-circle-exclamation" style="margin-right:3px;"></i>${errCount} errori nell'ultima RAN</div>`;
+                            } else {
+                                extraInfo = `<div style="font-size:0.65rem; color:var(--success-color);"><i class="fa-solid fa-circle-check" style="margin-right:3px;"></i>Nessun errore nell'ultima RAN</div>`;
+                            }
+                        }
+                    }
+                }
+            }
+
             html += `<div class="mode-dd-item${isSelected ? ' selected' : ''}" onclick="selectModeFromDropdown('${modeKey}')">
                 ${iconHtml}
                 <div style="flex:1; min-width:0;">
                     <div class="mode-dd-label">${getModeLabel(modeKey)}</div>
                     ${compatCount > 0 ? `<div style="font-size:0.65rem; color:var(--text-secondary);">${compatCount} set</div>` : ''}
+                    ${extraInfo}
                 </div>
             </div>`;
         });

@@ -873,6 +873,30 @@ window.toggleDaySessionDetail = (header, patientId, sessionIdx, activityKeyEncod
                 html += `</div></div>`;
             }
 
+            // Multi-set breakdown (search_find / intraverbal_scenari)
+            if (s.setBreakdown && s.setBreakdown.length > 0) {
+                html += `<div style="margin-bottom:8px;">`;
+                html += `<div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-images"></i> Dettaglio per Set (${s.setBreakdown.length}):</div>`;
+                html += `<div style="display:flex; flex-direction:column; gap:2px;">`;
+                s.setBreakdown.forEach((sb, i) => {
+                    const pct = sb.percentage;
+                    const pctColor = pct >= 90 ? 'var(--success-color)' : pct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
+                    let bg = 'rgba(255,255,255,0.05)', border = 'rgba(255,255,255,0.1)';
+                    if (pct >= 90) { bg = 'rgba(16,185,129,0.1)'; border = 'rgba(16,185,129,0.3)'; }
+                    else if (pct >= 70) { bg = 'rgba(245,158,11,0.1)'; border = 'rgba(245,158,11,0.3)'; }
+                    else { bg = 'rgba(239,68,68,0.1)'; border = 'rgba(239,68,68,0.3)'; }
+                    let parts = [];
+                    if (sb.correct > 0) parts.push(`<span style="color:var(--success-color)">${sb.correct}V</span>`);
+                    if ((sb.incorrect || 0) > 0) parts.push(`<span style="color:var(--danger-color)">${sb.incorrect}X</span>`);
+                    if ((sb.prompts || 0) > 0) parts.push(`<span style="color:var(--warning-color)">${sb.prompts}P</span>`);
+                    html += `<div style="padding:4px 8px; border-radius:6px; font-size:0.75rem; background:${bg}; border:1px solid ${border}; display:flex; justify-content:space-between; align-items:center;">
+                        <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px;"><b>${i + 1}.</b> ${sb.setName}${sb.setCat ? ` <span style="color:var(--text-secondary); font-size:0.65rem;">(${sb.setCat})</span>` : ''}</span>
+                        <span style="font-weight:bold; flex-shrink:0; display:flex; align-items:center; gap:4px;">${parts.join(' ')} <span style="font-size:0.7rem; color:${pctColor}; font-weight:bold; margin-left:6px;">${pct}%</span></span>
+                    </div>`;
+                });
+                html += `</div></div>`;
+            }
+
             // Activity chart (full history for this activity)
             const activityKey = decodeURIComponent(activityKeyEncoded);
             const [setName, modeCode, typeGroup] = activityKey.split('::');
@@ -960,6 +984,40 @@ function renderTaskStepDetailsCollapsible(s, patientId, sessionIdx, isTD) {
         <tr class="item-details-row" style="display:table-row;">
             <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(0,0,0,0.15);">
                 <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-list-ol"></i> Dettaglio Passaggi (V/X/P):</div>
+                <div style="display:flex; flex-direction:column; gap:2px;">${chips}</div>
+            </td>
+        </tr>`;
+}
+
+// --- Set breakdown collapsible row for multi-set sessions (search_find / intraverbal_scenari) ---
+function renderSetBreakdownCollapsible(s, patientId, sessionIdx, isTD) {
+    if (!s.setBreakdown || s.setBreakdown.length === 0) return '';
+    const colSpan = isTD ? 6 : 5;
+
+    const chips = s.setBreakdown.map((sb, i) => {
+        const pct = sb.percentage;
+        const pctColor = pct >= 90 ? 'var(--success-color)' : pct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
+        let bg = 'rgba(255,255,255,0.05)';
+        let border = 'rgba(255,255,255,0.1)';
+        if (pct >= 90) { bg = 'rgba(16,185,129,0.1)'; border = 'rgba(16,185,129,0.3)'; }
+        else if (pct >= 70) { bg = 'rgba(245,158,11,0.1)'; border = 'rgba(245,158,11,0.3)'; }
+        else { bg = 'rgba(239,68,68,0.1)'; border = 'rgba(239,68,68,0.3)'; }
+
+        let parts = [];
+        if (sb.correct > 0) parts.push(`<span style="color:var(--success-color)">${sb.correct}V</span>`);
+        if ((sb.incorrect || 0) > 0) parts.push(`<span style="color:var(--danger-color)">${sb.incorrect}X</span>`);
+        if ((sb.prompts || 0) > 0) parts.push(`<span style="color:var(--warning-color)">${sb.prompts}P</span>`);
+
+        return `<div style="padding:4px 8px; margin:2px 0; border-radius:6px; font-size:0.75rem; background:${bg}; border:1px solid ${border}; display:flex; justify-content:space-between; align-items:center;">
+            <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px;"><b>${i + 1}.</b> ${sb.setName}${sb.setCat ? ` <span style="color:var(--text-secondary); font-size:0.65rem;">(${sb.setCat})</span>` : ''}</span>
+            <span style="font-weight:bold; flex-shrink:0; display:flex; align-items:center; gap:4px;">${parts.join(' ')} <span style="font-size:0.7rem; color:${pctColor}; font-weight:bold; margin-left:4px;">${pct}%</span></span>
+        </div>`;
+    }).join('');
+
+    return `
+        <tr class="item-details-row" style="display:table-row;">
+            <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(0,0,0,0.15);">
+                <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-images"></i> Dettaglio per Set (${s.setBreakdown.length}):</div>
                 <div style="display:flex; flex-direction:column; gap:2px;">${chips}</div>
             </td>
         </tr>`;
@@ -1060,6 +1118,11 @@ function renderActivitiesTab(patient, sortBy) {
         const taskStepsAnalysisHtml = isTaskAnalysis && sessionsWithSteps.length > 0
             ? renderTaskStepsAnalysis(sessionsWithSteps) : '';
 
+        // Check if this has multi-set breakdown data (search_find / intraverbal_scenari)
+        const sessionsWithBreakdown = sessions.filter(s => s.setBreakdown && s.setBreakdown.length > 0);
+        const setBreakdownAnalysisHtml = sessionsWithBreakdown.length > 0
+            ? renderSetBreakdownAnalysis(sessionsWithBreakdown) : '';
+
         // Fluenza obiettivo
         const isFluenza = modeCode === 'fluenza';
         let fluenzaObiettivoHtml = '';
@@ -1075,7 +1138,7 @@ function renderActivitiesTab(patient, sortBy) {
         const lastInfoHtml = lastSession ? `<span style="font-size:0.7rem; color:var(--text-secondary);">${formatDateEU(lastSession.date)}</span> <span style="font-size:0.75rem; font-weight:bold; color:${lastPctColor};">${lastPct}%</span>` : '';
 
         html += `
-        <div class="chart-wrapper" style="margin-bottom:12px; border-left:3px solid ${typeColor};">
+        <div class="chart-wrapper" data-set-id="${setId || ''}" style="margin-bottom:12px; border-left:3px solid ${typeColor};">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                 <h4 style="margin:0; color:var(--accent-color); font-size:0.95rem; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                     ${setThumbHtml}
@@ -1096,6 +1159,7 @@ function renderActivitiesTab(patient, sortBy) {
             <div id="${chartId}"></div>
             <div class="activity-details-panel" style="display:none; margin-top:10px; border-top:1px solid rgba(255,255,255,0.05); padding-top:8px;">
                 ${taskStepsAnalysisHtml}
+                ${setBreakdownAnalysisHtml}
                 <table style="width:100%; font-size:0.85rem; color:#ccc; border-collapse:collapse;">
                     <tr style="border-bottom:1px solid #444; text-align:left; color:#888; font-size:0.75rem;">
                         <th style="padding:5px;">Data</th><th>Score</th><th>%</th>${typeGroup === 'timedelay' ? '<th>TD</th>' : ''}<th style="text-align:right;">Azioni</th>
@@ -1107,12 +1171,21 @@ function renderActivitiesTab(patient, sortBy) {
                 ? (nonCorrect > 0 ? ` <span style="color:var(--warning-color); font-size:0.75rem;">${nonCorrect}P</span>` : '')
                 : (nonCorrect > 0 ? ` <span style="color:var(--danger-color); font-size:0.75rem;">${nonCorrect}X</span>` : '');
             const isTaskAnalysisSession = s.mode === 'quaderno_task' && s.taskSteps && s.taskSteps.length > 0;
+            const hasSetBreakdown = s.setBreakdown && s.setBreakdown.length > 0;
             const hasDetails = s.itemDetails && s.itemDetails.length > 0 && s.itemDetails.some(d => d.result !== true);
-            const itemDetailsHtml = hasDetails
-                ? renderItemDetailsCollapsible(s, patient.id, s.originalIndex, isTD)
-                : (isTaskAnalysisSession ? renderTaskStepDetailsCollapsible(s, patient.id, s.originalIndex, isTD) : '');
-            const detailsBtn = (hasDetails || isTaskAnalysisSession)
-                ? `<button class="btn-icon item-details-toggle" style="width:26px; height:26px; font-size:0.6rem; display:inline-flex; color:${isTD ? 'var(--warning-color)' : (isTaskAnalysisSession ? 'var(--accent-color)' : 'var(--danger-color)')}; border-color:rgba(${isTD ? '245,158,11' : (isTaskAnalysisSession ? '99,102,241' : '239,68,68')},0.3);" title="Dettagli"><i class="fa-solid fa-chevron-down" style="transition:transform 0.2s; transform:rotate(180deg);"></i></button>`
+            let itemDetailsHtml = '';
+            if (hasDetails) {
+                itemDetailsHtml = renderItemDetailsCollapsible(s, patient.id, s.originalIndex, isTD);
+            } else if (isTaskAnalysisSession) {
+                itemDetailsHtml = renderTaskStepDetailsCollapsible(s, patient.id, s.originalIndex, isTD);
+            } else if (hasSetBreakdown) {
+                itemDetailsHtml = renderSetBreakdownCollapsible(s, patient.id, s.originalIndex, isTD);
+            }
+            const hasExpandable = hasDetails || isTaskAnalysisSession || hasSetBreakdown;
+            const expandColor = isTD ? 'var(--warning-color)' : (isTaskAnalysisSession ? 'var(--accent-color)' : (hasSetBreakdown ? 'var(--accent-color)' : 'var(--danger-color)'));
+            const expandRgba = isTD ? '245,158,11' : (isTaskAnalysisSession ? '99,102,241' : (hasSetBreakdown ? '99,102,241' : '239,68,68'));
+            const detailsBtn = hasExpandable
+                ? `<button class="btn-icon item-details-toggle" style="width:26px; height:26px; font-size:0.6rem; display:inline-flex; color:${expandColor}; border-color:rgba(${expandRgba},0.3);" title="Dettagli"><i class="fa-solid fa-chevron-down" style="transition:transform 0.2s; transform:rotate(180deg);"></i></button>`
                 : '';
             return `
                         <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
@@ -1590,6 +1663,144 @@ function renderTaskStepTable(stepAggregates, title) {
                         <div style="width:${barWidth}%; height:100%; background:${barColor}; border-radius:3px;"></div>
                     </div>
                     <span style="font-weight:bold; color:${barColor}; min-width:30px; text-align:right;">${step.pctCorrect}%</span>
+                </div>
+            </td>
+        </tr>`;
+    });
+
+    html += `</table>`;
+    return html;
+}
+
+// --- Set Breakdown Analysis (aggregate per-set data across multi-set sessions) ---
+function renderSetBreakdownAnalysis(sessions) {
+    if (!sessions || sessions.length === 0) return '';
+
+    // Collect all unique set names and aggregate data
+    const setMap = {};
+    sessions.forEach(session => {
+        (session.setBreakdown || []).forEach(sb => {
+            const key = sb.setName;
+            if (!setMap[key]) {
+                setMap[key] = { setName: sb.setName, setCat: sb.setCat || '', totalV: 0, totalX: 0, totalP: 0, totalScored: 0, appearances: 0 };
+            }
+            setMap[key].totalV += sb.correct || 0;
+            setMap[key].totalX += sb.incorrect || 0;
+            setMap[key].totalP += sb.prompts || 0;
+            setMap[key].totalScored += sb.total || 0;
+            setMap[key].appearances++;
+        });
+    });
+
+    const setAggregates = Object.values(setMap).map(s => ({
+        ...s,
+        pctCorrect: s.totalScored > 0 ? Math.round((s.totalV / s.totalScored) * 100) : 0
+    }));
+
+    if (setAggregates.length === 0) return '';
+
+    // Find weakest sets
+    const sorted = [...setAggregates].filter(s => s.totalScored > 0).sort((a, b) => a.pctCorrect - b.pctCorrect);
+    const worstSets = sorted.filter(s => s.pctCorrect < 90).slice(0, 3);
+
+    let html = `
+    <div style="margin-top:10px; padding:10px; background:rgba(99,102,241,0.05); border:1px solid rgba(99,102,241,0.15); border-radius:12px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+            <i class="fa-solid fa-images" style="color:var(--accent-color);"></i>
+            <span style="font-weight:bold; font-size:0.9rem; color:var(--accent-color);">Analisi per Set</span>
+            <span style="font-size:0.7rem; color:var(--text-secondary);">(su ${sessions.length} sessioni)</span>
+        </div>`;
+
+    // Problem areas highlight
+    if (worstSets.length > 0) {
+        html += `<div style="margin-bottom:10px; padding:8px; background:rgba(239,68,68,0.08); border-radius:8px; border:1px solid rgba(239,68,68,0.15);">
+            <div style="font-size:0.75rem; color:var(--danger-color); font-weight:bold; margin-bottom:4px;">
+                <i class="fa-solid fa-triangle-exclamation"></i> Set critici:
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:4px;">
+                ${worstSets.map(s => `<span style="display:inline-block; padding:2px 8px; border-radius:6px; font-size:0.75rem; background:rgba(239,68,68,0.12); color:var(--danger-color); border:1px solid rgba(239,68,68,0.2);">${s.setName} <b>${s.pctCorrect}%</b></span>`).join('')}
+            </div>
+        </div>`;
+    }
+
+    // Aggregate table
+    html += renderSetBreakdownTable(setAggregates, 'Riepilogo Totale');
+
+    // Per-session collapsible sections
+    if (sessions.length > 0) {
+        html += `<div style="margin-top:10px;">`;
+        [...sessions].sort((a, b) => new Date(b.date) - new Date(a.date)).forEach((session) => {
+            const breakdown = session.setBreakdown || [];
+            const sTotalScored = breakdown.reduce((sum, sb) => sum + (sb.total || 0), 0);
+            const sTotalV = breakdown.reduce((sum, sb) => sum + (sb.correct || 0), 0);
+            const sPct = sTotalScored > 0 ? Math.round((sTotalV / sTotalScored) * 100) : 0;
+            const pctColor = sPct >= 90 ? 'var(--success-color)' : sPct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
+
+            const sessionSetData = breakdown.map(sb => ({
+                setName: sb.setName, setCat: sb.setCat || '',
+                totalV: sb.correct || 0, totalX: sb.incorrect || 0, totalP: sb.prompts || 0,
+                totalScored: sb.total || 0,
+                pctCorrect: sb.percentage || 0, appearances: 1
+            }));
+
+            html += `
+            <div style="border:1px solid rgba(255,255,255,0.05); border-radius:8px; margin-bottom:6px; overflow:hidden;">
+                <div onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? '' : 'none'; this.querySelector('.sb-sess-icon').style.transform = this.nextElementSibling.style.display === 'none' ? '' : 'rotate(90deg)';"
+                     style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; cursor:pointer; background:rgba(255,255,255,0.02);"
+                     onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='rgba(255,255,255,0.02)'">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <i class="fa-solid fa-chevron-right sb-sess-icon" style="font-size:0.6rem; color:var(--text-secondary); transition:transform 0.2s;"></i>
+                        <span style="font-size:0.8rem; font-weight:600;">${formatDateEU(session.date)}</span>
+                        <span style="font-size:0.7rem; color:var(--text-secondary);">${breakdown.length} set</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:0.8rem;">${sTotalV}/${sTotalScored}</span>
+                        <span style="font-weight:bold; font-size:0.8rem; color:${pctColor};">${sPct}%</span>
+                    </div>
+                </div>
+                <div style="display:none; padding:6px;">
+                    ${renderSetBreakdownTable(sessionSetData)}
+                </div>
+            </div>`;
+        });
+        html += `</div>`;
+    }
+
+    html += `</div>`;
+    return html;
+}
+
+function renderSetBreakdownTable(setAggregates, title) {
+    let html = '';
+    if (title) {
+        html += `<div style="font-size:0.75rem; color:var(--text-secondary); font-weight:bold; margin-bottom:4px; margin-top:4px;">${title}</div>`;
+    }
+    html += `<table style="width:100%; font-size:0.8rem; color:#ccc; border-collapse:collapse;">
+        <tr style="border-bottom:1px solid #444; color:#888; font-size:0.7rem;">
+            <th style="padding:4px; text-align:left;">#</th>
+            <th style="text-align:left;">Set</th>
+            <th style="text-align:center;">V</th>
+            <th style="text-align:center;">X/P</th>
+            <th style="text-align:center;">Tot</th>
+            <th style="text-align:right;">%</th>
+        </tr>`;
+
+    setAggregates.forEach((s, i) => {
+        const barWidth = s.pctCorrect;
+        const barColor = s.pctCorrect >= 90 ? 'var(--success-color)' : s.pctCorrect >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
+        html += `
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
+            <td style="padding:5px 4px; color:var(--text-secondary); font-weight:bold;">${i + 1}</td>
+            <td style="padding:5px 4px; font-weight:600;">${s.setName}${s.setCat ? ` <span style="color:var(--text-secondary); font-size:0.65rem;">(${s.setCat})</span>` : ''}</td>
+            <td style="text-align:center; color:var(--success-color);">${s.totalV}</td>
+            <td style="text-align:center; color:var(--danger-color);">${s.totalX + s.totalP}</td>
+            <td style="text-align:center; color:var(--text-secondary);">${s.totalScored}</td>
+            <td style="text-align:right; width:90px;">
+                <div style="display:flex; align-items:center; gap:4px; justify-content:flex-end;">
+                    <div style="width:50px; height:6px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden;">
+                        <div style="width:${barWidth}%; height:100%; background:${barColor}; border-radius:3px;"></div>
+                    </div>
+                    <span style="font-weight:bold; color:${barColor}; min-width:30px; text-align:right;">${s.pctCorrect}%</span>
                 </div>
             </td>
         </tr>`;

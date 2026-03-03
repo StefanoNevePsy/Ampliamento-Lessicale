@@ -35,8 +35,115 @@ function handleImgError(img, label) {
     img.src = getPlaceholderUrl(label);
 }
 
+// === CUSTOM AUTOCOMPLETE (replaces native datalist to avoid keyboard overlap) ===
+// Returns HTML for a custom-autocomplete wrapper. Options is an array of strings.
+// inputAttrs is an object of extra attributes for the input element.
+function customAutocompleteHtml(inputId, options, inputAttrs = {}) {
+    const panelId = inputId + '-ac-panel';
+    const attrs = Object.entries(inputAttrs).map(([k, v]) => `${k}="${v}"`).join(' ');
+    const optionsHtml = options.length > 0
+        ? options.map(n => `<div class="custom-ac-item" data-value="${n.replace(/"/g, '&quot;')}">${n}</div>`).join('')
+        : '';
+    return `<div class="custom-autocomplete-wrap">
+        <input type="text" id="${inputId}" ${attrs} autocomplete="off">
+        <div class="custom-ac-panel" id="${panelId}">${optionsHtml}</div>
+    </div>`;
+}
+
+// Attach behavior to a custom autocomplete (call after DOM insert)
+function setupCustomAutocomplete(inputId, options) {
+    const input = document.getElementById(inputId);
+    const panel = document.getElementById(inputId + '-ac-panel');
+    if (!input || !panel) return;
+
+    let highlighted = -1;
+    let filteredOptions = [...options];
+
+    function renderOptions(filter) {
+        const query = (filter || '').toLowerCase().trim();
+        filteredOptions = query
+            ? options.filter(n => n.toLowerCase().includes(query))
+            : [...options];
+        if (filteredOptions.length === 0) {
+            panel.innerHTML = '<div class="custom-ac-empty">Nessun suggerimento</div>';
+        } else {
+            panel.innerHTML = filteredOptions.map(n =>
+                `<div class="custom-ac-item" data-value="${n.replace(/"/g, '&quot;')}">${n}</div>`
+            ).join('');
+        }
+        highlighted = -1;
+        // Attach click handlers
+        panel.querySelectorAll('.custom-ac-item').forEach(el => {
+            el.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                input.value = el.dataset.value;
+                closePanel();
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+        });
+    }
+
+    function openPanel() {
+        if (options.length === 0) return;
+        renderOptions(input.value);
+        // Use fixed positioning so panels aren't clipped by overflow:hidden on #game-stage
+        const rect = input.getBoundingClientRect();
+        const controlsRow = document.querySelector('.controls-row');
+        const topLimit = controlsRow ? controlsRow.getBoundingClientRect().bottom + 4 : 60;
+        const available = rect.top - topLimit;
+        panel.style.position = 'fixed';
+        panel.style.left = rect.left + 'px';
+        panel.style.width = rect.width + 'px';
+        panel.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+        panel.style.maxHeight = Math.max(80, Math.min(available, 250)) + 'px';
+        panel.classList.add('open');
+        panel.scrollTop = 0;
+    }
+
+    function closePanel() {
+        panel.classList.remove('open');
+        highlighted = -1;
+    }
+
+    function highlightItem(idx) {
+        const items = panel.querySelectorAll('.custom-ac-item');
+        items.forEach(el => el.classList.remove('highlighted'));
+        if (idx >= 0 && idx < items.length) {
+            items[idx].classList.add('highlighted');
+            items[idx].scrollIntoView({ block: 'nearest' });
+        }
+        highlighted = idx;
+    }
+
+    input.addEventListener('focus', () => { openPanel(); });
+    input.addEventListener('input', () => { renderOptions(input.value); if (options.length > 0) panel.classList.add('open'); });
+    input.addEventListener('blur', () => { setTimeout(closePanel, 150); });
+    input.addEventListener('keydown', (e) => {
+        const items = panel.querySelectorAll('.custom-ac-item');
+        if (!panel.classList.contains('open') || items.length === 0) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            highlightItem(Math.min(highlighted + 1, items.length - 1));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            highlightItem(Math.max(highlighted - 1, 0));
+        } else if (e.key === 'Enter' && highlighted >= 0 && highlighted < items.length) {
+            e.preventDefault();
+            input.value = items[highlighted].dataset.value;
+            closePanel();
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        } else if (e.key === 'Escape') {
+            closePanel();
+        }
+    });
+}
+
 function renderGameMode(mode, items) {
     const stage = document.getElementById('game-stage');
+    // Preserve pointer canvas before clearing stage (detach so innerHTML doesn't destroy it)
+    const pointerCanvas = document.getElementById('pointer-canvas');
+    if (pointerCanvas) pointerCanvas.remove();
     stage.innerHTML = '';
     // Resolve custom modes to their engine
     const engine = (typeof getModeEngine === 'function') ? getModeEngine(mode) : mode;
@@ -44,6 +151,7 @@ function renderGameMode(mode, items) {
     if (window._topoCleanup) { window._topoCleanup(); window._topoCleanup = null; }
     if (engine === 'tact') renderTact(items, stage);
     else if (engine === 'ran') renderRan(items, stage);
+    else if (engine === 'ran_intensivo') renderRanIntensivo(items, stage);
     else if (engine === 'fluenza') renderFluenza(items, stage);
     else if (engine === 'tombola') renderTombola(items, stage);
     else if (engine === 'tombola_sonora') renderTombolaSonora(items, stage);
@@ -56,6 +164,13 @@ function renderGameMode(mode, items) {
     else if (engine === 'categorizzazione') renderCategorizzazione(items, stage);
     else if (engine === 'zoom') renderZoom(items, stage);
     else if (engine === 'quaderno') renderQuaderno(stage);
+    // Re-insert pointer canvas on top after renderer runs (preserves event listeners and state)
+    if (pointerCanvas) stage.appendChild(pointerCanvas);
+    else {
+        const c = document.createElement('canvas');
+        c.id = 'pointer-canvas';
+        stage.appendChild(c);
+    }
 }
 
 // --- TACT ---
@@ -151,6 +266,60 @@ function updateRanContent() {
 
 window.nextRan = () => { if (state.ranIndex < state.ranDisplayItems.length - 1) { state.ranIndex++; updateRanContent(); } };
 window.prevRan = () => { if (state.ranIndex > 0) { state.ranIndex--; updateRanContent(); } };
+
+// --- RAN INTENSIVO ---
+function renderRanIntensivo(items, stage) {
+    const ri = state._ranIntensivo;
+    if (!ri || !ri.deck || ri.deck.length === 0) {
+        stage.innerHTML = `<div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:20px; color:var(--text-secondary);">
+            <i class="fa-solid fa-circle-check fa-3x" style="color:var(--success-color); margin-bottom:15px;"></i>
+            <p style="font-size:1.1rem;">Nessun item da esercitare!</p>
+            <p style="font-size:0.85rem;">Nell'ultima sessione RAN tutti gli item erano corretti.</p>
+        </div>`;
+        return;
+    }
+
+    const current = ri.deck[ri.deckIndex];
+    const target = ri.target;
+    const presented = ri.deckIndex + 1;
+    const pct = target > 0 ? Math.round((presented / target) * 100) : 0;
+    const uniqueErrorItems = ri.errorCount || ri.deck.length;
+
+    stage.innerHTML = `
+    <div class="ran-container">
+        <div class="ran-toolbar" style="gap:10px; flex-wrap:wrap;">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <i class="fa-solid fa-dumbbell" style="color:var(--accent-color);"></i>
+                <span style="font-weight:700; font-size:0.9rem;">RAN Intensivo</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <div style="background:rgba(0,0,0,0.3); border-radius:8px; padding:4px 12px; font-size:0.8rem; display:flex; align-items:center; gap:6px;">
+                    <span style="font-weight:bold;">${presented}</span>
+                    <span style="color:var(--text-secondary);">/</span>
+                    <span style="font-weight:bold;">${target}</span>
+                </div>
+                <div style="width:80px; height:8px; border-radius:4px; background:rgba(255,255,255,0.1); overflow:hidden;">
+                    <div style="width:${pct}%; height:100%; background:var(--accent-color); border-radius:4px; transition:width 0.3s;"></div>
+                </div>
+                <span style="font-size:0.75rem; color:var(--text-secondary);">${uniqueErrorItems} item, ${ri.totalCorrect} <i class="fa-solid fa-check" style="color:var(--success-color);"></i></span>
+            </div>
+        </div>
+        <div id="ran-content" style="flex:1; min-height:0;">
+            <div class="ran-single-stage">
+                <div style="flex:1; display:flex; flex-direction:column; justify-content:center; width:100%; overflow:hidden;">
+                    <img src="${current.url || getPlaceholderUrl(current.label)}"
+                         class="ran-main-img"
+                         style="transition:0.3s;"
+                         onerror="handleImgError(this,'${current.label}')">
+                    <h2 style="text-align:center;">${current.label}</h2>
+                </div>
+                <div class="ran-controls-bar">
+                    <div class="ran-counter">${presented}/${target}</div>
+                </div>
+            </div>
+        </div>
+    </div>`;
+}
 
 // --- FLUENZA (Timed fluency - count items within time limit) ---
 function renderFluenza(items, stage) {
@@ -1632,7 +1801,11 @@ function placeMarkerAt(clientX, clientY) {
             state.session.prompts = results.filter(v => v === 'prompt').length;
             state.session.total = results.length;
 
-            if (typeof updateScoreUI === 'function') updateScoreUI();
+            if (state.multiSetSession && state.multiSetSession.active && typeof _updateMultiSetScoreUI === 'function') {
+                _updateMultiSetScoreUI();
+            } else if (typeof updateScoreUI === 'function') {
+                updateScoreUI();
+            }
         }
 
         m.remove();
@@ -1729,7 +1902,11 @@ window.undoLastAction = () => {
     state.session.prompts = results.filter(v => v === 'prompt').length;
     state.session.total = results.length;
 
-    if (typeof updateScoreUI === 'function') updateScoreUI();
+    if (state.multiSetSession && state.multiSetSession.active && typeof _updateMultiSetScoreUI === 'function') {
+        _updateMultiSetScoreUI();
+    } else if (typeof updateScoreUI === 'function') {
+        updateScoreUI();
+    }
 };
 
 window.removeLastMarker = window.undoLastAction;
@@ -1752,7 +1929,11 @@ window.clearMarkers = () => {
         state.session.incorrect = results.filter(v => v === false).length;
         state.session.prompts = results.filter(v => v === 'prompt').length;
         state.session.total = results.length;
-        if (typeof updateScoreUI === 'function') updateScoreUI();
+        if (state.multiSetSession && state.multiSetSession.active && typeof _updateMultiSetScoreUI === 'function') {
+            _updateMultiSetScoreUI();
+        } else if (typeof updateScoreUI === 'function') {
+            updateScoreUI();
+        }
     }
 };
 
@@ -2102,15 +2283,16 @@ function renderQuadernoGeneral(container) {
     const qType = getQuadernoSessionType();
     const quadernoTemplates = state.savedSets.filter(s => s.modes && s.modes.includes('quaderno'));
 
+    const activityNames = getUsedActivityNames();
+
     container.innerHTML = `
     <div style="width:100%; max-width:700px; margin:0 auto;">
         <div style="display:flex; gap:8px; margin-bottom:8px; align-items:center; flex-wrap:wrap;">
-            <input type="text" id="quaderno-name-input" value="${state._quadernoName || ''}" placeholder="Nome lista (es. Seduta 15 Feb)"
-                list="quaderno-names-list"
-                style="flex:1; min-width:150px; padding:8px 12px; border-radius:8px; font-size:0.9rem;">
-            <datalist id="quaderno-names-list">
-                ${savedNames.map(n => `<option value="${n}">`).join('')}
-            </datalist>
+            ${customAutocompleteHtml('quaderno-name-input', savedNames, {
+                value: state._quadernoName || '',
+                placeholder: 'Nome lista (es. Seduta 15 Feb)',
+                style: 'min-width:150px; padding:8px 12px; border-radius:8px; font-size:0.9rem;'
+            })}
         </div>
         ${quadernoTemplates.length > 0 ? `
         <div style="display:flex; gap:6px; margin-bottom:10px; align-items:center; overflow-x:auto; padding-bottom:4px;">
@@ -2127,13 +2309,11 @@ function renderQuadernoGeneral(container) {
         </div>
 
         <div style="display:flex; gap:6px; margin-top:10px; align-items:center; flex-wrap:wrap;">
-            <input type="text" id="quaderno-new-activity" placeholder="Nome attivit&agrave;..."
-                list="quaderno-activity-names"
-                onkeydown="if(event.key==='Enter')addQuadernoRow()"
-                style="flex:1; min-width:120px; padding:10px; border-radius:8px; font-size:0.9rem;">
-            <datalist id="quaderno-activity-names">
-                ${getUsedActivityNames().map(n => `<option value="${n}">`).join('')}
-            </datalist>
+            ${customAutocompleteHtml('quaderno-new-activity', activityNames, {
+                placeholder: 'Nome attività...',
+                onkeydown: "if(event.key==='Enter')addQuadernoRow()",
+                style: 'min-width:120px; padding:10px; border-radius:8px; font-size:0.9rem;'
+            })}
             <select id="quaderno-session-type" onchange="onQuadernoTypeChange()" style="padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.85rem;">
                 <option value="independent" ${qType === 'independent' ? 'selected' : ''}>Indipendente</option>
                 <option value="timedelay" ${qType === 'timedelay' ? 'selected' : ''}>Time Delay</option>
@@ -2155,6 +2335,10 @@ function renderQuadernoGeneral(container) {
             </button>
         </div>
     </div>`;
+
+    // Setup custom autocomplete behavior after DOM insert
+    setupCustomAutocomplete('quaderno-name-input', savedNames);
+    setupCustomAutocomplete('quaderno-new-activity', activityNames);
 }
 
 function renderQuadernoRow(row, idx, sessionType) {
@@ -2494,15 +2678,16 @@ function renderQuadernoTask(container) {
     });
     const pct = totalScored > 0 ? Math.round((totalCorrect / totalScored) * 100) : 0;
 
+    const stepNames = getUsedActivityNames();
+
     container.innerHTML = `
     <div style="width:100%; max-width:700px; margin:0 auto;">
         <div style="display:flex; gap:8px; margin-bottom:8px; align-items:center; flex-wrap:wrap;">
-            <input type="text" id="quaderno-name-input" value="${state._quadernoName || ''}" placeholder="Nome Task Analysis (es. Memory - Procedura)"
-                list="quaderno-task-names-list"
-                style="flex:1; min-width:150px; padding:8px 12px; border-radius:8px; font-size:0.9rem;">
-            <datalist id="quaderno-task-names-list">
-                ${savedNames.map(n => `<option value="${n}">`).join('')}
-            </datalist>
+            ${customAutocompleteHtml('quaderno-name-input', savedNames, {
+                value: state._quadernoName || '',
+                placeholder: 'Nome Task Analysis (es. Memory - Procedura)',
+                style: 'min-width:150px; padding:8px 12px; border-radius:8px; font-size:0.9rem;'
+            })}
         </div>
         ${taskTemplates.length > 0 ? `
         <div style="display:flex; gap:6px; margin-bottom:10px; align-items:center; overflow-x:auto; padding-bottom:4px;">
@@ -2528,13 +2713,11 @@ function renderQuadernoTask(container) {
         </div>
 
         <div style="display:flex; gap:6px; margin-top:10px; align-items:center; flex-wrap:wrap;">
-            <input type="text" id="quaderno-new-step" placeholder="Nuovo passaggio..."
-                list="quaderno-step-names"
-                onkeydown="if(event.key==='Enter')addQuadernoStep()"
-                style="flex:1; min-width:120px; padding:10px; border-radius:8px; font-size:0.9rem;">
-            <datalist id="quaderno-step-names">
-                ${getUsedActivityNames().map(n => `<option value="${n}">`).join('')}
-            </datalist>
+            ${customAutocompleteHtml('quaderno-new-step', stepNames, {
+                placeholder: 'Nuovo passaggio...',
+                onkeydown: "if(event.key==='Enter')addQuadernoStep()",
+                style: 'min-width:120px; padding:10px; border-radius:8px; font-size:0.9rem;'
+            })}
             <select id="quaderno-session-type" onchange="onQuadernoTypeChange()" style="padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.85rem;">
                 <option value="independent" ${qType === 'independent' ? 'selected' : ''}>Indipendente</option>
                 <option value="timedelay" ${qType === 'timedelay' ? 'selected' : ''}>Time Delay</option>
@@ -2559,6 +2742,9 @@ function renderQuadernoTask(container) {
             </button>
         </div>
     </div>`;
+
+    setupCustomAutocomplete('quaderno-name-input', savedNames);
+    setupCustomAutocomplete('quaderno-new-step', stepNames);
 
     // Auto-scroll to active step
     if (steps.length > 0) {

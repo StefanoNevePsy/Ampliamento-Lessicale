@@ -145,6 +145,7 @@
 
         <!-- GAME STAGE -->
         <div id="game-stage">
+            <canvas id="pointer-canvas"></canvas>
             <div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; color:var(--text-secondary); text-align:center;">
                 <i class="fa-solid fa-shapes" style="font-size:4rem; margin-bottom:20px; opacity:0.2;"></i>
                 <p style="font-size:1.2rem;">Seleziona un'<b>Attivit&agrave;</b> e un <b>Set</b><br>per iniziare la sessione clinica.</p>
@@ -172,8 +173,10 @@
         </div>
 
         <div id="session-name-wrapper" class="hidden" style="pointer-events:auto; display:flex; align-items:center; gap:6px;">
-            <input type="text" id="session-name-input" list="session-names-list" placeholder="Nome sessione (opzionale)" style="padding:8px 12px; border-radius:12px; background:rgba(30,30,50,0.95); border:1px solid var(--glass-border); color:white; font-size:0.8rem; width:200px; backdrop-filter:blur(8px);">
-            <datalist id="session-names-list"></datalist>
+            <div class="custom-autocomplete-wrap">
+                <input type="text" id="session-name-input" placeholder="Nome sessione (opzionale)" autocomplete="off" style="padding:8px 12px; border-radius:12px; background:rgba(30,30,50,0.95); border:1px solid var(--glass-border); color:white; font-size:0.8rem; width:200px; backdrop-filter:blur(8px);">
+                <div class="custom-ac-panel" id="session-name-input-ac-panel"></div>
+            </div>
         </div>
 
         <button class="btn-float hidden" id="btn-save-session" onclick="confirmSaveSession()" style="background:#2563eb;" title="Salva Dati">
@@ -183,6 +186,12 @@
         <div class="control-row">
             <button class="btn-float hidden" id="btn-undo-marker" onclick="removeLastMarker()" title="Annulla Ultimo (Ctrl+Z)">
                 <i class="fa-solid fa-rotate-left"></i>
+            </button>
+            <button class="btn-float hidden" id="btn-toggle-labels" onclick="toggleLabelsVisibility()" title="Mostra/Nascondi Etichette">
+                <i class="fa-solid fa-font"></i>
+            </button>
+            <button class="btn-float" id="btn-pointer-pen" onclick="togglePointerPen()" title="Puntatore/Penna">
+                <i class="fa-solid fa-pen-fancy"></i>
             </button>
             <button class="btn-float" id="btn-global-lock" onclick="toggleGlobalScrollLock()" title="Blocca Schermo">
                 <i class="fa-solid fa-lock-open"></i>
