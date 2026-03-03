@@ -134,7 +134,10 @@ let state = {
     fluenzaTimeLeft: 0,
     fluenzaTimerInterval: null,
     fluenzaItemResults: {},
-    fluenzaShowBar: true
+    fluenzaShowBar: true,
+    // Multi-set session for search_find / intraverbal_scenari
+    // Allows accumulating data across multiple sets, then saving one unified session
+    multiSetSession: null  // { sets: [ { setId, setName, setCat, itemResults, scoreHistory } ], active: false }
 };
 
 // --- TAG IMAGE HELPERS (IndexedDB with in-memory cache) ---

@@ -1632,7 +1632,11 @@ function placeMarkerAt(clientX, clientY) {
             state.session.prompts = results.filter(v => v === 'prompt').length;
             state.session.total = results.length;
 
-            if (typeof updateScoreUI === 'function') updateScoreUI();
+            if (state.multiSetSession && state.multiSetSession.active && typeof _updateMultiSetScoreUI === 'function') {
+                _updateMultiSetScoreUI();
+            } else if (typeof updateScoreUI === 'function') {
+                updateScoreUI();
+            }
         }
 
         m.remove();
@@ -1729,7 +1733,11 @@ window.undoLastAction = () => {
     state.session.prompts = results.filter(v => v === 'prompt').length;
     state.session.total = results.length;
 
-    if (typeof updateScoreUI === 'function') updateScoreUI();
+    if (state.multiSetSession && state.multiSetSession.active && typeof _updateMultiSetScoreUI === 'function') {
+        _updateMultiSetScoreUI();
+    } else if (typeof updateScoreUI === 'function') {
+        updateScoreUI();
+    }
 };
 
 window.removeLastMarker = window.undoLastAction;
@@ -1752,7 +1760,11 @@ window.clearMarkers = () => {
         state.session.incorrect = results.filter(v => v === false).length;
         state.session.prompts = results.filter(v => v === 'prompt').length;
         state.session.total = results.length;
-        if (typeof updateScoreUI === 'function') updateScoreUI();
+        if (state.multiSetSession && state.multiSetSession.active && typeof _updateMultiSetScoreUI === 'function') {
+            _updateMultiSetScoreUI();
+        } else if (typeof updateScoreUI === 'function') {
+            updateScoreUI();
+        }
     }
 };
 

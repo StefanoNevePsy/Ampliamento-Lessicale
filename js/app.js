@@ -76,6 +76,11 @@ window.filterSetsByMode = function () {
     const isPoolMode = POOL_ENGINES.includes(engine);
     const isQuaderno = engine === 'quaderno';
 
+    // Clean up multi-set session when switching away from scenario modes
+    if (engine !== 'search_find' && engine !== 'intraverbal_scenari') {
+        state.multiSetSession = null;
+    }
+
     // Toggle set selector vs tag selector visibility
     const setWrapper = document.getElementById('set-selector-wrapper');
     const tagWrapper = document.getElementById('tag-selector-wrapper');
@@ -376,6 +381,15 @@ document.addEventListener('click', (e) => {
 window.loadSelectedSet = async (setId) => {
     const s = state.savedSets.find(x => x.id === setId);
     if (s) {
+        const mode = document.getElementById('mode-select').value;
+        const engine = getModeEngine(mode);
+        const isScenarioMode = (engine === 'search_find' || engine === 'intraverbal_scenari');
+
+        // For search_find / intraverbal_scenari: snapshot current set data before switching
+        if (isScenarioMode && state.session.active && state.multiSetSession && state.multiSetSession.active) {
+            _snapshotCurrentSetData();
+        }
+
         state.activeSetId = setId;
         state.items = JSON.parse(JSON.stringify(s.items));
         // Update custom dropdown label & selection highlight
@@ -387,9 +401,77 @@ window.loadSelectedSet = async (setId) => {
                 el.classList.toggle('selected', el.dataset.setId === setId);
             });
         }
-        window.startGame();
+
+        if (isScenarioMode && state.multiSetSession && state.multiSetSession.active) {
+            // Continue multi-set session: reset per-set scoring but keep accumulated totals
+            state.session.itemResults = {};
+            state.session.scoreHistory = [];
+            state.session.correct = 0;
+            state.session.incorrect = 0;
+            state.session.prompts = 0;
+            state.session.total = 0;
+            // Recalculate display totals from all accumulated sets
+            _updateMultiSetScoreUI();
+            document.getElementById('btn-save-session').classList.remove('hidden');
+            if (typeof showSessionNameInput === 'function') showSessionNameInput();
+            let playItems = state.items.filter(i => !i.hidden);
+            state.session.playItems = playItems;
+            renderGameMode(mode, playItems);
+        } else {
+            window.startGame();
+        }
     }
 };
+
+// Snapshot current set's scoring data into multiSetSession
+function _snapshotCurrentSetData() {
+    if (!state.multiSetSession || !state.activeSetId) return;
+    const results = Object.values(state.session.itemResults);
+    if (results.length === 0) return; // nothing scored on this set
+
+    const activeSet = state.savedSets.find(ss => ss.id === state.activeSetId);
+    const rawV = results.filter(v => v === true).length;
+    const rawP = results.filter(v => v === 'prompt').length;
+    const rawX = results.filter(v => v === false).length;
+    const total = rawV + rawP + rawX;
+
+    state.multiSetSession.sets.push({
+        setId: state.activeSetId,
+        setName: activeSet?.name || 'Set Rimosso',
+        setCat: activeSet?.category || '',
+        correct: rawV,
+        prompts: rawP,
+        incorrect: rawX,
+        total: total,
+        percentage: total > 0 ? Math.round((rawV / total) * 100) : 0
+    });
+}
+
+// Update score display to show accumulated totals across all sets
+function _updateMultiSetScoreUI() {
+    if (!state.multiSetSession) return;
+    // Sum all snapshotted sets + current set
+    let totalV = 0, totalP = 0, totalX = 0;
+    state.multiSetSession.sets.forEach(s => {
+        totalV += s.correct;
+        totalP += s.prompts;
+        totalX += s.incorrect;
+    });
+    // Add current (not yet snapshotted) set
+    const currentResults = Object.values(state.session.itemResults);
+    totalV += currentResults.filter(v => v === true).length;
+    totalP += currentResults.filter(v => v === 'prompt').length;
+    totalX += currentResults.filter(v => v === false).length;
+
+    // Update the score display with accumulated totals
+    const el = document.getElementById('score-display');
+    let html = `${totalV}`;
+    let tags = [];
+    if (totalP > 0) tags.push(`<span style="font-size:0.65rem; color:var(--warning-color);">P${totalP}</span>`);
+    if (totalX > 0) tags.push(`<span style="font-size:0.65rem; color:var(--danger-color);">X${totalX}</span>`);
+    if (tags.length > 0) html += ` ${tags.join(' ')}`;
+    el.innerHTML = html;
+}
 
 // --- START GAME ---
 window.startGame = () => {
@@ -454,6 +536,13 @@ window.startGame = () => {
         document.getElementById('scoring-controls').classList.remove('hidden');
     }
     document.getElementById('btn-save-session').classList.add('hidden');
+
+    // Initialize multi-set session for search_find / intraverbal_scenari
+    if (engine === 'search_find' || engine === 'intraverbal_scenari') {
+        state.multiSetSession = { sets: [], active: true, mode: mode, engine: engine };
+    } else {
+        state.multiSetSession = null;
+    }
 
     let playItems = state.items.filter(i => !i.hidden);
 
@@ -532,7 +621,12 @@ window.recordResponse = (result) => {
     state.session.prompts = results.filter(v => v === 'prompt').length;
     state.session.total = results.length;
 
-    updateScoreUI();
+    // For multi-set scenario modes, show accumulated totals
+    if (state.multiSetSession && state.multiSetSession.active) {
+        _updateMultiSetScoreUI();
+    } else {
+        updateScoreUI();
+    }
     document.getElementById('btn-save-session').classList.remove('hidden');
     if (typeof showSessionNameInput === 'function') showSessionNameInput();
 };
@@ -618,14 +712,102 @@ function handleShortcuts(e) {
 // --- SAVE SESSION (uses dropdown type, no modal) ---
 window.confirmSaveSession = async () => {
     if (!state.activePatientId) return alert("Seleziona prima un paziente in alto.");
-    const total = state.session.total;
-    if (total === 0) return;
 
     const p = state.patients.find(x => x.id === state.activePatientId);
     const mode = document.getElementById('mode-select').value;
     const engine = getModeEngine(mode);
     const type = getSelectedSessionType();
     if (!p) return;
+
+    const isMultiSet = state.multiSetSession && state.multiSetSession.active &&
+        (engine === 'search_find' || engine === 'intraverbal_scenari');
+
+    // --- Multi-set session save (search_find / intraverbal_scenari) ---
+    if (isMultiSet) {
+        // Snapshot current set data first
+        _snapshotCurrentSetData();
+
+        const allSets = state.multiSetSession.sets;
+        if (allSets.length === 0) return alert("Nessun dato registrato.");
+
+        // Calculate totals across all sets
+        let totalV = 0, totalP = 0, totalX = 0;
+        allSets.forEach(s => {
+            totalV += s.correct;
+            totalP += s.prompts;
+            totalX += s.incorrect;
+        });
+        const totalAll = totalV + totalP + totalX;
+        if (totalAll === 0) return;
+
+        const nameInput = document.getElementById('session-name-input');
+        let customName = nameInput ? nameInput.value.trim() : '';
+        // Default name: list of set names
+        const setNames = allSets.map(s => s.setName);
+        const defaultName = setNames.length > 1
+            ? setNames[0] + ` (+${setNames.length - 1})`
+            : setNames[0] || 'Scenari';
+        const setName = customName || defaultName;
+        if (customName) saveCustomSessionName(customName);
+
+        const sessionData = {
+            date: new Date().toISOString(),
+            setId: 'multi_' + allSets.map(s => s.setId).join('_'),
+            setName: setName,
+            setCat: allSets[0]?.setCat || '',
+            mode: mode,
+            correct: totalV,
+            prompts: totalP,
+            total: totalAll,
+            percentage: Math.round((totalV / totalAll) * 100),
+            sessionType: type,
+            rawV: totalV,
+            rawP: totalP,
+            rawX: totalX,
+            // Per-set breakdown (like taskSteps for task analysis)
+            setBreakdown: allSets.map(s => ({
+                setId: s.setId,
+                setName: s.setName,
+                setCat: s.setCat,
+                correct: s.correct,
+                prompts: s.prompts,
+                incorrect: s.incorrect,
+                total: s.total,
+                percentage: s.percentage
+            }))
+        };
+
+        if (type === 'timedelay') {
+            sessionData.timeDelaySeconds = getSelectedTDSeconds();
+        }
+
+        if (!p.history) p.history = [];
+        p.history.push(sessionData);
+        await DB.savePatient(p);
+
+        const btn = document.getElementById('btn-save-session');
+        btn.innerHTML = '<i class="fa-solid fa-check"></i>';
+        btn.style.background = 'var(--success-color)';
+        if (nameInput) nameInput.value = '';
+
+        // Reset multi-set session
+        state.multiSetSession = null;
+
+        setTimeout(() => {
+            btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i>';
+            btn.style.background = '#2563eb';
+            state.session.active = false;
+            document.getElementById('scoring-controls').classList.add('hidden');
+            btn.classList.add('hidden');
+            const sessionNameWrapper = document.getElementById('session-name-wrapper');
+            if (sessionNameWrapper) sessionNameWrapper.classList.add('hidden');
+        }, 1000);
+        return;
+    }
+
+    // --- Standard single-set session save ---
+    const total = state.session.total;
+    if (total === 0) return;
 
     const results = Object.values(state.session.itemResults);
     const rawV = results.filter(v => v === true).length;
