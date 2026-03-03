@@ -285,6 +285,24 @@ select optgroup { background: #1e1e2f; color: var(--text-secondary); }
 .tact-card-lg img { width: 100%; flex: 1; object-fit: contain; border-radius: 10px; max-height: 70vh; }
 .tact-title { font-size: 2rem; color: #333; margin: 15px 0; font-weight: 800; text-transform: uppercase; }
 
+/* Hide labels toggle */
+#game-stage.labels-hidden .tact-title,
+#game-stage.labels-hidden .ran-single-stage h2,
+#game-stage.labels-hidden #deck-target span,
+#game-stage.labels-hidden .topo-item > span,
+#game-stage.labels-hidden #zoom-label { visibility: hidden !important; height: 0 !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; }
+#btn-toggle-labels.labels-off { background: var(--danger-color); color: #fff; }
+
+/* Custom autocomplete dropdown */
+.custom-autocomplete-wrap { position: relative; flex: 1; min-width: 120px; }
+.custom-autocomplete-wrap input { width: 100%; }
+.custom-ac-panel { display: none; position: absolute; bottom: 100%; left: 0; right: 0; z-index: 600; max-height: 200px; overflow-y: auto; background: #22223a; border: 1px solid var(--accent-color); border-radius: 12px 12px 0 0; box-shadow: 0 -8px 24px rgba(0,0,0,0.5); margin-bottom: 4px; }
+.custom-ac-panel.open { display: block; }
+.custom-ac-item { padding: 10px 14px; font-size: 0.85rem; color: #ccc; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.04); display: flex; align-items: center; gap: 8px; }
+.custom-ac-item:hover, .custom-ac-item.highlighted { background: rgba(99,102,241,0.15); color: white; }
+.custom-ac-item:last-child { border-bottom: none; }
+.custom-ac-empty { padding: 12px 14px; font-size: 0.8rem; color: var(--text-secondary); text-align: center; font-style: italic; }
+
 .card-grid { cursor: pointer; transition: 0.2s; background: white; border-radius: 12px; padding: 5px; position:relative; aspect-ratio: 1; display:flex; align-items:center; justify-content:center;}
 .card-grid img { width: 100%; height: 100%; object-fit: contain; border-radius: 6px; }
 .card-grid.matched { opacity: 0.3; filter: grayscale(100%); pointer-events: none; }

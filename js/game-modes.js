@@ -35,6 +35,101 @@ function handleImgError(img, label) {
     img.src = getPlaceholderUrl(label);
 }
 
+// === CUSTOM AUTOCOMPLETE (replaces native datalist to avoid keyboard overlap) ===
+// Returns HTML for a custom-autocomplete wrapper. Options is an array of strings.
+// inputAttrs is an object of extra attributes for the input element.
+function customAutocompleteHtml(inputId, options, inputAttrs = {}) {
+    const panelId = inputId + '-ac-panel';
+    const attrs = Object.entries(inputAttrs).map(([k, v]) => `${k}="${v}"`).join(' ');
+    const optionsHtml = options.length > 0
+        ? options.map(n => `<div class="custom-ac-item" data-value="${n.replace(/"/g, '&quot;')}">${n}</div>`).join('')
+        : '';
+    return `<div class="custom-autocomplete-wrap">
+        <input type="text" id="${inputId}" ${attrs} autocomplete="off">
+        <div class="custom-ac-panel" id="${panelId}">${optionsHtml}</div>
+    </div>`;
+}
+
+// Attach behavior to a custom autocomplete (call after DOM insert)
+function setupCustomAutocomplete(inputId, options) {
+    const input = document.getElementById(inputId);
+    const panel = document.getElementById(inputId + '-ac-panel');
+    if (!input || !panel) return;
+
+    let highlighted = -1;
+    let filteredOptions = [...options];
+
+    function renderOptions(filter) {
+        const query = (filter || '').toLowerCase().trim();
+        filteredOptions = query
+            ? options.filter(n => n.toLowerCase().includes(query))
+            : [...options];
+        if (filteredOptions.length === 0) {
+            panel.innerHTML = '<div class="custom-ac-empty">Nessun suggerimento</div>';
+        } else {
+            panel.innerHTML = filteredOptions.map(n =>
+                `<div class="custom-ac-item" data-value="${n.replace(/"/g, '&quot;')}">${n}</div>`
+            ).join('');
+        }
+        highlighted = -1;
+        // Attach click handlers
+        panel.querySelectorAll('.custom-ac-item').forEach(el => {
+            el.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                input.value = el.dataset.value;
+                closePanel();
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+        });
+    }
+
+    function openPanel() {
+        if (options.length === 0) return;
+        renderOptions(input.value);
+        panel.classList.add('open');
+        // Scroll panel to top
+        panel.scrollTop = 0;
+    }
+
+    function closePanel() {
+        panel.classList.remove('open');
+        highlighted = -1;
+    }
+
+    function highlightItem(idx) {
+        const items = panel.querySelectorAll('.custom-ac-item');
+        items.forEach(el => el.classList.remove('highlighted'));
+        if (idx >= 0 && idx < items.length) {
+            items[idx].classList.add('highlighted');
+            items[idx].scrollIntoView({ block: 'nearest' });
+        }
+        highlighted = idx;
+    }
+
+    input.addEventListener('focus', () => { openPanel(); });
+    input.addEventListener('input', () => { renderOptions(input.value); if (options.length > 0) panel.classList.add('open'); });
+    input.addEventListener('blur', () => { setTimeout(closePanel, 150); });
+    input.addEventListener('keydown', (e) => {
+        const items = panel.querySelectorAll('.custom-ac-item');
+        if (!panel.classList.contains('open') || items.length === 0) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            highlightItem(Math.min(highlighted + 1, items.length - 1));
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            highlightItem(Math.max(highlighted - 1, 0));
+        } else if (e.key === 'Enter' && highlighted >= 0 && highlighted < items.length) {
+            e.preventDefault();
+            input.value = items[highlighted].dataset.value;
+            closePanel();
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+        } else if (e.key === 'Escape') {
+            closePanel();
+        }
+    });
+}
+
 function renderGameMode(mode, items) {
     const stage = document.getElementById('game-stage');
     stage.innerHTML = '';
@@ -2114,15 +2209,16 @@ function renderQuadernoGeneral(container) {
     const qType = getQuadernoSessionType();
     const quadernoTemplates = state.savedSets.filter(s => s.modes && s.modes.includes('quaderno'));
 
+    const activityNames = getUsedActivityNames();
+
     container.innerHTML = `
     <div style="width:100%; max-width:700px; margin:0 auto;">
         <div style="display:flex; gap:8px; margin-bottom:8px; align-items:center; flex-wrap:wrap;">
-            <input type="text" id="quaderno-name-input" value="${state._quadernoName || ''}" placeholder="Nome lista (es. Seduta 15 Feb)"
-                list="quaderno-names-list"
-                style="flex:1; min-width:150px; padding:8px 12px; border-radius:8px; font-size:0.9rem;">
-            <datalist id="quaderno-names-list">
-                ${savedNames.map(n => `<option value="${n}">`).join('')}
-            </datalist>
+            ${customAutocompleteHtml('quaderno-name-input', savedNames, {
+                value: state._quadernoName || '',
+                placeholder: 'Nome lista (es. Seduta 15 Feb)',
+                style: 'min-width:150px; padding:8px 12px; border-radius:8px; font-size:0.9rem;'
+            })}
         </div>
         ${quadernoTemplates.length > 0 ? `
         <div style="display:flex; gap:6px; margin-bottom:10px; align-items:center; overflow-x:auto; padding-bottom:4px;">
@@ -2139,13 +2235,11 @@ function renderQuadernoGeneral(container) {
         </div>
 
         <div style="display:flex; gap:6px; margin-top:10px; align-items:center; flex-wrap:wrap;">
-            <input type="text" id="quaderno-new-activity" placeholder="Nome attivit&agrave;..."
-                list="quaderno-activity-names"
-                onkeydown="if(event.key==='Enter')addQuadernoRow()"
-                style="flex:1; min-width:120px; padding:10px; border-radius:8px; font-size:0.9rem;">
-            <datalist id="quaderno-activity-names">
-                ${getUsedActivityNames().map(n => `<option value="${n}">`).join('')}
-            </datalist>
+            ${customAutocompleteHtml('quaderno-new-activity', activityNames, {
+                placeholder: 'Nome attività...',
+                onkeydown: "if(event.key==='Enter')addQuadernoRow()",
+                style: 'min-width:120px; padding:10px; border-radius:8px; font-size:0.9rem;'
+            })}
             <select id="quaderno-session-type" onchange="onQuadernoTypeChange()" style="padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.85rem;">
                 <option value="independent" ${qType === 'independent' ? 'selected' : ''}>Indipendente</option>
                 <option value="timedelay" ${qType === 'timedelay' ? 'selected' : ''}>Time Delay</option>
@@ -2167,6 +2261,10 @@ function renderQuadernoGeneral(container) {
             </button>
         </div>
     </div>`;
+
+    // Setup custom autocomplete behavior after DOM insert
+    setupCustomAutocomplete('quaderno-name-input', savedNames);
+    setupCustomAutocomplete('quaderno-new-activity', activityNames);
 }
 
 function renderQuadernoRow(row, idx, sessionType) {
@@ -2506,15 +2604,16 @@ function renderQuadernoTask(container) {
     });
     const pct = totalScored > 0 ? Math.round((totalCorrect / totalScored) * 100) : 0;
 
+    const stepNames = getUsedActivityNames();
+
     container.innerHTML = `
     <div style="width:100%; max-width:700px; margin:0 auto;">
         <div style="display:flex; gap:8px; margin-bottom:8px; align-items:center; flex-wrap:wrap;">
-            <input type="text" id="quaderno-name-input" value="${state._quadernoName || ''}" placeholder="Nome Task Analysis (es. Memory - Procedura)"
-                list="quaderno-task-names-list"
-                style="flex:1; min-width:150px; padding:8px 12px; border-radius:8px; font-size:0.9rem;">
-            <datalist id="quaderno-task-names-list">
-                ${savedNames.map(n => `<option value="${n}">`).join('')}
-            </datalist>
+            ${customAutocompleteHtml('quaderno-name-input', savedNames, {
+                value: state._quadernoName || '',
+                placeholder: 'Nome Task Analysis (es. Memory - Procedura)',
+                style: 'min-width:150px; padding:8px 12px; border-radius:8px; font-size:0.9rem;'
+            })}
         </div>
         ${taskTemplates.length > 0 ? `
         <div style="display:flex; gap:6px; margin-bottom:10px; align-items:center; overflow-x:auto; padding-bottom:4px;">
@@ -2540,13 +2639,11 @@ function renderQuadernoTask(container) {
         </div>
 
         <div style="display:flex; gap:6px; margin-top:10px; align-items:center; flex-wrap:wrap;">
-            <input type="text" id="quaderno-new-step" placeholder="Nuovo passaggio..."
-                list="quaderno-step-names"
-                onkeydown="if(event.key==='Enter')addQuadernoStep()"
-                style="flex:1; min-width:120px; padding:10px; border-radius:8px; font-size:0.9rem;">
-            <datalist id="quaderno-step-names">
-                ${getUsedActivityNames().map(n => `<option value="${n}">`).join('')}
-            </datalist>
+            ${customAutocompleteHtml('quaderno-new-step', stepNames, {
+                placeholder: 'Nuovo passaggio...',
+                onkeydown: "if(event.key==='Enter')addQuadernoStep()",
+                style: 'min-width:120px; padding:10px; border-radius:8px; font-size:0.9rem;'
+            })}
             <select id="quaderno-session-type" onchange="onQuadernoTypeChange()" style="padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.85rem;">
                 <option value="independent" ${qType === 'independent' ? 'selected' : ''}>Indipendente</option>
                 <option value="timedelay" ${qType === 'timedelay' ? 'selected' : ''}>Time Delay</option>
@@ -2571,6 +2668,9 @@ function renderQuadernoTask(container) {
             </button>
         </div>
     </div>`;
+
+    setupCustomAutocomplete('quaderno-name-input', savedNames);
+    setupCustomAutocomplete('quaderno-new-step', stepNames);
 
     // Auto-scroll to active step
     if (steps.length > 0) {

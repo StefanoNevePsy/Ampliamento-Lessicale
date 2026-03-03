@@ -473,6 +473,18 @@ function _updateMultiSetScoreUI() {
     el.innerHTML = html;
 }
 
+// --- LABEL TOGGLE ---
+const LABEL_ENGINES = ['tact', 'ran', 'tombola', 'topologia', 'zoom'];
+
+window.toggleLabelsVisibility = () => {
+    const stage = document.getElementById('game-stage');
+    const btn = document.getElementById('btn-toggle-labels');
+    if (!stage) return;
+    const isHidden = stage.classList.toggle('labels-hidden');
+    if (btn) btn.classList.toggle('labels-off', isHidden);
+    state._labelsHidden = isHidden;
+};
+
 // --- START GAME ---
 window.startGame = () => {
     // Clean up any active fluenza timer
@@ -480,6 +492,24 @@ window.startGame = () => {
 
     const mode = document.getElementById('mode-select').value;
     const engine = getModeEngine(mode);
+
+    // Show/hide label toggle button
+    const labelBtn = document.getElementById('btn-toggle-labels');
+    if (labelBtn) {
+        if (LABEL_ENGINES.includes(engine)) {
+            labelBtn.classList.remove('hidden');
+            // Restore previous label visibility state
+            const stage = document.getElementById('game-stage');
+            if (stage && state._labelsHidden) {
+                stage.classList.add('labels-hidden');
+                labelBtn.classList.add('labels-off');
+            }
+        } else {
+            labelBtn.classList.add('hidden');
+            const stage = document.getElementById('game-stage');
+            if (stage) stage.classList.remove('labels-hidden');
+        }
+    }
     const isPoolMode = POOL_ENGINES.includes(engine);
     const numStimuli = parseInt(document.getElementById('num-stimuli').value);
 
@@ -913,13 +943,9 @@ window.showSessionNameInput = () => {
     const wrapper = document.getElementById('session-name-wrapper');
     if (wrapper) {
         wrapper.classList.remove('hidden');
-        // Update datalist with recent names
-        const datalist = document.getElementById('session-names-list');
-        if (datalist) {
-            datalist.innerHTML = getRecentSessionNames()
-                .map(n => `<option value="${n}">`)
-                .join('');
-        }
+        // Setup custom autocomplete with recent names
+        const names = getRecentSessionNames();
+        setupCustomAutocomplete('session-name-input', names);
     }
 };
 
