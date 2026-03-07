@@ -235,7 +235,7 @@
                 <button class="btn btn-primary" onclick="createEmptySet()"><i class="fa-solid fa-plus"></i> Nuovo Set</button>
                 <button class="btn btn-ghost" onclick="exportAllSets()"><i class="fa-solid fa-file-arrow-down"></i> Backup</button>
                 <button class="btn btn-ghost" onclick="document.getElementById('file-upload').click()"><i class="fa-solid fa-file-arrow-up"></i> Importa</button>
-                <input type="file" id="file-upload" class="hidden" accept=".json" onchange="importSets(this)">
+                <input type="file" id="file-upload" class="hidden" accept=".json,.zip" onchange="importSets(this)">
                 <button class="btn btn-ghost" onclick="openP2PSync()" style="border-color:rgba(99,102,241,0.3); color:var(--accent-color);"><i class="fa-solid fa-wifi"></i> Sync Diretto</button>
             </div>
             <div id="lib-sort-bar" class="lib-sort-bar"></div>
@@ -622,6 +622,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
     <!-- JS MODULES -->
     <script src="js/db.js"></script>
