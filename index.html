@@ -290,10 +290,22 @@
     <!-- MODAL: SETTINGS -->
     <div id="modal-settings" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:2000; justify-content:center; align-items:center;">
         <div style="background:#1e1e2f; padding:30px; border-radius:20px; width:90%; max-width:400px; border:1px solid var(--glass-border);">
-            <h3><i class="fa-solid fa-key"></i> Gemini API Key</h3>
+            <h3><i class="fa-solid fa-key"></i> Impostazioni AI</h3>
             <p style="color:#aaa; font-size:0.9rem;">Per generare set con AI (gratuito).<br>
             <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent-color);">Ottieni la chiave gratuita &rarr;</a></p>
             <input type="password" id="api-key" placeholder="AIzaSy...">
+
+            <label style="display:block; margin-top:18px; font-size:0.85rem; color:#aaa;">Modello Gemini</label>
+            <select id="gemini-model" style="width:100%; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.95rem; margin-top:4px;">
+                <option value="gemini-2.5-flash">Gemini 2.5 Flash — veloce, gratuito</option>
+                <option value="gemini-2.5-pro">Gemini 2.5 Pro — ragionamento avanzato</option>
+                <option value="gemini-3-flash">Gemini 3 Flash — multimodale avanzato (preview)</option>
+                <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro — massima qualità (preview)</option>
+            </select>
+            <p id="gemini-model-hint" style="color:#666; font-size:0.75rem; margin-top:6px;">
+                Flash è ideale per generazioni rapide. Pro per set più complessi e ragionamento avanzato.
+            </p>
+
             <div style="margin-top:20px; text-align:right;">
                 <button class="btn-ghost" onclick="closeSettings()">Chiudi</button>
                 <button class="btn-primary" onclick="saveKey()">Salva</button>

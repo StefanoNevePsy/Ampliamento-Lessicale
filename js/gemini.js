@@ -1,8 +1,19 @@
 // === GEMINI AI INTEGRATION ===
-// Uses Gemini 2.5 Flash (free tier: 10 req/min, 250 req/day)
 // Generates therapy stimulus sets directly from natural language descriptions
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent';
+const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/';
+
+function getGeminiModel() {
+    return localStorage.getItem('gemini_model') || 'gemini-2.5-flash';
+}
+
+function saveGeminiModel(model) {
+    localStorage.setItem('gemini_model', model);
+}
+
+function getGeminiApiUrl() {
+    return `${GEMINI_API_BASE}${getGeminiModel()}:generateContent`;
+}
 
 // --- API KEY MANAGEMENT ---
 function getGeminiApiKey() {
@@ -16,6 +27,7 @@ function saveGeminiApiKey(key) {
 window.openSettings = () => {
     const modal = document.getElementById('modal-settings');
     document.getElementById('api-key').value = getGeminiApiKey();
+    document.getElementById('gemini-model').value = getGeminiModel();
     modal.style.display = 'flex';
 };
 
@@ -26,12 +38,14 @@ window.closeSettings = () => {
 window.saveKey = () => {
     const key = document.getElementById('api-key').value.trim();
     saveGeminiApiKey(key);
+    const model = document.getElementById('gemini-model').value;
+    saveGeminiModel(model);
     closeSettings();
 };
 
 // --- GEMINI API CALL ---
 async function callGemini(prompt, apiKey) {
-    const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
+    const response = await fetch(`${getGeminiApiUrl()}?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -217,7 +231,7 @@ window.runGeminiGeneration = async () => {
     btn.style.display = 'none';
     status.style.display = 'block';
     result.style.display = 'none';
-    document.getElementById('gemini-status-text').textContent = 'Generazione in corso...';
+    document.getElementById('gemini-status-text').textContent = `Generazione in corso con ${getGeminiModel()}...`;
 
     try {
         _lastGeminiSet = await generateSetWithGemini(prompt);
