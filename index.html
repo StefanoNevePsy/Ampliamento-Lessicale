@@ -296,14 +296,16 @@
             <input type="password" id="api-key" placeholder="AIzaSy...">
 
             <label style="display:block; margin-top:18px; font-size:0.85rem; color:#aaa;">Modello Gemini</label>
-            <select id="gemini-model" style="width:100%; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.95rem; margin-top:4px;">
-                <option value="gemini-2.5-flash">Gemini 2.5 Flash — veloce, gratuito</option>
-                <option value="gemini-2.5-pro">Gemini 2.5 Pro — ragionamento avanzato</option>
-                <option value="gemini-3-flash">Gemini 3 Flash — multimodale avanzato (preview)</option>
-                <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro — massima qualità (preview)</option>
-            </select>
+            <div style="display:flex; gap:6px; align-items:center; margin-top:4px;">
+                <select id="gemini-model" style="flex:1; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.95rem;">
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                </select>
+                <button class="btn-ghost" onclick="refreshGeminiModels()" title="Aggiorna lista modelli" style="padding:8px 10px; font-size:0.9rem;">
+                    <i class="fa-solid fa-rotate" id="gemini-refresh-icon"></i>
+                </button>
+            </div>
             <p id="gemini-model-hint" style="color:#666; font-size:0.75rem; margin-top:6px;">
-                Flash è ideale per generazioni rapide. Pro per set più complessi e ragionamento avanzato.
+                Premi aggiorna per caricare i modelli disponibili dalla tua API key.
             </p>
 
             <div style="margin-top:20px; text-align:right;">

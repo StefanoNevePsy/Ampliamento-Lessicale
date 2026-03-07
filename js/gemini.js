@@ -1,7 +1,7 @@
 // === GEMINI AI INTEGRATION ===
 // Generates therapy stimulus sets directly from natural language descriptions
 
-const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/';
+const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/';
 
 function getGeminiModel() {
     return localStorage.getItem('gemini_model') || 'gemini-2.5-flash';
@@ -12,8 +12,94 @@ function saveGeminiModel(model) {
 }
 
 function getGeminiApiUrl() {
-    return `${GEMINI_API_BASE}${getGeminiModel()}:generateContent`;
+    return `${GEMINI_API_BASE}models/${getGeminiModel()}:generateContent`;
 }
+
+// --- DYNAMIC MODEL LISTING ---
+// Models known to be free on the Gemini API free tier
+const FREE_MODELS = new Set([
+    'gemini-2.5-flash', 'gemini-2.5-flash-lite',
+    'gemini-2.0-flash', 'gemini-2.0-flash-lite',
+    'gemini-3-flash', 'gemini-3.1-flash-lite'
+]);
+
+// Fallback list in case the API call fails
+const FALLBACK_MODELS = [
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', free: true },
+    { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash-Lite', free: true },
+    { id: 'gemini-3-flash', name: 'Gemini 3 Flash (preview)', free: true },
+];
+
+async function fetchAvailableModels(apiKey) {
+    const resp = await fetch(`${GEMINI_API_BASE}models?key=${apiKey}`);
+    if (!resp.ok) throw new Error(`Errore ${resp.status}`);
+    const data = await resp.json();
+
+    return (data.models || [])
+        .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
+        // Exclude embedding, TTS, image-only, and other non-text models
+        .filter(m => !m.name.includes('embedding') && !m.name.includes('tts')
+                  && !m.name.includes('imagen') && !m.name.includes('computer-use')
+                  && !m.name.includes('deep-research'))
+        .map(m => {
+            // m.name is like "models/gemini-2.5-flash"
+            const id = m.name.replace('models/', '');
+            const isFree = FREE_MODELS.has(id) || id.includes('flash');
+            return { id, name: m.displayName || id, free: isFree };
+        })
+        // Sort: free first, then alphabetically
+        .sort((a, b) => {
+            if (a.free !== b.free) return a.free ? -1 : 1;
+            return a.name.localeCompare(b.name);
+        });
+}
+
+function populateModelSelect(models) {
+    const select = document.getElementById('gemini-model');
+    const current = getGeminiModel();
+    select.innerHTML = '';
+
+    for (const m of models) {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = m.name + (m.free ? ' (gratuito)' : ' (a pagamento)');
+        select.appendChild(opt);
+    }
+
+    // Restore previous selection if still available
+    if (models.some(m => m.id === current)) {
+        select.value = current;
+    }
+
+    const hint = document.getElementById('gemini-model-hint');
+    if (hint) hint.textContent = `${models.length} modelli disponibili. I modelli "gratuito" non hanno costi.`;
+}
+
+window.refreshGeminiModels = async () => {
+    const apiKey = document.getElementById('api-key').value.trim() || getGeminiApiKey();
+    if (!apiKey) {
+        alert('Inserisci prima la chiave API per caricare i modelli.');
+        return;
+    }
+
+    const icon = document.getElementById('gemini-refresh-icon');
+    icon.classList.add('fa-spin');
+    const hint = document.getElementById('gemini-model-hint');
+    hint.textContent = 'Caricamento modelli...';
+
+    try {
+        const models = await fetchAvailableModels(apiKey);
+        if (models.length === 0) throw new Error('Nessun modello trovato');
+        populateModelSelect(models);
+        // Cache the list for 24h
+        localStorage.setItem('gemini_models_cache', JSON.stringify({ ts: Date.now(), models }));
+    } catch (err) {
+        hint.textContent = 'Errore nel caricamento. Uso lista predefinita.';
+        populateModelSelect(FALLBACK_MODELS);
+    } finally {
+        icon.classList.remove('fa-spin');
+    }
+};
 
 // --- API KEY MANAGEMENT ---
 function getGeminiApiKey() {
@@ -27,7 +113,19 @@ function saveGeminiApiKey(key) {
 window.openSettings = () => {
     const modal = document.getElementById('modal-settings');
     document.getElementById('api-key').value = getGeminiApiKey();
-    document.getElementById('gemini-model').value = getGeminiModel();
+
+    // Load cached models or fallback, then restore selection
+    const cached = JSON.parse(localStorage.getItem('gemini_models_cache') || 'null');
+    const ONE_DAY = 24 * 60 * 60 * 1000;
+    if (cached && (Date.now() - cached.ts < ONE_DAY) && cached.models?.length) {
+        populateModelSelect(cached.models);
+    } else {
+        populateModelSelect(FALLBACK_MODELS);
+        // Auto-refresh if we have a key
+        const apiKey = getGeminiApiKey();
+        if (apiKey) setTimeout(() => refreshGeminiModels(), 100);
+    }
+
     modal.style.display = 'flex';
 };
 
@@ -62,6 +160,11 @@ async function callGemini(prompt, apiKey) {
         const err = await response.json().catch(() => ({}));
         if (response.status === 429) throw new Error('Limite di richieste raggiunto. Riprova tra qualche minuto.');
         if (response.status === 400) throw new Error('Chiave API non valida. Controlla nelle Impostazioni.');
+        if (response.status === 404) {
+            // Model was retired/removed — clear cache so next settings open refreshes
+            localStorage.removeItem('gemini_models_cache');
+            throw new Error(`Il modello "${getGeminiModel()}" non è più disponibile. Apri Impostazioni e scegline un altro.`);
+        }
         throw new Error(err.error?.message || `Errore API (${response.status})`);
     }
 
