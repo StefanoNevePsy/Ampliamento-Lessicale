@@ -141,37 +141,67 @@ window.saveKey = () => {
     closeSettings();
 };
 
-// --- GEMINI API CALL ---
-async function callGemini(prompt, apiKey) {
-    const response = await fetch(`${getGeminiApiUrl()}?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-                temperature: 0.8,
-                maxOutputTokens: 4096,
-                responseMimeType: 'application/json'
-            }
-        })
-    });
+// --- GEMINI API CALL (with auto-retry on rate limit) ---
+function _parse429Error(errBody) {
+    const msg = errBody?.error?.message || '';
+    // Google distinguishes RESOURCE_EXHAUSTED (quota) vs rate limit
+    if (/quota/i.test(msg) || /per day/i.test(msg) || /daily/i.test(msg)) {
+        return { retryable: false, message: 'Quota giornaliera esaurita per questo modello. Prova con un altro modello (es. gemini-2.0-flash o gemini-2.5-flash-lite) nelle Impostazioni.' };
+    }
+    if (/per minute/i.test(msg) || /rate limit/i.test(msg) || /too many/i.test(msg)) {
+        return { retryable: true, message: 'Troppe richieste al minuto.' };
+    }
+    // Default: assume retryable
+    return { retryable: true, message: msg || 'Limite richieste raggiunto.' };
+}
 
-    if (!response.ok) {
+async function callGemini(prompt, apiKey) {
+    const MAX_RETRIES = 3;
+    const BACKOFF_MS = [3000, 8000, 15000]; // 3s, 8s, 15s
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        const response = await fetch(`${getGeminiApiUrl()}?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    temperature: 0.8,
+                    maxOutputTokens: 4096,
+                    responseMimeType: 'application/json'
+                }
+            })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!text) throw new Error('Risposta vuota dall\'AI');
+            return JSON.parse(text);
+        }
+
         const err = await response.json().catch(() => ({}));
-        if (response.status === 429) throw new Error('Limite di richieste raggiunto. Riprova tra qualche minuto.');
+
+        if (response.status === 429) {
+            const parsed = _parse429Error(err);
+            if (!parsed.retryable) throw new Error(parsed.message);
+            if (attempt < MAX_RETRIES) {
+                // Update status text if visible
+                const statusEl = document.getElementById('gemini-status-text');
+                if (statusEl) statusEl.textContent = `Rate limit — nuovo tentativo tra ${BACKOFF_MS[attempt] / 1000}s (${attempt + 1}/${MAX_RETRIES})...`;
+                await new Promise(r => setTimeout(r, BACKOFF_MS[attempt]));
+                continue;
+            }
+            throw new Error('Limite richieste persistente. Prova con un altro modello (es. gemini-2.0-flash o gemini-2.5-flash-lite) nelle Impostazioni, oppure attendi qualche minuto.');
+        }
+
         if (response.status === 400) throw new Error('Chiave API non valida. Controlla nelle Impostazioni.');
         if (response.status === 404) {
-            // Model was retired/removed — clear cache so next settings open refreshes
             localStorage.removeItem('gemini_models_cache');
             throw new Error(`Il modello "${getGeminiModel()}" non è più disponibile. Apri Impostazioni e scegline un altro.`);
         }
         throw new Error(err.error?.message || `Errore API (${response.status})`);
     }
-
-    const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) throw new Error('Risposta vuota dall\'AI');
-    return JSON.parse(text);
 }
 
 // --- SET GENERATION ---
