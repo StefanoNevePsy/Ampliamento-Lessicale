@@ -281,7 +281,7 @@
             <div style="margin-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:15px; display:flex; gap:8px; flex-wrap:wrap;">
                  <button class="btn btn-ghost" onclick="document.getElementById('bulk-upload').click()"><i class="fa-solid fa-images"></i> Carica Immagini (Bulk)</button>
                  <input type="file" id="bulk-upload" class="hidden" multiple accept="image/*" onchange="bulkUploadImages(this)">
-                 <button class="btn btn-ghost" onclick="openBulkImageGenerator()" style="color:var(--accent-color); border-color:rgba(99,102,241,0.3);"><i class="fa-solid fa-wand-magic-sparkles"></i> Genera Immagini AI</button>
+                 <button class="btn btn-ghost" onclick="openBulkPollinations()" style="color:var(--accent-color); border-color:rgba(99,102,241,0.3);"><i class="fa-solid fa-wand-magic-sparkles"></i> Genera Immagini AI</button>
             </div>
             <div id="editor-list"></div>
             <button class="btn btn-primary" style="width:100%; margin-top:20px; padding:15px;" onclick="addNewItem()"><i class="fa-solid fa-plus"></i> Aggiungi Carta Vuota</button>
@@ -307,14 +307,6 @@
             </div>
             <p id="gemini-model-hint" style="color:#666; font-size:0.75rem; margin-top:6px;">
                 Premi aggiorna per caricare i modelli disponibili dalla tua API key.
-            </p>
-
-            <label style="display:block; margin-top:18px; font-size:0.85rem; color:#aaa;"><i class="fa-solid fa-image"></i> Modello Immagini (generazione)</label>
-            <select id="imagen-model" style="width:100%; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.95rem; margin-top:4px;">
-                <option value="gemini-2.5-flash-image">Nano Banana 1 (2.5 Flash)</option>
-            </select>
-            <p style="color:#666; font-size:0.75rem; margin-top:4px;">
-                Tutti i modelli immagine richiedono piano a pagamento. Nano Banana 1 (~$0.04/img) &egrave; il pi&ugrave; economico.
             </p>
 
             <div style="margin-top:20px; text-align:right;">
@@ -661,7 +653,7 @@
     <script src="js/backup.js"></script>
     <script src="js/p2p-sync.js"></script>
     <script src="js/gemini.js"></script>
-    <script src="js/imagen.js"></script>
+    <script src="js/pollinations.js"></script>
     <script src="js/app.js"></script>
     <script src="js/firebase-sync.js"></script>
 </body>
