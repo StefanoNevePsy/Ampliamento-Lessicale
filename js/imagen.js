@@ -1,11 +1,17 @@
-// === IMAGE GENERATION WITH IMAGEN API ===
-// Uses the same Gemini API key for generating images via Google's Imagen models
+// === IMAGE GENERATION WITH IMAGEN & NANO BANANA API ===
+// Uses the same Gemini API key for generating images via Google's Imagen and Gemini Image models
+// Imagen models use :predict endpoint, Nano Banana models use :generateContent endpoint
 
 const IMAGEN_MODELS = [
-    { id: 'imagen-3.0-generate-002', name: 'Imagen 3', free: true },
-    { id: 'imagen-4.0-fast-generate-001', name: 'Imagen 4 Fast', free: false },
-    { id: 'imagen-4.0-generate-001', name: 'Imagen 4 Standard', free: false },
-    { id: 'imagen-4.0-ultra-generate-001', name: 'Imagen 4 Ultra', free: false },
+    // Nano Banana (Gemini Image) models - use generateContent API
+    { id: 'gemini-2.5-flash-preview-image-generation', name: 'Nano Banana 1 (2.5 Flash)', free: true, type: 'gemini' },
+    { id: 'gemini-3.1-flash-image-preview', name: 'Nano Banana 2 (3.1 Flash)', free: false, type: 'gemini' },
+    { id: 'gemini-3-pro-image-preview', name: 'Nano Banana Pro (3 Pro)', free: false, type: 'gemini' },
+    // Imagen models - use predict API
+    { id: 'imagen-3.0-generate-002', name: 'Imagen 3', free: true, type: 'imagen' },
+    { id: 'imagen-4.0-fast-generate-001', name: 'Imagen 4 Fast', free: false, type: 'imagen' },
+    { id: 'imagen-4.0-generate-001', name: 'Imagen 4 Standard', free: false, type: 'imagen' },
+    { id: 'imagen-4.0-ultra-generate-001', name: 'Imagen 4 Ultra', free: false, type: 'imagen' },
 ];
 
 function getImagenModel() {
@@ -56,12 +62,29 @@ function buildImagePrompt(subject, generalStyleIds, specificStyleId) {
     return parts.join(', ');
 }
 
-// --- IMAGEN API CALL ---
+// --- IMAGE GENERATION API CALL ---
+// Detects model type and uses the appropriate API format
+function getModelType(modelId) {
+    const model = IMAGEN_MODELS.find(m => m.id === modelId);
+    return model?.type || (modelId.startsWith('gemini') ? 'gemini' : 'imagen');
+}
+
 async function callImagen(prompt, aspectRatio) {
     const apiKey = getGeminiApiKey();
     if (!apiKey) throw new Error('API key mancante. Configurala nelle Impostazioni.');
 
     const model = getImagenModel();
+    const modelType = getModelType(model);
+
+    if (modelType === 'gemini') {
+        return await callGeminiImage(prompt, aspectRatio, model, apiKey);
+    } else {
+        return await callImagenPredict(prompt, aspectRatio, model, apiKey);
+    }
+}
+
+// Imagen models (:predict endpoint)
+async function callImagenPredict(prompt, aspectRatio, model, apiKey) {
     const url = `${GEMINI_API_BASE}models/${model}:predict?key=${apiKey}`;
 
     const body = {
@@ -88,6 +111,47 @@ async function callImagen(prompt, aspectRatio) {
     if (!prediction?.bytesBase64Encoded) throw new Error('Nessuna immagine generata. Prova con un prompt diverso.');
 
     return `data:${prediction.mimeType || 'image/png'};base64,${prediction.bytesBase64Encoded}`;
+}
+
+// Nano Banana / Gemini Image models (:generateContent endpoint)
+async function callGeminiImage(prompt, aspectRatio, model, apiKey) {
+    const url = `${GEMINI_API_BASE}models/${model}:generateContent?key=${apiKey}`;
+
+    const body = {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+            responseModalities: ['IMAGE'],
+        }
+    };
+
+    // Add image config if aspect ratio specified
+    if (aspectRatio) {
+        body.generationConfig.imageConfig = { aspectRatio };
+    }
+
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    });
+
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        if (response.status === 429) throw new Error('Limite richieste raggiunto. Attendi qualche minuto.');
+        if (response.status === 403) throw new Error('Modello non disponibile con la tua API key. Prova un altro modello nelle Impostazioni.');
+        throw new Error(err.error?.message || `Errore API (${response.status})`);
+    }
+
+    const data = await response.json();
+
+    // Extract image from response parts
+    const parts = data.candidates?.[0]?.content?.parts;
+    if (!parts) throw new Error('Risposta vuota dal modello.');
+
+    const imagePart = parts.find(p => p.inlineData);
+    if (!imagePart?.inlineData?.data) throw new Error('Nessuna immagine generata. Prova con un prompt diverso.');
+
+    return `data:${imagePart.inlineData.mimeType || 'image/png'};base64,${imagePart.inlineData.data}`;
 }
 
 // --- UI: SINGLE ITEM IMAGE GENERATOR ---
