@@ -24,7 +24,8 @@
       "index.html",
       "css/**/*",
       "js/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "build/icon.svg"
     ],
     "mac": {
       "category": "public.app-category.medical",
