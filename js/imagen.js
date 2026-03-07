@@ -4,7 +4,7 @@
 
 const IMAGEN_MODELS = [
     // Nano Banana (Gemini Image) models - use generateContent API
-    { id: 'gemini-2.5-flash-preview-image-generation', name: 'Nano Banana 1 (2.5 Flash)', free: true, type: 'gemini' },
+    { id: 'gemini-2.5-flash-image', name: 'Nano Banana 1 (2.5 Flash)', free: false, type: 'gemini' },
     { id: 'gemini-3.1-flash-image-preview', name: 'Nano Banana 2 (3.1 Flash)', free: false, type: 'gemini' },
     { id: 'gemini-3-pro-image-preview', name: 'Nano Banana Pro (3 Pro)', free: false, type: 'gemini' },
     // Imagen models - use predict API
