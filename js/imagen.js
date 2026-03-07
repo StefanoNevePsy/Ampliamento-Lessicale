@@ -7,15 +7,14 @@ const IMAGEN_MODELS = [
     { id: 'gemini-2.5-flash-image', name: 'Nano Banana 1 (2.5 Flash)', free: false, type: 'gemini' },
     { id: 'gemini-3.1-flash-image-preview', name: 'Nano Banana 2 (3.1 Flash)', free: false, type: 'gemini' },
     { id: 'gemini-3-pro-image-preview', name: 'Nano Banana Pro (3 Pro)', free: false, type: 'gemini' },
-    // Imagen models - use predict API
-    { id: 'imagen-3.0-generate-002', name: 'Imagen 3', free: true, type: 'imagen' },
+    // Imagen 4 models - use predict API (Imagen 3 discontinued on v1beta)
     { id: 'imagen-4.0-fast-generate-001', name: 'Imagen 4 Fast', free: false, type: 'imagen' },
     { id: 'imagen-4.0-generate-001', name: 'Imagen 4 Standard', free: false, type: 'imagen' },
     { id: 'imagen-4.0-ultra-generate-001', name: 'Imagen 4 Ultra', free: false, type: 'imagen' },
 ];
 
 function getImagenModel() {
-    return localStorage.getItem('imagen_model') || 'imagen-3.0-generate-002';
+    return localStorage.getItem('imagen_model') || 'gemini-2.5-flash-image';
 }
 
 function saveImagenModel(model) {
