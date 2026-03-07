@@ -407,3 +407,13 @@ input[type="text"] { width: 100%; padding: 10px; background: rgba(0, 0, 0, 0.3);
 }
 
 @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(0,0,0,0); } 100% { box-shadow: 0 0 0 0 rgba(0,0,0,0); } }
+
+/* Loading spinner for AI generation */
+.loading-spinner {
+    width: 36px; height: 36px;
+    border: 3px solid rgba(99, 102, 241, 0.2);
+    border-top-color: var(--accent-color);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }

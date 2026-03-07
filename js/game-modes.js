@@ -87,6 +87,10 @@ function setupCustomAutocomplete(inputId, options) {
         if (options.length === 0) return;
         renderOptions(input.value);
         // Use fixed positioning so panels aren't clipped by overflow:hidden on #game-stage
+        // Use visualViewport to avoid keyboard-push issues on tablets
+        const vv = window.visualViewport;
+        const vpHeight = vv ? vv.height : window.innerHeight;
+        const vpOffsetTop = vv ? vv.offsetTop : 0;
         const rect = input.getBoundingClientRect();
         const controlsRow = document.querySelector('.controls-row');
         const topLimit = controlsRow ? controlsRow.getBoundingClientRect().bottom + 4 : 60;
@@ -94,7 +98,7 @@ function setupCustomAutocomplete(inputId, options) {
         panel.style.position = 'fixed';
         panel.style.left = rect.left + 'px';
         panel.style.width = rect.width + 'px';
-        panel.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+        panel.style.bottom = (vpHeight + vpOffsetTop - rect.top + 4) + 'px';
         panel.style.maxHeight = Math.max(80, Math.min(available, 250)) + 'px';
         panel.classList.add('open');
         panel.scrollTop = 0;
@@ -113,6 +117,13 @@ function setupCustomAutocomplete(inputId, options) {
             items[idx].scrollIntoView({ block: 'nearest' });
         }
         highlighted = idx;
+    }
+
+    // Reposition panel when visual viewport changes (e.g. keyboard open/close on tablets)
+    if (window.visualViewport) {
+        const reposition = () => { if (panel.classList.contains('open')) openPanel(); };
+        window.visualViewport.addEventListener('resize', reposition);
+        window.visualViewport.addEventListener('scroll', reposition);
     }
 
     input.addEventListener('focus', () => { openPanel(); });
@@ -314,12 +325,30 @@ function renderRanIntensivo(items, stage) {
                     <h2 style="text-align:center;">${current.label}</h2>
                 </div>
                 <div class="ran-controls-bar">
+                    <button class="ran-btn-nav" onclick="prevRanIntensivo()"><i class="fa-solid fa-arrow-left"></i></button>
                     <div class="ran-counter">${presented}/${target}</div>
+                    <button class="ran-btn-nav" onclick="nextRanIntensivo()"><i class="fa-solid fa-arrow-right"></i></button>
                 </div>
             </div>
         </div>
     </div>`;
 }
+
+// Navigation for RAN Intensivo (manual prev/next without scoring)
+window.nextRanIntensivo = () => {
+    const ri = state._ranIntensivo;
+    if (!ri || ri.completed || ri.deckIndex >= ri.deck.length - 1) return;
+    ri.deckIndex++;
+    const mode = document.getElementById('mode-select').value;
+    renderGameMode(mode, ri.allItems);
+};
+window.prevRanIntensivo = () => {
+    const ri = state._ranIntensivo;
+    if (!ri || ri.deckIndex <= 0) return;
+    ri.deckIndex--;
+    const mode = document.getElementById('mode-select').value;
+    renderGameMode(mode, ri.allItems);
+};
 
 // --- FLUENZA (Timed fluency - count items within time limit) ---
 function renderFluenza(items, stage) {

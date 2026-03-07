@@ -10,8 +10,8 @@
     <meta name="theme-color" content="#1e1e2f">
 
     <!-- Icons & Fonts -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImciIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiM2MzY2ZjEiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiM4YjVjZjYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjEyMCIgZmlsbD0idXJsKCNnKSIvPjxjaXJjbGUgY3g9IjI1NiIgY3k9IjI1NiIgcj0iMTQwIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMSkiLz48cGF0aCBkPSJNMzYwIDI1NmMwLTU3LjQtNDYuNi0xMDQtMTA0LTEwNHMtMTA0IDQ2LjYtMTA0IDEwNCA0Ni42IDEwNCAxMDQgMTA0YzEyLjggMCAyNS0yLjMgMzYuNC02LjUgMTAuMyA5LjggMjQuNiAxOC41IDQxLjYgMjIuNSAzLjEgMC43IDYuMi0xLjYgNi4yLTQuOCAwLTIuNy0xLjUtNS4yLTMuOS02LjYtMTEuNC02LjctMTguOC0xNi45LTE4LjgtMTYuOSAzMC42LTIzLjIgNTguOS02MS44IDQyLjUtOTEuN3oiIGZpbGw9IiNmZmZmZmYiLz48L3N2Zz4=">
-    <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImciIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiM2MzY2ZjEiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiM4YjVjZjYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9IjEyMCIgZmlsbD0idXJsKCNnKSIvPjxjaXJjbGUgY3g9IjI1NiIgY3k9IjI1NiIgcj0iMTQwIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMSkiLz48cGF0aCBkPSJNMzYwIDI1NmMwLTU3LjQtNDYuNi0xMDQtMTA0LTEwNHMtMTA0IDQ2LjYtMTA0IDEwNCA0Ni42IDEwNCAxMDQgMTA0YzEyLjggMCAyNS0yLjMgMzYuNC02LjUgMTAuMyA5LjggMjQuNiAxOC41IDQxLjYgMjIuNSAzLjEgMC43IDYuMi0xLjYgNi4yLTQuOCAwLTIuNy0xLjUtNS4yLTMuOS02LjYtMTEuNC02LjctMTguOC0xNi45LTE4LjgtMTYuOSAzMC42LTIzLjIgNTguOS02MS44IDQyLjUtOTEuN3oiIGZpbGw9IiNmZmZmZmYiLz48L3N2Zz4=">
+    <link rel="icon" type="image/svg+xml" href="build/icon.svg">
+    <link rel="apple-touch-icon" href="build/icon.svg">
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;800&display=swap" rel="stylesheet">
@@ -52,6 +52,9 @@
                 </button>
                 <button class="btn-icon" onclick="openFirebaseSettings()" title="Firebase Sync" style="color:#f59e0b; border-color:rgba(245,158,11,0.3);">
                     <i class="fa-solid fa-cloud"></i>
+                </button>
+                <button class="btn-icon" onclick="openSettings()" title="Impostazioni API">
+                    <i class="fa-solid fa-key"></i>
                 </button>
                 <button class="btn-icon" onclick="toggleFullScreen()" title="Schermo Intero">
                     <i class="fa-solid fa-expand" id="fs-icon"></i>
@@ -233,9 +236,10 @@
         <div class="modal-body">
             <div style="display:flex; gap:10px; margin-bottom: 20px; flex-wrap:wrap;">
                 <button class="btn btn-primary" onclick="createEmptySet()"><i class="fa-solid fa-plus"></i> Nuovo Set</button>
+                <button class="btn btn-primary" onclick="openGeminiGenerator()" style="background:linear-gradient(135deg, #4f46e5, #7c3aed);"><i class="fa-solid fa-wand-magic-sparkles"></i> Genera con AI</button>
                 <button class="btn btn-ghost" onclick="exportAllSets()"><i class="fa-solid fa-file-arrow-down"></i> Backup</button>
                 <button class="btn btn-ghost" onclick="document.getElementById('file-upload').click()"><i class="fa-solid fa-file-arrow-up"></i> Importa</button>
-                <input type="file" id="file-upload" class="hidden" accept=".json" onchange="importSets(this)">
+                <input type="file" id="file-upload" class="hidden" accept=".json,.zip" onchange="importSets(this)">
                 <button class="btn btn-ghost" onclick="openP2PSync()" style="border-color:rgba(99,102,241,0.3); color:var(--accent-color);"><i class="fa-solid fa-wifi"></i> Sync Diretto</button>
             </div>
             <div id="lib-sort-bar" class="lib-sort-bar"></div>
@@ -286,9 +290,24 @@
     <!-- MODAL: SETTINGS -->
     <div id="modal-settings" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:2000; justify-content:center; align-items:center;">
         <div style="background:#1e1e2f; padding:30px; border-radius:20px; width:90%; max-width:400px; border:1px solid var(--glass-border);">
-            <h3><i class="fa-solid fa-key"></i> API Key</h3>
-            <p style="color:#aaa; font-size:0.9rem;">Per AI Custom (opzionale).</p>
+            <h3><i class="fa-solid fa-key"></i> Impostazioni AI</h3>
+            <p style="color:#aaa; font-size:0.9rem;">Per generare set con AI (gratuito).<br>
+            <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent-color);">Ottieni la chiave gratuita &rarr;</a></p>
             <input type="password" id="api-key" placeholder="AIzaSy...">
+
+            <label style="display:block; margin-top:18px; font-size:0.85rem; color:#aaa;">Modello Gemini</label>
+            <div style="display:flex; gap:6px; align-items:center; margin-top:4px;">
+                <select id="gemini-model" style="flex:1; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.95rem;">
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                </select>
+                <button class="btn-ghost" onclick="refreshGeminiModels()" title="Aggiorna lista modelli" style="padding:8px 10px; font-size:0.9rem;">
+                    <i class="fa-solid fa-rotate" id="gemini-refresh-icon"></i>
+                </button>
+            </div>
+            <p id="gemini-model-hint" style="color:#666; font-size:0.75rem; margin-top:6px;">
+                Premi aggiorna per caricare i modelli disponibili dalla tua API key.
+            </p>
+
             <div style="margin-top:20px; text-align:right;">
                 <button class="btn-ghost" onclick="closeSettings()">Chiudi</button>
                 <button class="btn-primary" onclick="saveKey()">Salva</button>
@@ -622,6 +641,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
     <!-- JS MODULES -->
     <script src="js/db.js"></script>
@@ -631,6 +651,7 @@
     <script src="js/game-modes.js"></script>
     <script src="js/backup.js"></script>
     <script src="js/p2p-sync.js"></script>
+    <script src="js/gemini.js"></script>
     <script src="js/app.js"></script>
     <script src="js/firebase-sync.js"></script>
 </body>

@@ -922,7 +922,7 @@ window.recordResponse = (result) => {
             updateScoreUI();
             document.getElementById('btn-save-session').classList.remove('hidden');
             if (typeof showSessionNameInput === 'function') showSessionNameInput();
-        }, 600);
+        }, 350);
         return;
     } else if (engine === 'tact' || (engine === 'ran' && state.ranMode === 'single')) {
         const currentIndex = (engine === 'tact') ? state.tactIndex : state.ranIndex;
@@ -937,6 +937,17 @@ window.recordResponse = (result) => {
             void targetImg.offsetWidth;
             if (result === 'prompt') targetImg.classList.add('feedback-prompt');
             else targetImg.classList.add(result ? 'feedback-success' : 'feedback-fail');
+        }
+
+        // Auto-advance to next stimulus after scoring (normal RAN single mode)
+        if (engine === 'ran' && state.ranMode === 'single') {
+            const maxIdx = state.ranDisplayItems.length - 1;
+            if (state.ranIndex < maxIdx) {
+                setTimeout(() => {
+                    state.ranIndex++;
+                    updateRanContent();
+                }, 350);
+            }
         }
     } else if (engine === 'search_find' || engine === 'intraverbal_scenari') {
         const markers = document.querySelectorAll('.marker-pin');
