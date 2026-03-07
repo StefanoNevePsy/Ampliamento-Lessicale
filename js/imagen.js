@@ -522,13 +522,30 @@ window.populateImagenModelSelect = () => {
     if (!select) return;
     const current = getImagenModel();
     select.innerHTML = '';
-    for (const m of IMAGEN_MODELS) {
+
+    // Group: Nano Banana (Gemini Image)
+    const geminiGroup = document.createElement('optgroup');
+    geminiGroup.label = 'Nano Banana (Gemini Image)';
+    IMAGEN_MODELS.filter(m => m.type === 'gemini').forEach(m => {
         const opt = document.createElement('option');
         opt.value = m.id;
         opt.textContent = m.name + (m.free ? ' (gratuito)' : ' (a pagamento)');
         if (m.id === current) opt.selected = true;
-        select.appendChild(opt);
-    }
+        geminiGroup.appendChild(opt);
+    });
+    select.appendChild(geminiGroup);
+
+    // Group: Imagen
+    const imagenGroup = document.createElement('optgroup');
+    imagenGroup.label = 'Imagen';
+    IMAGEN_MODELS.filter(m => m.type === 'imagen').forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = m.name + (m.free ? ' (gratuito)' : ' (a pagamento)');
+        if (m.id === current) opt.selected = true;
+        imagenGroup.appendChild(opt);
+    });
+    select.appendChild(imagenGroup);
 };
 
 // Hook into saveKey to also save imagen model
@@ -543,5 +560,10 @@ window.saveKey = () => {
 const _originalOpenSettings = window.openSettings;
 window.openSettings = () => {
     _originalOpenSettings();
-    setTimeout(() => populateImagenModelSelect(), 50);
+    populateImagenModelSelect();
 };
+
+// Also populate on page load in case settings are already visible
+document.addEventListener('DOMContentLoaded', () => {
+    populateImagenModelSelect();
+});
