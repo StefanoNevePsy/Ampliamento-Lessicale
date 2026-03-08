@@ -110,21 +110,88 @@ function saveGeminiApiKey(key) {
     localStorage.setItem('gemini_api_key', key.trim());
 }
 
+// --- THEME SYSTEM ---
+const APP_THEMES = [
+    { id: 'default', name: 'Indigo', colors: ['#1e1e2f', '#2d2b55', '#6366f1', '#10b981'] },
+    { id: 'ocean', name: 'Oceano', colors: ['#0f172a', '#1e3a5f', '#38bdf8', '#34d399'] },
+    { id: 'forest', name: 'Foresta', colors: ['#1a2e1a', '#2d4a2d', '#4ade80', '#34d399'] },
+    { id: 'sunset', name: 'Tramonto', colors: ['#2d1b2e', '#4a2040', '#f472b6', '#34d399'] },
+    { id: 'midnight', name: 'Mezzanotte', colors: ['#0a0a0a', '#1a1a2e', '#8b5cf6', '#10b981'] },
+    { id: 'light', name: 'Chiaro', colors: ['#f1f5f9', '#e2e8f0', '#6366f1', '#059669'] },
+];
+
+function getCurrentTheme() {
+    return localStorage.getItem('app_theme') || 'default';
+}
+
+function applyTheme(themeId) {
+    if (themeId === 'default') {
+        document.documentElement.removeAttribute('data-theme');
+    } else {
+        document.documentElement.setAttribute('data-theme', themeId);
+    }
+    localStorage.setItem('app_theme', themeId);
+    // Update theme-color meta
+    const metaTheme = document.querySelector('meta[name="theme-color"]');
+    const theme = APP_THEMES.find(t => t.id === themeId);
+    if (metaTheme && theme) metaTheme.setAttribute('content', theme.colors[0]);
+}
+
+function renderThemePicker() {
+    const container = document.getElementById('theme-picker');
+    if (!container) return;
+    const current = getCurrentTheme();
+    container.innerHTML = APP_THEMES.map(t => `
+        <div class="theme-card ${t.id === current ? 'active' : ''}" onclick="selectTheme('${t.id}')">
+            <div class="theme-preview">
+                ${t.colors.map(c => `<span style="background:${c};"></span>`).join('')}
+            </div>
+            <div class="theme-name">${t.name}</div>
+            <i class="fa-solid fa-check theme-check"></i>
+        </div>
+    `).join('');
+}
+
+window.selectTheme = (themeId) => {
+    applyTheme(themeId);
+    renderThemePicker();
+};
+
+// --- SETTINGS TABS ---
+window.switchSettingsTab = (tab) => {
+    ['api', 'images', 'theme'].forEach(t => {
+        const el = document.getElementById('settings-tab-' + t);
+        if (el) el.style.display = t === tab ? '' : 'none';
+    });
+    document.querySelectorAll('#settings-tabs .settings-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
+    if (tab === 'theme') renderThemePicker();
+};
+
 window.openSettings = () => {
     const modal = document.getElementById('modal-settings');
+    // API tab
     document.getElementById('api-key').value = getGeminiApiKey();
 
-    // Load cached models or fallback, then restore selection
     const cached = JSON.parse(localStorage.getItem('gemini_models_cache') || 'null');
     const ONE_DAY = 24 * 60 * 60 * 1000;
     if (cached && (Date.now() - cached.ts < ONE_DAY) && cached.models?.length) {
         populateModelSelect(cached.models);
     } else {
         populateModelSelect(FALLBACK_MODELS);
-        // Auto-refresh if we have a key
         const apiKey = getGeminiApiKey();
         if (apiKey) setTimeout(() => refreshGeminiModels(), 100);
     }
+
+    // Images tab
+    const pixabayInput = document.getElementById('pixabay-api-key');
+    const togetherInput = document.getElementById('together-api-key');
+    if (pixabayInput) pixabayInput.value = getPixabayApiKey();
+    if (togetherInput) togetherInput.value = getTogetherApiKey();
+
+    // Reset to first tab
+    switchSettingsTab('api');
 
     modal.style.display = 'flex';
 };
@@ -133,13 +200,32 @@ window.closeSettings = () => {
     document.getElementById('modal-settings').style.display = 'none';
 };
 
-window.saveKey = () => {
+window.saveAllSettings = () => {
+    // Save API settings
     const key = document.getElementById('api-key').value.trim();
     saveGeminiApiKey(key);
     const model = document.getElementById('gemini-model').value;
     saveGeminiModel(model);
+
+    // Save image API keys
+    const pixabayKey = document.getElementById('pixabay-api-key')?.value?.trim();
+    if (pixabayKey !== undefined) savePixabayApiKey(pixabayKey);
+    const togetherKey = document.getElementById('together-api-key')?.value?.trim();
+    if (togetherKey !== undefined) saveTogetherApiKey(togetherKey);
+
+    // Theme is saved live on selection
+
     closeSettings();
 };
+
+// Backward compat
+window.saveKey = window.saveAllSettings;
+
+// Apply saved theme on load
+(function() {
+    const saved = getCurrentTheme();
+    if (saved && saved !== 'default') applyTheme(saved);
+})();
 
 // --- GEMINI API CALL (with auto-retry on rate limit) ---
 function _parse429Error(errBody) {

@@ -2171,9 +2171,9 @@ window.nextZoomItem = () => {
 function renderQuaderno(stage) {
     // Gather saved quaderno sets from IndexedDB
     const quadernoSets = state.savedSets.filter(s => s.modes && (s.modes.includes('quaderno') || s.modes.includes('quaderno_task')));
-    // Also check localStorage for legacy lists not yet migrated
-    const legacyLists = getSavedQuadernoLists();
-    const hasLegacy = legacyLists.some(l => !quadernoSets.find(s => s.name === l.name));
+
+    // Populate the set dropdown with quaderno lists for quick access
+    _populateQuadernoDropdown(quadernoSets);
 
     stage.innerHTML = `
     <div style="height:100%; display:flex; flex-direction:column; overflow:hidden;">
@@ -2188,27 +2188,64 @@ function renderQuaderno(stage) {
                 </button>
             </div>
         </div>
-        <!-- Saved lists area -->
-        ${quadernoSets.length > 0 || hasLegacy ? `
-        <div style="padding:10px 12px; border-bottom:1px solid #ffffff08; flex-shrink:0; overflow-x:auto;">
-            <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                ${quadernoSets.map(s => {
-                    const isTask = s.modes.includes('quaderno_task');
-                    return `<button class="btn btn-ghost" onclick="loadQuadernoSet('${s.id}')" style="padding:6px 12px; font-size:0.8rem; white-space:nowrap; ${isTask ? 'border-color:var(--warning-color); color:var(--warning-color);' : ''}">
-                        <i class="fa-solid ${isTask ? 'fa-list-check' : 'fa-clipboard-list'}" style="margin-right:4px;"></i>${s.name}
-                        <span style="opacity:0.5; font-size:0.7rem; margin-left:4px;">${s.items.length}</span>
-                    </button>`;
-                }).join('')}
-            </div>
-        </div>` : ''}
         <!-- Content area -->
         <div id="quaderno-content" style="flex:1; overflow-y:auto; padding:15px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--text-secondary);">
             <i class="fa-solid fa-book-open fa-3x" style="margin-bottom:15px; opacity:0.3;"></i>
             <p style="text-align:center;">Scegli <b>Quaderno Generale</b> per registrare attivit&agrave; manuali<br>
             o <b>Task Analysis</b> per sequenze operazionalizzate.</p>
-            ${quadernoSets.length > 0 ? '<p style="font-size:0.8rem; opacity:0.6;">Oppure carica una lista salvata dai pulsanti sopra.</p>' : ''}
+            ${quadernoSets.length > 0 ? '<p style="font-size:0.8rem; opacity:0.6;">Oppure carica una lista salvata dal dropdown Set in alto.</p>' : ''}
         </div>
     </div>`;
+}
+
+// Show quaderno/task analysis lists in the set dropdown
+function _populateQuadernoDropdown(quadernoSets) {
+    const setWrapper = document.getElementById('set-selector-wrapper');
+    const panel = document.getElementById('set-dropdown-panel');
+    const label = document.getElementById('set-dropdown-label');
+    if (!setWrapper || !panel) return;
+
+    // Show the set dropdown for quaderno modes
+    setWrapper.classList.remove('hidden');
+    label.textContent = '-- Liste Salvate --';
+
+    if (quadernoSets.length === 0) {
+        panel.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-secondary); font-size:0.85rem;">Nessuna lista salvata.<br>Crea un quaderno e salva la lista.</div>';
+        return;
+    }
+
+    let html = '';
+    // Group by type
+    const generalSets = quadernoSets.filter(s => s.modes.includes('quaderno') && !s.modes.includes('quaderno_task'));
+    const taskSets = quadernoSets.filter(s => s.modes.includes('quaderno_task'));
+
+    if (generalSets.length > 0) {
+        html += `<div class="set-dropdown-group-label"><span><i class="fa-solid fa-clipboard-list"></i> Quaderno Generale</span><span style="opacity:0.5; font-size:0.6rem;">${generalSets.length}</span></div>`;
+        generalSets.forEach(s => {
+            html += `<div class="set-dropdown-item" onclick="loadQuadernoSet('${s.id}')" style="cursor:pointer;">
+                <div class="set-item-thumb" style="background:rgba(99,102,241,0.15);"><i class="fa-solid fa-clipboard-list" style="color:var(--accent-color);"></i></div>
+                <div class="set-item-info">
+                    <div class="set-item-name">${s.name}</div>
+                    <div class="set-item-meta"><span class="set-item-count">${s.items.length} attivit&agrave;</span></div>
+                </div>
+            </div>`;
+        });
+    }
+
+    if (taskSets.length > 0) {
+        html += `<div class="set-dropdown-group-label" style="color:var(--warning-color); border-color:rgba(245,158,11,0.15);"><span><i class="fa-solid fa-list-check"></i> Task Analysis</span><span style="opacity:0.5; font-size:0.6rem;">${taskSets.length}</span></div>`;
+        taskSets.forEach(s => {
+            html += `<div class="set-dropdown-item" onclick="loadQuadernoSet('${s.id}')" style="cursor:pointer;">
+                <div class="set-item-thumb" style="background:rgba(245,158,11,0.15);"><i class="fa-solid fa-list-check" style="color:var(--warning-color);"></i></div>
+                <div class="set-item-info">
+                    <div class="set-item-name">${s.name}</div>
+                    <div class="set-item-meta"><span class="set-item-count">${s.items.length} passaggi</span></div>
+                </div>
+            </div>`;
+        });
+    }
+
+    panel.innerHTML = html;
 }
 
 // --- Open a new Quaderno sheet ---
@@ -2310,8 +2347,6 @@ function renderQuadernoGeneral(container) {
     const rows = state._quadernoRows || [];
     const savedNames = getSavedQuadernoLists().filter(l => l.type !== 'task').map(l => l.name);
     const qType = getQuadernoSessionType();
-    const quadernoTemplates = state.savedSets.filter(s => s.modes && s.modes.includes('quaderno'));
-
     const activityNames = getUsedActivityNames();
 
     container.innerHTML = `
@@ -2323,15 +2358,6 @@ function renderQuadernoGeneral(container) {
                 style: 'min-width:150px; padding:8px 12px; border-radius:8px; font-size:0.9rem;'
             })}
         </div>
-        ${quadernoTemplates.length > 0 ? `
-        <div style="display:flex; gap:6px; margin-bottom:10px; align-items:center; overflow-x:auto; padding-bottom:4px;">
-            <span style="font-size:0.75rem; color:var(--text-secondary); white-space:nowrap; flex-shrink:0;"><i class="fa-solid fa-folder-open"></i> Carica:</span>
-            ${quadernoTemplates.map(s => {
-                return `<button class="btn btn-ghost" onclick="loadQuadernoSet('${s.id}')" style="padding:4px 10px; font-size:0.78rem; white-space:nowrap; flex-shrink:0;">
-                    <i class="fa-solid fa-clipboard-list" style="margin-right:3px;"></i>${s.name} <span style="opacity:0.5; font-size:0.7rem;">${s.items.length}</span>
-                </button>`;
-            }).join('')}
-        </div>` : ''}
 
         <div id="quaderno-rows-list">
             ${rows.map((row, i) => renderQuadernoRow(row, i, qType)).join('')}
@@ -2579,10 +2605,48 @@ window.saveQuadernoSession = async () => {
         if (type === 'timedelay') {
             sessionData.timeDelaySeconds = tdSeconds;
         }
-        p.history.push(sessionData);
+
+        // Check for existing task analysis session today with same name → merge
+        const todayStr = now.slice(0, 10); // YYYY-MM-DD
+        const existingIdx = p.history.findIndex(h =>
+            h.mode === 'quaderno_task' &&
+            h.setName === taskName &&
+            h.date && h.date.slice(0, 10) === todayStr
+        );
+
+        let merged = false;
+        if (existingIdx >= 0) {
+            const existing = p.history[existingIdx];
+            // Merge taskSteps: append new cycles' results to existing steps
+            if (existing.taskSteps && existing.taskSteps.length === taskSteps.length) {
+                // Same steps structure → merge results arrays
+                for (let i = 0; i < taskSteps.length; i++) {
+                    existing.taskSteps[i].results = existing.taskSteps[i].results.concat(taskSteps[i].results);
+                    existing.taskSteps[i].v += taskSteps[i].v;
+                    existing.taskSteps[i].p += taskSteps[i].p;
+                    existing.taskSteps[i].x += taskSteps[i].x;
+                    existing.taskSteps[i].na += taskSteps[i].na;
+                    existing.taskSteps[i].scored += taskSteps[i].scored;
+                }
+                existing.correct += totalCorrect;
+                existing.prompts += totalP;
+                existing.total += totalScored;
+                existing.rawV += totalCorrect;
+                existing.rawP += totalP;
+                existing.rawX += totalX;
+                existing.percentage = Math.round((existing.correct / existing.total) * 100);
+                existing.date = now; // Update timestamp to latest
+                merged = true;
+            }
+        }
+
+        if (!merged) {
+            p.history.push(sessionData);
+        }
 
         await DB.savePatient(p);
-        alert(`Task Analysis salvata!\n${totalScored} LU (escl. N/A), ${totalCorrect} corrette (${Math.round((totalCorrect / totalScored) * 100)}%)\nCicli completati: ${(state._taskCycleCount || 0) + (state._taskCurrentStep > 0 ? 1 : 0)}`);
+        const mergeNote = merged ? ' (accorpata con sessione precedente)' : '';
+        alert(`Task Analysis salvata${mergeNote}!\n${totalScored} LU (escl. N/A), ${totalCorrect} corrette (${Math.round((totalCorrect / totalScored) * 100)}%)\nCicli completati: ${(state._taskCycleCount || 0) + (state._taskCurrentStep > 0 ? 1 : 0)}`);
 
     } else {
         // General Quaderno: save each row as a separate session (original behavior)
@@ -2696,8 +2760,6 @@ function renderQuadernoTask(container) {
     const qType = getQuadernoSessionType();
     const currentStep = state._taskCurrentStep || 0;
     const cycleCount = state._taskCycleCount || 0;
-    const taskTemplates = state.savedSets.filter(s => s.modes && s.modes.includes('quaderno_task'));
-
     // Compute totals excluding N/A
     let totalScored = 0, totalCorrect = 0;
     steps.forEach(step => {
@@ -2718,15 +2780,6 @@ function renderQuadernoTask(container) {
                 style: 'min-width:150px; padding:8px 12px; border-radius:8px; font-size:0.9rem;'
             })}
         </div>
-        ${taskTemplates.length > 0 ? `
-        <div style="display:flex; gap:6px; margin-bottom:10px; align-items:center; overflow-x:auto; padding-bottom:4px;">
-            <span style="font-size:0.75rem; color:var(--text-secondary); white-space:nowrap; flex-shrink:0;"><i class="fa-solid fa-folder-open"></i> Carica:</span>
-            ${taskTemplates.map(s => {
-                return `<button class="btn btn-ghost" onclick="loadQuadernoSet('${s.id}')" style="padding:4px 10px; font-size:0.78rem; white-space:nowrap; flex-shrink:0; border-color:var(--warning-color); color:var(--warning-color);">
-                    <i class="fa-solid fa-list-check" style="margin-right:3px;"></i>${s.name} <span style="opacity:0.5; font-size:0.7rem;">${s.items.length}</span>
-                </button>`;
-            }).join('')}
-        </div>` : ''}
 
         <!-- Legend + Cycle counter -->
         <div style="display:flex; gap:12px; margin-bottom:10px; font-size:0.75rem; color:var(--text-secondary); justify-content:center; align-items:center; flex-wrap:wrap;">

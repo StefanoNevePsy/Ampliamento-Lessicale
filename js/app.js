@@ -90,7 +90,7 @@ window.filterSetsByMode = function () {
             tagWrapper.classList.remove('hidden');
             renderPoolTagSelector();
         } else if (isQuaderno) {
-            setWrapper.classList.add('hidden');
+            setWrapper.classList.remove('hidden');
             tagWrapper.classList.add('hidden');
         } else {
             setWrapper.classList.remove('hidden');
@@ -98,9 +98,13 @@ window.filterSetsByMode = function () {
         }
     }
 
-    // Quaderno and Pool modes don't use set dropdown
-    if (isPoolMode || isQuaderno) {
-        if (isQuaderno) window.startGame();
+    // Pool modes don't use set dropdown
+    if (isPoolMode) {
+        return;
+    }
+    // Quaderno modes use the set dropdown for saved lists (populated in renderQuaderno)
+    if (isQuaderno) {
+        window.startGame();
         return;
     }
 
@@ -2084,10 +2088,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
         window.Capacitor.Plugins.App.addListener('backButton', ({ canGoBack }) => {
             if (canGoBack) {
-                // Fai fare alla WebView un passo indietro (scatenerà il popstate nativo su js)
                 window.history.back();
             } else {
-                // Se non c'è storia, vediamo se c'è un modal fuggito dai tracciamenti (aperto diversamente), o secion attiva
                 if (!goBackOrClose()) {
                     window.Capacitor.Plugins.App.exitApp();
                 }
@@ -2095,3 +2097,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+// === FAB MENU (collapsible floating tools) ===
+window.toggleFabMenu = () => {
+    const items = document.getElementById('fab-menu-items');
+    const btn = document.getElementById('fab-toggle-btn');
+    if (!items || !btn) return;
+    const isCollapsed = items.classList.contains('fab-collapsed');
+    items.classList.toggle('fab-collapsed', !isCollapsed);
+    items.classList.toggle('fab-expanded', isCollapsed);
+    btn.classList.toggle('fab-open', isCollapsed);
+    const icon = document.getElementById('fab-toggle-icon');
+    if (icon) {
+        icon.className = isCollapsed ? 'fa-solid fa-xmark' : 'fa-solid fa-wrench';
+    }
+};

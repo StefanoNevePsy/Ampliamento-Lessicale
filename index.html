@@ -53,8 +53,8 @@
                 <button class="btn-icon" onclick="openFirebaseSettings()" title="Firebase Sync" style="color:#f59e0b; border-color:rgba(245,158,11,0.3);">
                     <i class="fa-solid fa-cloud"></i>
                 </button>
-                <button class="btn-icon" onclick="openSettings()" title="Impostazioni API">
-                    <i class="fa-solid fa-key"></i>
+                <button class="btn-icon" onclick="openSettings()" title="Impostazioni">
+                    <i class="fa-solid fa-gear"></i>
                 </button>
                 <button class="btn-icon" onclick="toggleFullScreen()" title="Schermo Intero">
                     <i class="fa-solid fa-expand" id="fs-icon"></i>
@@ -186,18 +186,24 @@
             <i class="fa-solid fa-floppy-disk"></i>
         </button>
 
-        <div class="control-row">
-            <button class="btn-float hidden" id="btn-undo-marker" onclick="removeLastMarker()" title="Annulla Ultimo (Ctrl+Z)">
-                <i class="fa-solid fa-rotate-left"></i>
-            </button>
-            <button class="btn-float hidden" id="btn-toggle-labels" onclick="toggleLabelsVisibility()" title="Mostra/Nascondi Etichette">
-                <i class="fa-solid fa-font"></i>
-            </button>
-            <button class="btn-float" id="btn-pointer-pen" onclick="togglePointerPen()" title="Puntatore/Penna">
-                <i class="fa-solid fa-pen-fancy"></i>
-            </button>
-            <button class="btn-float" id="btn-global-lock" onclick="toggleGlobalScrollLock()" title="Blocca Schermo">
-                <i class="fa-solid fa-lock-open"></i>
+        <!-- Collapsible FAB menu (tools) -->
+        <div id="fab-menu-container" style="pointer-events:auto; position:relative;">
+            <div id="fab-menu-items" class="fab-menu-items fab-collapsed" style="display:flex; flex-direction:column-reverse; gap:10px; margin-bottom:10px;">
+                <button class="btn-float hidden" id="btn-undo-marker" onclick="removeLastMarker()" title="Annulla Ultimo (Ctrl+Z)">
+                    <i class="fa-solid fa-rotate-left"></i>
+                </button>
+                <button class="btn-float hidden" id="btn-toggle-labels" onclick="toggleLabelsVisibility()" title="Mostra/Nascondi Etichette">
+                    <i class="fa-solid fa-font"></i>
+                </button>
+                <button class="btn-float" id="btn-pointer-pen" onclick="togglePointerPen()" title="Puntatore/Penna">
+                    <i class="fa-solid fa-pen-fancy"></i>
+                </button>
+                <button class="btn-float" id="btn-global-lock" onclick="toggleGlobalScrollLock()" title="Blocca Schermo">
+                    <i class="fa-solid fa-lock-open"></i>
+                </button>
+            </div>
+            <button class="btn-float" id="fab-toggle-btn" onclick="toggleFabMenu()" title="Strumenti" style="background:var(--accent-color); border:none; z-index:10;">
+                <i class="fa-solid fa-wrench" id="fab-toggle-icon"></i>
             </button>
         </div>
     </div>
@@ -288,30 +294,74 @@
         </div>
     </div>
 
-    <!-- MODAL: SETTINGS -->
-    <div id="modal-settings" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:2000; justify-content:center; align-items:center;">
-        <div style="background:#1e1e2f; padding:30px; border-radius:20px; width:90%; max-width:400px; border:1px solid var(--glass-border);">
-            <h3><i class="fa-solid fa-key"></i> Impostazioni AI</h3>
-            <p style="color:#aaa; font-size:0.9rem;">Per generare set con AI (gratuito).<br>
-            <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent-color);">Ottieni la chiave gratuita &rarr;</a></p>
-            <input type="password" id="api-key" placeholder="AIzaSy...">
+    <!-- MODAL: SETTINGS (Unified) -->
+    <div id="modal-settings" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:2000; justify-content:center; align-items:center; overflow-y:auto; padding:20px;">
+        <div style="background:#1e1e2f; padding:25px; border-radius:20px; width:90%; max-width:500px; border:1px solid var(--glass-border); max-height:90vh; overflow-y:auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h3 style="margin:0;"><i class="fa-solid fa-gear"></i> Impostazioni</h3>
+                <button class="btn-icon" onclick="closeSettings()" style="width:32px; height:32px;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
 
-            <label style="display:block; margin-top:18px; font-size:0.85rem; color:#aaa;">Modello Gemini</label>
-            <div style="display:flex; gap:6px; align-items:center; margin-top:4px;">
-                <select id="gemini-model" style="flex:1; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.95rem;">
-                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                </select>
-                <button class="btn-ghost" onclick="refreshGeminiModels()" title="Aggiorna lista modelli" style="padding:8px 10px; font-size:0.9rem;">
-                    <i class="fa-solid fa-rotate" id="gemini-refresh-icon"></i>
+            <!-- TABS -->
+            <div id="settings-tabs" style="display:flex; gap:4px; margin-bottom:16px; border-bottom:1px solid var(--glass-border); padding-bottom:8px;">
+                <button class="settings-tab active" onclick="switchSettingsTab('api')" data-tab="api" style="padding:8px 14px; border:none; border-radius:8px 8px 0 0; background:rgba(99,102,241,0.2); color:var(--accent-color); cursor:pointer; font-size:0.85rem; font-weight:600;">
+                    <i class="fa-solid fa-key"></i> API
+                </button>
+                <button class="settings-tab" onclick="switchSettingsTab('images')" data-tab="images" style="padding:8px 14px; border:none; border-radius:8px 8px 0 0; background:transparent; color:var(--text-secondary); cursor:pointer; font-size:0.85rem; font-weight:600;">
+                    <i class="fa-solid fa-image"></i> Immagini
+                </button>
+                <button class="settings-tab" onclick="switchSettingsTab('theme')" data-tab="theme" style="padding:8px 14px; border:none; border-radius:8px 8px 0 0; background:transparent; color:var(--text-secondary); cursor:pointer; font-size:0.85rem; font-weight:600;">
+                    <i class="fa-solid fa-palette"></i> Tema
                 </button>
             </div>
-            <p id="gemini-model-hint" style="color:#666; font-size:0.75rem; margin-top:6px;">
-                Premi aggiorna per caricare i modelli disponibili dalla tua API key.
-            </p>
 
-            <div style="margin-top:20px; text-align:right;">
-                <button class="btn-ghost" onclick="closeSettings()">Chiudi</button>
-                <button class="btn-primary" onclick="saveKey()">Salva</button>
+            <!-- TAB: API -->
+            <div id="settings-tab-api" class="settings-tab-content">
+                <h4 style="margin:0 0 10px; color:var(--accent-color);"><i class="fa-solid fa-wand-magic-sparkles"></i> Gemini AI</h4>
+                <p style="color:#aaa; font-size:0.85rem; margin-bottom:10px;">Per generare set con AI (gratuito).<br>
+                <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent-color);">Ottieni la chiave gratuita &rarr;</a></p>
+                <input type="password" id="api-key" placeholder="AIzaSy...">
+
+                <label style="display:block; margin-top:14px; font-size:0.85rem; color:#aaa;">Modello Gemini</label>
+                <div style="display:flex; gap:6px; align-items:center; margin-top:4px;">
+                    <select id="gemini-model" style="flex:1; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.95rem;">
+                        <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                    </select>
+                    <button class="btn-ghost" onclick="refreshGeminiModels()" title="Aggiorna lista modelli" style="padding:8px 10px; font-size:0.9rem;">
+                        <i class="fa-solid fa-rotate" id="gemini-refresh-icon"></i>
+                    </button>
+                </div>
+                <p id="gemini-model-hint" style="color:#666; font-size:0.75rem; margin-top:6px;">
+                    Premi aggiorna per caricare i modelli disponibili.
+                </p>
+            </div>
+
+            <!-- TAB: IMAGES -->
+            <div id="settings-tab-images" class="settings-tab-content" style="display:none;">
+                <h4 style="margin:0 0 10px; color:#ec4899;"><i class="fa-solid fa-image"></i> Ricerca Immagini</h4>
+
+                <label style="display:block; font-size:0.85rem; color:#aaa; margin-bottom:4px;">Pixabay API Key <span style="font-size:0.75rem; opacity:0.6;">(ricerca foto gratis)</span></label>
+                <input type="text" id="pixabay-api-key" placeholder="La tua Pixabay API key...">
+                <p style="color:#666; font-size:0.75rem; margin-top:4px;">
+                    <a href="https://pixabay.com/api/docs/" target="_blank" style="color:var(--accent-color);">Ottieni chiave gratuita Pixabay &rarr;</a>
+                </p>
+
+                <label style="display:block; font-size:0.85rem; color:#aaa; margin-top:14px; margin-bottom:4px;">Together AI API Key <span style="font-size:0.75rem; opacity:0.6;">(genera immagini AI)</span></label>
+                <input type="password" id="together-api-key" placeholder="La tua Together AI API key...">
+                <p style="color:#666; font-size:0.75rem; margin-top:4px;">
+                    <a href="https://api.together.xyz/settings/api-keys" target="_blank" style="color:var(--accent-color);">Ottieni chiave Together AI &rarr;</a>
+                </p>
+            </div>
+
+            <!-- TAB: THEME -->
+            <div id="settings-tab-theme" class="settings-tab-content" style="display:none;">
+                <h4 style="margin:0 0 12px; color:#f59e0b;"><i class="fa-solid fa-palette"></i> Tema Applicazione</h4>
+                <div id="theme-picker" style="display:grid; grid-template-columns:1fr 1fr; gap:10px;"></div>
+            </div>
+
+            <div style="margin-top:20px; display:flex; gap:8px; justify-content:flex-end;">
+                <button class="btn btn-ghost" onclick="closeSettings()">Annulla</button>
+                <button class="btn btn-primary" onclick="saveAllSettings()"><i class="fa-solid fa-check"></i> Salva</button>
             </div>
         </div>
     </div>
