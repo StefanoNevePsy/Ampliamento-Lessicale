@@ -74,7 +74,7 @@ window.filterSetsByMode = function () {
     if (!currentMode) return;
     const engine = getModeEngine(currentMode);
     const isPoolMode = POOL_ENGINES.includes(engine);
-    const isQuaderno = engine === 'quaderno';
+    const isQuaderno = engine === 'quaderno' || engine === 'quaderno_task';
 
     // Clean up multi-set session when switching away from scenario modes
     if (engine !== 'search_find' && engine !== 'intraverbal_scenari') {
