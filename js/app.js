@@ -752,7 +752,7 @@ window.startGame = () => {
     }
 
     // Quaderno mode: no items needed, just render
-    if (engine === 'quaderno') {
+    if (engine === 'quaderno' || engine === 'quaderno_task') {
         state.session = { correct: 0, incorrect: 0, total: 0, active: true, itemResults: {} };
         document.getElementById('scoring-controls').classList.add('hidden');
         document.getElementById('btn-save-session').classList.add('hidden');
@@ -825,10 +825,14 @@ window.startGame = () => {
         // If no errors found or no history, use all items
         if (errorItems.length === 0) errorItems = [...playItems];
         // Build a fixed deck of exactly TARGET items by cycling through error items
+        // Re-shuffle each cycle so the order varies throughout the deck
         const deck = [];
-        const shuffled = [...errorItems].sort(() => Math.random() - 0.5);
+        let cycle = [...errorItems].sort(() => Math.random() - 0.5);
         for (let i = 0; i < TARGET; i++) {
-            deck.push(shuffled[i % shuffled.length]);
+            if (i > 0 && i % errorItems.length === 0) {
+                cycle = [...errorItems].sort(() => Math.random() - 0.5);
+            }
+            deck.push(cycle[i % errorItems.length]);
         }
 
         state._ranIntensivo = {

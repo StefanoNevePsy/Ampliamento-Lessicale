@@ -174,7 +174,7 @@ function renderGameMode(mode, items) {
     else if (engine === 'sequenze') renderSequenze(items, stage);
     else if (engine === 'categorizzazione') renderCategorizzazione(items, stage);
     else if (engine === 'zoom') renderZoom(items, stage);
-    else if (engine === 'quaderno') renderQuaderno(stage);
+    else if (engine === 'quaderno' || engine === 'quaderno_task') renderQuaderno(stage, engine);
     // Re-insert pointer canvas on top after renderer runs (preserves event listeners and state)
     if (pointerCanvas) stage.appendChild(pointerCanvas);
     else {
@@ -1854,7 +1854,7 @@ window.undoLastAction = () => {
     const mode = document.getElementById('mode-select').value;
     const engine = getModeEngine(mode);
 
-    if (engine === 'quaderno') {
+    if (engine === 'quaderno' || engine === 'quaderno_task') {
         if (state._quadernoType === 'task') {
             if (typeof window.undoLastTaskStep === 'function') window.undoLastTaskStep();
         }
@@ -2168,12 +2168,29 @@ window.nextZoomItem = () => {
 // ============================================================
 // --- QUADERNO (Manual scoring + Task Analysis) ---
 // ============================================================
-function renderQuaderno(stage) {
-    // Gather saved quaderno sets from IndexedDB
-    const quadernoSets = state.savedSets.filter(s => s.modes && (s.modes.includes('quaderno') || s.modes.includes('quaderno_task')));
+function renderQuaderno(stage, engine) {
+    const isTaskMode = engine === 'quaderno_task';
+    // Filter saved sets based on current engine
+    const quadernoSets = state.savedSets.filter(s => {
+        if (!s.modes) return false;
+        if (isTaskMode) return s.modes.includes('quaderno_task');
+        if (engine === 'quaderno') return s.modes.includes('quaderno') && !s.modes.includes('quaderno_task');
+        return s.modes.includes('quaderno') || s.modes.includes('quaderno_task');
+    });
 
-    // Populate the set dropdown with quaderno lists for quick access
-    _populateQuadernoDropdown(quadernoSets);
+    // Populate the set dropdown with filtered lists
+    _populateQuadernoDropdown(quadernoSets, isTaskMode);
+
+    // If entering directly via Task Analysis mode, open task sheet immediately
+    if (isTaskMode) {
+        stage.innerHTML = `
+        <div style="height:100%; display:flex; flex-direction:column; overflow:hidden;">
+            <div id="quaderno-content" style="flex:1; overflow-y:auto; padding:15px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--text-secondary);">
+            </div>
+        </div>`;
+        openQuadernoSheet('task');
+        return;
+    }
 
     stage.innerHTML = `
     <div style="height:100%; display:flex; flex-direction:column; overflow:hidden;">
@@ -2199,7 +2216,7 @@ function renderQuaderno(stage) {
 }
 
 // Show quaderno/task analysis lists in the set dropdown
-function _populateQuadernoDropdown(quadernoSets) {
+function _populateQuadernoDropdown(quadernoSets, isTaskMode) {
     const setWrapper = document.getElementById('set-selector-wrapper');
     const panel = document.getElementById('set-dropdown-panel');
     const label = document.getElementById('set-dropdown-label');
@@ -2207,10 +2224,13 @@ function _populateQuadernoDropdown(quadernoSets) {
 
     // Show the set dropdown for quaderno modes
     setWrapper.classList.remove('hidden');
-    label.textContent = '-- Liste Salvate --';
+    label.textContent = isTaskMode ? '-- Task Salvati --' : '-- Liste Salvate --';
 
     if (quadernoSets.length === 0) {
-        panel.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-secondary); font-size:0.85rem;">Nessuna lista salvata.<br>Crea un quaderno e salva la lista.</div>';
+        const emptyMsg = isTaskMode
+            ? 'Nessun task salvato.<br>Crea una Task Analysis e salva la lista.'
+            : 'Nessuna lista salvata.<br>Crea un quaderno e salva la lista.';
+        panel.innerHTML = `<div style="padding:20px; text-align:center; color:var(--text-secondary); font-size:0.85rem;">${emptyMsg}</div>`;
         return;
     }
 
