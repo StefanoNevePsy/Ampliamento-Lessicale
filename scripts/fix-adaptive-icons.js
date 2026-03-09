@@ -1,7 +1,15 @@
 /**
- * Post-asset-generation script: patches Android adaptive icon XMLs
- * to include monochrome layer for Material You / Monet theming (API 33+),
- * and generates monochrome PNGs from build/icon-monochrome.svg.
+ * Post-asset-generation script: fixes Android adaptive icon configuration.
+ *
+ * Fixes applied after `npx capacitor-assets generate --android`:
+ * 1. Rewrites adaptive icon XMLs to use @color/ic_launcher_background (red)
+ *    instead of a drawable PNG, and adds monochrome layer for Material You.
+ * 2. Sets the background color resource to #E53935 (red).
+ * 3. Creates themed icon XML for Material You / Monet theming (API 33+).
+ * 4. Regenerates foreground PNGs from build/icon-foreground.svg with correct
+ *    adaptive icon padding (108dp canvas, brain in 72dp safe zone), overwriting
+ *    the tightly-cropped versions that capacitor-assets may generate.
+ * 5. Generates monochrome PNGs from build/icon-monochrome.svg.
  *
  * Run after `npx capacitor-assets generate --android` or `npx cap sync`.
  *
@@ -17,30 +25,28 @@ if (!fs.existsSync(androidRes)) {
     process.exit(0);
 }
 
-// ---- 1. Patch adaptive icon XMLs to add <monochrome> ----
+// ---- 1. Rewrite adaptive icon XMLs with correct layers ----
+// capacitor-assets may generate foreground PNGs that are tightly cropped (no padding),
+// and background as a drawable PNG instead of our red color resource.
+// We overwrite the XMLs to ensure correct references.
 
 const iconXmlDir = path.join(androidRes, 'mipmap-anydpi-v26');
 const xmlFiles = ['ic_launcher.xml', 'ic_launcher_round.xml'];
+
+const correctAdaptiveXml = `<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background"/>
+    <foreground android:drawable="@drawable/ic_launcher_foreground"/>
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome"/>
+</adaptive-icon>
+`;
 
 for (const file of xmlFiles) {
     const xmlPath = path.join(iconXmlDir, file);
     if (!fs.existsSync(xmlPath)) continue;
 
-    let xml = fs.readFileSync(xmlPath, 'utf8');
-
-    if (xml.includes('monochrome')) {
-        console.log(`${file}: monochrome layer already present.`);
-        continue;
-    }
-
-    // Insert <monochrome> before closing </adaptive-icon>
-    xml = xml.replace(
-        '</adaptive-icon>',
-        '    <monochrome android:drawable="@drawable/ic_launcher_monochrome"/>\n</adaptive-icon>'
-    );
-
-    fs.writeFileSync(xmlPath, xml, 'utf8');
-    console.log(`${file}: added monochrome layer.`);
+    fs.writeFileSync(xmlPath, correctAdaptiveXml, 'utf8');
+    console.log(`${file}: rewritten with correct background color and monochrome layer.`);
 }
 
 // ---- 1b. Ensure adaptive icon background color is red ----
@@ -71,22 +77,18 @@ if (fs.existsSync(iconXmlDir)) {
     console.log('ic_launcher_themed.xml: created.');
 }
 
-// ---- 3. Generate monochrome PNGs from SVG using sharp library ----
+// ---- 3. Generate PNGs from SVG sources using sharp library ----
 
 const monoSvg = path.join(__dirname, '..', 'build', 'icon-monochrome.svg');
-if (!fs.existsSync(monoSvg)) {
-    console.log('build/icon-monochrome.svg not found — skipping monochrome PNG generation.');
-    console.log('Monochrome PNGs must be placed manually in drawable-*/ic_launcher_monochrome.png');
-    process.exit(0);
-}
+const fgSvg = path.join(__dirname, '..', 'build', 'icon-foreground.svg');
 
 let sharp;
 try {
     sharp = require('sharp');
 } catch (e) {
-    console.warn('Warning: sharp is not installed. Skipping monochrome PNG generation.');
-    console.warn('Run "npm install --save-dev sharp" to enable monochrome icon generation.');
-    console.log('\nDone! Adaptive icons patched for Material You / Monet support.');
+    console.warn('Warning: sharp is not installed. Skipping PNG generation from SVGs.');
+    console.warn('Run "npm install --save-dev sharp" to enable icon generation.');
+    console.log('\nDone! Adaptive icons patched (XML only).');
     process.exit(0);
 }
 
@@ -99,20 +101,49 @@ const densities = [
 ];
 
 (async () => {
-    const svgBuffer = fs.readFileSync(monoSvg);
-    for (const { size, dpi } of densities) {
-        const outDir = path.join(androidRes, `drawable-${dpi}`);
-        fs.mkdirSync(outDir, { recursive: true });
-        const outFile = path.join(outDir, 'ic_launcher_monochrome.png');
-        try {
-            await sharp(svgBuffer)
-                .resize(size, size)
-                .png()
-                .toFile(outFile);
-            console.log(`drawable-${dpi}/ic_launcher_monochrome.png: generated (${size}x${size}).`);
-        } catch (e) {
-            console.warn(`Warning: could not generate ${dpi} monochrome PNG: ${e.message}`);
+    // ---- 3a. Regenerate foreground PNGs from icon-foreground.svg ----
+    // This overwrites the foreground PNGs that capacitor-assets may have generated
+    // incorrectly (tightly cropped brain without proper adaptive icon padding).
+    if (fs.existsSync(fgSvg)) {
+        const fgBuffer = fs.readFileSync(fgSvg);
+        for (const { size, dpi } of densities) {
+            const outDir = path.join(androidRes, `drawable-${dpi}`);
+            fs.mkdirSync(outDir, { recursive: true });
+            const outFile = path.join(outDir, 'ic_launcher_foreground.png');
+            try {
+                await sharp(fgBuffer)
+                    .resize(size, size)
+                    .png()
+                    .toFile(outFile);
+                console.log(`drawable-${dpi}/ic_launcher_foreground.png: regenerated (${size}x${size}).`);
+            } catch (e) {
+                console.warn(`Warning: could not generate ${dpi} foreground PNG: ${e.message}`);
+            }
         }
+    } else {
+        console.log('build/icon-foreground.svg not found — skipping foreground PNG regeneration.');
     }
+
+    // ---- 3b. Generate monochrome PNGs from icon-monochrome.svg ----
+    if (fs.existsSync(monoSvg)) {
+        const monoBuffer = fs.readFileSync(monoSvg);
+        for (const { size, dpi } of densities) {
+            const outDir = path.join(androidRes, `drawable-${dpi}`);
+            fs.mkdirSync(outDir, { recursive: true });
+            const outFile = path.join(outDir, 'ic_launcher_monochrome.png');
+            try {
+                await sharp(monoBuffer)
+                    .resize(size, size)
+                    .png()
+                    .toFile(outFile);
+                console.log(`drawable-${dpi}/ic_launcher_monochrome.png: generated (${size}x${size}).`);
+            } catch (e) {
+                console.warn(`Warning: could not generate ${dpi} monochrome PNG: ${e.message}`);
+            }
+        }
+    } else {
+        console.log('build/icon-monochrome.svg not found — skipping monochrome PNG generation.');
+    }
+
     console.log('\nDone! Adaptive icons patched for Material You / Monet support.');
 })();
