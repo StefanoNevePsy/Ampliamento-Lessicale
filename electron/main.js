@@ -8,7 +8,7 @@ function createWindow() {
         minWidth: 800,
         minHeight: 600,
         title: 'Terapia Attiva',
-        icon: path.join(__dirname, '..', 'icon.png'),
+        icon: path.join(__dirname, '..', 'build', 'icon.png'),
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true
