@@ -2240,7 +2240,7 @@ function _populateQuadernoDropdown(quadernoSets, isTaskMode) {
     const taskSets = quadernoSets.filter(s => s.modes.includes('quaderno_task'));
 
     if (generalSets.length > 0) {
-        html += `<div class="set-dropdown-group-label"><span><i class="fa-solid fa-clipboard-list"></i> Quaderno Generale</span><span style="opacity:0.5; font-size:0.6rem;">${generalSets.length}</span></div>`;
+        html += `<div class="set-dropdown-group-label" style="top:0;"><span><i class="fa-solid fa-clipboard-list"></i> Quaderno Generale</span><span style="opacity:0.5; font-size:0.6rem;">${generalSets.length}</span></div>`;
         generalSets.forEach(s => {
             html += `<div class="set-dropdown-item" onclick="loadQuadernoSet('${s.id}')" style="cursor:pointer;">
                 <div class="set-item-thumb" style="background:rgba(99,102,241,0.15);"><i class="fa-solid fa-clipboard-list" style="color:var(--accent-color);"></i></div>
@@ -2253,7 +2253,7 @@ function _populateQuadernoDropdown(quadernoSets, isTaskMode) {
     }
 
     if (taskSets.length > 0) {
-        html += `<div class="set-dropdown-group-label" style="color:var(--warning-color); border-color:rgba(245,158,11,0.15);"><span><i class="fa-solid fa-list-check"></i> Task Analysis</span><span style="opacity:0.5; font-size:0.6rem;">${taskSets.length}</span></div>`;
+        html += `<div class="set-dropdown-group-label" style="top:0; color:var(--warning-color); border-color:rgba(245,158,11,0.15);"><span><i class="fa-solid fa-list-check"></i> Task Analysis</span><span style="opacity:0.5; font-size:0.6rem;">${taskSets.length}</span></div>`;
         taskSets.forEach(s => {
             html += `<div class="set-dropdown-item" onclick="loadQuadernoSet('${s.id}')" style="cursor:pointer;">
                 <div class="set-item-thumb" style="background:rgba(245,158,11,0.15);"><i class="fa-solid fa-list-check" style="color:var(--warning-color);"></i></div>
