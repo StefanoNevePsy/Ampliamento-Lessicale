@@ -9,8 +9,9 @@
     "electron:build:win": "electron-builder --win",
     "build:web": "node build.js",
     "cap:init": "npx cap init 'Terapia Attiva' 'com.stimolatore.clinico' --web-dir www",
-    "cap:add:android": "npm run build:web && npx cap add android && node scripts/add-android-permissions.js",
-    "cap:sync": "npm run build:web && npx cap sync && node scripts/add-android-permissions.js",
+    "cap:add:android": "npm run build:web && npx cap add android && node scripts/add-android-permissions.js && node scripts/fix-adaptive-icons.js",
+    "cap:sync": "npm run build:web && npx cap sync && node scripts/add-android-permissions.js && node scripts/fix-adaptive-icons.js",
+    "cap:icons": "npx capacitor-assets generate --android && node scripts/fix-adaptive-icons.js",
     "cap:build:android": "cd android && ./gradlew assembleRelease"
   },
   "build": {
