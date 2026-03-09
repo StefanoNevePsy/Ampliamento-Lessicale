@@ -208,6 +208,9 @@ function renderEditorList() {
                 placeholder="#"
                 title="N. Sequenza"
                 style="width:38px; padding:4px; border-radius:6px; background:${item.seqNumber ? 'rgba(99,102,241,0.2)' : 'rgba(0,0,0,0.2)'}; border:1px solid ${item.seqNumber ? 'var(--accent-color)' : 'var(--glass-border)'}; color:${item.seqNumber ? 'var(--accent-color)' : '#888'}; font-size:0.8rem; text-align:center; font-weight:bold;">
+            <button class="btn btn-ghost" style="padding:6px;" onclick="openPollinationsGenerator(${idx}); event.stopPropagation();" title="Genera immagine AI (Pollinations)">
+                <i class="fa-solid fa-wand-magic-sparkles" style="font-size:0.8rem; ${item.url ? 'opacity:0.4' : 'color:var(--accent-color); opacity:0.8'}"></i>
+            </button>
             <button class="btn btn-ghost" style="padding:6px;" onclick="triggerAudioUpload(${idx}); event.stopPropagation();" title="Carica Audio">
                 <i class="fa-solid fa-music" style="font-size:0.8rem; ${item.audio ? 'color:var(--success-color)' : 'opacity:0.4'}"></i>
             </button>

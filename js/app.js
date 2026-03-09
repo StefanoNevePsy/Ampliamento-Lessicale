@@ -74,7 +74,7 @@ window.filterSetsByMode = function () {
     if (!currentMode) return;
     const engine = getModeEngine(currentMode);
     const isPoolMode = POOL_ENGINES.includes(engine);
-    const isQuaderno = engine === 'quaderno';
+    const isQuaderno = engine === 'quaderno' || engine === 'quaderno_task';
 
     // Clean up multi-set session when switching away from scenario modes
     if (engine !== 'search_find' && engine !== 'intraverbal_scenari') {
@@ -90,7 +90,7 @@ window.filterSetsByMode = function () {
             tagWrapper.classList.remove('hidden');
             renderPoolTagSelector();
         } else if (isQuaderno) {
-            setWrapper.classList.add('hidden');
+            setWrapper.classList.remove('hidden');
             tagWrapper.classList.add('hidden');
         } else {
             setWrapper.classList.remove('hidden');
@@ -98,9 +98,13 @@ window.filterSetsByMode = function () {
         }
     }
 
-    // Quaderno and Pool modes don't use set dropdown
-    if (isPoolMode || isQuaderno) {
-        if (isQuaderno) window.startGame();
+    // Pool modes don't use set dropdown
+    if (isPoolMode) {
+        return;
+    }
+    // Quaderno modes use the set dropdown for saved lists (populated in renderQuaderno)
+    if (isQuaderno) {
+        window.startGame();
         return;
     }
 
@@ -748,7 +752,7 @@ window.startGame = () => {
     }
 
     // Quaderno mode: no items needed, just render
-    if (engine === 'quaderno') {
+    if (engine === 'quaderno' || engine === 'quaderno_task') {
         state.session = { correct: 0, incorrect: 0, total: 0, active: true, itemResults: {} };
         document.getElementById('scoring-controls').classList.add('hidden');
         document.getElementById('btn-save-session').classList.add('hidden');
@@ -821,10 +825,14 @@ window.startGame = () => {
         // If no errors found or no history, use all items
         if (errorItems.length === 0) errorItems = [...playItems];
         // Build a fixed deck of exactly TARGET items by cycling through error items
+        // Re-shuffle each cycle so the order varies throughout the deck
         const deck = [];
-        const shuffled = [...errorItems].sort(() => Math.random() - 0.5);
+        let cycle = [...errorItems].sort(() => Math.random() - 0.5);
         for (let i = 0; i < TARGET; i++) {
-            deck.push(shuffled[i % shuffled.length]);
+            if (i > 0 && i % errorItems.length === 0) {
+                cycle = [...errorItems].sort(() => Math.random() - 0.5);
+            }
+            deck.push(cycle[i % errorItems.length]);
         }
 
         state._ranIntensivo = {
@@ -2084,10 +2092,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) {
         window.Capacitor.Plugins.App.addListener('backButton', ({ canGoBack }) => {
             if (canGoBack) {
-                // Fai fare alla WebView un passo indietro (scatenerà il popstate nativo su js)
                 window.history.back();
             } else {
-                // Se non c'è storia, vediamo se c'è un modal fuggito dai tracciamenti (aperto diversamente), o secion attiva
                 if (!goBackOrClose()) {
                     window.Capacitor.Plugins.App.exitApp();
                 }
@@ -2095,3 +2101,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+// === FAB MENU (collapsible floating tools) ===
+window.toggleFabMenu = () => {
+    const items = document.getElementById('fab-menu-items');
+    const btn = document.getElementById('fab-toggle-btn');
+    if (!items || !btn) return;
+    const isCollapsed = items.classList.contains('fab-collapsed');
+    items.classList.toggle('fab-collapsed', !isCollapsed);
+    items.classList.toggle('fab-expanded', isCollapsed);
+    btn.classList.toggle('fab-open', isCollapsed);
+    const icon = document.getElementById('fab-toggle-icon');
+    if (icon) {
+        icon.className = isCollapsed ? 'fa-solid fa-xmark' : 'fa-solid fa-wrench';
+    }
+};

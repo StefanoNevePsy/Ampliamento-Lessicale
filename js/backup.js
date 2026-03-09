@@ -1,5 +1,18 @@
 // === BACKUP & EXPORT (ZIP + legacy JSON) ===
 
+// Helper to read AI reports for backup (mirrors _getPatientReports in patients.js)
+function _getReportsForBackup(pid) {
+    try {
+        const key = `ai_reports_${pid}`;
+        const saved = localStorage.getItem(key);
+        return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+}
+
+function _setReportsForBackup(pid, reports) {
+    localStorage.setItem(`ai_reports_${pid}`, JSON.stringify(reports));
+}
+
 function getTimestampedFilename(ext) {
     const now = new Date();
     const d = String(now.getDate()).padStart(2, '0');
@@ -139,7 +152,7 @@ function sanitizeFilename(str) {
 // --- ZIP EXPORT ---
 
 // Build a ZIP blob from backup data, extracting images as separate files
-async function buildBackupZip(sets, patients, includeConfig) {
+async function buildBackupZip(sets, patients, includeConfig, includeReports = true) {
     const zip = new JSZip();
     let imageIndex = 0;
 
@@ -212,6 +225,18 @@ async function buildBackupZip(sets, patients, includeConfig) {
 
         processedPatients.push(pClone);
         patientsFolder.file(`${pSlug}.json`, JSON.stringify(pClone, null, 2));
+    }
+
+    // --- AI Reports ---
+    if (includeReports) {
+        const reportsFolder = zip.folder('reports');
+        for (const patient of patients) {
+            const reports = _getReportsForBackup(patient.id);
+            if (reports && reports.length > 0) {
+                const pSlug = sanitizeFilename(patient.id);
+                reportsFolder.file(`${pSlug}.json`, JSON.stringify(reports, null, 2));
+            }
+        }
     }
 
     // --- Config ---
@@ -312,6 +337,22 @@ window.exportAllSets = async () => {
         });
         html += `</div></div>`;
 
+        // --- AI REPORTS ---
+        let totalReports = 0;
+        patients.forEach(p => { totalReports += _getReportsForBackup(p.id).length; });
+        if (totalReports > 0) {
+            html += `
+            <div style="background:rgba(0,0,0,0.2); border-radius:12px; padding:12px; margin-bottom:12px;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:bold; font-size:1rem;">
+                    <input type="checkbox" id="exp-reports" checked style="width:18px; height:18px;">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Report AI (${totalReports})
+                </label>
+                <div style="padding-left:20px; font-size:0.75rem; color:var(--text-secondary); margin-top:4px;">
+                    Include i report AI generati per i pazienti selezionati
+                </div>
+            </div>`;
+        }
+
         // --- CONFIG ---
         html += `
         <div style="background:rgba(0,0,0,0.2); border-radius:12px; padding:12px; margin-bottom:12px;">
@@ -353,6 +394,8 @@ window.executeSelectiveExport = async () => {
         const selectedPatientIds = new Set();
         document.querySelectorAll('.exp-patient-item:checked').forEach(cb => selectedPatientIds.add(cb.dataset.id));
         const includeConfig = document.getElementById('exp-config').checked;
+        const reportsCheckbox = document.getElementById('exp-reports');
+        const includeReports = reportsCheckbox ? reportsCheckbox.checked : true;
 
         const sets = window._exportData.sets.filter(s => selectedSetIds.has(s.id));
         const patients = window._exportData.patients.filter(p => selectedPatientIds.has(p.id));
@@ -366,7 +409,7 @@ window.executeSelectiveExport = async () => {
         const timeStr = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }).replace(/:/g, '-');
         const filename = `Backup_TerapiaAttiva_${dateStr}_${timeStr}.zip`;
 
-        const zipBlob = await buildBackupZip(sets, patients, includeConfig);
+        const zipBlob = await buildBackupZip(sets, patients, includeConfig, includeReports);
         await downloadFile(zipBlob, filename, 'Backup Terapia Attiva');
 
         document.getElementById('modal-export-select').classList.remove('open');
@@ -610,6 +653,35 @@ async function importFromZip(file) {
     if (layoutFile) {
         const incoming = JSON.parse(await layoutFile.async('text'));
         mergeActivityLayout(incoming);
+    }
+
+    // --- Import AI Reports ---
+    const reportsDir = zip.folder('reports');
+    if (reportsDir) {
+        const reportFiles = [];
+        reportsDir.forEach((relativePath, zipEntry) => {
+            if (relativePath.endsWith('.json')) reportFiles.push(zipEntry);
+        });
+        for (const entry of reportFiles) {
+            const incomingReports = JSON.parse(await entry.async('text'));
+            if (!Array.isArray(incomingReports) || incomingReports.length === 0) continue;
+            // Extract patient ID from filename (sanitized ID)
+            const fileName = entry.name.split('/').pop().replace('.json', '');
+            // Find actual patient ID matching this slug
+            const matchedPatient = [...localPatients, ...((await DB.getAllPatients()) || [])].find(p => sanitizeFilename(p.id) === fileName);
+            if (matchedPatient) {
+                const existing = _getReportsForBackup(matchedPatient.id);
+                const existingIds = new Set(existing.map(r => r.id));
+                const merged = [...existing];
+                for (const r of incomingReports) {
+                    if (!existingIds.has(r.id)) merged.push(r);
+                }
+                // Sort newest first
+                merged.sort((a, b) => new Date(b.date) - new Date(a.date));
+                if (merged.length > 50) merged.length = 50;
+                _setReportsForBackup(matchedPatient.id, merged);
+            }
+        }
     }
 
     // Summary

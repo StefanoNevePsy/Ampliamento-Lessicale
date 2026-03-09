@@ -407,16 +407,33 @@ window.connectToSender = (code) => {
     performReceive(code);
 };
 
-window.startQRScan = () => {
+window.startQRScan = async () => {
     const scanArea = document.getElementById('p2p-qr-scan-area');
     scanArea.style.display = '';
-    document.getElementById('p2p-receiver-status').textContent = 'Inquadra il QR code con la fotocamera...';
+    document.getElementById('p2p-receiver-status').textContent = 'Richiesta permesso fotocamera...';
 
     if (typeof Html5Qrcode === 'undefined') {
         document.getElementById('p2p-receiver-status').textContent = 'Scanner QR non disponibile. Inserisci il codice manualmente.';
         scanArea.style.display = 'none';
         return;
     }
+
+    // Request camera permission explicitly (needed for Android/Capacitor)
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        // Permission granted — stop the test stream immediately
+        stream.getTracks().forEach(t => t.stop());
+    } catch (permErr) {
+        console.warn('Camera permission denied:', permErr);
+        const msg = permErr.name === 'NotAllowedError'
+            ? 'Permesso fotocamera negato. Vai nelle impostazioni dell\'app e abilita il permesso fotocamera, poi riprova.'
+            : 'Fotocamera non disponibile: ' + (permErr.message || permErr) + '. Inserisci il codice manualmente.';
+        document.getElementById('p2p-receiver-status').textContent = msg;
+        scanArea.style.display = 'none';
+        return;
+    }
+
+    document.getElementById('p2p-receiver-status').textContent = 'Inquadra il QR code con la fotocamera...';
 
     _p2pScanner = new Html5Qrcode('p2p-qr-reader');
     _p2pScanner.start(

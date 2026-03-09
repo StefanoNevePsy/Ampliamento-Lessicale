@@ -110,21 +110,88 @@ function saveGeminiApiKey(key) {
     localStorage.setItem('gemini_api_key', key.trim());
 }
 
+// --- THEME SYSTEM ---
+const APP_THEMES = [
+    { id: 'default', name: 'Indigo', colors: ['#1e1e2f', '#2d2b55', '#6366f1', '#10b981'] },
+    { id: 'ocean', name: 'Oceano', colors: ['#0f172a', '#1e3a5f', '#38bdf8', '#34d399'] },
+    { id: 'forest', name: 'Foresta', colors: ['#1a2e1a', '#2d4a2d', '#4ade80', '#34d399'] },
+    { id: 'sunset', name: 'Tramonto', colors: ['#2d1b2e', '#4a2040', '#f472b6', '#34d399'] },
+    { id: 'midnight', name: 'Mezzanotte', colors: ['#0a0a0a', '#1a1a2e', '#8b5cf6', '#10b981'] },
+    { id: 'light', name: 'Chiaro', colors: ['#f1f5f9', '#e2e8f0', '#6366f1', '#059669'] },
+];
+
+function getCurrentTheme() {
+    return localStorage.getItem('app_theme') || 'default';
+}
+
+function applyTheme(themeId) {
+    if (themeId === 'default') {
+        document.documentElement.removeAttribute('data-theme');
+    } else {
+        document.documentElement.setAttribute('data-theme', themeId);
+    }
+    localStorage.setItem('app_theme', themeId);
+    // Update theme-color meta
+    const metaTheme = document.querySelector('meta[name="theme-color"]');
+    const theme = APP_THEMES.find(t => t.id === themeId);
+    if (metaTheme && theme) metaTheme.setAttribute('content', theme.colors[0]);
+}
+
+function renderThemePicker() {
+    const container = document.getElementById('theme-picker');
+    if (!container) return;
+    const current = getCurrentTheme();
+    container.innerHTML = APP_THEMES.map(t => `
+        <div class="theme-card ${t.id === current ? 'active' : ''}" onclick="selectTheme('${t.id}')">
+            <div class="theme-preview">
+                ${t.colors.map(c => `<span style="background:${c};"></span>`).join('')}
+            </div>
+            <div class="theme-name">${t.name}</div>
+            <i class="fa-solid fa-check theme-check"></i>
+        </div>
+    `).join('');
+}
+
+window.selectTheme = (themeId) => {
+    applyTheme(themeId);
+    renderThemePicker();
+};
+
+// --- SETTINGS TABS ---
+window.switchSettingsTab = (tab) => {
+    ['api', 'images', 'theme'].forEach(t => {
+        const el = document.getElementById('settings-tab-' + t);
+        if (el) el.style.display = t === tab ? '' : 'none';
+    });
+    document.querySelectorAll('#settings-tabs .settings-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
+    });
+    if (tab === 'theme') renderThemePicker();
+};
+
 window.openSettings = () => {
     const modal = document.getElementById('modal-settings');
+    // API tab
     document.getElementById('api-key').value = getGeminiApiKey();
 
-    // Load cached models or fallback, then restore selection
     const cached = JSON.parse(localStorage.getItem('gemini_models_cache') || 'null');
     const ONE_DAY = 24 * 60 * 60 * 1000;
     if (cached && (Date.now() - cached.ts < ONE_DAY) && cached.models?.length) {
         populateModelSelect(cached.models);
     } else {
         populateModelSelect(FALLBACK_MODELS);
-        // Auto-refresh if we have a key
         const apiKey = getGeminiApiKey();
         if (apiKey) setTimeout(() => refreshGeminiModels(), 100);
     }
+
+    // Images tab
+    const pixabayInput = document.getElementById('pixabay-api-key');
+    const togetherInput = document.getElementById('together-api-key');
+    if (pixabayInput) pixabayInput.value = getPixabayApiKey();
+    if (togetherInput) togetherInput.value = getTogetherApiKey();
+
+    // Reset to first tab
+    switchSettingsTab('api');
 
     modal.style.display = 'flex';
 };
@@ -133,45 +200,94 @@ window.closeSettings = () => {
     document.getElementById('modal-settings').style.display = 'none';
 };
 
-window.saveKey = () => {
+window.saveAllSettings = () => {
+    // Save API settings
     const key = document.getElementById('api-key').value.trim();
     saveGeminiApiKey(key);
     const model = document.getElementById('gemini-model').value;
     saveGeminiModel(model);
+
+    // Save image API keys
+    const pixabayKey = document.getElementById('pixabay-api-key')?.value?.trim();
+    if (pixabayKey !== undefined) savePixabayApiKey(pixabayKey);
+    const togetherKey = document.getElementById('together-api-key')?.value?.trim();
+    if (togetherKey !== undefined) saveTogetherApiKey(togetherKey);
+
+    // Theme is saved live on selection
+
     closeSettings();
 };
 
-// --- GEMINI API CALL ---
-async function callGemini(prompt, apiKey) {
-    const response = await fetch(`${getGeminiApiUrl()}?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-                temperature: 0.8,
-                maxOutputTokens: 4096,
-                responseMimeType: 'application/json'
-            }
-        })
-    });
+// Backward compat
+window.saveKey = window.saveAllSettings;
 
-    if (!response.ok) {
+// Apply saved theme on load
+(function() {
+    const saved = getCurrentTheme();
+    if (saved && saved !== 'default') applyTheme(saved);
+})();
+
+// --- GEMINI API CALL (with auto-retry on rate limit) ---
+function _parse429Error(errBody) {
+    const msg = errBody?.error?.message || '';
+    // Google distinguishes RESOURCE_EXHAUSTED (quota) vs rate limit
+    if (/quota/i.test(msg) || /per day/i.test(msg) || /daily/i.test(msg)) {
+        return { retryable: false, message: 'Quota giornaliera esaurita per questo modello. Prova con un altro modello (es. gemini-2.0-flash o gemini-2.5-flash-lite) nelle Impostazioni.' };
+    }
+    if (/per minute/i.test(msg) || /rate limit/i.test(msg) || /too many/i.test(msg)) {
+        return { retryable: true, message: 'Troppe richieste al minuto.' };
+    }
+    // Default: assume retryable
+    return { retryable: true, message: msg || 'Limite richieste raggiunto.' };
+}
+
+async function callGemini(prompt, apiKey) {
+    const MAX_RETRIES = 3;
+    const BACKOFF_MS = [3000, 8000, 15000]; // 3s, 8s, 15s
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        const response = await fetch(`${getGeminiApiUrl()}?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    temperature: 0.8,
+                    maxOutputTokens: 4096,
+                    responseMimeType: 'application/json'
+                }
+            })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!text) throw new Error('Risposta vuota dall\'AI');
+            return JSON.parse(text);
+        }
+
         const err = await response.json().catch(() => ({}));
-        if (response.status === 429) throw new Error('Limite di richieste raggiunto. Riprova tra qualche minuto.');
+
+        if (response.status === 429) {
+            const parsed = _parse429Error(err);
+            if (!parsed.retryable) throw new Error(parsed.message);
+            if (attempt < MAX_RETRIES) {
+                // Update status text if visible
+                const statusEl = document.getElementById('gemini-status-text');
+                if (statusEl) statusEl.textContent = `Rate limit — nuovo tentativo tra ${BACKOFF_MS[attempt] / 1000}s (${attempt + 1}/${MAX_RETRIES})...`;
+                await new Promise(r => setTimeout(r, BACKOFF_MS[attempt]));
+                continue;
+            }
+            throw new Error('Limite richieste persistente. Prova con un altro modello (es. gemini-2.0-flash o gemini-2.5-flash-lite) nelle Impostazioni, oppure attendi qualche minuto.');
+        }
+
         if (response.status === 400) throw new Error('Chiave API non valida. Controlla nelle Impostazioni.');
         if (response.status === 404) {
-            // Model was retired/removed — clear cache so next settings open refreshes
             localStorage.removeItem('gemini_models_cache');
             throw new Error(`Il modello "${getGeminiModel()}" non è più disponibile. Apri Impostazioni e scegline un altro.`);
         }
         throw new Error(err.error?.message || `Errore API (${response.status})`);
     }
-
-    const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!text) throw new Error('Risposta vuota dall\'AI');
-    return JSON.parse(text);
 }
 
 // --- SET GENERATION ---

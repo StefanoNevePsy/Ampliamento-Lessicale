@@ -23,7 +23,7 @@ on:
 
 jobs:
   # ==========================================
-  # macOS Build (DMG)
+  # macOS Build (DMG) — Tahoe dark/tinted icon support
   # ==========================================
   build-macos:
     runs-on: macos-latest
@@ -39,25 +39,62 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Generate macOS icon from SVG
+      - name: Generate macOS icon with Tahoe light/dark/tinted variants
         run: |
-          # Generate PNG from SVG at 1024x1024 for icns conversion
-          sips -s format png build/icon.svg --out build/icon_1024.png --resampleWidth 1024 2>/dev/null || true
-          # If sips can't handle SVG, use the existing icon.png
-          if [ ! -f build/icon_1024.png ]; then
-            cp build/icon.png build/icon_1024.png 2>/dev/null || true
-          fi
-          # Create iconset for macOS with all required sizes
+          # Install sharp-cli for SVG→PNG conversion
+          npm install --no-save sharp-cli
+
+          # Generate 1024x1024 PNGs from each SVG variant
+          npx sharp -i build/icon.svg -o build/icon_light_1024.png resize 1024 1024 2>/dev/null || \
+            sips -z 1024 1024 build/icon.png --out build/icon_light_1024.png 2>/dev/null || \
+            cp build/icon.png build/icon_light_1024.png
+
+          npx sharp -i build/icon-dark.svg -o build/icon_dark_1024.png resize 1024 1024 2>/dev/null || true
+
+          npx sharp -i build/icon-tinted.svg -o build/icon_tinted_1024.png resize 1024 1024 2>/dev/null || true
+
+          # ---- Standard .iconset (light mode) ----
           mkdir -p build/icon.iconset
           for size in 16 32 64 128 256 512; do
-            sips -z $size $size build/icon_1024.png --out build/icon.iconset/icon_${size}x${size}.png
+            sips -z $size $size build/icon_light_1024.png --out build/icon.iconset/icon_${size}x${size}.png
             double=$((size * 2))
             if [ $double -le 1024 ]; then
-              sips -z $double $double build/icon_1024.png --out build/icon.iconset/icon_${size}x${size}@2x.png
+              sips -z $double $double build/icon_light_1024.png --out build/icon.iconset/icon_${size}x${size}@2x.png
             fi
           done
-          # Generate .icns file for electron-builder
+
+          # ---- macOS Tahoe dark mode variants ----
+          # iconutil on macOS Sequoia+ supports _dark and _tinted suffixed PNGs in the iconset
+          if [ -f build/icon_dark_1024.png ]; then
+            for size in 16 32 64 128 256 512; do
+              sips -z $size $size build/icon_dark_1024.png --out "build/icon.iconset/icon_${size}x${size}_dark.png"
+              double=$((size * 2))
+              if [ $double -le 1024 ]; then
+                sips -z $double $double build/icon_dark_1024.png --out "build/icon.iconset/icon_${size}x${size}@2x_dark.png"
+              fi
+            done
+          fi
+
+          # ---- macOS Tahoe tinted mode variants ----
+          if [ -f build/icon_tinted_1024.png ]; then
+            for size in 16 32 64 128 256 512; do
+              sips -z $size $size build/icon_tinted_1024.png --out "build/icon.iconset/icon_${size}x${size}_tinted.png"
+              double=$((size * 2))
+              if [ $double -le 1024 ]; then
+                sips -z $double $double build/icon_tinted_1024.png --out "build/icon.iconset/icon_${size}x${size}@2x_tinted.png"
+              fi
+            done
+          fi
+
+          # Generate .icns file (includes dark/tinted variants on macOS 26+)
           iconutil -c icns build/icon.iconset -o build/icon.icns 2>/dev/null || true
+
+          # Fallback: if iconutil fails (older macOS runner), generate standard .icns
+          if [ ! -f build/icon.icns ]; then
+            # Remove dark/tinted variants and retry
+            rm -f build/icon.iconset/*_dark.png build/icon.iconset/*_tinted.png
+            iconutil -c icns build/icon.iconset -o build/icon.icns 2>/dev/null || true
+          fi
 
       - name: Build macOS DMG
         run: npm run electron:build:mac
@@ -87,6 +124,16 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Generate Windows icon from SVG
+        shell: bash
+        run: |
+          npm install --no-save sharp-cli
+          npx sharp -i build/icon.svg -o build/icon_256.png resize 256 256 2>/dev/null || true
+          # electron-builder can use icon.png directly if .ico is not available
+          if [ -f build/icon_256.png ]; then
+            cp build/icon_256.png build/icon_win.png
+          fi
+
       - name: Build Windows EXE
         run: npm run electron:build:win
         env:
@@ -99,7 +146,7 @@ jobs:
           path: dist/*.exe
 
   # ==========================================
-  # Android Build (APK via Capacitor)
+  # Android Build (APK via Capacitor) — Monet/Material You support
   # ==========================================
   build-android:
     runs-on: ubuntu-latest
@@ -124,6 +171,9 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Install image tools
+        run: npm install --no-save sharp-cli
+
       - name: Prepare web assets
         run: |
           mkdir -p www
@@ -135,29 +185,29 @@ jobs:
       - name: Initialize Capacitor Android
         run: npx cap add android
 
-      - name: Generate Android adaptive icons with Monet support
+      - name: Generate Android adaptive icons with Monet/Material You support
         run: |
-          # Generate legacy icons for backward compatibility
+          # ---- Legacy icons (pre-API 26) ----
           for size_dpi in "48 mdpi" "72 hdpi" "96 xhdpi" "144 xxhdpi" "192 xxxhdpi"; do
             set -- $size_dpi
-            convert build/icon.png -resize ${1}x${1} android/app/src/main/res/mipmap-${2}/ic_launcher.png
+            npx sharp -i build/icon.svg -o android/app/src/main/res/mipmap-${2}/ic_launcher.png resize ${1} ${1}
             cp android/app/src/main/res/mipmap-${2}/ic_launcher.png android/app/src/main/res/mipmap-${2}/ic_launcher_round.png
           done
 
-          # Generate foreground layer PNGs for adaptive icon
+          # ---- Foreground layer for adaptive icon (108dp canvas, brain centered) ----
           for size_dpi in "108 mdpi" "162 hdpi" "216 xhdpi" "324 xxhdpi" "432 xxxhdpi"; do
             set -- $size_dpi
             mkdir -p android/app/src/main/res/drawable-${2}
-            convert build/icon-foreground.svg -resize ${1}x${1} -background none android/app/src/main/res/drawable-${2}/ic_launcher_foreground.png
+            npx sharp -i build/icon-foreground.svg -o android/app/src/main/res/drawable-${2}/ic_launcher_foreground.png resize ${1} ${1}
           done
 
-          # Generate monochrome layer PNGs for Material You / Monet theming
+          # ---- Monochrome layer for Material You / Monet theming (API 33+) ----
           for size_dpi in "108 mdpi" "162 hdpi" "216 xhdpi" "324 xxhdpi" "432 xxxhdpi"; do
             set -- $size_dpi
-            convert build/icon-monochrome.svg -resize ${1}x${1} -background none android/app/src/main/res/drawable-${2}/ic_launcher_monochrome.png
+            npx sharp -i build/icon-monochrome.svg -o android/app/src/main/res/drawable-${2}/ic_launcher_monochrome.png resize ${1} ${1}
           done
 
-          # Create adaptive icon XML with monochrome layer
+          # ---- Adaptive icon XML (API 26+) with monochrome (API 33+) ----
           mkdir -p android/app/src/main/res/mipmap-anydpi-v26
           cat > android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml << 'XMLEOF'
           <?xml version="1.0" encoding="utf-8"?>
@@ -167,11 +217,11 @@ jobs:
               <monochrome android:drawable="@drawable/ic_launcher_monochrome"/>
           </adaptive-icon>
           XMLEOF
-          cp android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
+          cp android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml \
+             android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml
 
-          # Create background color resource
+          # ---- Background color resource (indigo to match brand) ----
           mkdir -p android/app/src/main/res/values
-          # Only add if not already present
           if ! grep -q "ic_launcher_background" android/app/src/main/res/values/colors.xml 2>/dev/null; then
             cat > android/app/src/main/res/values/ic_launcher_background.xml << 'XMLEOF'
             <?xml version="1.0" encoding="utf-8"?>
@@ -180,6 +230,16 @@ jobs:
             </resources>
           XMLEOF
           fi
+
+          # ---- Themed icon XML for Android 13+ (uses monochrome) ----
+          cat > android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_themed.xml << 'XMLEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@color/ic_launcher_background"/>
+              <foreground android:drawable="@drawable/ic_launcher_monochrome"/>
+              <monochrome android:drawable="@drawable/ic_launcher_monochrome"/>
+          </adaptive-icon>
+          XMLEOF
 
       - name: Sync Capacitor
         run: npx cap sync android
