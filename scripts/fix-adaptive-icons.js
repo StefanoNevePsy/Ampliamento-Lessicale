@@ -43,6 +43,19 @@ for (const file of xmlFiles) {
     console.log(`${file}: added monochrome layer.`);
 }
 
+// ---- 1b. Ensure adaptive icon background color is red ----
+
+const valuesDir = path.join(androidRes, 'values');
+fs.mkdirSync(valuesDir, { recursive: true });
+const colorsXmlPath = path.join(valuesDir, 'ic_launcher_background.xml');
+const colorsXml = `<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#E53935</color>
+</resources>
+`;
+fs.writeFileSync(colorsXmlPath, colorsXml, 'utf8');
+console.log('ic_launcher_background color set to #E53935 (red).');
+
 // ---- 2. Create themed icon XML (uses monochrome for both fg and mono) ----
 
 const themedXml = `<?xml version="1.0" encoding="utf-8"?>
