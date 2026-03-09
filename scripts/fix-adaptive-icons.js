@@ -58,7 +58,7 @@ if (fs.existsSync(iconXmlDir)) {
     console.log('ic_launcher_themed.xml: created.');
 }
 
-// ---- 3. Generate monochrome PNGs from SVG using sharp-cli ----
+// ---- 3. Generate monochrome PNGs from SVG using sharp library ----
 
 const monoSvg = path.join(__dirname, '..', 'build', 'icon-monochrome.svg');
 if (!fs.existsSync(monoSvg)) {
@@ -67,7 +67,15 @@ if (!fs.existsSync(monoSvg)) {
     process.exit(0);
 }
 
-const { execSync } = require('child_process');
+let sharp;
+try {
+    sharp = require('sharp');
+} catch (e) {
+    console.warn('Warning: sharp is not installed. Skipping monochrome PNG generation.');
+    console.warn('Run "npm install --save-dev sharp" to enable monochrome icon generation.');
+    console.log('\nDone! Adaptive icons patched for Material You / Monet support.');
+    process.exit(0);
+}
 
 const densities = [
     { size: 108, dpi: 'mdpi' },
@@ -77,16 +85,21 @@ const densities = [
     { size: 432, dpi: 'xxxhdpi' },
 ];
 
-for (const { size, dpi } of densities) {
-    const outDir = path.join(androidRes, `drawable-${dpi}`);
-    fs.mkdirSync(outDir, { recursive: true });
-    const outFile = path.join(outDir, 'ic_launcher_monochrome.png');
-    try {
-        execSync(`npx sharp -i "${monoSvg}" -o "${outFile}" resize ${size} ${size}`, { stdio: 'pipe' });
-        console.log(`drawable-${dpi}/ic_launcher_monochrome.png: generated (${size}x${size}).`);
-    } catch (e) {
-        console.warn(`Warning: could not generate ${dpi} monochrome PNG: ${e.message}`);
+(async () => {
+    const svgBuffer = fs.readFileSync(monoSvg);
+    for (const { size, dpi } of densities) {
+        const outDir = path.join(androidRes, `drawable-${dpi}`);
+        fs.mkdirSync(outDir, { recursive: true });
+        const outFile = path.join(outDir, 'ic_launcher_monochrome.png');
+        try {
+            await sharp(svgBuffer)
+                .resize(size, size)
+                .png()
+                .toFile(outFile);
+            console.log(`drawable-${dpi}/ic_launcher_monochrome.png: generated (${size}x${size}).`);
+        } catch (e) {
+            console.warn(`Warning: could not generate ${dpi} monochrome PNG: ${e.message}`);
+        }
     }
-}
-
-console.log('\nDone! Adaptive icons patched for Material You / Monet support.');
+    console.log('\nDone! Adaptive icons patched for Material You / Monet support.');
+})();
