@@ -431,6 +431,9 @@ window.loadPatientData = (pid) => {
                 <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem;" onclick="renamePatient('${pid}')">
                     <i class="fa-solid fa-pen"></i>
                 </button>
+                <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(99,102,241,0.3); color:var(--accent-color);" onclick="generateAIReport('${pid}')" title="Report AI">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                </button>
                 <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(16,185,129,0.3); color:var(--success-color);" onclick="exportPatientExcel('${pid}')">
                     <i class="fa-solid fa-file-excel"></i>
                 </button>
@@ -1808,4 +1811,307 @@ function renderSetBreakdownTable(setAggregates, title) {
 
     html += `</table>`;
     return html;
+}
+
+// ============================================================
+// AI CLINICAL REPORT (Gemini) — Privacy-safe
+// ============================================================
+const FICTIONAL_NAMES = [
+    'Marco R.', 'Laura B.', 'Giuseppe V.', 'Anna M.', 'Francesco T.',
+    'Elena S.', 'Alessandro P.', 'Chiara D.', 'Luca F.', 'Sara G.'
+];
+
+function _buildPatientSummaryForAI(patient, fakeName) {
+    const history = patient.history || [];
+    if (history.length === 0) return null;
+
+    const sorted = [...history].sort((a, b) => new Date(a.date) - new Date(b.date));
+    const firstDate = sorted[0].date;
+    const lastDate = sorted[sorted.length - 1].date;
+
+    // Group by activity (setName + mode + sessionType)
+    const byActivity = {};
+    sorted.forEach(s => {
+        const typeGroup = getSessionTypeGroup(s);
+        const key = `${s.setName}||${s.mode}||${typeGroup}`;
+        if (!byActivity[key]) byActivity[key] = [];
+        byActivity[key].push(s);
+    });
+
+    const activities = Object.entries(byActivity).map(([key, sessions]) => {
+        const [setName, mode, typeGroup] = key.split('||');
+        const modeName = MODES_CONFIG[mode] || mode;
+        const sortedSess = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
+        const firstSess = sortedSess[0];
+        const lastSess = sortedSess[sortedSess.length - 1];
+        const avgPct = Math.round(sessions.reduce((a, s) => a + s.percentage, 0) / sessions.length);
+        const hasCriterion = checkCriterion(sessions);
+        const isRepert = checkRepertorio(sessions);
+        const setCat = sessions.find(s => s.setCat)?.setCat || '';
+
+        // Trend: compare first half avg vs second half avg
+        const mid = Math.floor(sortedSess.length / 2);
+        const firstHalfAvg = mid > 0 ? Math.round(sortedSess.slice(0, mid).reduce((a, s) => a + s.percentage, 0) / mid) : firstSess.percentage;
+        const secondHalfAvg = mid > 0 ? Math.round(sortedSess.slice(mid).reduce((a, s) => a + s.percentage, 0) / (sortedSess.length - mid)) : lastSess.percentage;
+        const trend = secondHalfAvg - firstHalfAvg;
+
+        return {
+            nome_attivita: setName,
+            categoria_set: setCat,
+            modalita: modeName,
+            tipo_sessione: getSessionTypeLabel(typeGroup),
+            n_sessioni: sessions.length,
+            prima_data: formatDateEU(firstSess.date),
+            ultima_data: formatDateEU(lastSess.date),
+            percentuale_prima_sessione: firstSess.percentage,
+            percentuale_ultima_sessione: lastSess.percentage,
+            media_percentuale: avgPct,
+            trend_punti: trend,
+            criterio_raggiunto: hasCriterion,
+            in_repertorio: isRepert
+        };
+    });
+
+    // Daily summary
+    const byDate = {};
+    sorted.forEach(s => {
+        const dk = getDateKey(s.date);
+        if (!byDate[dk]) byDate[dk] = [];
+        byDate[dk].push(s);
+    });
+    const nGiornate = Object.keys(byDate).length;
+    const totalSessions = history.length;
+    const overallAvg = Math.round(history.reduce((a, s) => a + s.percentage, 0) / history.length);
+
+    return {
+        paziente: fakeName,
+        periodo: `${formatDateEU(firstDate)} - ${formatDateEU(lastDate)}`,
+        totale_giornate: nGiornate,
+        totale_sessioni: totalSessions,
+        media_percentuale_globale: overallAvg,
+        attivita: activities
+    };
+}
+
+const AI_REPORT_PROMPT = `Sei un neuropsicologo/logopedista esperto in riabilitazione neuropsicologica e precision teaching.
+Analizza i dati clinici del paziente e genera un report professionale.
+
+Rispondi in formato TESTO (non JSON), in italiano, con queste sezioni:
+
+## Riepilogo Generale
+Breve panoramica dell'andamento complessivo del paziente, numero di sessioni, periodo di trattamento, media globale.
+
+## Analisi per Attività
+Per ogni attività significativa, commenta:
+- Andamento (miglioramento, stallo, regressione)
+- Se il criterio è stato raggiunto o meno
+- Se l'attività è in repertorio
+
+## Punti di Forza
+Attività dove il paziente mostra le migliori performance.
+
+## Aree di Attenzione
+Attività con trend negativo o percentuali basse che richiedono intervento.
+
+## Suggerimenti Terapeutici
+Basandoti sui dati, suggerisci:
+- Con quali attività procedere (e perché)
+- Se ci sono attività da dismettere perché già in criterio
+- Se ci sono aree dove introdurre nuovi stimoli o aumentare la difficoltà
+- Eventuali strategie (time delay, prompt fading, ecc.)
+
+Sii professionale ma chiaro. Usa un linguaggio clinico accessibile.
+
+Ecco i dati del paziente:
+`;
+
+window.generateAIReport = async (pid) => {
+    const p = state.patients.find(x => x.id === pid);
+    if (!p) return;
+
+    if (!p.history || p.history.length === 0) {
+        alert('Nessun dato registrato per questo paziente.');
+        return;
+    }
+
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) {
+        openSettings();
+        setTimeout(() => {
+            alert('Per generare il report AI, inserisci prima la tua chiave API Gemini nelle Impostazioni.');
+        }, 300);
+        return;
+    }
+
+    // Privacy: use a fictional name
+    const fakeName = FICTIONAL_NAMES[Math.floor(Math.random() * FICTIONAL_NAMES.length)];
+    const realName = p.name;
+
+    const summary = _buildPatientSummaryForAI(p, fakeName);
+    if (!summary) return;
+
+    // Show loading modal
+    let modal = document.getElementById('modal-ai-report');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'modal-ai-report';
+        modal.className = 'modal-fs';
+        modal.innerHTML = `
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-wand-magic-sparkles"></i> Report AI</h2>
+                <button class="btn btn-danger" onclick="closeAIReport()">Chiudi</button>
+            </div>
+            <div class="modal-body" id="ai-report-body" style="max-width:700px; margin:0 auto;"></div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    const body = document.getElementById('ai-report-body');
+    body.innerHTML = `
+        <div style="text-align:center; padding:40px;">
+            <div class="loading-spinner" style="margin:0 auto 15px;"></div>
+            <p style="color:var(--accent-color); font-weight:600;">Generazione report in corso con ${getGeminiModel()}...</p>
+            <p style="color:var(--text-secondary); font-size:0.8rem; margin-top:8px;">
+                <i class="fa-solid fa-shield-halved"></i> Il nome del paziente viene sostituito con un nome fittizio per tutelare la privacy.
+            </p>
+        </div>
+    `;
+    modal.classList.add('open');
+
+    try {
+        const prompt = AI_REPORT_PROMPT + JSON.stringify(summary, null, 2);
+
+        // Call Gemini with text response (not JSON)
+        const response = await _callGeminiText(prompt, apiKey);
+
+        // Replace fictional name back with real name
+        const fakeFirst = fakeName.split(' ')[0];
+        const realFirst = realName.split(' ')[0];
+        const finalReport = response.replaceAll(fakeName, realName)
+            .replaceAll(fakeFirst, realFirst);
+
+        // Render the report
+        body.innerHTML = `
+            <div style="display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap;">
+                <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem;" onclick="copyAIReport()">
+                    <i class="fa-solid fa-copy"></i> Copia
+                </button>
+                <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(16,185,129,0.3); color:var(--success-color);" onclick="downloadAIReport('${pid}')">
+                    <i class="fa-solid fa-file-arrow-down"></i> Scarica
+                </button>
+                <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(99,102,241,0.3); color:var(--accent-color);" onclick="generateAIReport('${pid}')">
+                    <i class="fa-solid fa-arrows-rotate"></i> Rigenera
+                </button>
+            </div>
+            <div id="ai-report-content" style="background:rgba(0,0,0,0.2); border:1px solid var(--glass-border); border-radius:12px; padding:20px; line-height:1.7; font-size:0.9rem; color:var(--text-primary);">
+                ${_markdownToHtml(finalReport)}
+            </div>
+            <div style="margin-top:10px; padding:8px; background:rgba(99,102,241,0.05); border-radius:8px; font-size:0.7rem; color:var(--text-secondary); text-align:center;">
+                <i class="fa-solid fa-shield-halved"></i> Report generato con AI. Il nome del paziente non è mai stato inviato ai server esterni.
+            </div>
+        `;
+
+        // Store last report for copy/download
+        window._lastAIReport = finalReport;
+        window._lastAIReportPatient = realName;
+
+    } catch (err) {
+        body.innerHTML = `
+            <div style="text-align:center; padding:30px;">
+                <i class="fa-solid fa-circle-exclamation" style="font-size:2rem; color:var(--danger-color); margin-bottom:10px;"></i>
+                <p style="color:var(--danger-color); font-weight:600;">Errore nella generazione del report</p>
+                <p style="color:var(--text-secondary); font-size:0.85rem; margin-top:8px;">${err.message}</p>
+                <button class="btn btn-primary" style="margin-top:15px;" onclick="generateAIReport('${pid}')">
+                    <i class="fa-solid fa-arrows-rotate"></i> Riprova
+                </button>
+            </div>
+        `;
+    }
+};
+
+window.closeAIReport = () => {
+    const modal = document.getElementById('modal-ai-report');
+    if (modal) modal.classList.remove('open');
+};
+
+window.copyAIReport = () => {
+    if (!window._lastAIReport) return;
+    navigator.clipboard.writeText(window._lastAIReport).then(() => {
+        alert('Report copiato negli appunti!');
+    }).catch(() => {
+        // Fallback
+        const ta = document.createElement('textarea');
+        ta.value = window._lastAIReport;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        alert('Report copiato!');
+    });
+};
+
+window.downloadAIReport = (pid) => {
+    if (!window._lastAIReport) return;
+    const name = window._lastAIReportPatient || 'paziente';
+    const safeName = name.replace(/[^a-zA-Z0-9\u00C0-\u024F]/g, '_');
+    const dateStr = new Date().toISOString().split('T')[0];
+    const blob = new Blob([window._lastAIReport], { type: 'text/plain;charset=utf-8' });
+    const fileName = `${safeName}_report_AI_${dateStr}.txt`;
+    downloadFile(blob, fileName, `Report AI ${name}`);
+};
+
+// Simple markdown-to-HTML converter for the report
+function _markdownToHtml(md) {
+    return md
+        .replace(/^### (.+)$/gm, '<h4 style="color:var(--accent-color); margin:18px 0 8px; font-size:0.95rem;">$1</h4>')
+        .replace(/^## (.+)$/gm, '<h3 style="color:var(--accent-color); margin:20px 0 10px; font-size:1.05rem; border-bottom:1px solid var(--glass-border); padding-bottom:6px;">$1</h3>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/^- (.+)$/gm, '<li style="margin:4px 0; margin-left:16px;">$1</li>')
+        .replace(/(<li[^>]*>.*<\/li>\n?)+/g, (match) => `<ul style="list-style:disc; padding-left:8px; margin:6px 0;">${match}</ul>`)
+        .replace(/\n\n/g, '<br><br>')
+        .replace(/\n/g, '<br>');
+}
+
+// Gemini call that returns plain text (not JSON)
+async function _callGeminiText(prompt, apiKey) {
+    const MAX_RETRIES = 3;
+    const BACKOFF_MS = [3000, 8000, 15000];
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        const response = await fetch(`${getGeminiApiUrl()}?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    temperature: 0.7,
+                    maxOutputTokens: 8192
+                }
+            })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (!text) throw new Error('Risposta vuota dall\'AI');
+            return text;
+        }
+
+        const err = await response.json().catch(() => ({}));
+
+        if (response.status === 429) {
+            const parsed = _parse429Error(err);
+            if (!parsed.retryable) throw new Error(parsed.message);
+            if (attempt < MAX_RETRIES) {
+                await new Promise(r => setTimeout(r, BACKOFF_MS[attempt]));
+                continue;
+            }
+            throw new Error('Limite richieste persistente. Prova con un altro modello nelle Impostazioni, oppure attendi qualche minuto.');
+        }
+
+        if (response.status === 400) throw new Error('Chiave API non valida. Controlla nelle Impostazioni.');
+        if (response.status === 404) throw new Error(`Il modello "${getGeminiModel()}" non è più disponibile. Apri Impostazioni e scegline un altro.`);
+        throw new Error(err.error?.message || `Errore API (${response.status})`);
+    }
 }
