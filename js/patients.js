@@ -434,6 +434,9 @@ window.loadPatientData = (pid) => {
                 <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(99,102,241,0.3); color:var(--accent-color);" onclick="generateAIReport('${pid}')" title="Report AI">
                     <i class="fa-solid fa-wand-magic-sparkles"></i>
                 </button>
+                <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(168,85,247,0.3); color:#a855f7;" onclick="openReportHistoryStandalone('${pid}')" title="Storico Report AI">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                </button>
                 <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(16,185,129,0.3); color:var(--success-color);" onclick="exportPatientExcel('${pid}')">
                     <i class="fa-solid fa-file-excel"></i>
                 </button>
@@ -2268,6 +2271,56 @@ function _updateReportWithFollowUp(pid, question, answer) {
     reports[0].followUps.push({ question, answer });
     _setPatientReports(pid, reports);
 }
+
+// --- OPEN REPORT HISTORY STANDALONE (from cartella clinica) ---
+window.openReportHistoryStandalone = (pid) => {
+    const reports = _getPatientReports(pid);
+    if (reports.length === 0) {
+        alert('Nessun report salvato per questo paziente.');
+        return;
+    }
+
+    // Ensure the AI report modal exists
+    let modal = document.getElementById('modal-ai-report');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'modal-ai-report';
+        modal.className = 'modal-fs';
+        modal.innerHTML = `
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-clock-rotate-left"></i> Storico Report AI</h2>
+                <button class="btn btn-danger" onclick="closeAIReport()">Chiudi</button>
+            </div>
+            <div class="modal-body" id="ai-report-body" style="max-width:700px; margin:0 auto; padding-bottom:80px;"></div>
+            <div id="ai-report-chat-bar" style="display:none; position:fixed; bottom:0; left:0; right:0; background:var(--glass-bg, rgba(15,15,30,0.95)); backdrop-filter:blur(20px); border-top:1px solid var(--glass-border); padding:10px 16px; z-index:1001;">
+                <div style="max-width:700px; margin:0 auto; display:flex; gap:8px; align-items:center;">
+                    <i class="fa-solid fa-comments" style="color:var(--accent-color); font-size:1rem;"></i>
+                    <input type="text" id="ai-report-chat-input" placeholder="Chiedi altro sul report..."
+                        style="flex:1; padding:10px 14px; border-radius:10px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.05); color:var(--text-primary); font-size:0.85rem; outline:none;"
+                        onkeydown="if(event.key==='Enter')askReportFollowUp()">
+                    <button class="btn btn-primary" style="padding:8px 14px; border-radius:10px; font-size:0.85rem;" onclick="askReportFollowUp()">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    } else {
+        // Update header to show "Storico" instead of "Report AI"
+        const header = modal.querySelector('.modal-header h2');
+        if (header) header.innerHTML = '<i class="fa-solid fa-clock-rotate-left"></i> Storico Report AI';
+    }
+
+    // Hide chat bar
+    const chatBar = document.getElementById('ai-report-chat-bar');
+    if (chatBar) chatBar.style.display = 'none';
+
+    // Open modal
+    setTimeout(() => modal.classList.add('open'), 10);
+
+    // Show history
+    openReportHistory(pid);
+};
 
 // --- REPORT HISTORY ---
 window.openReportHistory = (pid) => {
