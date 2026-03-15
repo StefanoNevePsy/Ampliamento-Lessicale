@@ -552,6 +552,8 @@ window.toggleLabelsVisibility = () => {
 // --- POINTER / PEN TOOL ---
 (function initPointerPen() {
     let penActive = false;
+    let sPenHolding = false; // S-Pen barrel button temporary activation
+    let manualActive = false; // User toggled via button
     let drawing = false;
     let strokes = []; // { points: [{x,y,t}], color }
     let currentStroke = null;
@@ -576,6 +578,49 @@ window.toggleLabelsVisibility = () => {
             return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
         }
         return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    }
+
+    function activatePen() {
+        if (penActive) return;
+        const canvas = getCanvas();
+        if (!canvas) return;
+        penActive = true;
+        resizeCanvas();
+        canvas.classList.add('active');
+        const btn = document.getElementById('btn-pointer-pen');
+        if (btn) btn.classList.add('pen-active');
+        canvas.addEventListener('mousedown', startDraw);
+        canvas.addEventListener('mousemove', moveDraw);
+        canvas.addEventListener('mouseup', endDraw);
+        canvas.addEventListener('mouseleave', endDraw);
+        canvas.addEventListener('touchstart', startDraw, { passive: false });
+        canvas.addEventListener('touchmove', moveDraw, { passive: false });
+        canvas.addEventListener('touchend', endDraw);
+        canvas.addEventListener('touchcancel', endDraw);
+        if (!animFrameId) animFrameId = requestAnimationFrame(renderLoop);
+    }
+
+    function deactivatePen() {
+        if (!penActive) return;
+        const canvas = getCanvas();
+        if (!canvas) return;
+        penActive = false;
+        canvas.classList.remove('active');
+        const btn = document.getElementById('btn-pointer-pen');
+        if (btn) btn.classList.remove('pen-active');
+        canvas.removeEventListener('mousedown', startDraw);
+        canvas.removeEventListener('mousemove', moveDraw);
+        canvas.removeEventListener('mouseup', endDraw);
+        canvas.removeEventListener('mouseleave', endDraw);
+        canvas.removeEventListener('touchstart', startDraw);
+        canvas.removeEventListener('touchmove', moveDraw);
+        canvas.removeEventListener('touchend', endDraw);
+        canvas.removeEventListener('touchcancel', endDraw);
+        strokes = [];
+        currentStroke = null;
+        drawing = false;
+        const ctx = canvas.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
 
     function startDraw(e) {
@@ -654,38 +699,96 @@ window.toggleLabelsVisibility = () => {
     }
 
     window.togglePointerPen = () => {
-        const canvas = getCanvas();
-        const btn = document.getElementById('btn-pointer-pen');
-        if (!canvas) return;
-        penActive = !penActive;
-        canvas.classList.toggle('active', penActive);
-        if (btn) btn.classList.toggle('pen-active', penActive);
-        if (penActive) {
-            resizeCanvas();
-            canvas.addEventListener('mousedown', startDraw);
-            canvas.addEventListener('mousemove', moveDraw);
-            canvas.addEventListener('mouseup', endDraw);
-            canvas.addEventListener('mouseleave', endDraw);
-            canvas.addEventListener('touchstart', startDraw, { passive: false });
-            canvas.addEventListener('touchmove', moveDraw, { passive: false });
-            canvas.addEventListener('touchend', endDraw);
-            canvas.addEventListener('touchcancel', endDraw);
-            if (!animFrameId) animFrameId = requestAnimationFrame(renderLoop);
+        if (penActive && !sPenHolding) {
+            manualActive = false;
+            deactivatePen();
         } else {
-            canvas.removeEventListener('mousedown', startDraw);
-            canvas.removeEventListener('mousemove', moveDraw);
-            canvas.removeEventListener('mouseup', endDraw);
-            canvas.removeEventListener('mouseleave', endDraw);
-            canvas.removeEventListener('touchstart', startDraw);
-            canvas.removeEventListener('touchmove', moveDraw);
-            canvas.removeEventListener('touchend', endDraw);
-            canvas.removeEventListener('touchcancel', endDraw);
-            strokes = [];
-            currentStroke = null;
-            const ctx = canvas.getContext('2d');
-            if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+            manualActive = true;
+            sPenHolding = false;
+            activatePen();
         }
     };
+
+    // --- S-PEN BARREL BUTTON: auto-activate pointer while button is held ---
+    // The barrel button is reported as button=5 on pointerdown with pointerType='pen'.
+    // On some Samsung WebViews it may also appear as button=2 (right-click).
+    // We intercept at document level before anything else.
+    function isSPenBarrelButton(e) {
+        if (e.pointerType !== 'pen') return false;
+        // button === 5 is the standard pen barrel button
+        // button === 2 is sometimes used by Samsung WebView for barrel
+        // We also check the buttons bitmask: bit 5 (32) = eraser, bit 1 (2) = secondary
+        return e.button === 5 || (e.button === 2 && !e.ctrlKey);
+    }
+
+    document.addEventListener('pointerdown', (e) => {
+        if (!isSPenBarrelButton(e)) return;
+        if (manualActive) return; // Already manually toggled, don't interfere
+        e.preventDefault();
+        sPenHolding = true;
+        activatePen();
+        // Start drawing immediately from this position
+        const canvas = getCanvas();
+        if (canvas) {
+            const rect = canvas.getBoundingClientRect();
+            const pos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            drawing = true;
+            currentStroke = { points: [{ x: pos.x, y: pos.y, t: Date.now() }], color: PEN_COLOR };
+        }
+    }, true); // capture phase to intercept before other handlers
+
+    document.addEventListener('pointermove', (e) => {
+        if (!sPenHolding || e.pointerType !== 'pen') return;
+        if (!drawing || !currentStroke) return;
+        e.preventDefault();
+        const canvas = getCanvas();
+        if (canvas) {
+            const rect = canvas.getBoundingClientRect();
+            const pos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            currentStroke.points.push({ x: pos.x, y: pos.y, t: Date.now() });
+        }
+    }, true);
+
+    document.addEventListener('pointerup', (e) => {
+        if (!sPenHolding) return;
+        if (e.pointerType !== 'pen') return;
+        // End stroke
+        if (drawing && currentStroke) {
+            drawing = false;
+            if (currentStroke.points.length > 0) strokes.push(currentStroke);
+            currentStroke = null;
+        }
+        sPenHolding = false;
+        if (!manualActive) {
+            // Don't deactivate instantly — let strokes fade, then deactivate
+            setTimeout(() => {
+                if (!sPenHolding && !manualActive) deactivatePen();
+            }, FADE_MS + 100);
+        }
+    }, true);
+
+    document.addEventListener('pointercancel', (e) => {
+        if (!sPenHolding || e.pointerType !== 'pen') return;
+        if (drawing && currentStroke) {
+            drawing = false;
+            if (currentStroke.points.length > 0) strokes.push(currentStroke);
+            currentStroke = null;
+        }
+        sPenHolding = false;
+        if (!manualActive) {
+            setTimeout(() => {
+                if (!sPenHolding && !manualActive) deactivatePen();
+            }, FADE_MS + 100);
+        }
+    }, true);
+
+    // Prevent context menu on S-Pen barrel button (often triggers right-click menu)
+    document.addEventListener('contextmenu', (e) => {
+        if (sPenHolding || (e.pointerType === 'pen')) {
+            // Only prevent if we recently handled an S-Pen barrel event
+            if (sPenHolding) e.preventDefault();
+        }
+    });
 
     // Keep canvas sized on window resize
     window.addEventListener('resize', () => { if (penActive) resizeCanvas(); });
