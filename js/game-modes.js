@@ -1857,6 +1857,17 @@ window.undoLastAction = () => {
     if (engine === 'quaderno' || engine === 'quaderno_task') {
         if (state._quadernoType === 'task') {
             if (typeof window.undoLastTaskStep === 'function') window.undoLastTaskStep();
+        } else {
+            // Quaderno general: undo last LU from the most recently scored row
+            const rows = state._quadernoRows || [];
+            for (let i = rows.length - 1; i >= 0; i--) {
+                if (rows[i].results && rows[i].results.length > 0) {
+                    rows[i].results.pop();
+                    _syncQuadernoName();
+                    renderQuadernoGeneral(document.getElementById('quaderno-content'));
+                    break;
+                }
+            }
         }
         return;
     }
@@ -2166,6 +2177,47 @@ window.nextZoomItem = () => {
 };
 
 // ============================================================
+// --- QUADERNO STATE PERSISTENCE (survives keyboard attach/page reload) ---
+// ============================================================
+function _saveQuadernoState() {
+    try {
+        const data = {
+            type: state._quadernoType,
+            name: state._quadernoName,
+            setId: state._quadernoSetId,
+            rows: state._quadernoRows,
+            steps: state._quadernoSteps,
+            currentStep: state._taskCurrentStep,
+            cycleCount: state._taskCycleCount,
+            tdSeconds: state._quadernoTDSeconds
+        };
+        sessionStorage.setItem('_quadernoState', JSON.stringify(data));
+    } catch(e) { /* ignore */ }
+}
+
+function _restoreQuadernoState() {
+    try {
+        const raw = sessionStorage.getItem('_quadernoState');
+        if (!raw) return false;
+        const data = JSON.parse(raw);
+        if (!data.type) return false;
+        state._quadernoType = data.type;
+        state._quadernoName = data.name || '';
+        state._quadernoSetId = data.setId || null;
+        state._quadernoRows = data.rows || [];
+        state._quadernoSteps = data.steps || [];
+        state._taskCurrentStep = data.currentStep || 0;
+        state._taskCycleCount = data.cycleCount || 0;
+        state._quadernoTDSeconds = data.tdSeconds || 5;
+        return true;
+    } catch(e) { return false; }
+}
+
+function _clearQuadernoState() {
+    try { sessionStorage.removeItem('_quadernoState'); } catch(e) { /* ignore */ }
+}
+
+// ============================================================
 // --- QUADERNO (Manual scoring + Task Analysis) ---
 // ============================================================
 function renderQuaderno(stage, engine) {
@@ -2180,6 +2232,19 @@ function renderQuaderno(stage, engine) {
 
     // Populate the set dropdown with filtered lists
     _populateQuadernoDropdown(quadernoSets, isTaskMode);
+
+    // Try to restore previous quaderno state (e.g. after keyboard attach reload)
+    if (_restoreQuadernoState() && (state._quadernoRows.length > 0 || state._quadernoSteps.length > 0)) {
+        stage.innerHTML = `
+        <div style="height:100%; display:flex; flex-direction:column; overflow:hidden;">
+            <div id="quaderno-content" style="flex:1; overflow-y:auto; padding:15px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--text-secondary);">
+            </div>
+        </div>`;
+        const content = document.getElementById('quaderno-content');
+        if (state._quadernoType === 'task') renderQuadernoTask(content);
+        else renderQuadernoGeneral(content);
+        return;
+    }
 
     // If entering directly via Task Analysis mode, open task sheet immediately
     if (isTaskMode) {
@@ -2352,6 +2417,7 @@ function getQuadernoTDSeconds() {
 }
 
 window.onQuadernoTypeChange = () => {
+    _syncQuadernoName();
     const type = getQuadernoSessionType();
     const tdWrap = document.getElementById('quaderno-td-seconds-wrap');
     if (tdWrap) tdWrap.style.display = type === 'timedelay' ? '' : 'none';
@@ -2362,6 +2428,7 @@ window.onQuadernoTypeChange = () => {
 };
 
 function renderQuadernoGeneral(container) {
+    _saveQuadernoState();
     container.style.justifyContent = 'flex-start';
     container.style.alignItems = 'stretch';
     const rows = state._quadernoRows || [];
@@ -2472,8 +2539,15 @@ function renderQuadernoRow(row, idx, sessionType) {
     </div>`;
 }
 
+// Sync the quaderno name input value to state before any re-render
+function _syncQuadernoName() {
+    const input = document.getElementById('quaderno-name-input');
+    if (input) state._quadernoName = input.value;
+}
+
 // Add a LU to a quaderno row (append, not toggle)
 window.addQuadernoLU = (idx, result) => {
+    _syncQuadernoName();
     if (state._quadernoType === 'general') {
         if (!state._quadernoRows[idx].results) state._quadernoRows[idx].results = [];
         state._quadernoRows[idx].results.push(result);
@@ -2487,6 +2561,7 @@ window.addQuadernoLU = (idx, result) => {
 
 // Undo last LU from a quaderno row
 window.undoQuadernoResult = (idx) => {
+    _syncQuadernoName();
     if (state._quadernoType === 'general') {
         const res = state._quadernoRows[idx].results;
         if (res && res.length > 0) {
@@ -2503,6 +2578,7 @@ window.undoQuadernoResult = (idx) => {
 };
 
 window.addQuadernoRow = () => {
+    _syncQuadernoName();
     const input = document.getElementById('quaderno-new-activity');
     const name = input.value.trim();
     if (!name) return;
@@ -2512,6 +2588,7 @@ window.addQuadernoRow = () => {
 };
 
 window.removeQuadernoRow = (idx) => {
+    _syncQuadernoName();
     if (state._quadernoType === 'general') {
         state._quadernoRows.splice(idx, 1);
         renderQuadernoGeneral(document.getElementById('quaderno-content'));
@@ -2526,6 +2603,7 @@ window.removeQuadernoRow = (idx) => {
 };
 
 window.moveQuadernoRow = (idx, dir) => {
+    _syncQuadernoName();
     const rows = state._quadernoType === 'general' ? state._quadernoRows : state._quadernoSteps;
     if (!rows) return;
     const newIdx = idx + dir;
@@ -2543,6 +2621,7 @@ window.moveQuadernoRow = (idx, dir) => {
 };
 
 window.renameQuadernoRow = (idx) => {
+    _syncQuadernoName();
     const rows = state._quadernoType === 'general' ? state._quadernoRows : state._quadernoSteps;
     if (!rows || !rows[idx]) return;
     const newName = prompt('Rinomina:', rows[idx].name);
@@ -2665,6 +2744,7 @@ window.saveQuadernoSession = async () => {
         }
 
         await DB.savePatient(p);
+        _clearQuadernoState();
         const mergeNote = merged ? ' (accorpata con sessione precedente)' : '';
         alert(`Task Analysis salvata${mergeNote}!\n${totalScored} LU (escl. N/A), ${totalCorrect} corrette (${Math.round((totalCorrect / totalScored) * 100)}%)\nCicli completati: ${(state._taskCycleCount || 0) + (state._taskCurrentStep > 0 ? 1 : 0)}`);
 
@@ -2708,6 +2788,7 @@ window.saveQuadernoSession = async () => {
         });
 
         await DB.savePatient(p);
+        _clearQuadernoState();
         alert(`Sessione salvata!\n${totalLU} LU, ${totalCorrect} corrette (${totalLU > 0 ? Math.round((totalCorrect / totalLU) * 100) : 0}%)`);
     }
 };
@@ -2773,6 +2854,7 @@ window.saveQuadernoTemplate = async () => {
 // QUADERNO TASK ANALYSIS (one LU per step, auto-repeat cycles)
 // ============================================================
 function renderQuadernoTask(container) {
+    _saveQuadernoState();
     container.style.justifyContent = 'flex-start';
     container.style.alignItems = 'stretch';
     const steps = state._quadernoSteps || [];
@@ -2931,6 +3013,7 @@ function renderQuadernoTaskStep(step, idx, sessionType, isActive) {
 
 // Score the current active task step and auto-advance
 window.taskStepScore = (result) => {
+    _syncQuadernoName();
     const steps = state._quadernoSteps;
     if (!steps || steps.length === 0) return;
     const idx = state._taskCurrentStep || 0;
@@ -2953,6 +3036,7 @@ window.taskStepScore = (result) => {
 
 // Undo last scored task step (go back one)
 window.undoLastTaskStep = () => {
+    _syncQuadernoName();
     const steps = state._quadernoSteps;
     if (!steps || steps.length === 0) return;
 
@@ -2978,6 +3062,7 @@ window.undoLastTaskStep = () => {
 };
 
 window.addQuadernoStep = () => {
+    _syncQuadernoName();
     const input = document.getElementById('quaderno-new-step');
     const name = input.value.trim();
     if (!name) return;

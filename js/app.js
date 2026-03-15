@@ -756,6 +756,7 @@ window.startGame = () => {
         state.session = { correct: 0, incorrect: 0, total: 0, active: true, itemResults: {} };
         document.getElementById('scoring-controls').classList.add('hidden');
         document.getElementById('btn-save-session').classList.add('hidden');
+        document.getElementById('btn-undo-marker').classList.remove('hidden');
         renderGameMode(mode, []);
         return;
     }
