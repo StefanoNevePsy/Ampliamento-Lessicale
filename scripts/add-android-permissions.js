@@ -38,11 +38,44 @@ for (const perm of permissions) {
 // navigation|navigationHidden — trackpad / pointing device on the cover
 const extraConfigFlags = ['keyboard', 'keyboardHidden', 'navigation', 'navigationHidden'];
 
+// Flags that are no longer valid in newer compileSdk (35+)
+const deprecatedFlags = ['locale'];
+const deprecatedReplacements = { locale: 'locales' };
+
 if (manifest.includes('android:configChanges=')) {
+    // First: fix deprecated flags (e.g. locale -> locales)
+    manifest = manifest.replace(
+        /android:configChanges="([^"]*)"/,
+        (match, existing) => {
+            let flags = existing.split('|').map(f => f.trim()).filter(Boolean);
+            let replaced = false;
+            for (const dep of deprecatedFlags) {
+                const idx = flags.indexOf(dep);
+                if (idx !== -1) {
+                    const replacement = deprecatedReplacements[dep];
+                    flags.splice(idx, 1);
+                    if (replacement && !flags.includes(replacement)) {
+                        flags.splice(idx, 0, replacement);
+                    }
+                    replaced = true;
+                    console.log(`Replaced deprecated configChanges flag '${dep}' with '${replacement || '(removed)'}'.`);
+                }
+            }
+            // Remove duplicates while preserving order
+            flags = [...new Set(flags)];
+            if (replaced) changed = true;
+            return `android:configChanges="${flags.join('|')}"`;
+        }
+    );
+
+    // Then: add missing extra flags
     const missing = extraConfigFlags.filter(f => {
-        // Match the flag as a whole word inside the configChanges attribute value
-        const re = new RegExp('android:configChanges="[^"]*(?:^|\\|)' + f + '(?:\\||")');
-        return !re.test(manifest);
+        const re = new RegExp('android:configChanges="[^"]*(?:^"|\\|)' + f + '(?:\\||")');
+        // Simple check: split the value and look for exact match
+        const m = manifest.match(/android:configChanges="([^"]*)"/);
+        if (!m) return true;
+        const flags = m[1].split('|');
+        return !flags.includes(f);
     });
     if (missing.length > 0) {
         manifest = manifest.replace(
