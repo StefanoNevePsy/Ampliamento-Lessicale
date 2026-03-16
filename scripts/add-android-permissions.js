@@ -40,8 +40,8 @@ const extraConfigFlags = ['keyboard', 'keyboardHidden', 'navigation', 'navigatio
 
 if (manifest.includes('android:configChanges=')) {
     const missing = extraConfigFlags.filter(f => {
-        // Match the flag as a whole word inside the configChanges value
-        const re = new RegExp('(?:"|\\|)' + f + '(?:"|\\|)');
+        // Match the flag as a whole word inside the configChanges attribute value
+        const re = new RegExp('android:configChanges="[^"]*(?:^|\\|)' + f + '(?:\\||")');
         return !re.test(manifest);
     });
     if (missing.length > 0) {
