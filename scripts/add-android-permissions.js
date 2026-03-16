@@ -34,23 +34,33 @@ for (const perm of permissions) {
 }
 
 // Prevent Activity restart on external keyboard connect/disconnect (Smart Book Cover etc.)
-// Add keyboard|keyboardHidden to configChanges on the main Activity
-if (manifest.includes('android:configChanges=') && !manifest.includes('keyboard|keyboardHidden')) {
-    manifest = manifest.replace(
-        /android:configChanges="([^"]*)"/,
-        (match, existing) => `android:configChanges="${existing}|keyboard|keyboardHidden"`
-    );
-    changed = true;
-    console.log('Added keyboard|keyboardHidden to configChanges.');
-} else if (!manifest.includes('android:configChanges=') && manifest.includes('<activity')) {
+// keyboard|keyboardHidden  — physical keyboard attached/detached
+// navigation|navigationHidden — trackpad / pointing device on the cover
+const extraConfigFlags = ['keyboard', 'keyboardHidden', 'navigation', 'navigationHidden'];
+
+if (manifest.includes('android:configChanges=')) {
+    const missing = extraConfigFlags.filter(f => {
+        // Match the flag as a whole word inside the configChanges value
+        const re = new RegExp('(?:"|\\|)' + f + '(?:"|\\|)');
+        return !re.test(manifest);
+    });
+    if (missing.length > 0) {
+        manifest = manifest.replace(
+            /android:configChanges="([^"]*)"/,
+            (match, existing) => `android:configChanges="${existing}|${missing.join('|')}"`
+        );
+        changed = true;
+        console.log('Added ' + missing.join('|') + ' to configChanges.');
+    } else {
+        console.log('configChanges already includes all keyboard/navigation flags.');
+    }
+} else if (manifest.includes('<activity')) {
     manifest = manifest.replace(
         '<activity',
-        '<activity android:configChanges="keyboard|keyboardHidden"'
+        `<activity android:configChanges="${extraConfigFlags.join('|')}"`
     );
     changed = true;
-    console.log('Added configChanges with keyboard|keyboardHidden to activity.');
-} else if (manifest.includes('keyboard|keyboardHidden')) {
-    console.log('configChanges already includes keyboard|keyboardHidden.');
+    console.log('Added configChanges with ' + extraConfigFlags.join('|') + ' to activity.');
 }
 
 if (changed) {

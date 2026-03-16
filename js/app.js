@@ -710,24 +710,25 @@ window.toggleLabelsVisibility = () => {
     };
 
     // --- S-PEN BARREL BUTTON: auto-activate pointer while button is held ---
-    // The barrel button is reported as button=5 on pointerdown with pointerType='pen'.
-    // On some Samsung WebViews it may also appear as button=2 (right-click).
-    // We intercept at document level before anything else.
-    function isSPenBarrelButton(e) {
+    // Detection strategy (Samsung WebView quirks):
+    //   1. pointerdown with button=5 (W3C standard barrel button)
+    //   2. pointerdown with button=2 (Samsung WebView maps barrel → right-click)
+    //   3. pointermove with buttons bitmask containing bit 1 (=2, secondary)
+    //      while pointerType='pen' — some Samsung WebView versions never fire a
+    //      separate pointerdown for the barrel; the flag only appears mid-stroke.
+    function isSPenBarrelDown(e) {
         if (e.pointerType !== 'pen') return false;
-        // button === 5 is the standard pen barrel button
-        // button === 2 is sometimes used by Samsung WebView for barrel
-        // We also check the buttons bitmask: bit 5 (32) = eraser, bit 1 (2) = secondary
         return e.button === 5 || (e.button === 2 && !e.ctrlKey);
     }
+    function isSPenBarrelHeld(e) {
+        // Check buttons bitmask: bit 1 (value 2) = secondary button held
+        if (e.pointerType !== 'pen') return false;
+        return (e.buttons & 2) !== 0;
+    }
 
-    document.addEventListener('pointerdown', (e) => {
-        if (!isSPenBarrelButton(e)) return;
-        if (manualActive) return; // Already manually toggled, don't interfere
-        e.preventDefault();
+    function startSPenStroke(e) {
         sPenHolding = true;
         activatePen();
-        // Start drawing immediately from this position
         const canvas = getCanvas();
         if (canvas) {
             const rect = canvas.getBoundingClientRect();
@@ -735,10 +736,44 @@ window.toggleLabelsVisibility = () => {
             drawing = true;
             currentStroke = { points: [{ x: pos.x, y: pos.y, t: Date.now() }], color: PEN_COLOR };
         }
-    }, true); // capture phase to intercept before other handlers
+    }
+
+    function endSPenStroke() {
+        if (drawing && currentStroke) {
+            drawing = false;
+            if (currentStroke.points.length > 0) strokes.push(currentStroke);
+            currentStroke = null;
+        }
+        sPenHolding = false;
+        if (!manualActive) {
+            setTimeout(() => {
+                if (!sPenHolding && !manualActive) deactivatePen();
+            }, FADE_MS + 100);
+        }
+    }
+
+    document.addEventListener('pointerdown', (e) => {
+        if (!isSPenBarrelDown(e)) return;
+        if (manualActive) return;
+        e.preventDefault();
+        startSPenStroke(e);
+    }, true);
 
     document.addEventListener('pointermove', (e) => {
-        if (!sPenHolding || e.pointerType !== 'pen') return;
+        if (e.pointerType !== 'pen') return;
+
+        // In-flight barrel detection: barrel button pressed mid-stroke
+        if (!sPenHolding && !manualActive && isSPenBarrelHeld(e)) {
+            e.preventDefault();
+            startSPenStroke(e);
+            return;
+        }
+        // Barrel released mid-stroke → end immediately
+        if (sPenHolding && !isSPenBarrelHeld(e)) {
+            endSPenStroke();
+            return;
+        }
+        if (!sPenHolding) return;
         if (!drawing || !currentStroke) return;
         e.preventDefault();
         const canvas = getCanvas();
@@ -752,41 +787,18 @@ window.toggleLabelsVisibility = () => {
     document.addEventListener('pointerup', (e) => {
         if (!sPenHolding) return;
         if (e.pointerType !== 'pen') return;
-        // End stroke
-        if (drawing && currentStroke) {
-            drawing = false;
-            if (currentStroke.points.length > 0) strokes.push(currentStroke);
-            currentStroke = null;
-        }
-        sPenHolding = false;
-        if (!manualActive) {
-            // Don't deactivate instantly — let strokes fade, then deactivate
-            setTimeout(() => {
-                if (!sPenHolding && !manualActive) deactivatePen();
-            }, FADE_MS + 100);
-        }
+        endSPenStroke();
     }, true);
 
     document.addEventListener('pointercancel', (e) => {
         if (!sPenHolding || e.pointerType !== 'pen') return;
-        if (drawing && currentStroke) {
-            drawing = false;
-            if (currentStroke.points.length > 0) strokes.push(currentStroke);
-            currentStroke = null;
-        }
-        sPenHolding = false;
-        if (!manualActive) {
-            setTimeout(() => {
-                if (!sPenHolding && !manualActive) deactivatePen();
-            }, FADE_MS + 100);
-        }
+        endSPenStroke();
     }, true);
 
     // Prevent context menu on S-Pen barrel button (often triggers right-click menu)
     document.addEventListener('contextmenu', (e) => {
-        if (sPenHolding || (e.pointerType === 'pen')) {
-            // Only prevent if we recently handled an S-Pen barrel event
-            if (sPenHolding) e.preventDefault();
+        if (sPenHolding || (e.pointerType === 'pen' && (e.buttons & 2))) {
+            e.preventDefault();
         }
     });
 
