@@ -35,12 +35,12 @@ for (const perm of permissions) {
 
 // Prevent Activity restart on external keyboard connect/disconnect (Smart Book Cover etc.)
 // keyboard|keyboardHidden  — physical keyboard attached/detached
-// navigation|navigationHidden — trackpad / pointing device on the cover
-const extraConfigFlags = ['keyboard', 'keyboardHidden', 'navigation', 'navigationHidden'];
+// navigation — trackpad / pointing device on the cover
+const extraConfigFlags = ['keyboard', 'keyboardHidden', 'navigation'];
 
 // Flags that are no longer valid in newer compileSdk (35+)
-const deprecatedFlags = ['locale'];
-const deprecatedReplacements = { locale: 'locales' };
+const deprecatedFlags = ['locale', 'navigationHidden'];
+const deprecatedReplacements = { locale: 'locales', navigationHidden: null };
 
 if (manifest.includes('android:configChanges=')) {
     // First: fix deprecated flags (e.g. locale -> locales)
