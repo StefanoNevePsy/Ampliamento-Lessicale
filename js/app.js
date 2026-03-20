@@ -554,6 +554,7 @@ window.toggleLabelsVisibility = () => {
     let penActive = false;
     let sPenHolding = false; // S-Pen barrel button temporary activation
     let manualActive = false; // User toggled via button
+    let sPenAutoActive = false; // Auto-activated by S-Pen touch (no barrel)
     let drawing = false;
     let strokes = []; // { points: [{x,y,t}], color }
     let currentStroke = null;
@@ -561,6 +562,7 @@ window.toggleLabelsVisibility = () => {
     const LINE_WIDTH = 4;
     const PEN_COLOR = '#ff4444';
     let animFrameId = null;
+    let sPenAutoDeactivateTimer = null;
 
     function getCanvas() { return document.getElementById('pointer-canvas'); }
 
@@ -752,18 +754,55 @@ window.toggleLabelsVisibility = () => {
         }
     }
 
+    // --- S-PEN AUTO-POINTER: auto-activate drawing when S Pen touches screen ---
+    function startSPenAutoStroke(e) {
+        if (sPenAutoDeactivateTimer) { clearTimeout(sPenAutoDeactivateTimer); sPenAutoDeactivateTimer = null; }
+        sPenAutoActive = true;
+        activatePen();
+        const canvas = getCanvas();
+        if (canvas) {
+            const rect = canvas.getBoundingClientRect();
+            const pos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            drawing = true;
+            currentStroke = { points: [{ x: pos.x, y: pos.y, t: Date.now() }], color: PEN_COLOR };
+        }
+    }
+
+    function endSPenAutoStroke() {
+        if (drawing && currentStroke) {
+            drawing = false;
+            if (currentStroke.points.length > 0) strokes.push(currentStroke);
+            currentStroke = null;
+        }
+        if (!manualActive && !sPenHolding) {
+            sPenAutoDeactivateTimer = setTimeout(() => {
+                if (!sPenAutoActive || manualActive || sPenHolding) return;
+                sPenAutoActive = false;
+                deactivatePen();
+            }, FADE_MS + 100);
+        }
+    }
+
     document.addEventListener('pointerdown', (e) => {
-        if (!isSPenBarrelDown(e)) return;
-        if (manualActive) return;
-        e.preventDefault();
-        startSPenStroke(e);
+        // Barrel button detection (existing)
+        if (isSPenBarrelDown(e)) {
+            if (manualActive) return;
+            e.preventDefault();
+            startSPenStroke(e);
+            return;
+        }
+        // S-Pen auto-pointer: pen tip touches screen without barrel button
+        if (e.pointerType === 'pen' && !manualActive && !sPenHolding) {
+            startSPenAutoStroke(e);
+            return;
+        }
     }, true);
 
     document.addEventListener('pointermove', (e) => {
         if (e.pointerType !== 'pen') return;
 
         // In-flight barrel detection: barrel button pressed mid-stroke
-        if (!sPenHolding && !manualActive && isSPenBarrelHeld(e)) {
+        if (!sPenHolding && !manualActive && !sPenAutoActive && isSPenBarrelHeld(e)) {
             e.preventDefault();
             startSPenStroke(e);
             return;
@@ -771,6 +810,16 @@ window.toggleLabelsVisibility = () => {
         // Barrel released mid-stroke → end immediately
         if (sPenHolding && !isSPenBarrelHeld(e)) {
             endSPenStroke();
+            return;
+        }
+        // S-Pen auto drawing in progress
+        if (sPenAutoActive && drawing && currentStroke) {
+            const canvas = getCanvas();
+            if (canvas) {
+                const rect = canvas.getBoundingClientRect();
+                const pos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+                currentStroke.points.push({ x: pos.x, y: pos.y, t: Date.now() });
+            }
             return;
         }
         if (!sPenHolding) return;
@@ -785,13 +834,16 @@ window.toggleLabelsVisibility = () => {
     }, true);
 
     document.addEventListener('pointerup', (e) => {
-        if (!sPenHolding) return;
         if (e.pointerType !== 'pen') return;
+        if (sPenAutoActive) { endSPenAutoStroke(); return; }
+        if (!sPenHolding) return;
         endSPenStroke();
     }, true);
 
     document.addEventListener('pointercancel', (e) => {
-        if (!sPenHolding || e.pointerType !== 'pen') return;
+        if (e.pointerType !== 'pen') return;
+        if (sPenAutoActive) { endSPenAutoStroke(); return; }
+        if (!sPenHolding) return;
         endSPenStroke();
     }, true);
 
@@ -2217,6 +2269,21 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+// --- GAME AREA FULLSCREEN ---
+window.toggleGameFullscreen = () => {
+    const shell = document.querySelector('.app-shell');
+    if (!shell) return;
+    const isFs = shell.classList.toggle('game-fullscreen');
+    const icon = document.getElementById('game-fs-icon');
+    if (icon) {
+        icon.className = isFs
+            ? 'fa-solid fa-down-left-and-up-right-to-center'
+            : 'fa-solid fa-up-right-and-down-left-from-center';
+    }
+    const btn = document.getElementById('btn-game-fullscreen');
+    if (btn) btn.classList.toggle('pen-active', isFs);
+};
 
 // === FAB MENU (collapsible floating tools) ===
 window.toggleFabMenu = () => {
