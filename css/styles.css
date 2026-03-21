@@ -544,3 +544,67 @@ input[type="text"] { width: 100%; padding: 10px; background: rgba(0, 0, 0, 0.3);
 .pixabay-result-item:hover { border-color: var(--accent-color); }
 .pixabay-result-item.selected { border-color: var(--success-color); box-shadow: 0 0 8px rgba(16,185,129,0.4); }
 .pixabay-result-item img { width: 100%; height: 100%; object-fit: cover; }
+
+/* === NOTES SYSTEM === */
+
+/* Session note overlay (save prompt) */
+.session-note-overlay {
+    position: fixed; inset: 0; z-index: 10000;
+    background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    animation: fadeIn 0.15s ease;
+}
+.session-note-dialog {
+    background: var(--glass-bg); border: 1px solid var(--glass-border);
+    border-radius: 16px; padding: 16px 20px; width: 90%; max-width: 400px;
+    box-shadow: var(--shadow);
+}
+
+/* Daily note editor (fullscreen modal) */
+.daily-note-editor-overlay {
+    position: fixed; inset: 0; z-index: 10000;
+    background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
+    display: flex; align-items: center; justify-content: center;
+    animation: fadeIn 0.15s ease;
+}
+.daily-note-editor {
+    background: var(--glass-bg); border: 1px solid var(--glass-border);
+    border-radius: 16px; width: 95%; max-width: 600px; max-height: 90vh;
+    display: flex; flex-direction: column; box-shadow: var(--shadow);
+    overflow: hidden;
+}
+.daily-note-editor-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.daily-note-toolbar {
+    display: flex; gap: 2px; padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.05);
+    background: rgba(0,0,0,0.15); flex-wrap: wrap; align-items: center;
+}
+.daily-note-toolbar button {
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text-secondary); cursor: pointer; padding: 4px 10px;
+    border-radius: 6px; font-size: 0.75rem; font-weight: 600;
+    transition: all 0.15s;
+}
+.daily-note-toolbar button:hover {
+    background: rgba(99,102,241,0.15); color: var(--accent-color);
+    border-color: rgba(99,102,241,0.3);
+}
+#daily-note-textarea {
+    flex: 1; min-height: 200px; max-height: 50vh; padding: 14px 16px;
+    background: transparent; border: none; color: white;
+    font-size: 0.9rem; line-height: 1.6; resize: none;
+    font-family: 'Noto Sans', sans-serif;
+}
+#daily-note-textarea::placeholder { color: rgba(255,255,255,0.2); }
+#daily-note-textarea:focus { outline: none; }
+
+/* Diary entry styling */
+.diary-entry { transition: box-shadow 0.2s; }
+.diary-entry:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.2); }
+.diary-note-text ul, .diary-note-text ol, .daily-note-content ul, .daily-note-content ol {
+    margin: 4px 0; padding-left: 8px;
+}
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }

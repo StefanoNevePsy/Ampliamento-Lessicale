@@ -431,6 +431,9 @@ window.loadPatientData = (pid) => {
                 <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem;" onclick="renamePatient('${pid}')">
                     <i class="fa-solid fa-pen"></i>
                 </button>
+                <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(234,179,8,0.3); color:#eab308;" onclick="openDailyNoteEditor('${pid}')" title="Nota Giornata">
+                    <i class="fa-solid fa-book-medical"></i>
+                </button>
                 <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(99,102,241,0.3); color:var(--accent-color);" onclick="generateAIReport('${pid}')" title="Report AI">
                     <i class="fa-solid fa-wand-magic-sparkles"></i>
                 </button>
@@ -447,7 +450,8 @@ window.loadPatientData = (pid) => {
         </div>
     `;
 
-    if (!p.history || p.history.length === 0) {
+    const hasDailyNotes = p.dailyNotes && Object.keys(p.dailyNotes).length > 0;
+    if ((!p.history || p.history.length === 0) && !hasDailyNotes) {
         container.innerHTML += '<p style="text-align:center; opacity:0.5; padding:20px;">Nessun dato registrato.</p>';
         document.getElementById('patient-dashboard').classList.remove('hidden');
         return;
@@ -464,6 +468,9 @@ window.loadPatientData = (pid) => {
             </button>
             <button class="report-tab" onclick="switchReportTab('activities', '${pid}')" data-tab="activities" style="flex:1; padding:8px; border:none; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.85rem; background:transparent; color:var(--text-secondary);">
                 <i class="fa-solid fa-list-check"></i> Attivit&agrave;
+            </button>
+            <button class="report-tab" onclick="switchReportTab('diary', '${pid}')" data-tab="diary" style="flex:1; padding:8px; border:none; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.85rem; background:transparent; color:var(--text-secondary);">
+                <i class="fa-solid fa-book-medical"></i> Diario
             </button>
         </div>
         <div id="report-content"></div>
@@ -493,6 +500,7 @@ window.switchReportTab = (tab, pid) => {
     if (tab === 'overview') renderOverviewTab(p);
     else if (tab === 'dates') renderDatesTab(p);
     else if (tab === 'activities') renderActivitiesTab(p);
+    else if (tab === 'diary') renderDiaryTab(p);
 };
 
 // ============================================================
@@ -502,7 +510,7 @@ function renderOverviewTab(patient) {
     const content = document.getElementById('report-content');
     if (!content) return;
 
-    const history = patient.history;
+    const history = patient.history || [];
     const byDate = {};
     history.forEach(h => {
         const dk = getDateKey(h.date);
@@ -511,11 +519,15 @@ function renderOverviewTab(patient) {
     });
 
     const dates = Object.keys(byDate).sort();
+    // Check which days have notes (daily notes or activity notes)
+    const dailyNotes = patient.dailyNotes || {};
     const dailyData = dates.map(dk => {
         const sessions = byDate[dk];
         const totalLU = sessions.reduce((sum, s) => sum + s.total, 0);
         const correctLU = sessions.reduce((sum, s) => sum + s.correct, 0);
-        return { date: dk, totalLU, correctLU, incorrectLU: totalLU - correctLU, sessions: sessions.length };
+        const hasDailyNote = !!dailyNotes[dk];
+        const hasActivityNotes = sessions.some(s => s.note);
+        return { date: dk, totalLU, correctLU, incorrectLU: totalLU - correctLU, sessions: sessions.length, hasNote: hasDailyNote || hasActivityNotes };
     });
 
     const lastSession = [...history].sort((a, b) => new Date(b.date) - new Date(a.date))[0];
@@ -596,7 +608,8 @@ function renderDailyLUChart(dailyData) {
     const chartHeight = 150;
     const barWidth = Math.max(30, Math.min(50, 600 / dailyData.length));
     const chartWidth = Math.max(300, dailyData.length * (barWidth + 8) + 40);
-    const svgH = topPad + chartHeight + 30;
+    const hasAnyNote = dailyData.some(d => d.hasNote);
+    const svgH = topPad + chartHeight + (hasAnyNote ? 40 : 30);
 
     const svgNS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(svgNS, "svg");
@@ -657,6 +670,21 @@ function renderDailyLUChart(dailyData) {
         lbl.textContent = `${dObj.getDate()}/${dObj.getMonth() + 1}`;
         svg.appendChild(lbl);
 
+        // Note icon if day has notes
+        if (d.hasNote) {
+            const noteIcon = document.createElementNS(svgNS, "text");
+            noteIcon.setAttribute("x", x + barWidth / 2);
+            noteIcon.setAttribute("y", bY + chartHeight + 24);
+            noteIcon.setAttribute("text-anchor", "middle");
+            noteIcon.setAttribute("fill", "#eab308");
+            noteIcon.setAttribute("font-size", "8");
+            noteIcon.textContent = "\u270E";
+            const noteTitle = document.createElementNS(svgNS, "title");
+            noteTitle.textContent = "Giornata con note";
+            noteIcon.appendChild(noteTitle);
+            svg.appendChild(noteIcon);
+        }
+
         // Count label on top (total LU)
         const countLbl = document.createElementNS(svgNS, "text");
         countLbl.setAttribute("x", x + barWidth / 2);
@@ -714,12 +742,18 @@ function renderDatesTab(patient) {
     const content = document.getElementById('report-content');
     if (!content) return;
 
-    const history = patient.history;
+    const history = patient.history || [];
+    const dailyNotes = patient.dailyNotes || {};
     const byDate = {};
     history.forEach((h, idx) => {
         const dk = getDateKey(h.date);
         if (!byDate[dk]) byDate[dk] = [];
         byDate[dk].push({ ...h, originalIndex: idx });
+    });
+
+    // Also include dates that only have daily notes but no sessions
+    Object.keys(dailyNotes).forEach(dk => {
+        if (!byDate[dk]) byDate[dk] = [];
     });
 
     const dates = Object.keys(byDate).sort().reverse();
@@ -730,6 +764,8 @@ function renderDatesTab(patient) {
         const totalLU = sessions.reduce((sum, s) => sum + s.total, 0);
         const correctLU = sessions.reduce((sum, s) => sum + s.correct, 0);
         const pct = totalLU > 0 ? Math.round((correctLU / totalLU) * 100) : 0;
+        const hasDailyNote = !!dailyNotes[dk];
+        const noteIndicator = hasDailyNote ? '<i class="fa-solid fa-book-medical" style="color:#eab308; font-size:0.7rem;" title="Nota giornata"></i>' : '';
 
         html += `
         <div class="chart-wrapper" style="margin-bottom:10px; padding:0; overflow:hidden;">
@@ -737,6 +773,7 @@ function renderDatesTab(patient) {
                 <div style="display:flex; align-items:center; gap:10px;">
                     <i class="fa-solid fa-chevron-right date-expand-icon" style="transition:transform 0.2s; font-size:0.7rem; color:var(--text-secondary);"></i>
                     <span style="font-weight:bold; font-size:1rem;">${formatDateEU(dk + 'T00:00:00')}</span>
+                    ${noteIndicator}
                     <span style="color:var(--text-secondary); font-size:0.8rem;">${sessions.length} attivit&agrave;</span>
                 </div>
                 <div style="display:flex; gap:12px; align-items:center;">
@@ -745,10 +782,22 @@ function renderDatesTab(patient) {
                 </div>
             </div>
             <div class="date-detail-panel" style="display:none; padding:0 15px 12px; border-top:1px solid rgba(255,255,255,0.05);">
+                ${hasDailyNote ? `
+                <div class="daily-note-card" style="margin:8px 0 12px; padding:12px; border-radius:10px; background:rgba(234,179,8,0.08); border:1px solid rgba(234,179,8,0.2); border-left:3px solid #eab308;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <span style="font-size:0.8rem; color:#eab308; font-weight:bold;"><i class="fa-solid fa-book-medical"></i> Nota della Giornata</span>
+                        <div style="display:flex; gap:4px;">
+                            <button class="btn-icon" style="width:22px; height:22px; font-size:0.6rem; color:#eab308; border-color:rgba(234,179,8,0.3);" onclick="event.stopPropagation(); openDailyNoteEditor('${patient.id}', '${dk}')" title="Modifica"><i class="fa-solid fa-pen"></i></button>
+                            <button class="btn-icon" style="width:22px; height:22px; font-size:0.6rem; color:var(--danger-color); border-color:rgba(239,68,68,0.3);" onclick="event.stopPropagation(); deleteDailyNote('${patient.id}', '${dk}')" title="Elimina"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </div>
+                    <div class="daily-note-content" style="font-size:0.85rem; line-height:1.5; color:#ddd;">${_renderNoteMarkup(dailyNotes[dk])}</div>
+                </div>` : ''}
                 ${sessions.map(s => {
             const modeName = MODES_CONFIG[s.mode] || s.mode;
             const dayModeIcon = (typeof getModeIcon === 'function') ? getModeIcon(s.mode) : 'fa-puzzle-piece';
             const typeTag = s.sessionType === 'timedelay' ? `<span style="font-size:0.6rem; background:rgba(245,158,11,0.2); color:var(--warning-color); padding:1px 5px; border-radius:4px; margin-left:4px;">TD${s.timeDelaySeconds || ''}s</span>` : '';
+            const sessionNoteIcon = s.note ? '<i class="fa-solid fa-sticky-note" style="color:#eab308; font-size:0.6rem; flex-shrink:0;" title="Nota attività"></i>' : '';
             const activityKey = encodeURIComponent(s.setName + '::' + s.mode + '::' + getSessionTypeGroup(s));
             // Set thumbnail for Giornate
             let dayThumb = '';
@@ -766,7 +815,7 @@ function renderDatesTab(patient) {
                                 <i class="fa-solid fa-chevron-right day-act-icon" style="transition:transform 0.2s; font-size:0.6rem; color:#555;"></i>
                                 ${dayThumb}
                                 <span style="background:rgba(99,102,241,0.15); padding:2px 8px; border-radius:6px; font-size:0.7rem; color:var(--accent-color); flex-shrink:0; display:inline-flex; align-items:center; gap:4px;"><i class="fa-solid ${dayModeIcon}" style="font-size:0.65rem;"></i>${modeName}</span>
-                                <span style="font-size:0.9rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.setName}</span>${s.setCat ? `<span style="font-size:0.65rem; color:var(--text-secondary); background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:4px; flex-shrink:0;">${s.setCat}</span>` : ''}${typeTag}
+                                <span style="font-size:0.9rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.setName}</span>${s.setCat ? `<span style="font-size:0.65rem; color:var(--text-secondary); background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:4px; flex-shrink:0;">${s.setCat}</span>` : ''}${typeTag}${sessionNoteIcon}
                             </div>
                             <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
                                 <span style="font-size:0.85rem;">${s.correct}/${s.total}</span>
@@ -901,6 +950,17 @@ window.toggleDaySessionDetail = (header, patientId, sessionIdx, activityKeyEncod
                     </div>`;
                 });
                 html += `</div></div>`;
+            }
+
+            // Session note (collapsible)
+            if (s.note) {
+                html += `<div style="margin-top:8px; margin-bottom:8px;">
+                    <div onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'; this.querySelector('i').style.transform = this.nextElementSibling.style.display === 'none' ? '' : 'rotate(90deg)'" style="cursor:pointer; display:flex; align-items:center; gap:6px; font-size:0.75rem; color:#eab308; font-weight:bold;">
+                        <i class="fa-solid fa-chevron-right" style="font-size:0.6rem; transition:transform 0.2s;"></i>
+                        <i class="fa-solid fa-sticky-note"></i> Nota
+                    </div>
+                    <div style="display:none; margin-top:4px; padding:8px; border-radius:8px; background:rgba(234,179,8,0.08); border:1px solid rgba(234,179,8,0.15); font-size:0.8rem; line-height:1.4; color:#ddd;">${_renderNoteMarkup(s.note)}</div>
+                </div>`;
             }
 
             // Activity chart (full history for this activity)
@@ -1193,19 +1253,30 @@ function renderActivitiesTab(patient, sortBy) {
             const detailsBtn = hasExpandable
                 ? `<button class="btn-icon item-details-toggle" style="width:26px; height:26px; font-size:0.6rem; display:inline-flex; color:${expandColor}; border-color:rgba(${expandRgba},0.3);" title="Dettagli"><i class="fa-solid fa-chevron-down" style="transition:transform 0.2s; transform:rotate(180deg);"></i></button>`
                 : '';
+            const noteIcon = s.note ? ' <i class="fa-solid fa-sticky-note" style="color:#eab308; font-size:0.55rem;" title="Nota"></i>' : '';
+            const colSpan = isTD ? 5 : 4;
+            const noteRow = s.note ? `
+                        <tr class="note-details-row" style="display:none;">
+                            <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(234,179,8,0.06);">
+                                <div style="font-size:0.75rem; color:#eab308; margin-bottom:3px; font-weight:bold;"><i class="fa-solid fa-sticky-note"></i> Nota</div>
+                                <div style="font-size:0.8rem; line-height:1.4; color:#ddd;">${_renderNoteMarkup(s.note)}</div>
+                            </td>
+                        </tr>` : '';
             return `
                         <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                            <td style="padding:6px 5px;">${formatDateEU(s.date)}</td>
+                            <td style="padding:6px 5px;">${formatDateEU(s.date)}${noteIcon}</td>
                             <td>${s.correct}/${s.total}${scoreExtra}</td>
                             <td style="font-weight:bold; color:${s.percentage >= 90 ? 'var(--success-color)' : 'white'}">${s.percentage}%</td>
                             ${isTD ? `<td style="font-size:0.8rem; color:var(--warning-color);">${s.timeDelaySeconds || '?'}s</td>` : ''}
                             <td style="text-align:right;">
+                                ${s.note ? `<button class="btn-icon note-toggle-btn" style="width:26px; height:26px; font-size:0.6rem; display:inline-flex; color:#eab308; border-color:rgba(234,179,8,0.3);" title="Nota"><i class="fa-solid fa-sticky-note" style="transition:transform 0.2s;"></i></button>` : ''}
                                 ${detailsBtn}
                                 <button class="btn-icon" style="width:26px; height:26px; font-size:0.7rem; display:inline-flex;" onclick="editSession('${patient.id}', ${s.originalIndex})"><i class="fa-solid fa-pen"></i></button>
                                 <button class="btn-icon" style="width:26px; height:26px; font-size:0.7rem; display:inline-flex; color:var(--danger-color); border-color:rgba(239,68,68,0.3);" onclick="deleteSession('${patient.id}', ${s.originalIndex})"><i class="fa-solid fa-trash"></i></button>
                             </td>
                         </tr>
                         ${itemDetailsHtml}
+                        ${noteRow}
                     `}).join('')}
                 </table>
             </div>
@@ -1223,6 +1294,25 @@ function renderActivitiesTab(patient, sortBy) {
                 const isOpen = row.style.display !== 'none';
                 row.style.display = isOpen ? 'none' : 'table-row';
                 btn.querySelector('i').style.transform = isOpen ? 'rotate(0deg)' : 'rotate(180deg)';
+            }
+        });
+    });
+
+    // Wire up note toggle buttons
+    content.querySelectorAll('.note-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // Find the note-details-row for this row (may be after item-details-row)
+            let tr = btn.closest('tr');
+            let noteRow = null;
+            let sibling = tr.nextElementSibling;
+            while (sibling) {
+                if (sibling.classList.contains('note-details-row')) { noteRow = sibling; break; }
+                sibling = sibling.nextElementSibling;
+            }
+            if (noteRow) {
+                const isOpen = noteRow.style.display !== 'none';
+                noteRow.style.display = isOpen ? 'none' : 'table-row';
             }
         });
     });
@@ -1451,6 +1541,252 @@ window.changeActivitiesSort = (sortBy, patientId) => {
     const p = state.patients.find(x => x.id === patientId);
     if (p) renderActivitiesTab(p, sortBy);
 };
+
+// ============================================================
+// NOTES SYSTEM - Daily notes & markup rendering
+// ============================================================
+
+// Render basic markup (bold, italic, headers, lists, line breaks)
+function _renderNoteMarkup(text) {
+    if (!text) return '';
+    return text
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/^### (.+)$/gm, '<h5 style="margin:8px 0 4px; color:var(--accent-color); font-size:0.85rem;">$1</h5>')
+        .replace(/^## (.+)$/gm, '<h4 style="margin:10px 0 5px; color:var(--accent-color); font-size:0.9rem;">$1</h4>')
+        .replace(/^# (.+)$/gm, '<h3 style="margin:12px 0 6px; color:var(--accent-color); font-size:0.95rem;">$1</h3>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/~~(.+?)~~/g, '<del style="opacity:0.6;">$1</del>')
+        .replace(/^- (.+)$/gm, '<li style="margin:2px 0 2px 16px; list-style:disc;">$1</li>')
+        .replace(/^(\d+)\. (.+)$/gm, '<li style="margin:2px 0 2px 16px; list-style:decimal;" value="$1">$2</li>')
+        .replace(/\n/g, '<br>');
+}
+
+// Open daily note editor (fullscreen modal with markup toolbar)
+window.openDailyNoteEditor = (patientId, dateKey) => {
+    const p = state.patients.find(x => x.id === patientId);
+    if (!p) return;
+
+    if (!dateKey) {
+        // Default to today
+        dateKey = new Date().toISOString().split('T')[0];
+    }
+
+    const existingNote = (p.dailyNotes || {})[dateKey] || '';
+
+    // Remove any existing editor
+    const existing = document.getElementById('daily-note-editor-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'daily-note-editor-overlay';
+    overlay.className = 'daily-note-editor-overlay';
+
+    overlay.innerHTML = `
+        <div class="daily-note-editor">
+            <div class="daily-note-editor-header">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <i class="fa-solid fa-book-medical" style="color:#eab308; font-size:1.1rem;"></i>
+                    <h3 style="margin:0; font-size:1rem;">Nota della Giornata</h3>
+                </div>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <input type="date" id="daily-note-date" value="${dateKey}" style="padding:4px 8px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.85rem;">
+                    <button onclick="document.getElementById('daily-note-editor-overlay').remove()" style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:1.2rem;"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+            </div>
+            <div class="daily-note-toolbar">
+                <button onclick="_insertMarkup('**','**')" title="Grassetto"><i class="fa-solid fa-bold"></i></button>
+                <button onclick="_insertMarkup('*','*')" title="Corsivo"><i class="fa-solid fa-italic"></i></button>
+                <button onclick="_insertMarkup('~~','~~')" title="Barrato"><i class="fa-solid fa-strikethrough"></i></button>
+                <span style="width:1px; background:rgba(255,255,255,0.1); margin:0 4px;"></span>
+                <button onclick="_insertMarkup('# ','')" title="Titolo"><i class="fa-solid fa-heading"></i></button>
+                <button onclick="_insertMarkup('## ','')" title="Sottotitolo">H2</button>
+                <button onclick="_insertMarkup('### ','')" title="Sottotitolo piccolo">H3</button>
+                <span style="width:1px; background:rgba(255,255,255,0.1); margin:0 4px;"></span>
+                <button onclick="_insertMarkup('- ','')" title="Lista puntata"><i class="fa-solid fa-list-ul"></i></button>
+                <button onclick="_insertMarkup('1. ','')" title="Lista numerata"><i class="fa-solid fa-list-ol"></i></button>
+            </div>
+            <textarea id="daily-note-textarea" placeholder="Scrivi le note della giornata...\n\nPuoi usare:\n**grassetto**  *corsivo*  ~~barrato~~\n# Titolo  ## Sottotitolo\n- Lista puntata\n1. Lista numerata">${existingNote}</textarea>
+            <div class="daily-note-preview-toggle" style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px;">
+                <button onclick="_toggleNotePreview()" class="btn btn-ghost" style="padding:4px 12px; font-size:0.8rem;"><i class="fa-solid fa-eye"></i> Anteprima</button>
+                <div style="display:flex; gap:8px;">
+                    <button onclick="document.getElementById('daily-note-editor-overlay').remove()" class="btn btn-ghost" style="padding:6px 16px; font-size:0.85rem;">Annulla</button>
+                    <button onclick="_saveDailyNoteFromEditor('${patientId}')" class="btn btn-primary" style="padding:6px 16px; font-size:0.85rem;"><i class="fa-solid fa-floppy-disk"></i> Salva Nota</button>
+                </div>
+            </div>
+            <div id="daily-note-preview" style="display:none; padding:12px 16px; border-top:1px solid rgba(255,255,255,0.05); max-height:200px; overflow-y:auto; font-size:0.85rem; line-height:1.5; color:#ddd;"></div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    document.getElementById('daily-note-textarea').focus();
+};
+
+// Insert markup at cursor position in the note textarea
+window._insertMarkup = (before, after) => {
+    const ta = document.getElementById('daily-note-textarea');
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const selected = ta.value.substring(start, end);
+    const replacement = before + (selected || 'testo') + after;
+    ta.setRangeText(replacement, start, end, 'select');
+    ta.focus();
+};
+
+// Toggle note preview
+window._toggleNotePreview = () => {
+    const preview = document.getElementById('daily-note-preview');
+    const ta = document.getElementById('daily-note-textarea');
+    if (!preview || !ta) return;
+    if (preview.style.display === 'none') {
+        preview.innerHTML = _renderNoteMarkup(ta.value);
+        preview.style.display = 'block';
+    } else {
+        preview.style.display = 'none';
+    }
+};
+
+// Save daily note from editor
+window._saveDailyNoteFromEditor = async (patientId) => {
+    const p = state.patients.find(x => x.id === patientId);
+    if (!p) return;
+    const dateInput = document.getElementById('daily-note-date');
+    const ta = document.getElementById('daily-note-textarea');
+    if (!dateInput || !ta) return;
+
+    const dk = dateInput.value;
+    const text = ta.value.trim();
+
+    if (!p.dailyNotes) p.dailyNotes = {};
+
+    if (text) {
+        p.dailyNotes[dk] = text;
+    } else {
+        delete p.dailyNotes[dk];
+    }
+
+    await DB.savePatient(p);
+    document.getElementById('daily-note-editor-overlay').remove();
+
+    // Refresh current view
+    if (state.activePatientId === patientId) {
+        loadPatientData(patientId);
+    }
+};
+
+// Delete a daily note
+window.deleteDailyNote = async (patientId, dateKey) => {
+    if (!confirm("Eliminare la nota di questa giornata?")) return;
+    const p = state.patients.find(x => x.id === patientId);
+    if (!p || !p.dailyNotes) return;
+    delete p.dailyNotes[dateKey];
+    await DB.savePatient(p);
+    loadPatientData(patientId);
+};
+
+// ============================================================
+// TAB 4: DIARIO CLINICO - Chronological diary view
+// ============================================================
+function renderDiaryTab(patient) {
+    const content = document.getElementById('report-content');
+    if (!content) return;
+
+    const dailyNotes = patient.dailyNotes || {};
+    const history = patient.history || [];
+
+    // Collect all dates with notes (daily or activity)
+    const allDates = new Set();
+    Object.keys(dailyNotes).forEach(dk => allDates.add(dk));
+    history.forEach(h => {
+        if (h.note) allDates.add(getDateKey(h.date));
+    });
+
+    const dates = [...allDates].sort().reverse();
+
+    if (dates.length === 0) {
+        content.innerHTML = `
+            <div style="text-align:center; padding:40px 20px; color:var(--text-secondary);">
+                <i class="fa-solid fa-book-medical" style="font-size:2.5rem; opacity:0.3; margin-bottom:12px; display:block;"></i>
+                <p style="font-size:0.9rem; margin-bottom:8px;">Nessuna nota registrata</p>
+                <p style="font-size:0.8rem; opacity:0.6;">Le note della giornata e delle attività appariranno qui in ordine cronologico.</p>
+                <button class="btn btn-primary" style="margin-top:12px; padding:8px 20px; font-size:0.85rem;" onclick="openDailyNoteEditor('${patient.id}')">
+                    <i class="fa-solid fa-plus"></i> Aggiungi Nota Giornata
+                </button>
+            </div>`;
+        return;
+    }
+
+    let html = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+        <h4 style="margin:0; color:var(--accent-color); font-size:0.95rem;"><i class="fa-solid fa-book-medical"></i> Diario Clinico</h4>
+        <button class="btn btn-primary" style="padding:6px 14px; font-size:0.8rem;" onclick="openDailyNoteEditor('${patient.id}')">
+            <i class="fa-solid fa-plus"></i> Nuova Nota
+        </button>
+    </div>`;
+
+    dates.forEach(dk => {
+        const hasDailyNote = !!dailyNotes[dk];
+        const dayActivityNotes = history.filter(h => getDateKey(h.date) === dk && h.note);
+
+        html += `
+        <div class="diary-entry" style="margin-bottom:16px; border-radius:12px; overflow:hidden; border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02);">
+            <div style="padding:12px 16px; background:rgba(0,0,0,0.15); display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05);">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <i class="fa-solid fa-calendar-day" style="color:var(--accent-color); font-size:0.9rem;"></i>
+                    <span style="font-weight:bold; font-size:1rem;">${formatDateEU(dk + 'T00:00:00')}</span>
+                    <span style="font-size:0.7rem; color:var(--text-secondary);">${_getDayOfWeek(dk)}</span>
+                </div>
+                <div style="display:flex; gap:4px;">
+                    ${hasDailyNote ? `<button class="btn-icon" style="width:24px; height:24px; font-size:0.65rem; color:#eab308; border-color:rgba(234,179,8,0.3);" onclick="openDailyNoteEditor('${patient.id}', '${dk}')" title="Modifica nota giornata"><i class="fa-solid fa-pen"></i></button>` : `<button class="btn-icon" style="width:24px; height:24px; font-size:0.65rem; color:#eab308; border-color:rgba(234,179,8,0.3);" onclick="openDailyNoteEditor('${patient.id}', '${dk}')" title="Aggiungi nota giornata"><i class="fa-solid fa-plus"></i></button>`}
+                </div>
+            </div>`;
+
+        // Daily note
+        if (hasDailyNote) {
+            html += `
+            <div style="padding:14px 16px; border-bottom:${dayActivityNotes.length > 0 ? '1px solid rgba(255,255,255,0.05)' : 'none'};">
+                <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+                    <span style="display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:5px; background:rgba(234,179,8,0.15);"><i class="fa-solid fa-book-medical" style="color:#eab308; font-size:0.6rem;"></i></span>
+                    <span style="font-size:0.75rem; color:#eab308; font-weight:600;">Nota della Giornata</span>
+                </div>
+                <div class="diary-note-text" style="font-size:0.85rem; line-height:1.6; color:#ddd; padding-left:26px;">${_renderNoteMarkup(dailyNotes[dk])}</div>
+            </div>`;
+        }
+
+        // Activity notes
+        if (dayActivityNotes.length > 0) {
+            dayActivityNotes.forEach(s => {
+                const modeName = MODES_CONFIG[s.mode] || s.mode;
+                const modeIcon = (typeof getModeIcon === 'function') ? getModeIcon(s.mode) : 'fa-puzzle-piece';
+                const timeStr = new Date(s.date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+                html += `
+                <div style="padding:10px 16px; border-bottom:1px solid rgba(255,255,255,0.03);">
+                    <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px; flex-wrap:wrap;">
+                        <span style="display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:5px; background:rgba(99,102,241,0.15);"><i class="fa-solid ${modeIcon}" style="color:var(--accent-color); font-size:0.6rem;"></i></span>
+                        <span style="font-size:0.75rem; color:var(--accent-color); font-weight:600;">${modeName}</span>
+                        <span style="font-size:0.75rem; color:var(--text-secondary);">- ${s.setName}</span>
+                        <span style="font-size:0.65rem; color:#888;">${timeStr}</span>
+                        <span style="font-size:0.7rem; font-weight:bold; color:${s.percentage >= 90 ? 'var(--success-color)' : 'white'};">${s.percentage}%</span>
+                    </div>
+                    <div style="font-size:0.8rem; line-height:1.5; color:#ccc; padding-left:26px; border-left:2px solid rgba(99,102,241,0.2);">${_renderNoteMarkup(s.note)}</div>
+                </div>`;
+            });
+        }
+
+        html += `</div>`;
+    });
+
+    content.innerHTML = html;
+}
+
+// Helper: get day of week in Italian
+function _getDayOfWeek(dateKey) {
+    const days = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
+    const d = new Date(dateKey + 'T00:00:00');
+    return days[d.getDay()];
+}
 
 // ============================================================
 // --- EXCEL EXPORT ---

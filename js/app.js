@@ -1252,14 +1252,60 @@ function handleShortcuts(e) {
 }
 
 // --- SAVE SESSION (uses dropdown type, no modal) ---
+// Shows a note prompt overlay, then saves when user confirms
 window.confirmSaveSession = async () => {
     if (!state.activePatientId) return alert("Seleziona prima un paziente in alto.");
-
     const p = state.patients.find(x => x.id === state.activePatientId);
+    if (!p) return;
+
+    // Show note prompt overlay
+    _showSessionNotePrompt(async (noteText) => {
+        await _doSaveSession(p, noteText);
+    });
+};
+
+// Note prompt overlay for session save
+function _showSessionNotePrompt(onConfirm) {
+    // Remove any existing overlay
+    const existing = document.getElementById('session-note-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'session-note-overlay';
+    overlay.className = 'session-note-overlay';
+    overlay.innerHTML = `
+        <div class="session-note-dialog">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h4 style="margin:0; color:var(--accent-color); font-size:0.95rem;"><i class="fa-solid fa-sticky-note"></i> Nota sessione (opzionale)</h4>
+                <button onclick="this.closest('.session-note-overlay').remove()" style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:1.1rem;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <textarea id="session-note-textarea" placeholder="Aggiungi una nota per questa sessione..." style="width:100%; height:80px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); border-radius:8px; color:white; padding:8px; font-size:0.85rem; resize:vertical; font-family:inherit;"></textarea>
+            <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:10px;">
+                <button id="session-note-cancel" class="btn btn-ghost" style="padding:6px 16px; font-size:0.85rem;">Annulla</button>
+                <button id="session-note-save" class="btn btn-primary" style="padding:6px 16px; font-size:0.85rem;"><i class="fa-solid fa-floppy-disk"></i> Salva</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const textarea = document.getElementById('session-note-textarea');
+    const saveBtn = document.getElementById('session-note-save');
+    const cancelBtn = document.getElementById('session-note-cancel');
+
+    saveBtn.onclick = () => {
+        const note = textarea.value.trim();
+        overlay.remove();
+        onConfirm(note || '');
+    };
+    cancelBtn.onclick = () => overlay.remove();
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    textarea.focus();
+}
+
+async function _doSaveSession(p, noteText) {
     const mode = document.getElementById('mode-select').value;
     const engine = getModeEngine(mode);
     const type = getSelectedSessionType();
-    if (!p) return;
 
     const isMultiSet = state.multiSetSession && state.multiSetSession.active &&
         (engine === 'search_find' || engine === 'intraverbal_scenari');
@@ -1318,6 +1364,8 @@ window.confirmSaveSession = async () => {
                 percentage: s.percentage
             }))
         };
+
+        if (noteText) sessionData.note = noteText;
 
         if (type === 'timedelay') {
             sessionData.timeDelaySeconds = getSelectedTDSeconds();
@@ -1390,6 +1438,8 @@ window.confirmSaveSession = async () => {
         rawX: rawX
     };
 
+    if (noteText) sessionData.note = noteText;
+
     if (type === 'timedelay') {
         sessionData.timeDelaySeconds = getSelectedTDSeconds();
     }
@@ -1452,7 +1502,7 @@ window.confirmSaveSession = async () => {
         const sessionNameWrapper = document.getElementById('session-name-wrapper');
         if (sessionNameWrapper) sessionNameWrapper.classList.add('hidden');
     }, 1000);
-};
+}
 
 // Show session name input when session becomes saveable
 window.showSessionNameInput = () => {
