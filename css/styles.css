@@ -584,7 +584,7 @@ input[type="text"] { width: 100%; padding: 10px; background: rgba(0, 0, 0, 0.3);
     --modal-bg: #0d0d1a;
 }
 
-/* Rainbow stripe decorative border on app shell (top edge) */
+/* --- ARC RAIDERS: Rainbow stripe on app shell (top edge) --- */
 [data-theme="arcraiders"] .app-shell {
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-top: none;
@@ -594,22 +594,244 @@ input[type="text"] { width: 100%; padding: 10px; background: rgba(0, 0, 0, 0.3);
     content: '';
     position: absolute;
     top: -1px; left: -1px; right: -1px;
-    height: 3px;
+    height: 4px;
     background: linear-gradient(90deg, #e83040 0%, #e8a020 25%, #30c850 50%, #3090e8 75%, #6050d0 100%);
     border-radius: var(--radius) var(--radius) 0 0;
     z-index: 10;
 }
 
-/* Chromatic aberration on app title only */
+/* --- ARC RAIDERS: Rainbow stripe on modal headers --- */
+[data-theme="arcraiders"] .modal-header {
+    background: rgba(0, 0, 0, 0.35);
+    border-bottom: none;
+    position: relative;
+    overflow: visible;
+}
+[data-theme="arcraiders"] .modal-header::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #e83040, #e8a020 30%, #30c850 55%, #3090e8 80%, #6050d0);
+}
+
+/* --- ARC RAIDERS: Rainbow left accent on controls row --- */
+[data-theme="arcraiders"] .controls-row {
+    background: rgba(0, 0, 0, 0.25);
+    border-left: 3px solid transparent;
+    border-image: linear-gradient(180deg, #e83040, #e8a020, #30c850, #3090e8) 1;
+}
+
+/* --- ARC RAIDERS: Rainbow accent on game stage border --- */
+[data-theme="arcraiders"] #game-stage {
+    border: 2px solid rgba(255, 255, 255, 0.06);
+    position: relative;
+}
+[data-theme="arcraiders"] #game-stage::before {
+    content: '';
+    position: absolute;
+    top: -2px; left: -2px; right: -2px;
+    height: 3px;
+    background: linear-gradient(90deg, #e83040, #e8a020, #30c850, #3090e8, #6050d0);
+    border-radius: 16px 16px 0 0;
+    z-index: 1;
+}
+
+/* --- ARC RAIDERS: Vibrant rainbow dot decorations on section headers --- */
+[data-theme="arcraiders"] .lib-category-header::before {
+    content: '';
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+    background: conic-gradient(#e83040, #e8a020, #30c850, #3090e8, #6050d0, #e83040);
+    margin-right: 4px;
+    box-shadow: 0 0 6px rgba(232, 160, 32, 0.4);
+}
+
+/* --- ARC RAIDERS: Rainbow gradient underline on settings tabs active --- */
+[data-theme="arcraiders"] .settings-tab.active {
+    background: rgba(232, 160, 32, 0.12) !important;
+    color: #e8a020 !important;
+    border-bottom: 2px solid transparent !important;
+    border-image: linear-gradient(90deg, #e83040, #e8a020, #30c850) 1 !important;
+}
+
+/* --- ARC RAIDERS: Vibrant rainbow-glow on primary buttons hover --- */
+[data-theme="arcraiders"] .btn-primary:hover {
+    background: linear-gradient(135deg, #f0b030, #e09020);
+    box-shadow:
+        0 0 20px rgba(232, 160, 32, 0.4),
+        0 0 40px rgba(232, 48, 64, 0.12),
+        0 0 40px rgba(48, 144, 232, 0.12);
+}
+
+/* --- ARC RAIDERS: Rainbow shimmer on theme card active --- */
+[data-theme="arcraiders"] .theme-card.active {
+    border-color: #e8a020;
+    box-shadow:
+        0 0 14px rgba(232, 160, 32, 0.25),
+        inset 0 0 20px rgba(232, 160, 32, 0.05);
+    position: relative;
+}
+
+/* --- ARC RAIDERS: Colored vector accent bars on badges --- */
+[data-theme="arcraiders"] .badge-criterion {
+    background: linear-gradient(135deg, #e8a020, #d08818);
+    color: #0d0d1a;
+    box-shadow: 0 2px 8px rgba(232, 160, 32, 0.3);
+}
+[data-theme="arcraiders"] .badge-repertorio {
+    background: linear-gradient(135deg, #3090e8, #2070c0);
+    box-shadow: 0 2px 8px rgba(48, 144, 232, 0.3);
+}
+[data-theme="arcraiders"] .criterion-badge {
+    background: linear-gradient(135deg, #30c850, #20a040);
+    box-shadow: 0 2px 8px rgba(48, 200, 80, 0.3);
+}
+[data-theme="arcraiders"] .repertorio-badge {
+    background: linear-gradient(135deg, #3090e8, #2070c0);
+    box-shadow: 0 2px 8px rgba(48, 144, 232, 0.3);
+}
+[data-theme="arcraiders"] .badge-near {
+    background: rgba(61, 187, 94, 0.15);
+    color: #3dbb5e;
+    border-color: rgba(61, 187, 94, 0.25);
+}
+
+/* --- ARC RAIDERS: Tag chips with vibrant multicolor palette --- */
+[data-theme="arcraiders"] .tag-chip {
+    background: rgba(150, 80, 220, 0.15);
+    border-color: rgba(150, 80, 220, 0.3);
+    color: #b888e8;
+    box-shadow: 0 1px 4px rgba(150, 80, 220, 0.15);
+}
+[data-theme="arcraiders"] .tag-chip:nth-child(3n+1) {
+    background: rgba(48, 144, 232, 0.12);
+    border-color: rgba(48, 144, 232, 0.3);
+    color: #60b0f0;
+}
+[data-theme="arcraiders"] .tag-chip:nth-child(3n+2) {
+    background: rgba(48, 200, 80, 0.12);
+    border-color: rgba(48, 200, 80, 0.3);
+    color: #50d868;
+}
+
+/* --- ARC RAIDERS: Colorful score buttons with glow --- */
+[data-theme="arcraiders"] .btn-score.success {
+    background: #30c850;
+    box-shadow: 0 0 12px rgba(48, 200, 80, 0.35);
+}
+[data-theme="arcraiders"] .btn-score.fail {
+    background: #e83040;
+    box-shadow: 0 0 12px rgba(232, 48, 64, 0.35);
+}
+[data-theme="arcraiders"] .btn-score.prompt {
+    background: #e8a020;
+    box-shadow: 0 0 12px rgba(232, 160, 32, 0.35);
+}
+
+/* --- ARC RAIDERS: Vibrant feedback with rainbow flash --- */
+[data-theme="arcraiders"] .feedback-success {
+    border-color: #30c850 !important;
+    box-shadow:
+        0 0 25px rgba(48, 200, 80, 0.5),
+        inset 0 0 30px rgba(48, 200, 80, 0.08) !important;
+}
+[data-theme="arcraiders"] .feedback-fail {
+    border-color: #e83040 !important;
+    box-shadow:
+        0 0 25px rgba(232, 48, 64, 0.5),
+        inset 0 0 30px rgba(232, 48, 64, 0.08) !important;
+}
+[data-theme="arcraiders"] .feedback-prompt {
+    border-color: #e8a020 !important;
+    box-shadow:
+        0 0 25px rgba(232, 160, 32, 0.5),
+        inset 0 0 30px rgba(232, 160, 32, 0.08) !important;
+}
+
+/* --- ARC RAIDERS: Rainbow left-bar on daily notes --- */
+[data-theme="arcraiders"] .daily-note-toolbar {
+    background: rgba(0, 0, 0, 0.25);
+    border-left: 3px solid transparent;
+    border-image: linear-gradient(180deg, #e83040, #e8a020, #30c850) 1;
+}
+
+/* --- ARC RAIDERS: Rainbow accent on pointer pen active --- */
+[data-theme="arcraiders"] #btn-pointer-pen.pen-active {
+    background: #e8a020;
+    box-shadow:
+        0 0 12px rgba(232, 160, 32, 0.5),
+        0 0 24px rgba(232, 48, 64, 0.2),
+        0 0 24px rgba(48, 144, 232, 0.2);
+}
+
+/* --- ARC RAIDERS: Chromatic aberration on loading spinner --- */
+[data-theme="arcraiders"] .loading-spinner {
+    border-color: transparent;
+    border-top-color: #e8a020;
+    border-right-color: #e83040;
+    border-bottom-color: #3090e8;
+    border-left-color: #30c850;
+}
+
+/* --- ARC RAIDERS: Rainbow bottom accent on dropdown panels --- */
+[data-theme="arcraiders"] .custom-dropdown-panel::after {
+    content: '';
+    display: block;
+    height: 2px;
+    background: linear-gradient(90deg, #e83040, #e8a020, #30c850, #3090e8, #6050d0);
+    border-radius: 0 0 12px 12px;
+}
+
+/* --- ARC RAIDERS: Colorful scrollbar --- */
+[data-theme="arcraiders"] ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(232, 160, 32, 0.3), rgba(48, 144, 232, 0.3));
+    border-radius: 3px;
+}
+[data-theme="arcraiders"] ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, rgba(232, 160, 32, 0.5), rgba(48, 144, 232, 0.5));
+}
+
+/* --- ARC RAIDERS: RAN mode nav with chromatic glow --- */
+[data-theme="arcraiders"] .ran-btn-nav {
+    background: #e8a020;
+    color: #0d0d1a;
+    box-shadow: 0 0 16px rgba(232, 160, 32, 0.3),
+        -2px 0 8px rgba(232, 48, 64, 0.15),
+        2px 0 8px rgba(48, 144, 232, 0.15);
+}
+
+/* --- ARC RAIDERS: Chromatic Aberration & Typography --- */
 [data-theme="arcraiders"] .app-title,
 [data-theme="arcraiders"] h1 {
-    text-shadow: -1.5px 0 rgba(232, 48, 64, 0.4), 1.5px 0 rgba(48, 144, 232, 0.4);
-    font-weight: 800;
+    text-shadow:
+        -2px 0 rgba(232, 48, 64, 0.55),
+        2px 0 rgba(48, 144, 232, 0.55),
+        0 0 20px rgba(232, 160, 32, 0.15);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    font-size: 1.2rem;
+}
+[data-theme="arcraiders"] h1 .logo-icon {
+    filter: drop-shadow(-2px 0 rgba(232, 48, 64, 0.6)) drop-shadow(2px 0 rgba(48, 144, 232, 0.6));
+}
+[data-theme="arcraiders"] h2 {
+    text-shadow:
+        -1.5px 0 rgba(232, 48, 64, 0.4),
+        1.5px 0 rgba(48, 144, 232, 0.4),
+        0 0 12px rgba(232, 160, 32, 0.1);
     text-transform: uppercase;
     letter-spacing: 2px;
+    font-weight: 800;
 }
-[data-theme="arcraiders"] h2,
-[data-theme="arcraiders"] h3,
+[data-theme="arcraiders"] h3 {
+    text-shadow:
+        -1px 0 rgba(232, 48, 64, 0.3),
+        1px 0 rgba(48, 144, 232, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 700;
+}
 [data-theme="arcraiders"] h4 {
     text-transform: uppercase;
     letter-spacing: 1px;
@@ -628,10 +850,6 @@ input[type="text"] { width: 100%; padding: 10px; background: rgba(0, 0, 0, 0.3);
     color: #0d0d1a;
     border: none;
     font-weight: 800;
-}
-[data-theme="arcraiders"] .btn-primary:hover {
-    background: linear-gradient(135deg, #f0b030, #e09020);
-    box-shadow: 0 0 20px rgba(232, 160, 32, 0.35);
 }
 [data-theme="arcraiders"] .btn-ghost {
     border-color: rgba(255, 255, 255, 0.12);
@@ -659,11 +877,6 @@ input[type="text"] { width: 100%; padding: 10px; background: rgba(0, 0, 0, 0.3);
 [data-theme="arcraiders"] .btn-float:hover {
     border-color: rgba(232, 160, 32, 0.4);
 }
-
-/* Score buttons - vibrant colors */
-[data-theme="arcraiders"] .btn-score.success { background: #30c850; }
-[data-theme="arcraiders"] .btn-score.fail { background: #e83040; }
-[data-theme="arcraiders"] .btn-score.prompt { background: #e8a020; }
 
 /* Form inputs */
 [data-theme="arcraiders"] select,
@@ -695,11 +908,6 @@ input[type="text"] { width: 100%; padding: 10px; background: rgba(0, 0, 0, 0.3);
     background: rgba(0, 0, 0, 0.35);
     border-color: rgba(61, 187, 94, 0.3);
     color: #3dbb5e;
-}
-
-/* Controls row */
-[data-theme="arcraiders"] .controls-row {
-    background: rgba(0, 0, 0, 0.25);
 }
 
 /* Custom dropdown trigger */
@@ -796,20 +1004,9 @@ input[type="text"] { width: 100%; padding: 10px; background: rgba(0, 0, 0, 0.3);
     color: #fff;
 }
 
-/* Modals */
-[data-theme="arcraiders"] .modal-header {
-    background: rgba(0, 0, 0, 0.3);
-    border-bottom-color: rgba(255, 255, 255, 0.06);
-}
 [data-theme="arcraiders"] .modal-content {
     border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8);
-}
-
-/* Settings tabs */
-[data-theme="arcraiders"] .settings-tab.active {
-    background: rgba(232, 160, 32, 0.15) !important;
-    color: #e8a020 !important;
 }
 
 /* Theme cards */
@@ -819,11 +1016,6 @@ input[type="text"] { width: 100%; padding: 10px; background: rgba(0, 0, 0, 0.3);
 [data-theme="arcraiders"] .theme-card:hover {
     border-color: rgba(232, 160, 32, 0.4);
 }
-[data-theme="arcraiders"] .theme-card.active {
-    border-color: #e8a020;
-    box-shadow: 0 0 14px rgba(232, 160, 32, 0.25);
-}
-
 /* Library cards and grid */
 [data-theme="arcraiders"] .lib-card:hover {
     border-color: rgba(232, 160, 32, 0.4);
@@ -845,32 +1037,6 @@ input[type="text"] { width: 100%; padding: 10px; background: rgba(0, 0, 0, 0.3);
     color: #e8a020;
 }
 
-/* Badges - vibrant rainbow-inspired colors */
-[data-theme="arcraiders"] .badge-criterion {
-    background: linear-gradient(135deg, #e8a020, #d08818);
-    color: #0d0d1a;
-}
-[data-theme="arcraiders"] .badge-repertorio {
-    background: linear-gradient(135deg, #3090e8, #2070c0);
-}
-[data-theme="arcraiders"] .badge-near {
-    background: rgba(61, 187, 94, 0.15);
-    color: #3dbb5e;
-    border-color: rgba(61, 187, 94, 0.25);
-}
-[data-theme="arcraiders"] .criterion-badge {
-    background: linear-gradient(135deg, #30c850, #20a040);
-}
-[data-theme="arcraiders"] .repertorio-badge {
-    background: linear-gradient(135deg, #3090e8, #2070c0);
-}
-
-/* Tag chips - vibrant purple/magenta tones */
-[data-theme="arcraiders"] .tag-chip {
-    background: rgba(150, 80, 220, 0.15);
-    border-color: rgba(150, 80, 220, 0.3);
-    color: #b888e8;
-}
 [data-theme="arcraiders"] .tag-suggestion:hover {
     background: rgba(150, 80, 220, 0.15);
     border-color: rgba(150, 80, 220, 0.3);
@@ -896,23 +1062,8 @@ input[type="text"] { width: 100%; padding: 10px; background: rgba(0, 0, 0, 0.3);
     color: #f0d090 !important;
 }
 
-/* Loading spinner */
-[data-theme="arcraiders"] .loading-spinner {
-    border-color: rgba(232, 160, 32, 0.15);
-    border-top-color: #e8a020;
-}
-
 /* Chart styling */
 [data-theme="arcraiders"] .chart-dot { fill: #e8a020; }
-
-/* Game stage */
-[data-theme="arcraiders"] #game-stage {
-    border-color: rgba(255, 255, 255, 0.06);
-}
-[data-theme="arcraiders"] #btn-pointer-pen.pen-active {
-    background: #e8a020;
-    box-shadow: 0 0 12px rgba(232, 160, 32, 0.5);
-}
 
 /* Pixabay results */
 [data-theme="arcraiders"] .pixabay-result-item:hover {
@@ -928,10 +1079,6 @@ input[type="text"] { width: 100%; padding: 10px; background: rgba(0, 0, 0, 0.3);
     border-color: rgba(232, 160, 32, 0.2);
 }
 
-/* Daily note editor */
-[data-theme="arcraiders"] .daily-note-toolbar {
-    background: rgba(0, 0, 0, 0.25);
-}
 [data-theme="arcraiders"] .daily-note-toolbar button:hover {
     background: rgba(232, 160, 32, 0.15);
     color: #e8a020;
@@ -946,35 +1093,9 @@ input[type="text"] { width: 100%; padding: 10px; background: rgba(0, 0, 0, 0.3);
 [data-theme="arcraiders"] ::-webkit-scrollbar-track {
     background: rgba(0, 0, 0, 0.2);
 }
-[data-theme="arcraiders"] ::-webkit-scrollbar-thumb {
-    background: rgba(232, 160, 32, 0.25);
-    border-radius: 3px;
-}
-[data-theme="arcraiders"] ::-webkit-scrollbar-thumb:hover {
-    background: rgba(232, 160, 32, 0.4);
-}
-
 /* RAN mode controls */
 [data-theme="arcraiders"] .ran-controls-bar {
     background: rgba(0, 0, 0, 0.4);
-}
-[data-theme="arcraiders"] .ran-btn-nav {
-    background: #e8a020;
-    color: #0d0d1a;
-}
-
-/* Feedback colors - vibrant */
-[data-theme="arcraiders"] .feedback-success {
-    border-color: #30c850 !important;
-    box-shadow: 0 0 25px rgba(48, 200, 80, 0.5) !important;
-}
-[data-theme="arcraiders"] .feedback-fail {
-    border-color: #e83040 !important;
-    box-shadow: 0 0 25px rgba(232, 48, 64, 0.5) !important;
-}
-[data-theme="arcraiders"] .feedback-prompt {
-    border-color: #e8a020 !important;
-    box-shadow: 0 0 25px rgba(232, 160, 32, 0.5) !important;
 }
 
 /* --- CHERRY BLOSSOM THEME --- */
