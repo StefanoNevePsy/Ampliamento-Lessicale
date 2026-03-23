@@ -163,6 +163,8 @@ function renderThemePicker() {
 window.selectTheme = (themeId) => {
     applyTheme(themeId);
     renderThemePicker();
+    // Re-render mode dropdown with new theme colors
+    if (typeof renderModeSelect === 'function') renderModeSelect();
 };
 
 // --- SETTINGS TABS ---

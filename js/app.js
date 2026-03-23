@@ -1807,7 +1807,12 @@ function getModeIcon(modeKey) {
     if (layout.modeIcons && layout.modeIcons[modeKey]) return layout.modeIcons[modeKey];
     return MODE_ICONS[getModeEngine(modeKey)] || 'fa-puzzle-piece';
 }
-const DEFAULT_GROUP_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899'];
+const DEFAULT_GROUP_COLORS_FALLBACK = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899'];
+function getThemeGroupColors() {
+    const s = getComputedStyle(document.documentElement);
+    return [1,2,3,4,5,6].map(i => s.getPropertyValue('--cat-' + i).trim() || DEFAULT_GROUP_COLORS_FALLBACK[i - 1]);
+}
+const DEFAULT_GROUP_COLORS = DEFAULT_GROUP_COLORS_FALLBACK;
 
 // --- RENDER MODE SELECT (custom dropdown + hidden select sync) ---
 function renderModeSelect() {
@@ -1835,9 +1840,10 @@ function renderModeSelect() {
     const label = document.getElementById('mode-dropdown-label');
     if (!panel) return;
 
+    const _themeColors = getThemeGroupColors();
     let html = '';
     layout.groups.forEach((group, gi) => {
-        const color = (layout.groupColors && layout.groupColors[gi]) || DEFAULT_GROUP_COLORS[gi % DEFAULT_GROUP_COLORS.length];
+        const color = (layout.groupColors && layout.groupColors[gi]) || _themeColors[gi % _themeColors.length];
         if (group.name) {
             html += `<div class="mode-group-header" style="color:${color};">
                 <span class="mode-group-dot" style="background:${color};"></span>${group.name}
@@ -1982,7 +1988,8 @@ function renderActivityLayoutBody() {
 
     groups.forEach((group, gi) => {
         const groupName = group.name || '(Principale)';
-        const groupColor = (_editingLayout.groupColors[gi]) || DEFAULT_GROUP_COLORS[gi % DEFAULT_GROUP_COLORS.length];
+        const _tc = getThemeGroupColors();
+        const groupColor = (_editingLayout.groupColors[gi]) || _tc[gi % _tc.length];
         html += `
         <div style="background:rgba(0,0,0,0.2); border-radius:12px; padding:12px; margin-bottom:10px; border:1px solid rgba(255,255,255,0.08); border-left:3px solid ${groupColor};">
             <div style="display:flex; gap:6px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">
