@@ -118,7 +118,7 @@ const APP_THEMES = [
     { id: 'sunset', name: 'Tramonto', icon: 'fa-sun', colors: ['#2d1b2e', '#4a2040', '#f472b6', '#34d399'] },
     { id: 'midnight', name: 'Mezzanotte', icon: 'fa-moon', colors: ['#0a0a0a', '#1a1a2e', '#8b5cf6', '#10b981'] },
     { id: 'light', name: 'Chiaro', icon: 'fa-cloud-sun', colors: ['#f1f5f9', '#e2e8f0', '#6366f1', '#059669'] },
-    { id: 'arcraiders', name: 'Arc Raiders', icon: 'fa-satellite-dish', colors: ['#121214', '#1a1a1e', '#d4a035', '#5a8a5a'] },
+    { id: 'arcraiders', name: 'Arc Raiders', icon: 'fa-satellite-dish', colors: ['#0d0d1a', '#151528', '#e8a020', '#3dbb5e'], badge: 'NEW' },
     { id: 'sakura', name: 'Sakura', icon: 'fa-fan', colors: ['#2e1a2a', '#3d2040', '#f06292', '#81c784'] },
     { id: 'arctic', name: 'Artico', icon: 'fa-snowflake', colors: ['#e8f0f8', '#d0dde8', '#4a90d9', '#3dae8f'] },
     { id: 'volcano', name: 'Vulcano', icon: 'fa-fire', colors: ['#1a0a0a', '#2e1510', '#e8603c', '#50b080'] },

@@ -539,32 +539,54 @@ input[type="text"] { width: 100%; padding: 10px; background: rgba(0, 0, 0, 0.3);
 [data-theme="light"] .btn-float { background: rgba(255,255,255,0.95); color: #1e293b; border-color: rgba(0,0,0,0.1); }
 
 /* --- ARC RAIDERS THEME --- */
-/* Clean, modern military-sci-fi aesthetic inspired by Arc Raiders UI */
+/* Vibrant sci-fi aesthetic: deep space background, rainbow accents, chromatic aberration on branding */
 [data-theme="arcraiders"] {
-    --bg-gradient: linear-gradient(160deg, #121214 0%, #1a1a1e 40%, #0e0e10 100%);
-    --glass-bg: rgba(18, 18, 22, 0.92);
+    --bg-gradient: linear-gradient(160deg, #0d0d1a 0%, #151528 40%, #1a1030 100%);
+    --glass-bg: rgba(14, 14, 28, 0.93);
     --glass-border: rgba(255, 255, 255, 0.08);
-    --text-primary: #e8e6e1;
-    --text-secondary: #7a7872;
-    --accent-color: #d4a035;
-    --success-color: #5a8a5a;
-    --danger-color: #c44030;
-    --warning-color: #d4a035;
-    --radius: 8px;
-    --shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    --text-primary: #ede8df;
+    --text-secondary: #8a8598;
+    --accent-color: #e8a020;
+    --success-color: #3dbb5e;
+    --danger-color: #e04040;
+    --warning-color: #e8a020;
+    --radius: 10px;
+    --shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
 }
+
+/* Rainbow stripe decorative border on app shell (top edge) */
 [data-theme="arcraiders"] .app-shell {
     border: 1px solid rgba(255, 255, 255, 0.06);
+    border-top: none;
+    overflow: visible;
 }
-[data-theme="arcraiders"] h1,
+[data-theme="arcraiders"] .app-shell::after {
+    content: '';
+    position: absolute;
+    top: -1px; left: -1px; right: -1px;
+    height: 3px;
+    background: linear-gradient(90deg, #e83040 0%, #e8a020 25%, #30c850 50%, #3090e8 75%, #6050d0 100%);
+    border-radius: var(--radius) var(--radius) 0 0;
+    z-index: 10;
+}
+
+/* Chromatic aberration on app title only */
+[data-theme="arcraiders"] .app-title,
+[data-theme="arcraiders"] h1 {
+    text-shadow: -1.5px 0 rgba(232, 48, 64, 0.4), 1.5px 0 rgba(48, 144, 232, 0.4);
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
 [data-theme="arcraiders"] h2,
 [data-theme="arcraiders"] h3,
-[data-theme="arcraiders"] h4,
-[data-theme="arcraiders"] .app-title {
+[data-theme="arcraiders"] h4 {
     text-transform: uppercase;
-    letter-spacing: 1.5px;
-    font-weight: 800;
+    letter-spacing: 1px;
+    font-weight: 700;
 }
+
+/* Buttons */
 [data-theme="arcraiders"] .btn,
 [data-theme="arcraiders"] button {
     text-transform: uppercase;
@@ -572,34 +594,364 @@ input[type="text"] { width: 100%; padding: 10px; background: rgba(0, 0, 0, 0.3);
     font-weight: 700;
 }
 [data-theme="arcraiders"] .btn-primary {
-    background: #d4a035;
-    color: #121214;
+    background: linear-gradient(135deg, #e8a020, #d08818);
+    color: #0d0d1a;
     border: none;
     font-weight: 800;
 }
 [data-theme="arcraiders"] .btn-primary:hover {
-    background: #e0b040;
-    box-shadow: 0 0 16px rgba(212, 160, 53, 0.3);
+    background: linear-gradient(135deg, #f0b030, #e09020);
+    box-shadow: 0 0 20px rgba(232, 160, 32, 0.35);
 }
+[data-theme="arcraiders"] .btn-ghost {
+    border-color: rgba(255, 255, 255, 0.12);
+    color: var(--text-secondary);
+}
+[data-theme="arcraiders"] .btn-ghost:hover {
+    border-color: rgba(232, 160, 32, 0.4);
+    color: #e8a020;
+}
+[data-theme="arcraiders"] .btn-icon {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+[data-theme="arcraiders"] .btn-icon:hover {
+    background: rgba(232, 160, 32, 0.12);
+    border-color: rgba(232, 160, 32, 0.3);
+    color: #e8a020;
+}
+
+/* Floating action buttons */
+[data-theme="arcraiders"] .btn-float {
+    background: rgba(14, 14, 28, 0.92);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+[data-theme="arcraiders"] .btn-float:hover {
+    border-color: rgba(232, 160, 32, 0.4);
+}
+
+/* Score buttons - vibrant colors */
+[data-theme="arcraiders"] .btn-score.success { background: #30c850; }
+[data-theme="arcraiders"] .btn-score.fail { background: #e83040; }
+[data-theme="arcraiders"] .btn-score.prompt { background: #e8a020; }
+
+/* Form inputs */
 [data-theme="arcraiders"] select,
 [data-theme="arcraiders"] input[type="text"],
 [data-theme="arcraiders"] input[type="password"],
 [data-theme="arcraiders"] input[type="number"],
 [data-theme="arcraiders"] textarea {
-    background: rgba(0, 0, 0, 0.4);
+    background: rgba(0, 0, 0, 0.35);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #e8e6e1;
+    color: #ede8df;
 }
-[data-theme="arcraiders"] .theme-card {
-    border-color: rgba(255, 255, 255, 0.08);
+[data-theme="arcraiders"] select:focus,
+[data-theme="arcraiders"] input[type="text"]:focus,
+[data-theme="arcraiders"] textarea:focus {
+    border-color: rgba(232, 160, 32, 0.5);
+    box-shadow: 0 0 0 2px rgba(232, 160, 32, 0.1);
+}
+[data-theme="arcraiders"] select option {
+    background: #151528;
+    color: #ede8df;
+}
+[data-theme="arcraiders"] select optgroup {
+    background: #0d0d1a;
+    color: #8a8598;
+}
+
+/* Patient selector */
+[data-theme="arcraiders"] .patient-selector-wrapper select {
+    background: rgba(0, 0, 0, 0.35);
+    border-color: rgba(61, 187, 94, 0.3);
+    color: #3dbb5e;
+}
+
+/* Controls row */
+[data-theme="arcraiders"] .controls-row {
+    background: rgba(0, 0, 0, 0.25);
+}
+
+/* Custom dropdown trigger */
+[data-theme="arcraiders"] .custom-dropdown-trigger {
+    background: rgba(0, 0, 0, 0.35);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #ede8df;
+}
+[data-theme="arcraiders"] .custom-dropdown-trigger:hover {
+    border-color: rgba(232, 160, 32, 0.4);
+}
+[data-theme="arcraiders"] .custom-dropdown-trigger.open {
+    border-color: #e8a020;
+    box-shadow: 0 0 0 2px rgba(232, 160, 32, 0.15);
+}
+
+/* Custom dropdown panel */
+[data-theme="arcraiders"] .custom-dropdown-panel {
+    background: #12122a;
+    border-color: #e8a020;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
+}
+
+/* Set dropdown sort bar */
+[data-theme="arcraiders"] .set-dropdown-sort-bar {
+    background: #0d0d1a;
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+[data-theme="arcraiders"] .set-dropdown-sort-bar button.active {
+    background: rgba(232, 160, 32, 0.2);
+    color: #e8a020;
+}
+
+/* Set dropdown group label */
+[data-theme="arcraiders"] .set-dropdown-group-label {
+    background: #12122a;
+    color: #e8a020;
+    border-bottom-color: rgba(232, 160, 32, 0.15);
+}
+[data-theme="arcraiders"] .set-dropdown-group-label:hover {
+    background: #181838;
+}
+
+/* Set dropdown items */
+[data-theme="arcraiders"] .set-dropdown-item:hover {
+    background: rgba(232, 160, 32, 0.1);
+}
+[data-theme="arcraiders"] .set-dropdown-item.selected {
+    background: rgba(232, 160, 32, 0.15);
+}
+
+/* Set item data button */
+[data-theme="arcraiders"] .set-item-data-btn {
+    background: rgba(232, 160, 32, 0.12);
+    border-color: rgba(232, 160, 32, 0.25);
+    color: #e8a020;
+}
+[data-theme="arcraiders"] .set-item-data-btn:hover {
+    background: rgba(232, 160, 32, 0.25);
+    color: #fff;
+}
+
+/* Patient dropdown */
+[data-theme="arcraiders"] .patient-dd-item:hover {
+    background: rgba(232, 160, 32, 0.1);
+}
+[data-theme="arcraiders"] .patient-dd-item.selected {
+    background: rgba(232, 160, 32, 0.15);
+}
+[data-theme="arcraiders"] .patient-dd-avatar {
+    background: rgba(232, 160, 32, 0.12);
+    color: #e8a020;
+}
+[data-theme="arcraiders"] .patient-avatar-mini {
+    background: rgba(232, 160, 32, 0.15);
+    color: #e8a020;
+}
+
+/* Mode dropdown */
+[data-theme="arcraiders"] .mode-dd-item:hover {
+    background: rgba(232, 160, 32, 0.1);
+}
+[data-theme="arcraiders"] .mode-dd-item.selected {
+    background: rgba(232, 160, 32, 0.15);
+}
+[data-theme="arcraiders"] .mode-group-header {
+    background: #12122a;
+}
+
+/* Autocomplete dropdown */
+[data-theme="arcraiders"] .custom-ac-panel {
+    background: #12122a;
+    border-color: #e8a020;
+}
+[data-theme="arcraiders"] .custom-ac-item:hover,
+[data-theme="arcraiders"] .custom-ac-item.highlighted {
+    background: rgba(232, 160, 32, 0.15);
+    color: #fff;
+}
+
+/* Modals */
+[data-theme="arcraiders"] .modal-fs {
+    background: #0d0d1a;
+}
+[data-theme="arcraiders"] .modal-header {
+    background: rgba(0, 0, 0, 0.3);
+    border-bottom-color: rgba(255, 255, 255, 0.06);
 }
 [data-theme="arcraiders"] .modal-content {
     border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8);
 }
+
+/* Settings tabs */
 [data-theme="arcraiders"] .settings-tab.active {
-    background: rgba(212, 160, 53, 0.15) !important;
-    color: #d4a035 !important;
+    background: rgba(232, 160, 32, 0.15) !important;
+    color: #e8a020 !important;
+}
+
+/* Theme cards */
+[data-theme="arcraiders"] .theme-card {
+    border-color: rgba(255, 255, 255, 0.08);
+}
+[data-theme="arcraiders"] .theme-card:hover {
+    border-color: rgba(232, 160, 32, 0.4);
+}
+[data-theme="arcraiders"] .theme-card.active {
+    border-color: #e8a020;
+    box-shadow: 0 0 14px rgba(232, 160, 32, 0.25);
+}
+
+/* Library cards and grid */
+[data-theme="arcraiders"] .lib-card:hover {
+    border-color: rgba(232, 160, 32, 0.4);
+    background: rgba(232, 160, 32, 0.06);
+}
+[data-theme="arcraiders"] .lib-category-header {
+    background: rgba(232, 160, 32, 0.06);
+    border-color: rgba(232, 160, 32, 0.12);
+}
+[data-theme="arcraiders"] .lib-category-header:hover {
+    background: rgba(232, 160, 32, 0.1);
+}
+[data-theme="arcraiders"] .lib-category-header h3 {
+    color: #e8a020;
+}
+[data-theme="arcraiders"] .lib-sort-bar button.active {
+    background: rgba(232, 160, 32, 0.15);
+    border-color: rgba(232, 160, 32, 0.3);
+    color: #e8a020;
+}
+
+/* Badges - vibrant rainbow-inspired colors */
+[data-theme="arcraiders"] .badge-criterion {
+    background: linear-gradient(135deg, #e8a020, #d08818);
+    color: #0d0d1a;
+}
+[data-theme="arcraiders"] .badge-repertorio {
+    background: linear-gradient(135deg, #3090e8, #2070c0);
+}
+[data-theme="arcraiders"] .badge-near {
+    background: rgba(61, 187, 94, 0.15);
+    color: #3dbb5e;
+    border-color: rgba(61, 187, 94, 0.25);
+}
+[data-theme="arcraiders"] .criterion-badge {
+    background: linear-gradient(135deg, #30c850, #20a040);
+}
+[data-theme="arcraiders"] .repertorio-badge {
+    background: linear-gradient(135deg, #3090e8, #2070c0);
+}
+
+/* Tag chips - vibrant purple/magenta tones */
+[data-theme="arcraiders"] .tag-chip {
+    background: rgba(150, 80, 220, 0.15);
+    border-color: rgba(150, 80, 220, 0.3);
+    color: #b888e8;
+}
+[data-theme="arcraiders"] .tag-suggestion:hover {
+    background: rgba(150, 80, 220, 0.15);
+    border-color: rgba(150, 80, 220, 0.3);
+    color: #b888e8;
+}
+
+/* Mode check items */
+[data-theme="arcraiders"] .mode-check.selected {
+    background: rgba(232, 160, 32, 0.15);
+    border-color: #e8a020;
+}
+
+/* Poll style buttons */
+[data-theme="arcraiders"] .poll-style-btn.selected {
+    border-color: #e8a020;
+    box-shadow: 0 2px 10px rgba(232, 160, 32, 0.2);
+}
+
+/* Bulk target button */
+[data-theme="arcraiders"] .bulk-target-btn.selected {
+    background: rgba(232, 160, 32, 0.12) !important;
+    border-color: rgba(232, 160, 32, 0.35) !important;
+    color: #f0d090 !important;
+}
+
+/* Loading spinner */
+[data-theme="arcraiders"] .loading-spinner {
+    border-color: rgba(232, 160, 32, 0.15);
+    border-top-color: #e8a020;
+}
+
+/* Chart styling */
+[data-theme="arcraiders"] .chart-dot { fill: #e8a020; }
+
+/* Game stage */
+[data-theme="arcraiders"] #game-stage {
+    border-color: rgba(255, 255, 255, 0.06);
+}
+[data-theme="arcraiders"] #btn-pointer-pen.pen-active {
+    background: #e8a020;
+    box-shadow: 0 0 12px rgba(232, 160, 32, 0.5);
+}
+
+/* Pixabay results */
+[data-theme="arcraiders"] .pixabay-result-item:hover {
+    border-color: #e8a020;
+}
+[data-theme="arcraiders"] .pixabay-result-item.selected {
+    border-color: #3dbb5e;
+    box-shadow: 0 0 8px rgba(61, 187, 94, 0.3);
+}
+
+/* Session note dialog */
+[data-theme="arcraiders"] .session-note-dialog {
+    border-color: rgba(232, 160, 32, 0.2);
+}
+
+/* Daily note editor */
+[data-theme="arcraiders"] .daily-note-toolbar {
+    background: rgba(0, 0, 0, 0.25);
+}
+[data-theme="arcraiders"] .daily-note-toolbar button:hover {
+    background: rgba(232, 160, 32, 0.15);
+    color: #e8a020;
+    border-color: rgba(232, 160, 32, 0.25);
+}
+
+/* Scrollbar styling */
+[data-theme="arcraiders"] ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+[data-theme="arcraiders"] ::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+}
+[data-theme="arcraiders"] ::-webkit-scrollbar-thumb {
+    background: rgba(232, 160, 32, 0.25);
+    border-radius: 3px;
+}
+[data-theme="arcraiders"] ::-webkit-scrollbar-thumb:hover {
+    background: rgba(232, 160, 32, 0.4);
+}
+
+/* RAN mode controls */
+[data-theme="arcraiders"] .ran-controls-bar {
+    background: rgba(0, 0, 0, 0.4);
+}
+[data-theme="arcraiders"] .ran-btn-nav {
+    background: #e8a020;
+    color: #0d0d1a;
+}
+
+/* Feedback colors - vibrant */
+[data-theme="arcraiders"] .feedback-success {
+    border-color: #30c850 !important;
+    box-shadow: 0 0 25px rgba(48, 200, 80, 0.5) !important;
+}
+[data-theme="arcraiders"] .feedback-fail {
+    border-color: #e83040 !important;
+    box-shadow: 0 0 25px rgba(232, 48, 64, 0.5) !important;
+}
+[data-theme="arcraiders"] .feedback-prompt {
+    border-color: #e8a020 !important;
+    box-shadow: 0 0 25px rgba(232, 160, 32, 0.5) !important;
 }
 
 /* --- CHERRY BLOSSOM THEME --- */
