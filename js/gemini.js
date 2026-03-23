@@ -112,12 +112,19 @@ function saveGeminiApiKey(key) {
 
 // --- THEME SYSTEM ---
 const APP_THEMES = [
-    { id: 'default', name: 'Indigo', colors: ['#1e1e2f', '#2d2b55', '#6366f1', '#10b981'] },
-    { id: 'ocean', name: 'Oceano', colors: ['#0f172a', '#1e3a5f', '#38bdf8', '#34d399'] },
-    { id: 'forest', name: 'Foresta', colors: ['#1a2e1a', '#2d4a2d', '#4ade80', '#34d399'] },
-    { id: 'sunset', name: 'Tramonto', colors: ['#2d1b2e', '#4a2040', '#f472b6', '#34d399'] },
-    { id: 'midnight', name: 'Mezzanotte', colors: ['#0a0a0a', '#1a1a2e', '#8b5cf6', '#10b981'] },
-    { id: 'light', name: 'Chiaro', colors: ['#f1f5f9', '#e2e8f0', '#6366f1', '#059669'] },
+    { id: 'default', name: 'Indigo', icon: 'fa-gem', colors: ['#1e1e2f', '#2d2b55', '#6366f1', '#10b981'] },
+    { id: 'ocean', name: 'Oceano', icon: 'fa-water', colors: ['#0f172a', '#1e3a5f', '#38bdf8', '#34d399'] },
+    { id: 'forest', name: 'Foresta', icon: 'fa-tree', colors: ['#1a2e1a', '#2d4a2d', '#4ade80', '#34d399'] },
+    { id: 'sunset', name: 'Tramonto', icon: 'fa-sun', colors: ['#2d1b2e', '#4a2040', '#f472b6', '#34d399'] },
+    { id: 'midnight', name: 'Mezzanotte', icon: 'fa-moon', colors: ['#0a0a0a', '#1a1a2e', '#8b5cf6', '#10b981'] },
+    { id: 'light', name: 'Chiaro', icon: 'fa-cloud-sun', colors: ['#f1f5f9', '#e2e8f0', '#6366f1', '#059669'] },
+    { id: 'arcraiders', name: 'Arc Raiders', icon: 'fa-satellite-dish', colors: ['#1a1a18', '#2a2520', '#bf782a', '#5a7a5a'], badge: 'CRT' },
+    { id: 'sakura', name: 'Sakura', icon: 'fa-fan', colors: ['#2e1a2a', '#3d2040', '#f06292', '#81c784'] },
+    { id: 'arctic', name: 'Artico', icon: 'fa-snowflake', colors: ['#e8f0f8', '#d0dde8', '#4a90d9', '#3dae8f'] },
+    { id: 'volcano', name: 'Vulcano', icon: 'fa-fire', colors: ['#1a0a0a', '#2e1510', '#e8603c', '#50b080'] },
+    { id: 'cyberpunk', name: 'Cyberpunk', icon: 'fa-bolt', colors: ['#0a0014', '#1a0030', '#00e0a0', '#ff3060'] },
+    { id: 'sand', name: 'Sabbia', icon: 'fa-umbrella-beach', colors: ['#f5f0e0', '#e8dcc8', '#b08840', '#6a9a50'] },
+    { id: 'deepspace', name: 'Spazio', icon: 'fa-star', colors: ['#050510', '#0a0a2e', '#7c6cf0', '#40c090'] },
 ];
 
 function getCurrentTheme() {
@@ -146,7 +153,8 @@ function renderThemePicker() {
             <div class="theme-preview">
                 ${t.colors.map(c => `<span style="background:${c};"></span>`).join('')}
             </div>
-            <div class="theme-name">${t.name}</div>
+            <div class="theme-name"><i class="fa-solid ${t.icon || 'fa-palette'}" style="margin-right:4px; opacity:0.7;"></i>${t.name}</div>
+            ${t.badge ? `<span style="position:absolute;top:4px;left:6px;font-size:0.55rem;background:rgba(191,120,42,0.3);color:#bf782a;padding:1px 5px;border-radius:3px;font-weight:700;letter-spacing:1px;font-family:monospace;">${t.badge}</span>` : ''}
             <i class="fa-solid fa-check theme-check"></i>
         </div>
     `).join('');
