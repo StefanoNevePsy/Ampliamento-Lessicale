@@ -1203,6 +1203,11 @@ function renderActivitiesTab(patient, sortBy) {
         const nearCritHtml = nearCrit ? `<span style="font-size:0.65rem; background:rgba(16,185,129,0.15); color:var(--success-color); padding:1px 6px; border-radius:4px;"><i class="fa-solid fa-arrow-trend-up"></i> Vicino al criterio</span>` : '';
         const lastInfoHtml = lastSession ? `<span style="font-size:0.7rem; color:var(--text-secondary);">${formatDateEU(lastSession.date)}</span> <span style="font-size:0.75rem; font-weight:bold; color:${lastPctColor};">${lastPct}%</span>` : '';
 
+        // Last session note quick-view
+        const lastNoteSession = [...sessions].reverse().find(s => s.note);
+        const lastNoteHtml = lastNoteSession ? `<button class="btn-icon last-note-toggle" style="width:24px; height:24px; font-size:0.6rem; display:inline-flex; color:#eab308; border-color:rgba(234,179,8,0.3); flex-shrink:0;" title="Nota ultima sessione (${formatDateEU(lastNoteSession.date)})"><i class="fa-solid fa-sticky-note"></i></button>` : '';
+        const lastNoteContentHtml = lastNoteSession ? `<div class="last-note-content" style="display:none; margin-bottom:6px; padding:8px 10px; border-radius:8px; background:rgba(234,179,8,0.08); border:1px solid rgba(234,179,8,0.15); font-size:0.8rem; line-height:1.4;"><div style="font-size:0.7rem; color:#eab308; margin-bottom:4px; font-weight:bold;"><i class="fa-solid fa-sticky-note"></i> Nota del ${formatDateEU(lastNoteSession.date)}</div><div style="color:#ddd;">${_renderNoteMarkup(lastNoteSession.note)}</div></div>` : '';
+
         html += `
         <div class="chart-wrapper" data-set-id="${setId || ''}" style="margin-bottom:12px; border-left:3px solid ${typeColor};">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
@@ -1212,6 +1217,7 @@ function renderActivitiesTab(patient, sortBy) {
                     ${setName} ${setCat ? `<span style="color:var(--text-secondary); font-size:0.7em; background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:4px;">${setCat}</span>` : ''}<span style="color:#666; font-size:0.8em;">(${modeName})</span> ${badgeHtml} ${fluenzaObiettivoHtml}
                 </h4>
                 <div style="display:flex; align-items:center; gap:6px;">
+                    ${lastNoteHtml}
                     <span style="font-size:0.65rem; background:rgba(${typeGroup === 'timedelay' ? '245,158,11' : '16,185,129'},0.15); color:${typeColor}; padding:2px 8px; border-radius:6px; font-weight:bold;">${typeLbl}</span>
                     <span style="font-size:0.75rem; color:var(--text-secondary);">${sessions.length} sess.</span>
                     <button class="btn-icon" onclick="toggleActivityDetails(this)" style="width:28px; height:28px; background:rgba(255,255,255,0.05);" title="Dettagli">
@@ -1222,6 +1228,7 @@ function renderActivitiesTab(patient, sortBy) {
             <div style="display:flex; gap:8px; align-items:center; margin-bottom:6px; flex-wrap:wrap;">
                 ${lastInfoHtml} ${nearCritHtml}
             </div>
+            ${lastNoteContentHtml}
             <div id="${chartId}"></div>
             <div class="activity-details-panel" style="display:none; margin-top:10px; border-top:1px solid rgba(255,255,255,0.05); padding-top:8px;">
                 ${taskStepsAnalysisHtml}
@@ -1313,6 +1320,20 @@ function renderActivitiesTab(patient, sortBy) {
             if (noteRow) {
                 const isOpen = noteRow.style.display !== 'none';
                 noteRow.style.display = isOpen ? 'none' : 'table-row';
+            }
+        });
+    });
+
+    // Wire up last-note-toggle buttons (quick view of last session note)
+    content.querySelectorAll('.last-note-toggle').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const wrapper = btn.closest('.chart-wrapper');
+            if (!wrapper) return;
+            const noteContent = wrapper.querySelector('.last-note-content');
+            if (noteContent) {
+                const isOpen = noteContent.style.display !== 'none';
+                noteContent.style.display = isOpen ? 'none' : 'block';
             }
         });
     });
@@ -1624,8 +1645,8 @@ window.openDailyNoteEditor = (patientId, dateKey) => {
 };
 
 // Insert markup at cursor position in the note textarea
-window._insertMarkup = (before, after) => {
-    const ta = document.getElementById('daily-note-textarea');
+window._insertMarkup = (before, after, textareaId) => {
+    const ta = document.getElementById(textareaId || 'daily-note-textarea') || document.getElementById('session-note-textarea');
     if (!ta) return;
     const start = ta.selectionStart;
     const end = ta.selectionEnd;

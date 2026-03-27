@@ -939,8 +939,11 @@ window.handleIntrusoClick = (idx) => {
         cardEl.style.boxShadow = '0 0 15px rgba(245,158,11,0.3)';
         cardEl.style.opacity = '0.5';
         cardEl.dataset.tried = '1';
-        const key = `intruso_${state.intrusoRound}_p${Date.now()}`;
-        state.session.itemResults[key] = 'prompt';
+        // Only record one prompt per round in TD mode
+        if (!state._autoScoreErrored) {
+            const key = `intruso_${state.intrusoRound}_p`;
+            state.session.itemResults[key] = 'prompt';
+        }
         state._autoScoreErrored = true;
     } else {
         // Independent: mark as error, show correct intruder, advance

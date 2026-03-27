@@ -1279,7 +1279,15 @@ function _showSessionNotePrompt(onConfirm) {
                 <h4 style="margin:0; color:var(--accent-color); font-size:0.95rem;"><i class="fa-solid fa-sticky-note"></i> Nota sessione (opzionale)</h4>
                 <button onclick="this.closest('.session-note-overlay').remove()" style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:1.1rem;"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <textarea id="session-note-textarea" placeholder="Aggiungi una nota per questa sessione..." style="width:100%; height:80px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); border-radius:8px; color:white; padding:8px; font-size:0.85rem; resize:vertical; font-family:inherit;"></textarea>
+            <div class="daily-note-toolbar" style="border-radius:8px 8px 0 0; margin-bottom:0;">
+                <button onclick="_insertMarkup('**','**','session-note-textarea')" title="Grassetto"><i class="fa-solid fa-bold"></i></button>
+                <button onclick="_insertMarkup('*','*','session-note-textarea')" title="Corsivo"><i class="fa-solid fa-italic"></i></button>
+                <button onclick="_insertMarkup('~~','~~','session-note-textarea')" title="Barrato"><i class="fa-solid fa-strikethrough"></i></button>
+                <span style="width:1px; background:rgba(255,255,255,0.1); margin:0 4px;"></span>
+                <button onclick="_insertMarkup('# ','','session-note-textarea')" title="Titolo"><i class="fa-solid fa-heading"></i></button>
+                <button onclick="_insertMarkup('- ','','session-note-textarea')" title="Lista puntata"><i class="fa-solid fa-list-ul"></i></button>
+            </div>
+            <textarea id="session-note-textarea" placeholder="Aggiungi una nota per questa sessione...\n\n**grassetto**  *corsivo*  # titolo" style="width:100%; height:80px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); border-radius:0 0 8px 8px; border-top:none; color:white; padding:8px; font-size:0.85rem; resize:vertical; font-family:inherit;"></textarea>
             <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:10px;">
                 <button id="session-note-cancel" class="btn btn-ghost" style="padding:6px 16px; font-size:0.85rem;">Annulla</button>
                 <button id="session-note-save" class="btn btn-primary" style="padding:6px 16px; font-size:0.85rem;"><i class="fa-solid fa-floppy-disk"></i> Salva</button>
