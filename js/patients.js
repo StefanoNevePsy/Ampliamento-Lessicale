@@ -443,6 +443,9 @@ window.loadPatientData = (pid) => {
                 <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(16,185,129,0.3); color:var(--success-color);" onclick="exportPatientExcel('${pid}')">
                     <i class="fa-solid fa-file-excel"></i>
                 </button>
+                <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(251,191,36,0.3); color:#fbbf24;" onclick="quickSharePatientDirect('${pid}')" title="Quick Share">
+                    <i class="fa-solid fa-share-from-square"></i>
+                </button>
                 <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(6,182,212,0.3); color:#06b6d4;" onclick="offlineSharePatient('${pid}')" title="Condividi Offline">
                     <i class="fa-solid fa-tower-broadcast"></i>
                 </button>

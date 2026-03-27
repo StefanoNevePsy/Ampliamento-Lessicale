@@ -249,6 +249,7 @@
                 <button class="btn btn-ghost" onclick="exportAllSets()"><i class="fa-solid fa-file-arrow-down"></i> Backup</button>
                 <button class="btn btn-ghost" onclick="document.getElementById('file-upload').click()"><i class="fa-solid fa-file-arrow-up"></i> Importa</button>
                 <input type="file" id="file-upload" class="hidden" accept=".json,.zip" onchange="importSets(this)">
+                <button class="btn btn-ghost" onclick="openQuickShare()" style="border-color:rgba(251,191,36,0.3); color:#fbbf24;"><i class="fa-solid fa-share-from-square"></i> Quick Share</button>
                 <button class="btn btn-ghost" onclick="openP2PSync()" style="border-color:rgba(99,102,241,0.3); color:var(--accent-color);"><i class="fa-solid fa-wifi"></i> Sync Diretto</button>
                 <button class="btn btn-ghost" onclick="openOfflineShare()" style="border-color:rgba(16,185,129,0.3); color:var(--success-color);"><i class="fa-solid fa-tower-broadcast"></i> Offline</button>
             </div>
@@ -523,6 +524,8 @@
                         <li><i class="fa-solid fa-file-export" style="color:#06b6d4; width:20px;"></i> <strong>Esporta Singolo Set:</strong> Con immagini, tag e ordinamento inclusi.</li>
                         <li><i class="fa-solid fa-box-archive" style="color:#06b6d4; width:20px;"></i> <strong>Backup Completo:</strong> Tutti i set, pazienti, tag images, template, nomi sessione, layout attivit&agrave; (icone, colori, emoji).</li>
                         <li><i class="fa-solid fa-arrows-rotate" style="color:#06b6d4; width:20px;"></i> <strong>Importazione:</strong> <b>Non distruttiva</b> &ndash; set e pazienti aggiornati, dati locali mantenuti, nessuna cancellazione.</li>
+                        <li><i class="fa-solid fa-share-from-square" style="color:#fbbf24; width:20px;"></i> <strong>Quick Share:</strong> Condividi set, pazienti o backup completo via <b>Nearby Share / Quick Share / AirDrop</b>. Offline e velocissimo!<br>
+                            <span style="font-size:0.85em; opacity:0.8;">Seleziona &rarr; Condividi &rarr; Scegli dispositivo vicino. Zero configurazione.</span></li>
                         <li><i class="fa-solid fa-wifi" style="color:#06b6d4; width:20px;"></i> <strong>Sync Diretto (P2P):</strong> Trasferisci via QR code tra dispositivi. Ogni set ha il bottone <i class="fa-solid fa-wifi"></i>.<br>
                             <span style="font-size:0.85em; opacity:0.8;">Invia &rarr; QR &rarr; Ricevi scansiona &rarr; Merge automatico.</span></li>
                         <li><i class="fa-solid fa-cloud" style="color:#06b6d4; width:20px;"></i> <strong>Firebase Sync:</strong> Sincronizzazione automatica dati pazienti tra dispositivi via Firebase Realtime Database.</li>
@@ -738,6 +741,75 @@
         </div>
     </div>
 
+    <!-- MODAL: QUICK SHARE (Nearby Share / Quick Share) -->
+    <div id="modal-quick-share" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:10700; justify-content:center; align-items:center;">
+        <div style="background:#1e1e2f; padding:25px; border-radius:20px; width:90%; max-width:480px; border:1px solid var(--glass-border); max-height:90vh; overflow-y:auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3 style="margin:0;"><i class="fa-solid fa-share-from-square"></i> Quick Share</h3>
+                <button class="btn-icon" onclick="closeQuickShare()" style="width:32px; height:32px;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <!-- Hub: choose what to share -->
+            <div id="qs-hub">
+                <p style="color:#aaa; font-size:0.85rem; margin-bottom:15px;">Condividi istantaneamente via <b>Nearby Share</b>, <b>Quick Share</b>, AirDrop o Bluetooth. Funziona <b>offline</b> ed &egrave; velocissimo.</p>
+                <div style="display:flex; gap:10px; flex-direction:column;">
+                    <button class="btn btn-primary" onclick="quickSharePatientSelect()" style="padding:15px; font-size:1rem; text-align:left; display:flex; align-items:center; gap:12px;">
+                        <i class="fa-solid fa-user-group" style="font-size:1.3rem; width:28px; text-align:center;"></i>
+                        <div>
+                            Pazienti
+                            <span style="display:block; font-size:0.75rem; opacity:0.7; margin-top:2px;">Dati, sessioni e report AI</span>
+                        </div>
+                    </button>
+                    <button class="btn btn-primary" onclick="quickShareSetSelect()" style="padding:15px; font-size:1rem; text-align:left; display:flex; align-items:center; gap:12px; background:linear-gradient(135deg, #4f46e5, #6366f1);">
+                        <i class="fa-solid fa-folder-tree" style="font-size:1.3rem; width:28px; text-align:center;"></i>
+                        <div>
+                            Set
+                            <span style="display:block; font-size:0.75rem; opacity:0.7; margin-top:2px;">Set con immagini, audio e tag</span>
+                        </div>
+                    </button>
+                    <button class="btn btn-ghost" onclick="quickShareFullBackup()" style="padding:15px; font-size:1rem; text-align:left; display:flex; align-items:center; gap:12px; border-color:rgba(16,185,129,0.3);">
+                        <i class="fa-solid fa-box-archive" style="font-size:1.3rem; width:28px; text-align:center; color:var(--success-color);"></i>
+                        <div>
+                            <span style="color:var(--success-color);">Backup Completo</span>
+                            <span style="display:block; font-size:0.75rem; opacity:0.7; margin-top:2px;">Tutto: set, pazienti, configurazione</span>
+                        </div>
+                    </button>
+                </div>
+                <div style="margin-top:15px; padding:12px; border-radius:10px; background:rgba(99,102,241,0.08); border:1px solid rgba(99,102,241,0.15);">
+                    <p style="margin:0; font-size:0.8rem; color:#aaa;">
+                        <i class="fa-solid fa-bolt" style="color:#facc15;"></i> <b>Come funziona:</b> Seleziona cosa condividere &rarr; si apre il pannello di condivisione del sistema &rarr; scegli il dispositivo vicino. Nessun internet necessario!
+                    </p>
+                </div>
+            </div>
+
+            <!-- Selection panel (patients or sets) -->
+            <div id="qs-select-panel" style="display:none;">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+                    <button class="btn-icon" onclick="document.getElementById('qs-select-panel').style.display='none'; document.getElementById('qs-hub').style.display='';" style="width:32px; height:32px;"><i class="fa-solid fa-arrow-left"></i></button>
+                    <span style="font-weight:600;">Seleziona <span id="qs-select-title">elementi</span></span>
+                </div>
+                <div id="qs-select-list" style="max-height:50vh; overflow-y:auto; margin-bottom:12px;"></div>
+                <button class="btn btn-primary" id="qs-select-action" style="width:100%; padding:12px; font-size:0.95rem;">
+                    <i class="fa-solid fa-share-from-square"></i> Condividi Selezionati
+                </button>
+            </div>
+
+            <!-- Progress panel -->
+            <div id="qs-progress-panel" style="display:none; text-align:center; padding:20px 0;">
+                <div id="qs-progress-icon" style="margin-bottom:15px;">
+                    <i class="fa-solid fa-share-from-square" style="font-size:3rem; color:var(--accent-color); animation:pulse 1.5s infinite;"></i>
+                </div>
+                <div style="height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden; margin-bottom:10px;">
+                    <div id="qs-progress-bar" style="width:0%; height:100%; background:var(--accent-color); border-radius:4px; transition:width 0.3s;"></div>
+                </div>
+                <p id="qs-progress-text" style="color:#aaa; font-size:0.9rem;"></p>
+                <button class="btn btn-ghost" onclick="document.getElementById('qs-progress-panel').style.display='none'; document.getElementById('qs-hub').style.display='';" style="margin-top:15px; padding:8px 20px;">
+                    <i class="fa-solid fa-arrow-left"></i> Indietro
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL: ACTIVITY LAYOUT MANAGER -->
     <div id="modal-activity-layout" class="modal-fs">
         <div class="modal-header">
@@ -782,6 +854,7 @@
     <script src="js/backup.js"></script>
     <script src="js/p2p-sync.js"></script>
     <script src="js/offline-share.js"></script>
+    <script src="js/quick-share.js"></script>
     <script src="js/gemini.js"></script>
     <script src="js/pollinations.js"></script>
     <script src="js/app.js"></script>
