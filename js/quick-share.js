@@ -14,14 +14,37 @@ function isQuickShareAvailable() {
 // --- Core share function ---
 async function quickShareFile(blob, filename, title) {
     const file = new File([blob], filename, { type: blob.type || 'application/octet-stream' });
+
+    // If Web Share API with file support is not available, fall back to download
+    if (!navigator.share || !navigator.canShare) {
+        _quickShareFallbackDownload(blob, filename);
+        return;
+    }
+
     if (!navigator.canShare({ files: [file] })) {
         // Retry with generic MIME type
         const genericBlob = new Blob([blob], { type: 'application/octet-stream' });
         const genericFile = new File([genericBlob], filename, { type: 'application/octet-stream' });
-        await navigator.share({ title, files: [genericFile] });
+        if (navigator.canShare({ files: [genericFile] })) {
+            await navigator.share({ title, files: [genericFile] });
+            return;
+        }
+        // canShare still fails, fall back to download
+        _quickShareFallbackDownload(blob, filename);
         return;
     }
     await navigator.share({ title, files: [file] });
+}
+
+// --- Fallback: classic download for unsupported browsers ---
+function _quickShareFallbackDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
 }
 
 // --- Open Quick Share Hub ---
