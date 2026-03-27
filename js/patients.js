@@ -443,6 +443,9 @@ window.loadPatientData = (pid) => {
                 <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(16,185,129,0.3); color:var(--success-color);" onclick="exportPatientExcel('${pid}')">
                     <i class="fa-solid fa-file-excel"></i>
                 </button>
+                <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(6,182,212,0.3); color:#06b6d4;" onclick="offlineSharePatient('${pid}')" title="Condividi Offline">
+                    <i class="fa-solid fa-tower-broadcast"></i>
+                </button>
                 <button class="btn btn-danger" style="padding:6px 12px; font-size:0.85rem;" onclick="deletePatient('${pid}')">
                     <i class="fa-solid fa-user-minus"></i>
                 </button>
@@ -952,15 +955,27 @@ window.toggleDaySessionDetail = (header, patientId, sessionIdx, activityKeyEncod
                 html += `</div></div>`;
             }
 
-            // Session note (collapsible)
-            if (s.note) {
-                html += `<div style="margin-top:8px; margin-bottom:8px;">
-                    <div onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'; this.querySelector('i').style.transform = this.nextElementSibling.style.display === 'none' ? '' : 'rotate(90deg)'" style="cursor:pointer; display:flex; align-items:center; gap:6px; font-size:0.75rem; color:#eab308; font-weight:bold;">
-                        <i class="fa-solid fa-chevron-right" style="font-size:0.6rem; transition:transform 0.2s;"></i>
-                        <i class="fa-solid fa-sticky-note"></i> Nota
-                    </div>
-                    <div style="display:none; margin-top:4px; padding:8px; border-radius:8px; background:rgba(234,179,8,0.08); border:1px solid rgba(234,179,8,0.15); font-size:0.8rem; line-height:1.4; color:#ddd;">${_renderNoteMarkup(s.note)}</div>
-                </div>`;
+            // Session note (collapsible + editable)
+            {
+                const _escapedDate = (s.date || '').replace(/'/g, "\\'");
+                const _escapedMode = (s.mode || '').replace(/'/g, "\\'");
+                const _escapedSetName = (s.setName || '').replace(/'/g, "\\'");
+                if (s.note) {
+                    html += `<div style="margin-top:8px; margin-bottom:8px;">
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <div onclick="this.parentElement.nextElementSibling.style.display = this.parentElement.nextElementSibling.style.display === 'none' ? 'block' : 'none'; this.querySelector('i.fa-chevron-right').style.transform = this.parentElement.nextElementSibling.style.display === 'none' ? '' : 'rotate(90deg)'" style="cursor:pointer; display:flex; align-items:center; gap:6px; font-size:0.75rem; color:#eab308; font-weight:bold; flex:1;">
+                                <i class="fa-solid fa-chevron-right" style="font-size:0.6rem; transition:transform 0.2s;"></i>
+                                <i class="fa-solid fa-sticky-note"></i> Nota
+                            </div>
+                            <button class="btn-icon" style="width:20px; height:20px; font-size:0.55rem; color:#eab308; border-color:rgba(234,179,8,0.3);" onclick="openSessionNoteEditor('${patientId}', '${_escapedDate}', '${_escapedMode}', '${_escapedSetName}')" title="Modifica nota"><i class="fa-solid fa-pen"></i></button>
+                        </div>
+                        <div style="display:none; margin-top:4px; padding:8px; border-radius:8px; background:rgba(234,179,8,0.08); border:1px solid rgba(234,179,8,0.15); font-size:0.8rem; line-height:1.4; color:#ddd; cursor:pointer;" onclick="openSessionNoteEditor('${patientId}', '${_escapedDate}', '${_escapedMode}', '${_escapedSetName}')">${_renderNoteMarkup(s.note)}</div>
+                    </div>`;
+                } else {
+                    html += `<div style="margin-top:6px; margin-bottom:6px;">
+                        <button class="btn-icon" style="height:22px; font-size:0.65rem; color:#eab308; border-color:rgba(234,179,8,0.2); padding:2px 8px; gap:4px; display:inline-flex; align-items:center;" onclick="openSessionNoteEditor('${patientId}', '${_escapedDate}', '${_escapedMode}', '${_escapedSetName}')" title="Aggiungi nota"><i class="fa-solid fa-plus" style="font-size:0.5rem;"></i> <i class="fa-solid fa-sticky-note" style="font-size:0.55rem;"></i> Nota</button>
+                    </div>`;
+                }
             }
 
             // Activity chart (full history for this activity)
@@ -1262,11 +1277,17 @@ function renderActivitiesTab(patient, sortBy) {
                 : '';
             const noteIcon = s.note ? ' <i class="fa-solid fa-sticky-note" style="color:#eab308; font-size:0.55rem;" title="Nota"></i>' : '';
             const colSpan = isTD ? 5 : 4;
+            const _escDate = (s.date || '').replace(/'/g, "\\'");
+            const _escMode = (s.mode || '').replace(/'/g, "\\'");
+            const _escSet = (s.setName || '').replace(/'/g, "\\'");
             const noteRow = s.note ? `
                         <tr class="note-details-row" style="display:none;">
                             <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(234,179,8,0.06);">
-                                <div style="font-size:0.75rem; color:#eab308; margin-bottom:3px; font-weight:bold;"><i class="fa-solid fa-sticky-note"></i> Nota</div>
-                                <div style="font-size:0.8rem; line-height:1.4; color:#ddd;">${_renderNoteMarkup(s.note)}</div>
+                                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:3px;">
+                                    <div style="font-size:0.75rem; color:#eab308; font-weight:bold;"><i class="fa-solid fa-sticky-note"></i> Nota</div>
+                                    <button class="btn-icon" style="width:20px; height:20px; font-size:0.55rem; color:#eab308; border-color:rgba(234,179,8,0.3);" onclick="openSessionNoteEditor('${patient.id}', '${_escDate}', '${_escMode}', '${_escSet}')" title="Modifica nota"><i class="fa-solid fa-pen"></i></button>
+                                </div>
+                                <div style="font-size:0.8rem; line-height:1.4; color:#ddd; cursor:pointer;" onclick="openSessionNoteEditor('${patient.id}', '${_escDate}', '${_escMode}', '${_escSet}')">${_renderNoteMarkup(s.note)}</div>
                             </td>
                         </tr>` : '';
             return `
@@ -1707,6 +1728,88 @@ window.deleteDailyNote = async (patientId, dateKey) => {
     loadPatientData(patientId);
 };
 
+// Edit a session (activity) note
+window.openSessionNoteEditor = (patientId, sessionDate, sessionMode, sessionSetName) => {
+    const p = state.patients.find(x => x.id === patientId);
+    if (!p) return;
+
+    // Find session by date + mode + setName
+    const sessionIdx = p.history.findIndex(h =>
+        h.date === sessionDate && h.mode === sessionMode && h.setName === sessionSetName
+    );
+    if (sessionIdx === -1) return;
+    const s = p.history[sessionIdx];
+
+    const existingNote = s.note || '';
+
+    const existing = document.getElementById('daily-note-editor-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'daily-note-editor-overlay';
+    overlay.className = 'daily-note-editor-overlay';
+
+    const modeName = MODES_CONFIG[s.mode] || s.mode;
+
+    overlay.innerHTML = `
+        <div class="daily-note-editor">
+            <div class="daily-note-editor-header">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <i class="fa-solid fa-sticky-note" style="color:#eab308; font-size:1.1rem;"></i>
+                    <h3 style="margin:0; font-size:1rem;">Nota Attività</h3>
+                </div>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:0.8rem; color:var(--text-secondary);">${modeName} - ${s.setName}</span>
+                    <button onclick="document.getElementById('daily-note-editor-overlay').remove()" style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:1.2rem;"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+            </div>
+            <div class="daily-note-toolbar">
+                <button onclick="_insertMarkup('**','**')" title="Grassetto"><i class="fa-solid fa-bold"></i></button>
+                <button onclick="_insertMarkup('*','*')" title="Corsivo"><i class="fa-solid fa-italic"></i></button>
+                <button onclick="_insertMarkup('~~','~~')" title="Barrato"><i class="fa-solid fa-strikethrough"></i></button>
+                <span style="width:1px; background:rgba(255,255,255,0.1); margin:0 4px;"></span>
+                <button onclick="_insertMarkup('- ','')" title="Lista puntata"><i class="fa-solid fa-list-ul"></i></button>
+                <button onclick="_insertMarkup('1. ','')" title="Lista numerata"><i class="fa-solid fa-list-ol"></i></button>
+            </div>
+            <textarea id="daily-note-textarea" placeholder="Scrivi la nota per questa attività...">${existingNote}</textarea>
+            <div class="daily-note-preview-toggle" style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px;">
+                <button onclick="_toggleNotePreview()" class="btn btn-ghost" style="padding:4px 12px; font-size:0.8rem;"><i class="fa-solid fa-eye"></i> Anteprima</button>
+                <div style="display:flex; gap:8px;">
+                    <button onclick="document.getElementById('daily-note-editor-overlay').remove()" class="btn btn-ghost" style="padding:6px 16px; font-size:0.85rem;">Annulla</button>
+                    <button onclick="_saveSessionNoteFromEditor('${patientId}', ${sessionIdx})" class="btn btn-primary" style="padding:6px 16px; font-size:0.85rem;"><i class="fa-solid fa-floppy-disk"></i> Salva Nota</button>
+                </div>
+            </div>
+            <div id="daily-note-preview" style="display:none; padding:12px 16px; border-top:1px solid rgba(255,255,255,0.05); max-height:200px; overflow-y:auto; font-size:0.85rem; line-height:1.5; color:#ddd;"></div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    document.getElementById('daily-note-textarea').focus();
+};
+
+// Save session note from editor
+window._saveSessionNoteFromEditor = async (patientId, sessionIdx) => {
+    const p = state.patients.find(x => x.id === patientId);
+    if (!p || !p.history[sessionIdx]) return;
+    const ta = document.getElementById('daily-note-textarea');
+    if (!ta) return;
+
+    const text = ta.value.trim();
+    if (text) {
+        p.history[sessionIdx].note = text;
+    } else {
+        delete p.history[sessionIdx].note;
+    }
+
+    await DB.savePatient(p);
+    document.getElementById('daily-note-editor-overlay').remove();
+
+    if (state.activePatientId === patientId) {
+        loadPatientData(patientId);
+    }
+};
+
 // ============================================================
 // TAB 4: DIARIO CLINICO - Chronological diary view
 // ============================================================
@@ -1772,7 +1875,7 @@ function renderDiaryTab(patient) {
                     <span style="display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:5px; background:rgba(234,179,8,0.15);"><i class="fa-solid fa-book-medical" style="color:#eab308; font-size:0.6rem;"></i></span>
                     <span style="font-size:0.75rem; color:#eab308; font-weight:600;">Nota della Giornata</span>
                 </div>
-                <div class="diary-note-text" style="font-size:0.85rem; line-height:1.6; color:#ddd; padding-left:26px;">${_renderNoteMarkup(dailyNotes[dk])}</div>
+                <div class="diary-note-text" style="font-size:0.85rem; line-height:1.6; color:#ddd; padding-left:26px; cursor:pointer;" onclick="openDailyNoteEditor('${patient.id}', '${dk}')" title="Clicca per modificare">${_renderNoteMarkup(dailyNotes[dk])}</div>
             </div>`;
         }
 
@@ -1782,6 +1885,9 @@ function renderDiaryTab(patient) {
                 const modeName = MODES_CONFIG[s.mode] || s.mode;
                 const modeIcon = (typeof getModeIcon === 'function') ? getModeIcon(s.mode) : 'fa-puzzle-piece';
                 const timeStr = new Date(s.date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+                const escapedDate = (s.date || '').replace(/'/g, "\\'");
+                const escapedMode = (s.mode || '').replace(/'/g, "\\'");
+                const escapedSetName = (s.setName || '').replace(/'/g, "\\'");
                 html += `
                 <div style="padding:10px 16px; border-bottom:1px solid rgba(255,255,255,0.03);">
                     <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px; flex-wrap:wrap;">
@@ -1790,8 +1896,9 @@ function renderDiaryTab(patient) {
                         <span style="font-size:0.75rem; color:var(--text-secondary);">- ${s.setName}</span>
                         <span style="font-size:0.65rem; color:#888;">${timeStr}</span>
                         <span style="font-size:0.7rem; font-weight:bold; color:${s.percentage >= 90 ? 'var(--success-color)' : 'white'};">${s.percentage}%</span>
+                        <button class="btn-icon" style="width:22px; height:22px; font-size:0.6rem; color:#eab308; border-color:rgba(234,179,8,0.3); margin-left:auto;" onclick="openSessionNoteEditor('${patient.id}', '${escapedDate}', '${escapedMode}', '${escapedSetName}')" title="Modifica nota"><i class="fa-solid fa-pen"></i></button>
                     </div>
-                    <div style="font-size:0.8rem; line-height:1.5; color:#ccc; padding-left:26px; border-left:2px solid rgba(99,102,241,0.2);">${_renderNoteMarkup(s.note)}</div>
+                    <div style="font-size:0.8rem; line-height:1.5; color:#ccc; padding-left:26px; border-left:2px solid rgba(99,102,241,0.2); cursor:pointer;" onclick="openSessionNoteEditor('${patient.id}', '${escapedDate}', '${escapedMode}', '${escapedSetName}')">${_renderNoteMarkup(s.note)}</div>
                 </div>`;
             });
         }

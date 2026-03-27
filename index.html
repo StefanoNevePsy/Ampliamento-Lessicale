@@ -250,6 +250,7 @@
                 <button class="btn btn-ghost" onclick="document.getElementById('file-upload').click()"><i class="fa-solid fa-file-arrow-up"></i> Importa</button>
                 <input type="file" id="file-upload" class="hidden" accept=".json,.zip" onchange="importSets(this)">
                 <button class="btn btn-ghost" onclick="openP2PSync()" style="border-color:rgba(99,102,241,0.3); color:var(--accent-color);"><i class="fa-solid fa-wifi"></i> Sync Diretto</button>
+                <button class="btn btn-ghost" onclick="openOfflineShare()" style="border-color:rgba(16,185,129,0.3); color:var(--success-color);"><i class="fa-solid fa-tower-broadcast"></i> Offline</button>
             </div>
             <div id="lib-sort-bar" class="lib-sort-bar"></div>
             <div id="lib-list"></div>
@@ -662,6 +663,81 @@
         </div>
     </div>
 
+    <!-- MODAL: OFFLINE SHARE (no internet needed) -->
+    <div id="modal-offline-share" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:10600; justify-content:center; align-items:center;">
+        <div style="background:#1e1e2f; padding:25px; border-radius:20px; width:90%; max-width:480px; border:1px solid var(--glass-border); max-height:90vh; overflow-y:auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3 style="margin:0;"><i class="fa-solid fa-tower-broadcast"></i> Condivisione Offline</h3>
+                <button class="btn-icon" onclick="closeOfflineShare()" style="width:32px; height:32px;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <!-- Role selection -->
+            <div id="offline-role-select">
+                <p style="color:#aaa; font-size:0.85rem; margin-bottom:15px;">Trasferisci i dati di un paziente tra dispositivi <b>senza internet</b>. Funziona via QR code animato o condivisione file locale.</p>
+                <div style="display:flex; gap:10px; flex-direction:column;">
+                    <button class="btn btn-primary" onclick="offlineShareSendSelect()" style="padding:15px; font-size:1rem;">
+                        <i class="fa-solid fa-upload"></i> Invia Paziente
+                        <span style="display:block; font-size:0.75rem; opacity:0.7; margin-top:4px;">Condividi via QR o file</span>
+                    </button>
+                    <button class="btn btn-ghost" onclick="offlineShareReceive()" style="padding:15px; font-size:1rem;">
+                        <i class="fa-solid fa-download"></i> Ricevi Paziente
+                        <span style="display:block; font-size:0.75rem; opacity:0.7; margin-top:4px;">Scansiona QR o importa file</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Send: patient selection -->
+            <div id="offline-send-select" style="display:none;">
+                <div id="offline-patient-list" style="margin-bottom:12px;"></div>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-ghost" onclick="offlineShareBackToRole()" style="padding:10px;">
+                        <i class="fa-solid fa-arrow-left"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Send: QR display -->
+            <div id="offline-send-qr" style="display:none; text-align:center;">
+                <div id="offline-qr-container" style="margin:15px auto; background:white; padding:10px; border-radius:12px; display:inline-block;"></div>
+                <div id="offline-qr-progress" style="margin:10px 0; font-size:0.8rem; color:#aaa;"></div>
+                <p id="offline-send-status" style="color:#aaa; font-size:0.85rem;"></p>
+                <div style="display:flex; gap:8px; margin-top:12px; justify-content:center;">
+                    <button class="btn btn-ghost" onclick="offlineShareBackToRole()" style="padding:8px 16px; font-size:0.85rem;">
+                        <i class="fa-solid fa-arrow-left"></i> Indietro
+                    </button>
+                </div>
+            </div>
+
+            <!-- Receive panel -->
+            <div id="offline-receive-panel" style="display:none;">
+                <p id="offline-receive-status" style="color:#aaa; font-size:0.85rem; margin-bottom:12px;">Scegli come ricevere i dati del paziente.</p>
+                <div style="display:flex; gap:8px; margin-bottom:15px; flex-direction:column;">
+                    <button class="btn btn-primary" onclick="offlineStartQRScan()" style="padding:12px;">
+                        <i class="fa-solid fa-qrcode"></i> Scansiona QR Animato
+                    </button>
+                    <label class="btn btn-ghost" style="padding:12px; cursor:pointer; text-align:center;">
+                        <i class="fa-solid fa-file-import"></i> Importa File .tashare
+                        <input type="file" accept=".tashare" onchange="offlineImportFile(this)" style="display:none;">
+                    </label>
+                </div>
+                <div id="offline-qr-scan-area" style="display:none; margin:10px 0; border-radius:12px; overflow:hidden;">
+                    <div id="offline-qr-reader" style="width:100%;"></div>
+                </div>
+                <div id="offline-receive-progress" style="display:none; margin:10px 0;">
+                    <div style="height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden;">
+                        <div id="offline-receive-bar" style="width:0%; height:100%; background:var(--accent-color); border-radius:4px; transition:width 0.3s;"></div>
+                    </div>
+                    <p id="offline-receive-text" style="color:#aaa; font-size:0.8rem; margin-top:6px; text-align:center;"></p>
+                </div>
+                <div style="display:flex; gap:8px; margin-top:8px;">
+                    <button class="btn btn-ghost" onclick="offlineShareBackToRole()" style="padding:8px 16px; font-size:0.85rem;">
+                        <i class="fa-solid fa-arrow-left"></i> Indietro
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL: ACTIVITY LAYOUT MANAGER -->
     <div id="modal-activity-layout" class="modal-fs">
         <div class="modal-header">
@@ -705,6 +781,7 @@
     <script src="js/game-modes.js"></script>
     <script src="js/backup.js"></script>
     <script src="js/p2p-sync.js"></script>
+    <script src="js/offline-share.js"></script>
     <script src="js/gemini.js"></script>
     <script src="js/pollinations.js"></script>
     <script src="js/app.js"></script>
