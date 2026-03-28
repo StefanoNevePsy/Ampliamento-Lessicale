@@ -54,15 +54,11 @@ async function downloadFile(blob, filename, title) {
         const FS = window.Capacitor.Plugins.Filesystem;
         if (FS) {
             try {
-                // For ZIP files, write as base64
                 const isZip = filename.endsWith('.zip');
                 let writeData;
                 if (isZip) {
-                    const arrayBuffer = await blob.arrayBuffer();
-                    const bytes = new Uint8Array(arrayBuffer);
-                    let binary = '';
-                    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-                    writeData = { path: filename, data: btoa(binary), directory: 'CACHE' };
+                    const base64Data = await _blobToBase64(blob);
+                    writeData = { path: filename, data: base64Data, directory: 'CACHE' };
                 } else {
                     writeData = { path: filename, data: await blob.text(), directory: 'CACHE', encoding: 'utf8' };
                 }
@@ -98,6 +94,20 @@ async function downloadFile(blob, filename, title) {
             alert('Se il file non si \u00e8 scaricato, esegui:\nnpx cap sync\nper attivare il supporto download nativo.');
         }, 600);
     }
+}
+
+// --- Chunked base64 conversion (avoids OOM on large files) ---
+function _blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const dataUrl = reader.result;
+            const commaIdx = dataUrl.indexOf(',');
+            resolve(commaIdx >= 0 ? dataUrl.substring(commaIdx + 1) : dataUrl);
+        };
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+    });
 }
 
 // --- IMAGE HELPERS for ZIP ---
@@ -139,8 +149,12 @@ function binaryToDataUrl(uint8, ext) {
         'aac': 'audio/aac', 'audio': 'audio/mpeg'
     };
     const mime = mimeMap[ext] || 'application/octet-stream';
+    // Chunked conversion to avoid OOM on large files
+    const CHUNK = 8192;
     let binary = '';
-    for (let i = 0; i < uint8.length; i++) binary += String.fromCharCode(uint8[i]);
+    for (let i = 0; i < uint8.length; i += CHUNK) {
+        binary += String.fromCharCode.apply(null, uint8.subarray(i, Math.min(i + CHUNK, uint8.length)));
+    }
     return `data:${mime};base64,${btoa(binary)}`;
 }
 

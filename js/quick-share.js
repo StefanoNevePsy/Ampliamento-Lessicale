@@ -50,11 +50,8 @@ async function quickShareFile(blob, filename, title) {
         const FS = window.Capacitor.Plugins.Filesystem;
         if (FS) {
             try {
-                const arrayBuffer = await blob.arrayBuffer();
-                const bytes = new Uint8Array(arrayBuffer);
-                let binary = '';
-                for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-                const written = await FS.writeFile({ path: filename, data: btoa(binary), directory: 'CACHE' });
+                const base64Data = await _blobToBase64Chunked(blob);
+                const written = await FS.writeFile({ path: filename, data: base64Data, directory: 'CACHE' });
 
                 const SharePlugin = window.Capacitor.Plugins.Share;
                 if (SharePlugin) {
@@ -382,6 +379,21 @@ async function _executeQuickShareSets() {
 window.qsToggleAll = (masterCb, selector) => {
     document.querySelectorAll(selector).forEach(cb => cb.checked = masterCb.checked);
 };
+
+// --- Chunked base64 conversion (avoids OOM on large files) ---
+function _blobToBase64Chunked(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            // result is "data:<mime>;base64,<data>" — strip the prefix
+            const dataUrl = reader.result;
+            const commaIdx = dataUrl.indexOf(',');
+            resolve(commaIdx >= 0 ? dataUrl.substring(commaIdx + 1) : dataUrl);
+        };
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+    });
+}
 
 // --- Progress helper ---
 function _qsProgress(text, pct, success, error) {

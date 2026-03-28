@@ -99,34 +99,40 @@ if (manifest.includes('android:configChanges=')) {
 // --- Add intent-filter for receiving shared files (.tashare, .zip) ---
 // This allows Nearby Share / Quick Share to open files directly in the app
 const intentFilterBlock = `
+                <!-- VIEW: file:// URIs with .tashare extension -->
                 <intent-filter>
                     <action android:name="android.intent.action.VIEW" />
                     <category android:name="android.intent.category.DEFAULT" />
                     <category android:name="android.intent.category.BROWSABLE" />
-                    <data android:scheme="content" />
                     <data android:scheme="file" />
-                    <data android:mimeType="application/octet-stream" />
+                    <data android:host="*" />
+                    <data android:mimeType="*/*" />
                     <data android:pathPattern=".*\\.tashare" />
-                    <data android:host="*" />
+                </intent-filter>
+                <!-- VIEW: content:// URIs (Quick Share sends content URIs where pathPattern cannot match,
+                     so we match on MIME types the OS assigns to our files) -->
+                <intent-filter>
+                    <action android:name="android.intent.action.VIEW" />
+                    <category android:name="android.intent.category.DEFAULT" />
+                    <category android:name="android.intent.category.BROWSABLE" />
+                    <data android:scheme="content" />
+                    <data android:mimeType="application/octet-stream" />
                 </intent-filter>
                 <intent-filter>
                     <action android:name="android.intent.action.VIEW" />
                     <category android:name="android.intent.category.DEFAULT" />
                     <category android:name="android.intent.category.BROWSABLE" />
                     <data android:scheme="content" />
-                    <data android:scheme="file" />
                     <data android:mimeType="application/zip" />
-                    <data android:host="*" />
                 </intent-filter>
                 <intent-filter>
                     <action android:name="android.intent.action.VIEW" />
                     <category android:name="android.intent.category.DEFAULT" />
                     <category android:name="android.intent.category.BROWSABLE" />
                     <data android:scheme="content" />
-                    <data android:scheme="file" />
                     <data android:mimeType="application/x-zip-compressed" />
-                    <data android:host="*" />
                 </intent-filter>
+                <!-- SEND: Nearby Share / Quick Share file receiving -->
                 <intent-filter>
                     <action android:name="android.intent.action.SEND" />
                     <category android:name="android.intent.category.DEFAULT" />
@@ -141,6 +147,11 @@ const intentFilterBlock = `
                     <action android:name="android.intent.action.SEND" />
                     <category android:name="android.intent.category.DEFAULT" />
                     <data android:mimeType="application/x-zip-compressed" />
+                </intent-filter>
+                <intent-filter>
+                    <action android:name="android.intent.action.SEND" />
+                    <category android:name="android.intent.category.DEFAULT" />
+                    <data android:mimeType="*/*" />
                 </intent-filter>
 `;
 

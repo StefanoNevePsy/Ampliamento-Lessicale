@@ -92,28 +92,35 @@ function _setupSharedFileReceiver() {
     // --- Method 2: SendIntent plugin (SEND intents from Nearby Share) ---
     const SendIntent = window.Capacitor.Plugins.SendIntent;
     if (SendIntent) {
-        // Check if launched with a SEND intent
-        SendIntent.checkSendIntentReceived().then(async (result) => {
-            if (result && result.url) {
-                console.log('[SharedFile] SendIntent received:', result.url, result.type);
-                await _handleReceivedFileUrl(result.url);
+        const _processSendIntent = async (result) => {
+            if (!result) return;
+            // SendIntent may provide url directly or inside result.extras
+            const url = result.url || (result.extras && result.extras['android.intent.extra.STREAM']);
+            const title = result.title || '';
+            if (url) {
+                console.log('[SharedFile] SendIntent received:', url, result.type, 'title:', title);
+                // Pass title as hint for file type detection (may contain original filename)
+                await _handleReceivedFileUrl(url, title);
             }
-        }).catch(e => console.warn('[SharedFile] SendIntent check error:', e));
+        };
+
+        // Check if launched with a SEND intent
+        SendIntent.checkSendIntentReceived().then(_processSendIntent)
+            .catch(e => console.warn('[SharedFile] SendIntent check error:', e));
 
         // Listen for subsequent SEND intents while app is running
-        window.Capacitor.Plugins.App && window.Capacitor.Plugins.App.addListener('resume', async () => {
-            try {
-                const result = await SendIntent.checkSendIntentReceived();
-                if (result && result.url) {
-                    console.log('[SharedFile] SendIntent on resume:', result.url);
-                    await _handleReceivedFileUrl(result.url);
-                }
-            } catch (e) { /* no intent */ }
-        });
+        if (App) {
+            App.addListener('resume', async () => {
+                try {
+                    const result = await SendIntent.checkSendIntentReceived();
+                    await _processSendIntent(result);
+                } catch (e) { /* no intent */ }
+            });
+        }
     }
 }
 
-async function _handleReceivedFileUrl(url) {
+async function _handleReceivedFileUrl(url, filenameHint) {
     try {
         let fileData;
 
@@ -134,9 +141,10 @@ async function _handleReceivedFileUrl(url) {
             fileData = new Uint8Array(buffer);
         }
 
-        // Detect file type and import
-        const isTashare = url.toLowerCase().includes('.tashare');
-        const isZip = url.toLowerCase().includes('.zip') || _isZipSignature(fileData);
+        // Detect file type from URL, filename hint (from SendIntent title), or file signature
+        const combined = (url + '|' + (filenameHint || '')).toLowerCase();
+        const isTashare = combined.includes('.tashare');
+        const isZip = combined.includes('.zip') || _isZipSignature(fileData);
 
         if (isTashare) {
             await _importSharedTashare(fileData);
@@ -150,12 +158,20 @@ async function _handleReceivedFileUrl(url) {
             try {
                 await _importSharedTashare(fileData);
             } catch {
-                // Try as JSON
-                const text = new TextDecoder().decode(fileData);
-                const blob = new Blob([text], { type: 'application/json' });
-                const file = new File([blob], 'received.json', { type: 'application/json' });
-                await importFromJSON(file);
-                _showImportToast('File importato con successo!');
+                // Try as ZIP by signature (some providers don't include extension)
+                if (_isZipSignature(fileData)) {
+                    const blob = new Blob([fileData], { type: 'application/zip' });
+                    const file = new File([blob], 'received.zip', { type: 'application/zip' });
+                    await importFromZip(file);
+                    _showImportToast('File ZIP importato con successo!');
+                } else {
+                    // Try as JSON
+                    const text = new TextDecoder().decode(fileData);
+                    const blob = new Blob([text], { type: 'application/json' });
+                    const file = new File([blob], 'received.json', { type: 'application/json' });
+                    await importFromJSON(file);
+                    _showImportToast('File importato con successo!');
+                }
             }
         }
     } catch (err) {
