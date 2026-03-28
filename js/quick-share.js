@@ -13,27 +13,61 @@ function isQuickShareAvailable() {
 
 // --- Core share function ---
 async function quickShareFile(blob, filename, title) {
-    const file = new File([blob], filename, { type: blob.type || 'application/octet-stream' });
+    const isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 
-    // If Web Share API with file support is not available, fall back to download
-    if (!navigator.share || !navigator.canShare) {
-        _quickShareFallbackDownload(blob, filename);
-        return;
-    }
-
-    if (!navigator.canShare({ files: [file] })) {
-        // Retry with generic MIME type
-        const genericBlob = new Blob([blob], { type: 'application/octet-stream' });
-        const genericFile = new File([genericBlob], filename, { type: 'application/octet-stream' });
-        if (navigator.canShare({ files: [genericFile] })) {
+    // Method 1: Web Share API with file support
+    if (navigator.share) {
+        try {
+            const file = new File([blob], filename, { type: blob.type || 'application/octet-stream' });
+            if (!navigator.canShare || navigator.canShare({ files: [file] })) {
+                await navigator.share({ title, files: [file] });
+                return;
+            }
+        } catch (e) {
+            if (e.name === 'AbortError') return;
+            console.warn('Quick Share: Web Share API failed:', e.message);
+        }
+        // Retry with generic MIME type (some Android versions reject custom types)
+        try {
+            const genericBlob = new Blob([blob], { type: 'application/octet-stream' });
+            const genericFile = new File([genericBlob], filename, { type: 'application/octet-stream' });
             await navigator.share({ title, files: [genericFile] });
             return;
+        } catch (e2) {
+            if (e2.name === 'AbortError') return;
+            console.warn('Quick Share: generic MIME fallback failed:', e2.message);
         }
-        // canShare still fails, fall back to download
-        _quickShareFallbackDownload(blob, filename);
-        return;
     }
-    await navigator.share({ title, files: [file] });
+
+    // Method 2: Capacitor Filesystem + Share plugins (Android native)
+    if (isNative && window.Capacitor.Plugins) {
+        const FS = window.Capacitor.Plugins.Filesystem;
+        if (FS) {
+            try {
+                const arrayBuffer = await blob.arrayBuffer();
+                const bytes = new Uint8Array(arrayBuffer);
+                let binary = '';
+                for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+                const written = await FS.writeFile({ path: filename, data: btoa(binary), directory: 'CACHE' });
+
+                const SharePlugin = window.Capacitor.Plugins.Share;
+                if (SharePlugin) {
+                    await SharePlugin.share({
+                        title: title || filename,
+                        url: written.uri,
+                        dialogTitle: title || 'Condividi'
+                    });
+                    return;
+                }
+            } catch (e) {
+                if (e.name === 'AbortError') return;
+                console.warn('Quick Share: Capacitor share fallback failed:', e);
+            }
+        }
+    }
+
+    // Method 3: <a> download fallback (desktop browsers)
+    _quickShareFallbackDownload(blob, filename);
 }
 
 // --- Fallback: classic download for unsupported browsers ---
