@@ -4,7 +4,13 @@
 
 // --- Feature detection ---
 function isQuickShareAvailable() {
-    if (!navigator.share || !navigator.canShare) return false;
+    // Capacitor native: always available via Filesystem + Share plugins
+    if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
+        return !!(window.Capacitor.Plugins && window.Capacitor.Plugins.Share);
+    }
+    // Web: check Web Share API with file support
+    if (!navigator.share) return false;
+    if (!navigator.canShare) return true; // canShare may not exist but share may still work
     try {
         const testFile = new File(['test'], 'test.txt', { type: 'text/plain' });
         return navigator.canShare({ files: [testFile] });
