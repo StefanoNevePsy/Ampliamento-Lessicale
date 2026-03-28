@@ -65,6 +65,7 @@
     "@capacitor/core": "^6.0.0",
     "@capacitor/filesystem": "^6.0.4",
     "@capacitor/share": "^6.0.4",
-    "@capacitor/status-bar": "^6.0.3"
+    "@capacitor/status-bar": "^6.0.3",
+    "send-intent": "^6.0.3"
   }
 }

@@ -61,8 +61,184 @@ window.onload = async () => {
         document.addEventListener('dragstart', (e) => e.preventDefault());
         document.addEventListener('keydown', handleShortcuts);
 
+        // --- Listen for shared files (Nearby Share / Quick Share) ---
+        _setupSharedFileReceiver();
+
     } catch (e) { console.error("Init Error", e); }
 };
+
+// === SHARED FILE RECEIVER ===
+// Handles files received via Android intent (Nearby Share, file manager, etc.)
+function _setupSharedFileReceiver() {
+    if (!window.Capacitor || !window.Capacitor.Plugins) return;
+
+    const App = window.Capacitor.Plugins.App;
+
+    // --- Method 1: App plugin (VIEW intents) ---
+    if (App) {
+        App.addListener('appUrlOpen', async (event) => {
+            console.log('[SharedFile] appUrlOpen:', event.url);
+            if (event.url) await _handleReceivedFileUrl(event.url);
+        });
+
+        App.getLaunchUrl().then(async (result) => {
+            if (result && result.url) {
+                console.log('[SharedFile] getLaunchUrl:', result.url);
+                await _handleReceivedFileUrl(result.url);
+            }
+        }).catch(e => console.warn('[SharedFile] getLaunchUrl error:', e));
+    }
+
+    // --- Method 2: SendIntent plugin (SEND intents from Nearby Share) ---
+    const SendIntent = window.Capacitor.Plugins.SendIntent;
+    if (SendIntent) {
+        // Check if launched with a SEND intent
+        SendIntent.checkSendIntentReceived().then(async (result) => {
+            if (result && result.url) {
+                console.log('[SharedFile] SendIntent received:', result.url, result.type);
+                await _handleReceivedFileUrl(result.url);
+            }
+        }).catch(e => console.warn('[SharedFile] SendIntent check error:', e));
+
+        // Listen for subsequent SEND intents while app is running
+        window.Capacitor.Plugins.App && window.Capacitor.Plugins.App.addListener('resume', async () => {
+            try {
+                const result = await SendIntent.checkSendIntentReceived();
+                if (result && result.url) {
+                    console.log('[SharedFile] SendIntent on resume:', result.url);
+                    await _handleReceivedFileUrl(result.url);
+                }
+            } catch (e) { /* no intent */ }
+        });
+    }
+}
+
+async function _handleReceivedFileUrl(url) {
+    try {
+        let fileData;
+
+        if (url.startsWith('content://') || url.startsWith('file://')) {
+            // Read file via Capacitor Filesystem
+            const FS = window.Capacitor.Plugins.Filesystem;
+            if (!FS) throw new Error('Filesystem plugin non disponibile.');
+
+            const result = await FS.readFile({ path: url });
+            const binary = atob(result.data);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            fileData = bytes;
+        } else {
+            // Try fetch for https:// or other schemes
+            const resp = await fetch(url);
+            const buffer = await resp.arrayBuffer();
+            fileData = new Uint8Array(buffer);
+        }
+
+        // Detect file type and import
+        const isTashare = url.toLowerCase().includes('.tashare');
+        const isZip = url.toLowerCase().includes('.zip') || _isZipSignature(fileData);
+
+        if (isTashare) {
+            await _importSharedTashare(fileData);
+        } else if (isZip) {
+            const blob = new Blob([fileData], { type: 'application/zip' });
+            const file = new File([blob], 'received.zip', { type: 'application/zip' });
+            await importFromZip(file);
+            _showImportToast('File ZIP importato con successo!');
+        } else {
+            // Try as tashare (compressed binary) - Nearby Share may strip the extension
+            try {
+                await _importSharedTashare(fileData);
+            } catch {
+                // Try as JSON
+                const text = new TextDecoder().decode(fileData);
+                const blob = new Blob([text], { type: 'application/json' });
+                const file = new File([blob], 'received.json', { type: 'application/json' });
+                await importFromJSON(file);
+                _showImportToast('File importato con successo!');
+            }
+        }
+    } catch (err) {
+        console.error('[SharedFile] Import error:', err);
+        alert('Errore importazione file ricevuto: ' + err.message);
+    }
+}
+
+async function _importSharedTashare(uint8) {
+    const jsonStr = pako.inflate(uint8, { to: 'string' });
+    const data = JSON.parse(jsonStr);
+
+    if (!data || data.type !== 'tashare' || !data.patient) {
+        throw new Error('Formato file .tashare non valido.');
+    }
+
+    const incoming = data.patient;
+    const localPatients = await DB.getAllPatients();
+    const existing = localPatients.find(p => p.id === incoming.id);
+
+    if (existing) {
+        const existingDates = new Set((existing.history || []).map(h => h.date));
+        let newSessions = 0;
+        (incoming.history || []).forEach(h => {
+            if (!existingDates.has(h.date)) {
+                if (!existing.history) existing.history = [];
+                existing.history.push(h);
+                newSessions++;
+            }
+        });
+        if (incoming.dailyNotes) {
+            if (!existing.dailyNotes) existing.dailyNotes = {};
+            Object.assign(existing.dailyNotes, incoming.dailyNotes);
+        }
+        if (!existing.photo && incoming.photo) existing.photo = incoming.photo;
+        await DB.savePatient(existing);
+        _showImportToast(`${incoming.name}: aggiornato (${newSessions} nuove sessioni)`);
+    } else {
+        const newPatient = {
+            id: incoming.id, name: incoming.name, category: incoming.category || '',
+            photo: incoming.photo || '', history: incoming.history || [],
+            dailyNotes: incoming.dailyNotes || {}
+        };
+        await DB.savePatient(newPatient);
+        _showImportToast(`${incoming.name}: aggiunto come nuovo paziente`);
+    }
+
+    // Import AI reports if included
+    if (data.reports && Array.isArray(data.reports)) {
+        try {
+            const key = 'ai_reports_' + incoming.id;
+            const existing = JSON.parse(localStorage.getItem(key) || '[]');
+            const existingTs = new Set(existing.map(r => r.timestamp || r.date));
+            const newReports = data.reports.filter(r => !existingTs.has(r.timestamp || r.date));
+            if (newReports.length > 0) {
+                localStorage.setItem(key, JSON.stringify([...existing, ...newReports]));
+            }
+        } catch (e) { /* ignore */ }
+    }
+
+    // Refresh state
+    state.patients = await DB.getAllPatients();
+    if (typeof populateGlobalPatientSelect === 'function') populateGlobalPatientSelect();
+}
+
+function _isZipSignature(data) {
+    return data.length >= 4 && data[0] === 0x50 && data[1] === 0x4B && data[2] === 0x03 && data[3] === 0x04;
+}
+
+function _showImportToast(message) {
+    // Create a toast notification
+    const toast = document.createElement('div');
+    toast.style.cssText = 'position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:var(--success-color, #22c55e); color:#fff; padding:12px 24px; border-radius:12px; font-size:0.9rem; font-weight:600; z-index:99999; box-shadow:0 4px 20px rgba(0,0,0,0.3); text-align:center; max-width:90vw; animation:slideUp 0.3s ease;';
+    toast.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${message}`;
+    document.body.appendChild(toast);
+
+    // Add animation
+    const style = document.createElement('style');
+    style.textContent = '@keyframes slideUp{from{opacity:0;transform:translateX(-50%) translateY(20px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}';
+    document.head.appendChild(style);
+
+    setTimeout(() => { toast.remove(); style.remove(); }, 4000);
+}
 
 // --- SET FILTERING & DROPDOWN ---
 const POOL_ENGINES = ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione'];
