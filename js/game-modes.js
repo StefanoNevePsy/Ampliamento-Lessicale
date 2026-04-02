@@ -205,8 +205,9 @@ function renderTact(items, stage) {
             </div>
         </div>`;
     };
-    window.nextTact = () => { state.tactIndex = (state.tactIndex + 1) % items.length; showCard(); };
+    window.nextTact = () => { state.tactIndex = (state.tactIndex + 1) % items.length; showCard(); window._startTDCountdown(); };
     showCard();
+    window._startTDCountdown();
 }
 
 // --- RAN ---
@@ -224,6 +225,7 @@ function renderRan(items, stage) {
             <div id="ran-content" style="flex:1; min-height:0;"></div>
         </div>`;
     updateRanContent();
+    window._startTDCountdown();
 }
 
 window.toggleRanMode = () => {
@@ -275,8 +277,8 @@ function updateRanContent() {
     }
 }
 
-window.nextRan = () => { if (state.ranIndex < state.ranDisplayItems.length - 1) { state.ranIndex++; updateRanContent(); } };
-window.prevRan = () => { if (state.ranIndex > 0) { state.ranIndex--; updateRanContent(); } };
+window.nextRan = () => { if (state.ranIndex < state.ranDisplayItems.length - 1) { state.ranIndex++; updateRanContent(); window._startTDCountdown(); } };
+window.prevRan = () => { if (state.ranIndex > 0) { state.ranIndex--; updateRanContent(); window._startTDCountdown(); } };
 
 // --- RAN INTENSIVO ---
 function renderRanIntensivo(items, stage) {
@@ -332,6 +334,7 @@ function renderRanIntensivo(items, stage) {
             </div>
         </div>
     </div>`;
+    window._startTDCountdown();
 }
 
 // Navigation for RAN Intensivo (manual prev/next without scoring)

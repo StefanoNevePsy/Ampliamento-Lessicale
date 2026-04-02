@@ -163,9 +163,17 @@
             <button id="btn-score-x" class="btn-score fail" onclick="recordResponse(false)" title="Risposta Errata (Tasto X)">
                 <i class="fa-solid fa-xmark"></i>
             </button>
-            <button id="btn-score-p" class="btn-score prompt" onclick="recordResponse('prompt')" title="Prompt (Tasto P)" style="display:none;">
-                P
-            </button>
+            <div id="td-timer-wrapper" style="position:relative; display:none;">
+                <svg id="td-ring" width="68" height="68" style="position:absolute; top:-4px; left:-4px; pointer-events:none; transform:rotate(-90deg);">
+                    <circle cx="34" cy="34" r="30" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="3"/>
+                    <circle id="td-ring-progress" cx="34" cy="34" r="30" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="3"
+                            stroke-dasharray="188.5" stroke-dashoffset="0" stroke-linecap="round"
+                            style="transition: stroke-dashoffset 0.1s linear;"/>
+                </svg>
+                <button id="btn-score-p" class="btn-score prompt" onclick="recordResponse('prompt')" title="Prompt (Tasto P)">
+                    P
+                </button>
+            </div>
             <div style="background:rgba(0,0,0,0.5); padding:5px 10px; border-radius:10px; color:white; font-size:0.8rem; display:flex; flex-direction:column; align-items:center; justify-content:center; min-width: 60px;">
                 <span id="score-display" style="font-weight:bold; font-size:1.1rem;">0/0</span>
                 <span style="font-size:0.6rem; opacity:0.8; letter-spacing:1px;">SCORE</span>
@@ -195,7 +203,7 @@
                 <button class="btn-float hidden" id="btn-toggle-labels" onclick="toggleLabelsVisibility()" title="Mostra/Nascondi Etichette">
                     <i class="fa-solid fa-font"></i>
                 </button>
-                <button class="btn-float" id="btn-pointer-pen" onclick="togglePointerPen()" title="Puntatore/Penna">
+                <button class="btn-float" id="btn-pointer-pen" onclick="togglePointerPen()" title="Puntatore/Penna (Tasto D)">
                     <i class="fa-solid fa-pen-fancy"></i>
                 </button>
                 <button class="btn-float" id="btn-global-lock" onclick="toggleGlobalScrollLock()" title="Blocca Schermo">
@@ -318,6 +326,9 @@
                 <button class="settings-tab" onclick="switchSettingsTab('theme')" data-tab="theme" style="padding:8px 14px; border:none; border-radius:8px 8px 0 0; background:transparent; color:var(--text-secondary); cursor:pointer; font-size:0.85rem; font-weight:600;">
                     <i class="fa-solid fa-palette"></i> Tema
                 </button>
+                <button class="settings-tab" onclick="switchSettingsTab('session')" data-tab="session" style="padding:8px 14px; border:none; border-radius:8px 8px 0 0; background:transparent; color:var(--text-secondary); cursor:pointer; font-size:0.85rem; font-weight:600;">
+                    <i class="fa-solid fa-sliders"></i> Sessione
+                </button>
             </div>
 
             <!-- TAB: API -->
@@ -362,6 +373,18 @@
             <div id="settings-tab-theme" class="settings-tab-content" style="display:none;">
                 <h4 style="margin:0 0 12px; color:#f59e0b;"><i class="fa-solid fa-palette"></i> Tema Applicazione</h4>
                 <div id="theme-picker" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px;"></div>
+            </div>
+
+            <!-- TAB: SESSION -->
+            <div id="settings-tab-session" class="settings-tab-content" style="display:none;">
+                <h4 style="margin:0 0 12px; color:var(--accent-color);"><i class="fa-solid fa-sliders"></i> Opzioni Sessione</h4>
+                <label style="display:flex; align-items:center; gap:10px; cursor:pointer; padding:10px; border-radius:10px; background:rgba(0,0,0,0.2); border:1px solid var(--glass-border);">
+                    <input type="checkbox" id="setting-td-timer" style="width:18px; height:18px; accent-color:var(--accent-color);">
+                    <div>
+                        <div style="font-size:0.9rem; font-weight:600;">Timer Time Delay</div>
+                        <div style="font-size:0.75rem; color:var(--text-secondary);">Mostra l'anello di countdown intorno al tasto Prompt (P) durante la modalità Time Delay</div>
+                    </div>
+                </label>
             </div>
 
             <div style="margin-top:20px; display:flex; gap:8px; justify-content:flex-end;">

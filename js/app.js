@@ -1218,6 +1218,7 @@ window.startGame = () => {
 // --- SCORING ---
 window.recordResponse = (result) => {
     if (!state.session.active) return;
+    window._stopTDCountdown();
     const mode = document.getElementById('mode-select').value;
     const engine = getModeEngine(mode);
 
@@ -1290,6 +1291,7 @@ window.recordResponse = (result) => {
             updateScoreUI();
             document.getElementById('btn-save-session').classList.remove('hidden');
             if (typeof showSessionNameInput === 'function') showSessionNameInput();
+            window._startTDCountdown();
         }, 350);
         return;
     } else if (engine === 'tact' || (engine === 'ran' && state.ranMode === 'single')) {
@@ -1314,6 +1316,7 @@ window.recordResponse = (result) => {
                 setTimeout(() => {
                     state.ranIndex++;
                     updateRanContent();
+                    window._startTDCountdown();
                 }, 350);
             }
         }
@@ -1390,18 +1393,19 @@ window.onSessionTypeChange = () => {
     const type = document.getElementById('session-type-select').value;
     const tdWrapper = document.getElementById('td-seconds-wrapper');
     const btnX = document.getElementById('btn-score-x');
-    const btnP = document.getElementById('btn-score-p');
+    const timerWrapper = document.getElementById('td-timer-wrapper');
 
     if (type === 'timedelay') {
         tdWrapper.style.display = '';
         // Time Delay: show P + V, hide X
         if (btnX) btnX.style.display = 'none';
-        if (btnP) btnP.style.display = '';
+        if (timerWrapper) timerWrapper.style.display = '';
     } else {
         tdWrapper.style.display = 'none';
         // Independent: show X + V, hide P
         if (btnX) btnX.style.display = '';
-        if (btnP) btnP.style.display = 'none';
+        if (timerWrapper) timerWrapper.style.display = 'none';
+        window._stopTDCountdown();
     }
 };
 
@@ -1414,6 +1418,63 @@ function getSelectedTDSeconds() {
     const input = document.getElementById('td-seconds-ctrl');
     return input ? (parseInt(input.value) || 5) : 5;
 }
+
+// --- TIME-DELAY COUNTDOWN RING ---
+// A subtle SVG ring around the "P" prompt button that depletes over the configured seconds.
+// Visibility is controlled by the setting 'td_timer_visible' in localStorage.
+(function() {
+    let _tdTimerId = null;
+    let _tdStartTime = 0;
+    let _tdDuration = 0;
+
+    function isTDTimerVisible() {
+        return localStorage.getItem('td_timer_visible') !== 'false'; // default: visible
+    }
+
+    window._startTDCountdown = () => {
+        window._stopTDCountdown();
+        const type = getSelectedSessionType();
+        if (type !== 'timedelay') return;
+        if (!state.session.active) return;
+
+        const ring = document.getElementById('td-ring');
+        const progress = document.getElementById('td-ring-progress');
+        if (!ring || !progress) return;
+
+        // Show/hide based on setting
+        ring.style.opacity = isTDTimerVisible() ? '1' : '0';
+
+        _tdDuration = getSelectedTDSeconds() * 1000;
+        _tdStartTime = performance.now();
+        const circumference = 2 * Math.PI * 30; // r=30
+
+        const tick = () => {
+            const elapsed = performance.now() - _tdStartTime;
+            const remaining = Math.max(0, 1 - elapsed / _tdDuration);
+            progress.setAttribute('stroke-dashoffset', String(circumference * (1 - remaining)));
+
+            if (remaining > 0) {
+                _tdTimerId = requestAnimationFrame(tick);
+            } else {
+                // Timer expired — ring is fully depleted
+                _tdTimerId = null;
+            }
+        };
+        _tdTimerId = requestAnimationFrame(tick);
+    };
+
+    window._stopTDCountdown = () => {
+        if (_tdTimerId) {
+            cancelAnimationFrame(_tdTimerId);
+            _tdTimerId = null;
+        }
+        const progress = document.getElementById('td-ring-progress');
+        if (progress) progress.setAttribute('stroke-dashoffset', '0');
+    };
+
+    // Expose visibility check for settings
+    window._isTDTimerVisible = isTDTimerVisible;
+})();
 
 // --- KEYBOARD SHORTCUTS ---
 function handleShortcuts(e) {
@@ -1440,6 +1501,11 @@ function handleShortcuts(e) {
     // Global undo fallback
     if (!(engine === 'search_find' || engine === 'intraverbal_scenari') && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         if (typeof window.undoLastAction === 'function') window.undoLastAction();
+    }
+    // Pointer/pen toggle shortcut — "D" key (Draw) from anywhere
+    if (e.key.toLowerCase() === 'd' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        if (typeof window.togglePointerPen === 'function') window.togglePointerPen();
     }
 }
 

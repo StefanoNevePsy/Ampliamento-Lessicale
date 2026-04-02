@@ -169,7 +169,7 @@ window.selectTheme = (themeId) => {
 
 // --- SETTINGS TABS ---
 window.switchSettingsTab = (tab) => {
-    ['api', 'images', 'theme'].forEach(t => {
+    ['api', 'images', 'theme', 'session'].forEach(t => {
         const el = document.getElementById('settings-tab-' + t);
         if (el) el.style.display = t === tab ? '' : 'none';
     });
@@ -200,6 +200,10 @@ window.openSettings = () => {
     if (pixabayInput) pixabayInput.value = getPixabayApiKey();
     if (togetherInput) togetherInput.value = getTogetherApiKey();
 
+    // Session tab
+    const tdTimerCb = document.getElementById('setting-td-timer');
+    if (tdTimerCb) tdTimerCb.checked = localStorage.getItem('td_timer_visible') !== 'false';
+
     // Reset to first tab
     switchSettingsTab('api');
 
@@ -224,6 +228,10 @@ window.saveAllSettings = () => {
     if (togetherKey !== undefined) saveTogetherApiKey(togetherKey);
 
     // Theme is saved live on selection
+
+    // Save session settings
+    const tdTimerCb = document.getElementById('setting-td-timer');
+    if (tdTimerCb) localStorage.setItem('td_timer_visible', tdTimerCb.checked ? 'true' : 'false');
 
     closeSettings();
 };
