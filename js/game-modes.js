@@ -2936,12 +2936,13 @@ function renderQuadernoTask(container) {
     setupCustomAutocomplete('quaderno-name-input', savedNames);
     setupCustomAutocomplete('quaderno-new-step', stepNames);
 
-    // Auto-scroll to active step
+    // Auto-scroll to active step & start ring countdown
     if (steps.length > 0) {
         setTimeout(() => {
             const activeEl = document.getElementById('task-step-' + currentStep);
             if (activeEl) activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }, 100);
+        _startTaskTDRing();
     }
 }
 
@@ -2969,9 +2970,17 @@ function renderQuadernoTaskStep(step, idx, sessionType, isActive) {
     const buttonsHtml = isActive ? `
         <div style="display:flex; gap:10px; justify-content:center; align-items:stretch; margin-top:6px;">
             ${isTD ? `
-            <button onclick="taskStepScore('prompt')" style="width:56px; height:56px; border-radius:50%; border:2px solid var(--warning-color); background:rgba(245,158,11,0.15); color:var(--warning-color); cursor:pointer; font-size:1rem; font-weight:800; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
-                P
-            </button>` : `
+            <div style="position:relative; width:64px; height:64px; display:flex; align-items:center; justify-content:center;">
+                <svg class="task-td-ring" width="64" height="64" style="position:absolute; top:0; left:0; pointer-events:none; transform:rotate(-90deg); opacity:${typeof _isTDTimerVisible === 'function' && !_isTDTimerVisible() ? '0' : '1'};">
+                    <circle cx="32" cy="32" r="28" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="3"/>
+                    <circle class="task-td-ring-progress" cx="32" cy="32" r="28" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="3"
+                            stroke-dasharray="${2 * Math.PI * 28}" stroke-dashoffset="0" stroke-linecap="round"
+                            style="transition: stroke-dashoffset 0.1s linear;"/>
+                </svg>
+                <button onclick="taskStepScore('prompt')" style="width:56px; height:56px; border-radius:50%; border:2px solid var(--warning-color); background:rgba(245,158,11,0.15); color:var(--warning-color); cursor:pointer; font-size:1rem; font-weight:800; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
+                    P
+                </button>
+            </div>` : `
             <button onclick="taskStepScore(false)" style="width:56px; height:56px; border-radius:50%; border:2px solid var(--danger-color); background:rgba(239,68,68,0.15); color:var(--danger-color); cursor:pointer; font-size:1.2rem; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
                 <i class="fa-solid fa-xmark"></i>
             </button>`}
@@ -3077,3 +3086,44 @@ window.addQuadernoStep = () => {
     input.value = '';
     renderQuadernoTask(document.getElementById('quaderno-content'));
 };
+
+// --- TASK ANALYSIS TD RING COUNTDOWN ---
+(function() {
+    let _taskTdTimerId = null;
+
+    window._startTaskTDRing = () => {
+        _stopTaskTDRing();
+        if (typeof getSelectedSessionType !== 'function') return;
+        if (getSelectedSessionType() !== 'timedelay') return;
+        if (typeof _isTDTimerVisible === 'function' && !_isTDTimerVisible()) return;
+
+        const activeStep = document.getElementById('task-step-' + (state._taskCurrentStep || 0));
+        if (!activeStep) return;
+        const ring = activeStep.querySelector('.task-td-ring');
+        const progress = activeStep.querySelector('.task-td-ring-progress');
+        if (!ring || !progress) return;
+
+        const duration = (typeof getSelectedTDSeconds === 'function' ? getSelectedTDSeconds() : 5) * 1000;
+        const circumference = 2 * Math.PI * 28;
+        const startTime = performance.now();
+
+        const tick = () => {
+            const elapsed = performance.now() - startTime;
+            const remaining = Math.max(0, 1 - elapsed / duration);
+            progress.setAttribute('stroke-dashoffset', String(circumference * (1 - remaining)));
+            if (remaining > 0) {
+                _taskTdTimerId = requestAnimationFrame(tick);
+            } else {
+                _taskTdTimerId = null;
+            }
+        };
+        _taskTdTimerId = requestAnimationFrame(tick);
+    };
+
+    function _stopTaskTDRing() {
+        if (_taskTdTimerId) {
+            cancelAnimationFrame(_taskTdTimerId);
+            _taskTdTimerId = null;
+        }
+    }
+})();
