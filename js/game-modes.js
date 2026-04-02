@@ -2626,11 +2626,11 @@ window.moveQuadernoRow = (idx, dir) => {
     else renderQuadernoTask(content);
 };
 
-window.renameQuadernoRow = (idx) => {
+window.renameQuadernoRow = async (idx) => {
     _syncQuadernoName();
     const rows = state._quadernoType === 'general' ? state._quadernoRows : state._quadernoSteps;
     if (!rows || !rows[idx]) return;
-    const newName = prompt('Rinomina:', rows[idx].name);
+    const newName = await themedPrompt('Rinomina:', rows[idx].name);
     if (!newName || newName.trim() === '' || newName.trim() === rows[idx].name) return;
     rows[idx].name = newName.trim();
     const content = document.getElementById('quaderno-content');
@@ -2804,7 +2804,7 @@ window.saveQuadernoTemplate = async () => {
     const nameInput = document.getElementById('quaderno-name-input');
     let name = nameInput ? nameInput.value.trim() : '';
     if (!name) {
-        name = prompt("Nome per la lista:");
+        name = await themedPrompt("Nome per la lista:");
         if (!name || !name.trim()) return;
         name = name.trim();
         if (nameInput) nameInput.value = name;

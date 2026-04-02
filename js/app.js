@@ -2021,7 +2021,7 @@ window.loadSet = async (id) => {
 
 // FIX: No more page reload for create/delete
 window.createEmptySet = async () => {
-    const name = prompt("Nome del nuovo Set?");
+    const name = await themedPrompt("Nome del nuovo Set?");
     if (!name) return;
     const newSet = {
         id: Date.now().toString(),
@@ -2038,7 +2038,7 @@ window.createEmptySet = async () => {
 };
 
 window.deleteSet = async (id) => {
-    if (confirm("Eliminare definitivamente?")) {
+    if (await themedConfirm("Eliminare definitivamente?")) {
         await DB.deleteSet(id);
         await reloadLibrary();
     }
@@ -2397,8 +2397,8 @@ window.confirmAddCustomMode = () => {
     renderActivityLayoutBody();
 };
 
-window.deleteCustomMode = (modeKey, gi, mi) => {
-    if (!confirm('Eliminare questa attivit\u00e0 personalizzata?')) return;
+window.deleteCustomMode = async (modeKey, gi, mi) => {
+    if (!await themedConfirm('Eliminare questa attività personalizzata?')) return;
     _editingLayout.groups[gi].modes.splice(mi, 1);
     if (_editingLayout.customModes) delete _editingLayout.customModes[modeKey];
     if (_editingLayout.modeEmojis) delete _editingLayout.modeEmojis[modeKey];
@@ -2566,14 +2566,14 @@ document.addEventListener('DOMContentLoaded', () => {
     overrideModalOpen('openFirebaseSettings', 'firebase');
 
     // Funzione globale che prova a chiudere l'ultima cosa aperta
-    const goBackOrClose = () => {
+    const goBackOrClose = async () => {
         const openModals = Array.from(document.querySelectorAll('.modal-fs.open, .modal.open, .modal-small.open'));
         if (openModals.length > 0) {
             const topModal = openModals[openModals.length - 1];
             topModal.classList.remove('open');
             return true;
         } else if (typeof state !== 'undefined' && state.session && state.session.active) {
-            if (confirm("Attività in corso. Vuoi tornare al menu e azzerare i dati correnti?")) {
+            if (await themedConfirm("Attività in corso. Vuoi tornare al menu e azzerare i dati correnti?")) {
                 window.location.reload();
             }
             return true; // We handled it

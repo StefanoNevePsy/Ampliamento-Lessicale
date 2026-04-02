@@ -1420,4 +1420,33 @@ input[type="text"] { width: 100%; padding: 10px; background: rgba(0, 0, 0, 0.3);
     margin: 4px 0; padding-left: 8px;
 }
 
+/* Themed Dialog (prompt/confirm replacement) */
+.themed-dialog-overlay {
+    position: fixed; inset: 0; z-index: 99999;
+    background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity 0.2s;
+}
+.themed-dialog-overlay.open { opacity: 1; }
+.themed-dialog {
+    background: var(--modal-bg); border: 1px solid var(--glass-border);
+    border-radius: var(--radius); padding: 24px; width: 90%; max-width: 400px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    transform: scale(0.9); transition: transform 0.2s;
+}
+.themed-dialog-overlay.open .themed-dialog { transform: scale(1); }
+.themed-dialog-msg {
+    color: var(--text-primary); font-size: 1rem; font-weight: 600;
+    margin-bottom: 16px; line-height: 1.4;
+}
+.themed-dialog-input {
+    width: 100%; padding: 12px 14px; background: var(--input-bg);
+    border: 1px solid var(--glass-border); border-radius: 10px;
+    color: var(--text-primary); font-size: 1rem; margin-bottom: 20px;
+    font-family: 'Noto Sans', sans-serif; transition: border-color 0.2s;
+}
+.themed-dialog-input:focus { border-color: var(--accent-color); outline: none; }
+.themed-dialog-btns { display: flex; gap: 10px; justify-content: flex-end; }
+.themed-dialog-btns .btn { min-width: 90px; }
+
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }

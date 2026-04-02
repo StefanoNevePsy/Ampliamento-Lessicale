@@ -238,7 +238,7 @@ window.openPatients = async () => {
 window.closePatients = () => document.getElementById('modal-patients').classList.remove('open');
 
 window.createNewPatient = async () => {
-    const name = prompt("Nome:");
+    const name = await themedPrompt("Nome:");
     if (name) {
         const newPatient = { id: Date.now().toString(), name: name, history: [] };
         await DB.savePatient(newPatient);
@@ -253,7 +253,7 @@ window.createNewPatient = async () => {
 window.renamePatient = async (patientId) => {
     const p = state.patients.find(x => x.id === patientId);
     if (!p) return;
-    const newName = prompt("Nuovo nome:", p.name);
+    const newName = await themedPrompt("Nuovo nome:", p.name);
     if (!newName || newName.trim() === '' || newName.trim() === p.name) return;
     p.name = newName.trim();
     await DB.savePatient(p);
@@ -270,7 +270,7 @@ window.editPatientCategory = async (patientId) => {
     // Gather existing categories for suggestions
     const existingCats = [...new Set(state.patients.map(x => x.category).filter(Boolean))];
     const suggestion = existingCats.length > 0 ? `\n\nCategorie esistenti: ${existingCats.join(', ')}` : '';
-    const newCat = prompt(`Categoria per ${p.name}:${suggestion}`, p.category || '');
+    const newCat = await themedPrompt(`Categoria per ${p.name}:${suggestion}`, p.category || '');
     if (newCat === null) return;
     p.category = newCat.trim();
     await DB.savePatient(p);
@@ -281,7 +281,7 @@ window.editPatientCategory = async (patientId) => {
 
 // --- DELETE PATIENT ---
 window.deletePatient = async (patientId) => {
-    if (!confirm("Eliminare definitivamente questo paziente e tutti i suoi dati?")) return;
+    if (!await themedConfirm("Eliminare definitivamente questo paziente e tutti i suoi dati?")) return;
     await DB.deletePatient(patientId);
     state.patients = await DB.getAllPatients();
     if (state.activePatientId === patientId) state.activePatientId = null;
@@ -292,7 +292,7 @@ window.deletePatient = async (patientId) => {
 
 // --- SESSION MANAGEMENT ---
 window.deleteSession = async (patientId, sessionIndex) => {
-    if (!confirm("Eliminare questa sessione dai dati?")) return;
+    if (!await themedConfirm("Eliminare questa sessione dai dati?")) return;
     const p = state.patients.find(x => x.id === patientId);
     p.history.splice(sessionIndex, 1);
     await DB.savePatient(p);
@@ -303,22 +303,22 @@ window.editSession = async (patientId, sessionIndex) => {
     const p = state.patients.find(x => x.id === patientId);
     const s = p.history[sessionIndex];
     const currentDateStr = s.date.substring(0, 10);
-    const newDateStr = prompt("Data (AAAA-MM-GG):", currentDateStr);
+    const newDateStr = await themedPrompt("Data (AAAA-MM-GG):", currentDateStr);
     if (newDateStr === null) return;
-    const newScore = prompt("Punteggio Corretti:", s.correct);
+    const newScore = await themedPrompt("Punteggio Corretti:", s.correct);
     if (newScore === null) return;
-    const newTotal = prompt("Totale Item:", s.total);
+    const newTotal = await themedPrompt("Totale Item:", s.total);
     if (newTotal === null) return;
 
     // Session type selection
     const currentType = s.sessionType || 'independent';
-    const typeChoice = prompt("Tipo sessione (1 = Indipendente, 2 = Time Delay):", currentType === 'timedelay' ? '2' : '1');
+    const typeChoice = await themedPrompt("Tipo sessione (1 = Indipendente, 2 = Time Delay):", currentType === 'timedelay' ? '2' : '1');
     if (typeChoice === null) return;
     const newType = typeChoice.trim() === '2' ? 'timedelay' : 'independent';
 
     let newTDSeconds = s.timeDelaySeconds || 5;
     if (newType === 'timedelay') {
-        const tdInput = prompt("Secondi Time Delay:", newTDSeconds);
+        const tdInput = await themedPrompt("Secondi Time Delay:", newTDSeconds);
         if (tdInput === null) return;
         newTDSeconds = parseInt(tdInput) || 5;
     }
@@ -1723,7 +1723,7 @@ window._saveDailyNoteFromEditor = async (patientId) => {
 
 // Delete a daily note
 window.deleteDailyNote = async (patientId, dateKey) => {
-    if (!confirm("Eliminare la nota di questa giornata?")) return;
+    if (!await themedConfirm("Eliminare la nota di questa giornata?")) return;
     const p = state.patients.find(x => x.id === patientId);
     if (!p || !p.dailyNotes) return;
     delete p.dailyNotes[dateKey];
@@ -2923,8 +2923,8 @@ function _escapeForAttr(str) {
     return (str || '').replace(/'/g, "\\'").replace(/\n/g, '\\n');
 }
 
-window.deleteReport = (pid, index) => {
-    if (!confirm('Eliminare questo report?')) return;
+window.deleteReport = async (pid, index) => {
+    if (!await themedConfirm('Eliminare questo report?')) return;
     const reports = _getPatientReports(pid);
     reports.splice(index, 1);
     _setPatientReports(pid, reports);

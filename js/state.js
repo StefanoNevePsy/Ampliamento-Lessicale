@@ -268,6 +268,61 @@ function getItemsByTag(tag) {
     return items;
 }
 
+// === THEMED PROMPT & CONFIRM (cross-platform, replaces window.prompt/confirm) ===
+
+function themedPrompt(message, defaultValue = '') {
+    return new Promise(resolve => {
+        const overlay = document.createElement('div');
+        overlay.className = 'themed-dialog-overlay';
+        overlay.innerHTML = `
+            <div class="themed-dialog">
+                <div class="themed-dialog-msg">${message}</div>
+                <input class="themed-dialog-input" type="text" value="${defaultValue.replace(/"/g, '&quot;')}" />
+                <div class="themed-dialog-btns">
+                    <button class="btn btn-ghost themed-dialog-cancel">Annulla</button>
+                    <button class="btn btn-primary themed-dialog-ok">OK</button>
+                </div>
+            </div>`;
+        document.body.appendChild(overlay);
+        requestAnimationFrame(() => overlay.classList.add('open'));
+        const inp = overlay.querySelector('.themed-dialog-input');
+        const ok = overlay.querySelector('.themed-dialog-ok');
+        const cancel = overlay.querySelector('.themed-dialog-cancel');
+        inp.focus();
+        inp.select();
+        const close = val => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 200); resolve(val); };
+        ok.onclick = () => close(inp.value || null);
+        cancel.onclick = () => close(null);
+        inp.addEventListener('keydown', e => { if (e.key === 'Enter') ok.click(); if (e.key === 'Escape') cancel.click(); });
+        overlay.addEventListener('click', e => { if (e.target === overlay) cancel.click(); });
+    });
+}
+
+function themedConfirm(message) {
+    return new Promise(resolve => {
+        const overlay = document.createElement('div');
+        overlay.className = 'themed-dialog-overlay';
+        overlay.innerHTML = `
+            <div class="themed-dialog">
+                <div class="themed-dialog-msg">${message}</div>
+                <div class="themed-dialog-btns">
+                    <button class="btn btn-ghost themed-dialog-cancel">Annulla</button>
+                    <button class="btn btn-danger themed-dialog-ok">Conferma</button>
+                </div>
+            </div>`;
+        document.body.appendChild(overlay);
+        requestAnimationFrame(() => overlay.classList.add('open'));
+        const ok = overlay.querySelector('.themed-dialog-ok');
+        const cancel = overlay.querySelector('.themed-dialog-cancel');
+        ok.focus();
+        const close = val => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 200); resolve(val); };
+        ok.onclick = () => close(true);
+        cancel.onclick = () => close(false);
+        overlay.addEventListener('keydown', e => { if (e.key === 'Enter') ok.click(); if (e.key === 'Escape') cancel.click(); });
+        overlay.addEventListener('click', e => { if (e.target === overlay) cancel.click(); });
+    });
+}
+
 // Get all items from sets matching ANY of the selected tags
 function getItemsByTags(tags) {
     const items = [];
