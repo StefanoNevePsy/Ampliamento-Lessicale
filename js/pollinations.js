@@ -395,9 +395,9 @@ window.selectPollStyle = (el) => {
     }
 };
 
-window.acceptPollImage = (itemIndex) => {
+window.acceptPollImage = async (itemIndex) => {
     if (_pollLastImageUrl && state.editingItems[itemIndex]) {
-        state.editingItems[itemIndex].url = _pollLastImageUrl;
+        state.editingItems[itemIndex].url = await compressDataUrl(_pollLastImageUrl, getEditingImageQuality());
         renderEditorList();
         closePollinationsGenerator();
     }
@@ -561,7 +561,7 @@ window.runBulkPollGeneration = async () => {
             } else {
                 imageUrl = await fetchPollinationsImage(item.label, randomStyle);
             }
-            state.editingItems[idx].url = imageUrl;
+            state.editingItems[idx].url = await compressDataUrl(imageUrl, getEditingImageQuality());
             log.innerHTML += `<div style="color:var(--success-color);"><i class="fa-solid fa-check"></i> ${escapeHtml(item.label)} (${styleName})</div>`;
         } catch (err) {
             errors++;

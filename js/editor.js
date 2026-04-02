@@ -20,6 +20,10 @@ window.editSet = async (id) => {
     // Tag editor
     renderTagEditor(set.tags || []);
 
+    // Image quality - load from set or pick smart default based on modes
+    state._editingImageQuality = set.imageQuality || guessDefaultImageQuality(set.modes || []);
+    renderImageQualitySelector();
+
     renderEditorList();
     document.getElementById('modal-library').classList.remove('open');
     document.getElementById('modal-editor').classList.add('open');
@@ -134,6 +138,83 @@ function compressImage(file, maxSize, quality, callback) {
     img.src = url;
 }
 
+// --- IMAGE QUALITY PRESETS ---
+const IMAGE_QUALITY_PRESETS = {
+    alta:   { maxSize: 1200, quality: 0.85, label: 'Alta (1200px)',  desc: 'Per Cerca-Trova e dettagli' },
+    media:  { maxSize: 600,  quality: 0.80, label: 'Media (600px)',  desc: 'Standard per naming/tact' },
+    bassa:  { maxSize: 400,  quality: 0.70, label: 'Bassa (400px)',  desc: 'Minimo ingombro' },
+    originale: { maxSize: 0, quality: 0,    label: 'Originale',      desc: 'Nessuna compressione' }
+};
+window.IMAGE_QUALITY_PRESETS = IMAGE_QUALITY_PRESETS;
+
+// Default quality per mode
+const MODE_DEFAULT_QUALITY = {
+    search_find: 'alta',
+    intraverbal_scenari: 'alta'
+};
+
+function getEditingImageQuality() {
+    return state._editingImageQuality || 'media';
+}
+window.getEditingImageQuality = getEditingImageQuality;
+
+function guessDefaultImageQuality(modes) {
+    for (const m of modes) {
+        if (MODE_DEFAULT_QUALITY[m]) return MODE_DEFAULT_QUALITY[m];
+    }
+    return 'media';
+}
+
+function renderImageQualitySelector() {
+    const container = document.getElementById('edit-image-quality-container');
+    if (!container) return;
+    const current = getEditingImageQuality();
+    container.innerHTML = Object.entries(IMAGE_QUALITY_PRESETS).map(([key, cfg]) => {
+        const sel = key === current;
+        return `<div class="mode-check ${sel ? 'selected' : ''}" data-quality="${key}" onclick="selectImageQuality('${key}')" title="${cfg.desc}" style="cursor:pointer;">
+            <i class="fa-solid ${sel ? 'fa-check-square' : 'fa-square'}"></i> ${cfg.label}
+        </div>`;
+    }).join('');
+}
+
+window.selectImageQuality = (key) => {
+    state._editingImageQuality = key;
+    renderImageQualitySelector();
+};
+
+// Compress/resize a dataUrl string using current quality preset.
+// Returns a Promise<string> with the processed dataUrl.
+function compressDataUrl(dataUrl, preset) {
+    if (!preset || preset === 'originale') return Promise.resolve(dataUrl);
+    const cfg = IMAGE_QUALITY_PRESETS[preset];
+    if (!cfg || cfg.maxSize === 0) return Promise.resolve(dataUrl);
+
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            let w = img.width, h = img.height;
+            // Only resize if larger than max
+            if (w <= cfg.maxSize && h <= cfg.maxSize) {
+                // Still convert to WebP for size savings
+                const canvas = document.createElement('canvas');
+                canvas.width = w; canvas.height = h;
+                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                resolve(canvas.toDataURL('image/webp', cfg.quality));
+                return;
+            }
+            if (w > h) { h = Math.round(h * cfg.maxSize / w); w = cfg.maxSize; }
+            else { w = Math.round(w * cfg.maxSize / h); h = cfg.maxSize; }
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/webp', cfg.quality));
+        };
+        img.onerror = () => resolve(dataUrl); // fallback: keep original
+        img.src = dataUrl;
+    });
+}
+window.compressDataUrl = compressDataUrl;
+
 // --- SAVE EDITOR ---
 window.saveEditorChanges = () => {
     const modes = [];
@@ -152,6 +233,7 @@ window.saveEditorChanges = () => {
             s.items = state.editingItems;
             s.modes = modes;
             s.tags = [...editingTags]; // Save semantic tags
+            s.imageQuality = state._editingImageQuality || 'media';
             DB.saveSet(s).then(() => {
                 reloadLibrary();
                 document.getElementById('modal-editor').classList.remove('open');
@@ -263,7 +345,10 @@ window.triggerItemUpload = (index) => {
     input.onchange = (e) => {
         if (e.target.files[0]) {
             const r = new FileReader();
-            r.onload = (ev) => { state.editingItems[index].url = ev.target.result; renderEditorList(); };
+            r.onload = async (ev) => {
+                state.editingItems[index].url = await compressDataUrl(ev.target.result, getEditingImageQuality());
+                renderEditorList();
+            };
             r.readAsDataURL(e.target.files[0]);
         }
     };
@@ -275,12 +360,14 @@ window.triggerItemUpload = (index) => {
 window.bulkUploadImages = (input) => {
     if (!input.files || input.files.length === 0) return;
     const files = Array.from(input.files);
+    const preset = getEditingImageQuality();
 
     files.forEach(file => {
         const r = new FileReader();
-        r.onload = (ev) => {
+        r.onload = async (ev) => {
             const name = file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
-            state.editingItems.push({ label: name, url: ev.target.result, hidden: false });
+            const url = await compressDataUrl(ev.target.result, preset);
+            state.editingItems.push({ label: name, url, hidden: false });
             renderEditorList();
         };
         r.readAsDataURL(file);
@@ -491,8 +578,8 @@ async function handlePaste(e) {
             e.preventDefault();
             const blob = item.getAsFile();
             const r = new FileReader();
-            r.onload = (event) => {
-                state.editingItems[state.activeEditorIndex].url = event.target.result;
+            r.onload = async (event) => {
+                state.editingItems[state.activeEditorIndex].url = await compressDataUrl(event.target.result, getEditingImageQuality());
                 renderEditorList();
             };
             r.readAsDataURL(blob);
