@@ -1213,6 +1213,8 @@ window.startGame = () => {
     const undoBtn = document.getElementById('btn-undo-marker');
     if (undoBtn) undoBtn.classList.remove('hidden');
     renderGameMode(mode, playItems);
+    // Start TD countdown for all modes at session start
+    window._startTDCountdown();
 };
 
 // --- SCORING ---
@@ -1366,6 +1368,9 @@ window.recordResponse = (result) => {
     }
     document.getElementById('btn-save-session').classList.remove('hidden');
     if (typeof showSessionNameInput === 'function') showSessionNameInput();
+
+    // Restart TD countdown after every response (for modes without auto-advance)
+    window._startTDCountdown();
 };
 
 function updateScoreUI() {
