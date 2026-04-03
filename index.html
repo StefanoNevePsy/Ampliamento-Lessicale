@@ -102,9 +102,9 @@
                 </div>
             </div>
 
-            <!-- STIMULUS COUNT SELECTOR (Phase 1.b) -->
+            <!-- FIELD SIZE SELECTOR -->
             <div class="select-wrapper" style="max-width: 110px;">
-                <label><i class="fa-solid fa-hashtag"></i> N. Stimoli</label>
+                <label><i class="fa-solid fa-hashtag"></i> Field</label>
                 <select id="num-stimuli" onchange="window.startGame()">
                     <option value="0">Tutti</option>
                     <option value="3">3</option>
@@ -167,8 +167,7 @@
                 <svg id="td-ring" width="68" height="68" style="position:absolute; top:-4px; left:-4px; pointer-events:none; transform:rotate(-90deg);">
                     <circle cx="34" cy="34" r="30" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="3"/>
                     <circle id="td-ring-progress" cx="34" cy="34" r="30" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="3"
-                            stroke-dasharray="188.5" stroke-dashoffset="0" stroke-linecap="round"
-                            style="transition: stroke-dashoffset 0.1s linear;"/>
+                            stroke-dasharray="188.5" stroke-dashoffset="0" stroke-linecap="round"/>
                 </svg>
                 <button id="btn-score-p" class="btn-score prompt" onclick="recordResponse('prompt')" title="Prompt (Tasto P)">
                     P
@@ -206,10 +205,10 @@
                 <button class="btn-float" id="btn-pointer-pen" onclick="togglePointerPen()" title="Puntatore/Penna (Tasto D)">
                     <i class="fa-solid fa-pen-fancy"></i>
                 </button>
-                <button class="btn-float" id="btn-global-lock" onclick="toggleGlobalScrollLock()" title="Blocca Schermo">
+                <button class="btn-float" id="btn-global-lock" onclick="toggleGlobalScrollLock()" title="Blocca Schermo (Tasto L)">
                     <i class="fa-solid fa-lock-open"></i>
                 </button>
-                <button class="btn-float" id="btn-game-fullscreen" onclick="toggleGameFullscreen()" title="Area di Gioco a Schermo Intero">
+                <button class="btn-float" id="btn-game-fullscreen" onclick="toggleGameFullscreen()" title="Area di Gioco a Schermo Intero (Tasto F)">
                     <i class="fa-solid fa-up-right-and-down-left-from-center" id="game-fs-icon"></i>
                 </button>
             </div>
@@ -507,11 +506,17 @@
                         <li><i class="fa-solid fa-clock-rotate-left" style="color:var(--warning-color); width:20px;"></i> <strong>Tipo Sessione:</strong><br>
                             <b>Indipendente</b> &ndash; Scoring V/X standard.<br>
                             <b>Time Delay</b> &ndash; Scoring V/P con secondi TD configurabili.</li>
-                        <li><i class="fa-solid fa-sliders" style="color:var(--warning-color); width:20px;"></i> <strong>N. Stimoli:</strong> 3, 4, 6, 8&hellip; o Tutti.</li>
+                        <li><i class="fa-solid fa-sliders" style="color:var(--warning-color); width:20px;"></i> <strong>Field:</strong> Numero di stimoli visibili (3, 4, 6, 8&hellip; o Tutti).</li>
                         <li><i class="fa-solid fa-table-cells-large" style="color:var(--warning-color); width:20px;"></i> <strong>Griglia:</strong> Layout visivo (Auto, 3&times;3, 4&times;4, 5&times;5).</li>
                         <li><i class="fa-solid fa-rotate-left" style="color:var(--warning-color); width:20px;"></i> <strong>Undo:</strong> <b>Ctrl+Z</b> per annullare l'ultimo punteggio.</li>
                         <li><i class="fa-solid fa-floppy-disk" style="color:var(--warning-color); width:20px;"></i> <strong>Salvataggio:</strong> Salva nella cartella del paziente attivo. Nome personalizzabile.</li>
                         <li><i class="fa-solid fa-pen-nib" style="color:var(--warning-color); width:20px;"></i> <strong>S Pen:</strong> Singolo clic = V, doppio clic = X (Samsung S Pen).</li>
+                        <li><i class="fa-solid fa-keyboard" style="color:var(--warning-color); width:20px;"></i> <strong>Shortcut:</strong>
+                            <span style="display:flex; gap:10px; margin-top:4px; font-size:0.9em; flex-wrap:wrap;">
+                                <span><b>D</b> = Puntatore</span>
+                                <span><b>F</b> = Fullscreen area</span>
+                                <span><b>L</b> = Blocco scorrimento</span>
+                            </span></li>
                     </ul>
                 </div>
 

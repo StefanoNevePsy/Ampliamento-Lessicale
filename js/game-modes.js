@@ -1759,12 +1759,35 @@ window.handleCatChoice = (chosenTag) => {
 
 // --- SEARCH & FIND ---
 function renderSearchFind(items, stage) {
-    const s = items[0];
+    // Initialize variant index if not set
+    if (state._sfVariantIndex === undefined || state._sfVariantIndex === null) state._sfVariantIndex = 0;
+    if (state._sfVariantIndex >= items.length) state._sfVariantIndex = 0;
+
+    const idx = state._sfVariantIndex;
+    const s = items[idx];
+    const total = items.length;
+    const isFs = document.querySelector('.app-shell')?.classList.contains('game-fullscreen');
+
+    // Navigation arrows (only if multiple items and NOT in fullscreen)
+    const navHtml = (total > 1 && !isFs) ? `
+        <div style="display:flex; align-items:center; gap:6px;">
+            <button class="btn btn-sm" onclick="sfPrevVariant()" style="padding:4px 8px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.08); color:white; border-radius:6px; cursor:pointer;" ${idx === 0 ? 'disabled style="padding:4px 8px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.08); color:#555; border-radius:6px; cursor:default;"' : ''}>
+                <i class="fa-solid fa-chevron-left"></i>
+            </button>
+            <span style="font-size:0.75rem; color:var(--text-secondary); white-space:nowrap;">Variante ${idx + 1} / ${total}</span>
+            <button class="btn btn-sm" onclick="sfNextVariant()" style="padding:4px 8px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.08); color:white; border-radius:6px; cursor:pointer;" ${idx >= total - 1 ? 'disabled style="padding:4px 8px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.08); color:#555; border-radius:6px; cursor:default;"' : ''}>
+                <i class="fa-solid fa-chevron-right"></i>
+            </button>
+        </div>` : (total > 1 && isFs ? `<span style="font-size:0.65rem; color:var(--text-secondary);">${idx + 1}/${total}</span>` : '');
+
     stage.innerHTML = `
         <div class="search-find-container">
             <div class="sf-toolbar">
                 <span style="color:white;font-weight:bold;">${s.label}</span>
-                <button class="btn btn-sm btn-danger" onclick="clearMarkers()"><i class="fa-solid fa-eraser"></i> Pulisci</button>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    ${navHtml}
+                    <button class="btn btn-sm btn-danger" onclick="clearMarkers()"><i class="fa-solid fa-eraser"></i> Pulisci</button>
+                </div>
             </div>
             <div class="sf-viewport" id="sf-viewport">
                 <img src="${s.url || getPlaceholderUrl(s.label)}" class="sf-image" onerror="handleImgError(this,'${s.label}')">
@@ -1772,6 +1795,31 @@ function renderSearchFind(items, stage) {
         </div>`;
     setupSearchFindTouch();
 }
+
+// Variant navigation for search_find / intraverbal_scenari
+window.sfNextVariant = () => {
+    const items = state.session.playItems || state.items.filter(i => !i.hidden);
+    if (!items || items.length <= 1) return;
+    if (state._sfVariantIndex < items.length - 1) {
+        // Clear markers on variant change
+        clearMarkers();
+        state._sfVariantIndex++;
+        const mode = document.getElementById('mode-select').value;
+        renderGameMode(mode, items);
+    }
+};
+
+window.sfPrevVariant = () => {
+    const items = state.session.playItems || state.items.filter(i => !i.hidden);
+    if (!items || items.length <= 1) return;
+    if (state._sfVariantIndex > 0) {
+        // Clear markers on variant change
+        clearMarkers();
+        state._sfVariantIndex--;
+        const mode = document.getElementById('mode-select').value;
+        renderGameMode(mode, items);
+    }
+};
 
 // Touch-permissive marker placement (tolerates slight finger movement)
 function setupSearchFindTouch() {
@@ -2974,8 +3022,7 @@ function renderQuadernoTaskStep(step, idx, sessionType, isActive) {
                 <svg class="task-td-ring" width="64" height="64" style="position:absolute; top:0; left:0; pointer-events:none; transform:rotate(-90deg); opacity:${typeof _isTDTimerVisible === 'function' && !_isTDTimerVisible() ? '0' : '1'};">
                     <circle cx="32" cy="32" r="28" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="3"/>
                     <circle class="task-td-ring-progress" cx="32" cy="32" r="28" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="3"
-                            stroke-dasharray="${2 * Math.PI * 28}" stroke-dashoffset="0" stroke-linecap="round"
-                            style="transition: stroke-dashoffset 0.1s linear;"/>
+                            stroke-dasharray="${2 * Math.PI * 28}" stroke-dashoffset="0" stroke-linecap="round"/>
                 </svg>
                 <button onclick="taskStepScore('prompt')" style="width:56px; height:56px; border-radius:50%; border:2px solid var(--warning-color); background:rgba(245,158,11,0.15); color:var(--warning-color); cursor:pointer; font-size:1rem; font-weight:800; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
                     P
@@ -3110,7 +3157,7 @@ window.addQuadernoStep = () => {
         const tick = () => {
             const elapsed = performance.now() - startTime;
             const remaining = Math.max(0, 1 - elapsed / duration);
-            progress.setAttribute('stroke-dashoffset', String(circumference * (1 - remaining)));
+            progress.style.strokeDashoffset = String(circumference * (1 - remaining));
             if (remaining > 0) {
                 _taskTdTimerId = requestAnimationFrame(tick);
             } else {

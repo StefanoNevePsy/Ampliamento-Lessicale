@@ -803,6 +803,7 @@ function renderDatesTab(patient) {
             const modeName = MODES_CONFIG[s.mode] || s.mode;
             const dayModeIcon = (typeof getModeIcon === 'function') ? getModeIcon(s.mode) : 'fa-puzzle-piece';
             const typeTag = s.sessionType === 'timedelay' ? `<span style="font-size:0.6rem; background:rgba(245,158,11,0.2); color:var(--warning-color); padding:1px 5px; border-radius:4px; margin-left:4px;">TD${s.timeDelaySeconds || ''}s</span>` : '';
+            const fieldTag = s.fieldSize ? `<span style="font-size:0.6rem; background:rgba(99,102,241,0.2); color:var(--accent-color); padding:1px 5px; border-radius:4px; margin-left:4px;">F${s.fieldSize}</span>` : '';
             const sessionNoteIcon = s.note ? '<i class="fa-solid fa-sticky-note" style="color:#eab308; font-size:0.6rem; flex-shrink:0;" title="Nota attività"></i>' : '';
             const activityKey = encodeURIComponent(s.setName + '::' + s.mode + '::' + getSessionTypeGroup(s));
             // Set thumbnail for Giornate
@@ -821,7 +822,7 @@ function renderDatesTab(patient) {
                                 <i class="fa-solid fa-chevron-right day-act-icon" style="transition:transform 0.2s; font-size:0.6rem; color:#555;"></i>
                                 ${dayThumb}
                                 <span style="background:rgba(99,102,241,0.15); padding:2px 8px; border-radius:6px; font-size:0.7rem; color:var(--accent-color); flex-shrink:0; display:inline-flex; align-items:center; gap:4px;"><i class="fa-solid ${dayModeIcon}" style="font-size:0.65rem;"></i>${modeName}</span>
-                                <span style="font-size:0.9rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.setName}</span>${s.setCat ? `<span style="font-size:0.65rem; color:var(--text-secondary); background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:4px; flex-shrink:0;">${s.setCat}</span>` : ''}${typeTag}${sessionNoteIcon}
+                                <span style="font-size:0.9rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.setName}</span>${s.setCat ? `<span style="font-size:0.65rem; color:var(--text-secondary); background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:4px; flex-shrink:0;">${s.setCat}</span>` : ''}${typeTag}${fieldTag}${sessionNoteIcon}
                             </div>
                             <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
                                 <span style="font-size:0.85rem;">${s.correct}/${s.total}</span>
@@ -1509,6 +1510,35 @@ function renderActivitySVGChart(container, sessions, typeGroup, modeCode) {
         });
     }
 
+    // Field size vertical markers
+    {
+        let lastField = null;
+        sessions.forEach((s, i) => {
+            const fs = s.fieldSize || null;
+            if (fs !== null && fs !== lastField && lastField !== null) {
+                const x = 20 + (sessions.length > 1 ? i * stepX : 130);
+                const vLine = document.createElementNS(svgNS, "line");
+                vLine.setAttribute("x1", x); vLine.setAttribute("x2", x);
+                vLine.setAttribute("y1", "0"); vLine.setAttribute("y2", "130");
+                vLine.setAttribute("stroke", "var(--accent-color)");
+                vLine.setAttribute("stroke-width", "1.5");
+                vLine.setAttribute("stroke-dasharray", "4,3");
+                vLine.setAttribute("opacity", "0.5");
+                svg.appendChild(vLine);
+
+                const fsLbl = document.createElementNS(svgNS, "text");
+                fsLbl.setAttribute("x", x); fsLbl.setAttribute("y", "-3");
+                fsLbl.setAttribute("text-anchor", "middle");
+                fsLbl.setAttribute("fill", "var(--accent-color)");
+                fsLbl.setAttribute("font-size", "7");
+                fsLbl.setAttribute("font-weight", "bold");
+                fsLbl.textContent = `F${fs}`;
+                svg.appendChild(fsLbl);
+            }
+            lastField = fs;
+        });
+    }
+
     sessions.forEach((s, i) => {
         const x = 20 + (sessions.length > 1 ? i * stepX : 130);
         const y = isFluenza
@@ -1542,6 +1572,7 @@ function renderActivitySVGChart(container, sessions, typeGroup, modeCode) {
             : `${formatDateEU(s.date)}\nScore: ${s.percentage}% (${s.correct}/${s.total})`;
         if (s.rawP) tooltipText += `\nPrompt: ${s.rawP}`;
         if (s.timeDelaySeconds) tooltipText += `\nTime Delay: ${s.timeDelaySeconds}s`;
+        if (s.fieldSize) tooltipText += `\nField: ${s.fieldSize}`;
 
         const title = document.createElementNS(svgNS, "title");
         title.textContent = tooltipText;

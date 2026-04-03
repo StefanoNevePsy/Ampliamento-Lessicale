@@ -670,6 +670,7 @@ window.loadSelectedSet = async (setId) => {
             _updateMultiSetScoreUI();
             document.getElementById('btn-save-session').classList.remove('hidden');
             if (typeof showSessionNameInput === 'function') showSessionNameInput();
+            state._sfVariantIndex = 0; // Reset variant on set switch
             let playItems = state.items.filter(i => !i.hidden);
             state.session.playItems = playItems;
             renderGameMode(mode, playItems);
@@ -699,7 +700,8 @@ function _snapshotCurrentSetData() {
         prompts: rawP,
         incorrect: rawX,
         total: total,
-        percentage: total > 0 ? Math.round((rawV / total) * 100) : 0
+        percentage: total > 0 ? Math.round((rawV / total) * 100) : 0,
+        variantIndex: state._sfVariantIndex || 0
     });
 }
 
@@ -1159,6 +1161,7 @@ window.startGame = () => {
 
     state.tactIndex = 0;
     state.ranIndex = 0;
+    state._sfVariantIndex = 0; // Reset variant navigation for search_find/intraverbal
     state.session.playItems = playItems; // Store for per-item detail tracking
 
     // RAN Intensivo: build deck of exactly 20 stimuli from last session's errors
@@ -1456,7 +1459,7 @@ function getSelectedTDSeconds() {
         const tick = () => {
             const elapsed = performance.now() - _tdStartTime;
             const remaining = Math.max(0, 1 - elapsed / _tdDuration);
-            progress.setAttribute('stroke-dashoffset', String(circumference * (1 - remaining)));
+            progress.style.strokeDashoffset = String(circumference * (1 - remaining));
 
             if (remaining > 0) {
                 _tdTimerId = requestAnimationFrame(tick);
@@ -1474,7 +1477,7 @@ function getSelectedTDSeconds() {
             _tdTimerId = null;
         }
         const progress = document.getElementById('td-ring-progress');
-        if (progress) progress.setAttribute('stroke-dashoffset', '0');
+        if (progress) progress.style.strokeDashoffset = '0';
     };
 
     // Expose visibility check for settings
@@ -1502,6 +1505,12 @@ function handleShortcuts(e) {
     if (engine === 'search_find' || engine === 'intraverbal_scenari') {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { if (typeof window.undoLastAction === 'function') window.undoLastAction(); }
         if (e.key === 'Delete' || e.key === 'Backspace') clearMarkers();
+        // Variant navigation (only when not in fullscreen)
+        const isFs = document.querySelector('.app-shell')?.classList.contains('game-fullscreen');
+        if (!isFs) {
+            if (e.key === 'ArrowRight' && typeof window.sfNextVariant === 'function') sfNextVariant();
+            if (e.key === 'ArrowLeft' && typeof window.sfPrevVariant === 'function') sfPrevVariant();
+        }
     }
     // Global undo fallback
     if (!(engine === 'search_find' || engine === 'intraverbal_scenari') && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
@@ -1511,6 +1520,16 @@ function handleShortcuts(e) {
     if (e.key.toLowerCase() === 'd' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         if (typeof window.togglePointerPen === 'function') window.togglePointerPen();
+    }
+    // Fullscreen game area shortcut — "F" key
+    if (e.key.toLowerCase() === 'f' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        if (typeof window.toggleGameFullscreen === 'function') window.toggleGameFullscreen();
+    }
+    // Child lock shortcut — "L" key
+    if (e.key.toLowerCase() === 'l' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        if (typeof window.toggleGlobalScrollLock === 'function') window.toggleGlobalScrollLock();
     }
 }
 
@@ -1609,6 +1628,10 @@ async function _doSaveSession(p, noteText) {
         const setName = customName || defaultName;
         if (customName) saveCustomSessionName(customName);
 
+        // Capture field size
+        const fieldVal = parseInt(document.getElementById('num-stimuli').value);
+        const fieldSize = fieldVal > 0 ? fieldVal : (state.session.playItems ? state.session.playItems.length : totalAll);
+
         const sessionData = {
             date: new Date().toISOString(),
             setId: 'multi_' + allSets.map(s => s.setId).join('_'),
@@ -1620,6 +1643,7 @@ async function _doSaveSession(p, noteText) {
             total: totalAll,
             percentage: Math.round((totalV / totalAll) * 100),
             sessionType: type,
+            fieldSize: fieldSize,
             rawV: totalV,
             rawP: totalP,
             rawX: totalX,
@@ -1632,7 +1656,8 @@ async function _doSaveSession(p, noteText) {
                 prompts: s.prompts,
                 incorrect: s.incorrect,
                 total: s.total,
-                percentage: s.percentage
+                percentage: s.percentage,
+                variantIndex: s.variantIndex
             }))
         };
 
@@ -1693,6 +1718,10 @@ async function _doSaveSession(p, noteText) {
 
     const correct = rawV; // In both modes, only V = correct
 
+    // Capture field size
+    const fieldVal = parseInt(document.getElementById('num-stimuli').value);
+    const fieldSize = fieldVal > 0 ? fieldVal : (state.session.playItems ? state.session.playItems.length : rawTotal);
+
     const sessionData = {
         date: new Date().toISOString(),
         setId: state.activeSetId,
@@ -1704,6 +1733,7 @@ async function _doSaveSession(p, noteText) {
         total: rawTotal,
         percentage: Math.round((correct / rawTotal) * 100),
         sessionType: type,
+        fieldSize: fieldSize,
         rawV: rawV,
         rawP: rawP,
         rawX: rawX
@@ -1815,7 +1845,7 @@ function renderLibSortBar() {
         { key: 'category', icon: 'fa-folder', label: 'Categoria' },
         { key: 'name', icon: 'fa-font', label: 'Nome' },
         { key: 'recent', icon: 'fa-clock', label: 'Recenti' },
-        { key: 'items-desc', icon: 'fa-arrow-down-9-1', label: 'N. stimoli' },
+        { key: 'items-desc', icon: 'fa-arrow-down-9-1', label: 'Field' },
         { key: 'modes', icon: 'fa-gamepad', label: 'Modalit\u00E0' }
     ];
     bar.innerHTML = opts.map(o =>
