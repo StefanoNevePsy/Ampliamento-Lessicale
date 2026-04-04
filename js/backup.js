@@ -204,6 +204,20 @@ async function buildBackupZip(sets, patients, includeConfig, includeReports = tr
                 }
             }
 
+            // Extract variant images
+            if (item.variantUrls && typeof item.variantUrls === 'object') {
+                for (const [vIdx, vUrl] of Object.entries(item.variantUrls)) {
+                    if (vUrl && vUrl.startsWith('data:')) {
+                        const parsed = parseDataUrl(vUrl);
+                        if (parsed) {
+                            const vImgName = `${setSlug}_${i}_${sanitizeFilename(item.label)}_v${vIdx}.${parsed.ext}`;
+                            itemImagesFolder.file(vImgName, base64ToUint8(parsed.base64));
+                            item.variantUrls[vIdx] = `images/items/${vImgName}`;
+                        }
+                    }
+                }
+            }
+
             // Extract audio
             if (item.audio && item.audio.startsWith('data:')) {
                 const parsed = parseDataUrl(item.audio);
@@ -460,6 +474,19 @@ window.exportSingleSet = async (id) => {
                 item.url = `images/items/${imgName}`;
             }
         }
+        // Extract variant images
+        if (item.variantUrls && typeof item.variantUrls === 'object') {
+            for (const [vIdx, vUrl] of Object.entries(item.variantUrls)) {
+                if (vUrl && vUrl.startsWith('data:')) {
+                    const parsed = parseDataUrl(vUrl);
+                    if (parsed) {
+                        const vImgName = `${setSlug}_${i}_${sanitizeFilename(item.label)}_v${vIdx}.${parsed.ext}`;
+                        itemImagesFolder.file(vImgName, base64ToUint8(parsed.base64));
+                        item.variantUrls[vIdx] = `images/items/${vImgName}`;
+                    }
+                }
+            }
+        }
         if (item.audio && item.audio.startsWith('data:')) {
             const parsed = parseDataUrl(item.audio);
             if (parsed) {
@@ -571,6 +598,19 @@ async function importFromZip(file) {
                     const ext = item.audio.split('.').pop();
                     const uint8 = await audioFile.async('uint8array');
                     item.audio = binaryToDataUrl(uint8, ext);
+                }
+            }
+            // Rehydrate variant images
+            if (item.variantUrls && typeof item.variantUrls === 'object') {
+                for (const [vIdx, vPath] of Object.entries(item.variantUrls)) {
+                    if (vPath && !vPath.startsWith('data:') && !vPath.startsWith('http')) {
+                        const vFile = zip.file(vPath);
+                        if (vFile) {
+                            const ext = vPath.split('.').pop();
+                            const uint8 = await vFile.async('uint8array');
+                            item.variantUrls[vIdx] = binaryToDataUrl(uint8, ext);
+                        }
+                    }
                 }
             }
         }
@@ -859,30 +899,30 @@ function mergePatients(local, incoming) {
 }
 
 function mergeActivityLayout(incoming) {
+    // Full replace: restore the exact layout structure (groups, ordering, icons, colors)
+    // from the backup, preserving any local custom modes not present in backup
     const local = getActivityLayout();
-    if (incoming.customModes) {
-        if (!local.customModes) local.customModes = {};
-        for (const [k, v] of Object.entries(incoming.customModes)) {
-            if (!local.customModes[k]) {
-                local.customModes[k] = v;
-                const inAnyGroup = local.groups.some(g => g.modes.includes(k));
-                if (!inAnyGroup && local.groups.length > 0) local.groups[0].modes.push(k);
+    const result = JSON.parse(JSON.stringify(incoming));
+
+    // Ensure required fields exist
+    if (!result.groups) result.groups = local.groups;
+    if (!result.customModes) result.customModes = {};
+    if (!result.modeEmojis) result.modeEmojis = {};
+
+    // Preserve local custom modes not in backup
+    if (local.customModes) {
+        for (const [k, v] of Object.entries(local.customModes)) {
+            if (!result.customModes[k]) {
+                result.customModes[k] = v;
+                const inAnyGroup = (result.groups || []).some(g => (g.modes || []).includes(k));
+                if (!inAnyGroup && result.groups && result.groups.length > 0) {
+                    result.groups[0].modes.push(k);
+                }
             }
         }
     }
-    if (incoming.modeEmojis) {
-        if (!local.modeEmojis) local.modeEmojis = {};
-        Object.assign(local.modeEmojis, incoming.modeEmojis);
-    }
-    if (incoming.modeIcons) {
-        if (!local.modeIcons) local.modeIcons = {};
-        Object.assign(local.modeIcons, incoming.modeIcons);
-    }
-    if (incoming.groupColors) {
-        if (!local.groupColors) local.groupColors = {};
-        Object.assign(local.groupColors, incoming.groupColors);
-    }
-    saveActivityLayout(local);
+
+    saveActivityLayout(result);
     renderModeSelect();
 }
 

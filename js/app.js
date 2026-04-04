@@ -257,7 +257,7 @@ function _showImportToast(message) {
 }
 
 // --- SET FILTERING & DROPDOWN ---
-const POOL_ENGINES = ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione'];
+const POOL_ENGINES = ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione', 'ricorda'];
 // Keep POOL_MODES as alias for backward compat
 const POOL_MODES = POOL_ENGINES;
 
@@ -1117,6 +1117,11 @@ window.startGame = () => {
         } else if (engine === 'categorizzazione') {
             state.activeSetId = 'cat_' + state.selectedPoolTags.join('_');
             renderGameMode(mode, []);
+        } else if (engine === 'ricorda') {
+            let poolItems = getItemsByTags(state.selectedPoolTags);
+            poolItems.sort(() => Math.random() - 0.5);
+            state.activeSetId = 'ricorda_' + state.selectedPoolTags.join('_');
+            renderGameMode(mode, poolItems);
         }
         return;
     }

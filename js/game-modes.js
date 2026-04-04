@@ -174,6 +174,7 @@ function renderGameMode(mode, items) {
     else if (engine === 'sequenze') renderSequenze(items, stage);
     else if (engine === 'categorizzazione') renderCategorizzazione(items, stage);
     else if (engine === 'zoom') renderZoom(items, stage);
+    else if (engine === 'ricorda') renderRicorda(items, stage);
     else if (engine === 'quaderno' || engine === 'quaderno_task') renderQuaderno(stage, engine);
     // Re-insert pointer canvas on top after renderer runs (preserves event listeners and state)
     if (pointerCanvas) stage.appendChild(pointerCanvas);
@@ -2228,6 +2229,220 @@ window.revealZoom = () => {
 window.nextZoomItem = () => {
     state.zoomIndex++;
     showZoomItem(document.getElementById('game-stage'));
+};
+
+// ============================================================
+// --- RICORDA (Cards face-up, then flipped, child guesses) ---
+// ============================================================
+
+function renderRicorda(items, stage) {
+    if (!items || items.length === 0) {
+        stage.innerHTML = `
+            <div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; opacity:0.5; text-align:center; padding:20px;">
+                <i class="fa-solid fa-brain fa-3x" style="margin-bottom:15px;"></i>
+                <p>Nessun item trovato per i tag selezionati.<br>Assicurati che i set abbiano immagini e tag assegnati.</p>
+            </div>`;
+        return;
+    }
+
+    const numStimuli = parseInt(document.getElementById('num-stimuli').value) || 0;
+    const cardCount = numStimuli > 0 ? Math.min(numStimuli, items.length) : Math.min(6, items.length);
+    const cards = items.slice(0, cardCount);
+
+    // Store state for scoring
+    state._ricordaCards = cards;
+    state._ricordaFlipped = false;
+    state._ricordaRevealed = {};
+    state._ricordaScored = {};
+    state.session.playItems = cards;
+
+    _showRicordaBoard(stage, cards, false);
+}
+
+function _showRicordaBoard(stage, cards, flipped) {
+    const cols = cards.length <= 2 ? cards.length : Math.ceil(Math.sqrt(cards.length));
+    const rows = Math.ceil(cards.length / cols);
+    const scored = state._ricordaScored || {};
+    const revealed = state._ricordaRevealed || {};
+    const allScored = Object.keys(scored).length === cards.length;
+
+    // Toolbar
+    let toolbarHtml;
+    if (!flipped) {
+        // Phase 1: cards face-up, show "Gira" button + optional timer
+        const sessionType = (typeof getSelectedSessionType === 'function') ? getSelectedSessionType() : 'standard';
+        const tdSeconds = (typeof getSelectedTDSeconds === 'function') ? getSelectedTDSeconds() : 5;
+        const showTimer = sessionType === 'timedelay';
+
+        toolbarHtml = `
+            <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
+                <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
+                    <i class="fa-solid fa-brain"></i> Ricorda - Memorizza!
+                </span>
+                <span style="color:var(--text-secondary); font-size:0.75rem;">${cards.length} carte</span>
+                ${showTimer ? `<span id="ricorda-countdown" style="background:rgba(139,92,246,0.2); color:#a78bfa; padding:2px 10px; border-radius:10px; font-size:0.8rem; font-weight:bold;">${tdSeconds}s</span>` : ''}
+                <button class="btn btn-sm btn-primary" onclick="ricordaFlipAll()" style="padding:4px 14px; font-size:0.8rem;">
+                    <i class="fa-solid fa-rotate"></i> Gira Carte
+                </button>
+                ${showTimer ? `<button class="btn btn-sm" onclick="ricordaStartTimer()" style="padding:4px 12px; font-size:0.75rem; background:rgba(139,92,246,0.3); color:#a78bfa; border:1px solid rgba(139,92,246,0.4);">
+                    <i class="fa-solid fa-clock"></i> Timer Auto
+                </button>` : ''}
+            </div>`;
+    } else {
+        // Phase 2: cards flipped, show progress
+        const scoredCount = Object.keys(scored).length;
+        toolbarHtml = `
+            <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
+                <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
+                    <i class="fa-solid fa-brain"></i> Ricorda - Indovina!
+                </span>
+                <span style="color:var(--text-secondary); font-size:0.75rem;">${scoredCount}/${cards.length}</span>
+                ${allScored ? `<button class="btn btn-sm btn-primary" onclick="ricordaNewRound()" style="padding:4px 14px; font-size:0.8rem;">
+                    <i class="fa-solid fa-forward"></i> Nuovo Round
+                </button>` : ''}
+            </div>`;
+    }
+
+    // Cards grid
+    const cardsHtml = cards.map((item, idx) => {
+        const isRevealed = revealed[idx];
+        const scoreResult = scored[idx];
+        const hasScore = scoreResult !== undefined;
+
+        if (!flipped || isRevealed) {
+            // Face-up: show image
+            let border = '';
+            let overlay = '';
+            if (hasScore) {
+                const color = scoreResult === 'v' ? 'var(--success-color)' : scoreResult === 'p' ? 'var(--accent-color)' : 'var(--danger-color)';
+                const icon = scoreResult === 'v' ? 'fa-check' : scoreResult === 'p' ? 'fa-hand' : 'fa-xmark';
+                border = `border: 3px solid ${color};`;
+                overlay = `<div style="position:absolute; top:4px; right:4px; width:24px; height:24px; border-radius:50%; background:${color}; display:flex; align-items:center; justify-content:center;">
+                    <i class="fa-solid ${icon}" style="color:white; font-size:0.7rem;"></i>
+                </div>`;
+            }
+            return `
+                <div class="card-grid" style="position:relative; aspect-ratio:unset; height:auto; min-height:0; min-width:0; overflow:hidden; ${border}">
+                    <img src="${item.url || getPlaceholderUrl(item.label)}"
+                         style="max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain;"
+                         onerror="handleImgError(this, '${(item.label || '').replace(/'/g, "\\'")}')">
+                    ${overlay}
+                    ${flipped && isRevealed && !hasScore ? `
+                    <div style="position:absolute; bottom:0; left:0; right:0; display:flex; gap:2px; padding:4px; background:rgba(0,0,0,0.6);">
+                        <button onclick="ricordaScore(${idx},'v')" style="flex:1; padding:6px; border:none; border-radius:6px; background:var(--success-color); color:white; font-size:0.8rem; cursor:pointer;">
+                            <i class="fa-solid fa-check"></i>
+                        </button>
+                        <button onclick="ricordaScore(${idx},'p')" style="flex:1; padding:6px; border:none; border-radius:6px; background:var(--accent-color); color:white; font-size:0.8rem; cursor:pointer;">
+                            <i class="fa-solid fa-hand"></i>
+                        </button>
+                        <button onclick="ricordaScore(${idx},'x')" style="flex:1; padding:6px; border:none; border-radius:6px; background:var(--danger-color); color:white; font-size:0.8rem; cursor:pointer;">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>` : ''}
+                </div>`;
+        } else {
+            // Face-down: show card back, tap to reveal
+            return `
+                <div class="card-grid" onclick="ricordaReveal(${idx})"
+                     style="background:var(--accent-color); aspect-ratio:unset; height:auto; min-height:0; min-width:0; overflow:hidden; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+                    <i class="fa-solid fa-question" style="color:white; font-size:2rem; opacity:0.7;"></i>
+                </div>`;
+        }
+    }).join('');
+
+    stage.innerHTML = `
+    <div style="display:flex; height:100%; flex-direction:column;">
+        ${toolbarHtml}
+        <div style="flex:1; min-height:0; padding:10px; display:grid;
+                    grid-template-columns:repeat(${cols}, 1fr);
+                    grid-template-rows:repeat(${rows}, minmax(80px, 1fr));
+                    gap:10px; overflow-y:auto;">
+            ${cardsHtml}
+        </div>
+    </div>`;
+}
+
+// Flip all cards face-down
+window.ricordaFlipAll = () => {
+    if (state._ricordaTimerInterval) {
+        clearInterval(state._ricordaTimerInterval);
+        state._ricordaTimerInterval = null;
+    }
+    state._ricordaFlipped = true;
+    state._ricordaRevealed = {};
+    state._ricordaScored = {};
+    _showRicordaBoard(document.getElementById('game-stage'), state._ricordaCards, true);
+};
+
+// Start auto-timer that flips cards after TD seconds
+window.ricordaStartTimer = () => {
+    if (state._ricordaTimerInterval) return;
+    const tdSeconds = (typeof getSelectedTDSeconds === 'function') ? getSelectedTDSeconds() : 5;
+    let remaining = tdSeconds;
+    const el = document.getElementById('ricorda-countdown');
+    if (el) el.textContent = remaining + 's';
+
+    state._ricordaTimerInterval = setInterval(() => {
+        remaining--;
+        const el = document.getElementById('ricorda-countdown');
+        if (el) el.textContent = remaining + 's';
+        if (remaining <= 0) {
+            clearInterval(state._ricordaTimerInterval);
+            state._ricordaTimerInterval = null;
+            window.ricordaFlipAll();
+        }
+    }, 1000);
+};
+
+// Reveal a single card (tap in flipped phase)
+window.ricordaReveal = (idx) => {
+    if (!state._ricordaFlipped) return;
+    if (state._ricordaRevealed[idx]) return;
+    state._ricordaRevealed[idx] = true;
+    _showRicordaBoard(document.getElementById('game-stage'), state._ricordaCards, true);
+};
+
+// Score a revealed card
+window.ricordaScore = (idx, result) => {
+    state._ricordaScored[idx] = result;
+    // Update global session scoring
+    if (typeof window.markCorrect === 'function' || typeof updateScoreUI === 'function') {
+        state.session.total++;
+        if (result === 'v') { state.session.correct++; state.session.itemResults[idx] = true; }
+        else if (result === 'p') { state.session.incorrect++; state.session.itemResults[idx] = 'prompt'; }
+        else { state.session.incorrect++; state.session.itemResults[idx] = false; }
+        if (typeof updateScoreUI === 'function') updateScoreUI();
+    }
+
+    // Check if all scored — show save button
+    const allScored = Object.keys(state._ricordaScored).length === state._ricordaCards.length;
+    if (allScored) {
+        document.getElementById('btn-save-session').classList.remove('hidden');
+        if (typeof showSessionNameInput === 'function') showSessionNameInput();
+    }
+
+    _showRicordaBoard(document.getElementById('game-stage'), state._ricordaCards, true);
+};
+
+// New round: reshuffle and show new cards face-up
+window.ricordaNewRound = () => {
+    if (state._ricordaTimerInterval) {
+        clearInterval(state._ricordaTimerInterval);
+        state._ricordaTimerInterval = null;
+    }
+    // Re-fetch and shuffle items from pool
+    let poolItems = getItemsByTags(state.selectedPoolTags);
+    poolItems.sort(() => Math.random() - 0.5);
+    const numStimuli = parseInt(document.getElementById('num-stimuli').value) || 0;
+    const cardCount = numStimuli > 0 ? Math.min(numStimuli, poolItems.length) : Math.min(6, poolItems.length);
+    const cards = poolItems.slice(0, cardCount);
+
+    state._ricordaCards = cards;
+    state._ricordaFlipped = false;
+    state._ricordaRevealed = {};
+    state._ricordaScored = {};
+
+    _showRicordaBoard(document.getElementById('game-stage'), cards, false);
 };
 
 // ============================================================
