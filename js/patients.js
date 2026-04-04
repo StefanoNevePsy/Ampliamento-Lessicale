@@ -804,6 +804,7 @@ function renderDatesTab(patient) {
             const dayModeIcon = (typeof getModeIcon === 'function') ? getModeIcon(s.mode) : 'fa-puzzle-piece';
             const typeTag = s.sessionType === 'timedelay' ? `<span style="font-size:0.6rem; background:rgba(245,158,11,0.2); color:var(--warning-color); padding:1px 5px; border-radius:4px; margin-left:4px;">TD${s.timeDelaySeconds || ''}s</span>` : '';
             const fieldTag = s.fieldSize ? `<span style="font-size:0.6rem; background:rgba(99,102,241,0.2); color:var(--accent-color); padding:1px 5px; border-radius:4px; margin-left:4px;">F${s.fieldSize}</span>` : '';
+            const variantTag = s.variant ? (() => { const vSet = state.savedSets.find(ss => ss.id === s.setId); const vName = vSet?.variantNames?.[s.variant - 1] || `V${s.variant}`; return `<span style="font-size:0.6rem; background:rgba(139,92,246,0.2); color:#a78bfa; padding:1px 5px; border-radius:4px; margin-left:4px;"><i class="fa-solid fa-layer-group" style="font-size:0.5rem;"></i> ${vName}</span>`; })() : '';
             const sessionNoteIcon = s.note ? '<i class="fa-solid fa-sticky-note" style="color:#eab308; font-size:0.6rem; flex-shrink:0;" title="Nota attività"></i>' : '';
             const activityKey = encodeURIComponent(s.setName + '::' + s.mode + '::' + getSessionTypeGroup(s));
             // Set thumbnail for Giornate
@@ -822,7 +823,7 @@ function renderDatesTab(patient) {
                                 <i class="fa-solid fa-chevron-right day-act-icon" style="transition:transform 0.2s; font-size:0.6rem; color:#555;"></i>
                                 ${dayThumb}
                                 <span style="background:rgba(99,102,241,0.15); padding:2px 8px; border-radius:6px; font-size:0.7rem; color:var(--accent-color); flex-shrink:0; display:inline-flex; align-items:center; gap:4px;"><i class="fa-solid ${dayModeIcon}" style="font-size:0.65rem;"></i>${modeName}</span>
-                                <span style="font-size:0.9rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.setName}</span>${s.setCat ? `<span style="font-size:0.65rem; color:var(--text-secondary); background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:4px; flex-shrink:0;">${s.setCat}</span>` : ''}${typeTag}${fieldTag}${sessionNoteIcon}
+                                <span style="font-size:0.9rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.setName}</span>${s.setCat ? `<span style="font-size:0.65rem; color:var(--text-secondary); background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:4px; flex-shrink:0;">${s.setCat}</span>` : ''}${typeTag}${fieldTag}${variantTag}${sessionNoteIcon}
                             </div>
                             <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
                                 <span style="font-size:0.85rem;">${s.correct}/${s.total}</span>

@@ -1771,11 +1771,11 @@ function renderSearchFind(items, stage) {
     // Navigation arrows (only if multiple items and NOT in fullscreen)
     const navHtml = (total > 1 && !isFs) ? `
         <div style="display:flex; align-items:center; gap:6px;">
-            <button class="btn btn-sm" onclick="sfPrevVariant()" style="padding:4px 8px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.08); color:white; border-radius:6px; cursor:pointer;" ${idx === 0 ? 'disabled style="padding:4px 8px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.08); color:#555; border-radius:6px; cursor:default;"' : ''}>
+            <button class="btn btn-sm" onclick="sfPrevVariant()" style="padding:4px 8px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.08); color:${idx === 0 ? '#555' : 'white'}; border-radius:6px; cursor:${idx === 0 ? 'default' : 'pointer'};" ${idx === 0 ? 'disabled' : ''}>
                 <i class="fa-solid fa-chevron-left"></i>
             </button>
-            <span style="font-size:0.75rem; color:var(--text-secondary); white-space:nowrap;">Variante ${idx + 1} / ${total}</span>
-            <button class="btn btn-sm" onclick="sfNextVariant()" style="padding:4px 8px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.08); color:white; border-radius:6px; cursor:pointer;" ${idx >= total - 1 ? 'disabled style="padding:4px 8px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.08); color:#555; border-radius:6px; cursor:default;"' : ''}>
+            <span style="font-size:0.75rem; color:var(--text-secondary); white-space:nowrap;">Img ${idx + 1} / ${total}</span>
+            <button class="btn btn-sm" onclick="sfNextVariant()" style="padding:4px 8px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.08); color:${idx >= total - 1 ? '#555' : 'white'}; border-radius:6px; cursor:${idx >= total - 1 ? 'default' : 'pointer'};" ${idx >= total - 1 ? 'disabled' : ''}>
                 <i class="fa-solid fa-chevron-right"></i>
             </button>
         </div>` : (total > 1 && isFs ? `<span style="font-size:0.65rem; color:var(--text-secondary);">${idx + 1}/${total}</span>` : '');

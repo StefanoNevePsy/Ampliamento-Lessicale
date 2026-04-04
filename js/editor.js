@@ -4,6 +4,8 @@ window.editSet = async (id) => {
     const set = state.savedSets.find(s => s.id === id);
     state.editingSetId = id;
     state.editingItems = JSON.parse(JSON.stringify(set.items));
+    state._editingVariantNames = set.variantNames ? [...set.variantNames] : [];
+    state._editingVariant = 0; // Always start editing the base variant
     document.getElementById('edit-set-name').value = set.name;
 
     // Mode checkboxes
@@ -24,6 +26,7 @@ window.editSet = async (id) => {
     state._editingImageQuality = set.imageQuality || guessDefaultImageQuality(set.modes || []);
     renderImageQualitySelector();
 
+    renderVariantEditor();
     renderEditorList();
     document.getElementById('modal-library').classList.remove('open');
     document.getElementById('modal-editor').classList.add('open');
@@ -234,6 +237,12 @@ window.saveEditorChanges = () => {
             s.modes = modes;
             s.tags = [...editingTags]; // Save semantic tags
             s.imageQuality = state._editingImageQuality || 'media';
+            // Save variant names (only if variants exist)
+            if (state._editingVariantNames && state._editingVariantNames.length > 0) {
+                s.variantNames = [...state._editingVariantNames];
+            } else {
+                delete s.variantNames;
+            }
             DB.saveSet(s).then(() => {
                 reloadLibrary();
                 document.getElementById('modal-editor').classList.remove('open');
@@ -258,6 +267,7 @@ function renderEditorList() {
         </div>
     `;
 
+    const editVariant = state._editingVariant || 0;
     const listHtml = state.editingItems.map((item, idx) => {
         const isSelected = state.activeEditorIndex === idx;
         const activeStyle = isSelected ? 'border:1px solid var(--accent-color); background:rgba(99, 102, 241, 0.1);' : 'border:1px solid transparent;';
@@ -267,10 +277,14 @@ function renderEditorList() {
         const hasZoom = item.zoomArea ? '<i class="fa-solid fa-crop" style="color:var(--warning-color); font-size:0.6rem;"></i>' : '';
         const hasSeq = item.seqNumber ? `<i class="fa-solid fa-arrow-down-1-9" style="color:var(--accent-color); font-size:0.6rem;" title="Seq: ${item.seqNumber}"></i>` : '';
 
+        // Resolve display URL based on active editing variant
+        const displayUrl = getItemVariantUrl(item, editVariant);
+        const hasVariantImg = editVariant > 0 && item.variantUrls && item.variantUrls[editVariant];
+
         return `
         <div class="editor-item" style="${activeStyle} ${opacityStyle} transition:0.2s; cursor:pointer;" onclick="setActiveItem(${idx})">
-            <div class="editor-thumb" style="cursor:pointer; position:relative;" onclick="triggerItemUpload(${idx}); event.stopPropagation();" title="Clicca per caricare">
-                <img src="${item.url || getPlaceholderUrl(item.label)}" style="width:100%; height:100%; object-fit:cover; pointer-events:none;">
+            <div class="editor-thumb" style="cursor:pointer; position:relative;${editVariant > 0 && !hasVariantImg ? ' outline:2px dashed var(--warning-color); outline-offset:-2px;' : ''}" onclick="triggerItemUpload(${idx}); event.stopPropagation();" title="Clicca per caricare">
+                <img src="${displayUrl || getPlaceholderUrl(item.label)}" style="width:100%; height:100%; object-fit:cover; pointer-events:none;">
                 <div style="position:absolute; inset:0; background:rgba(0,0,0,0.3); display:flex; justify-content:center; align-items:center; opacity:0;">
                     <i class="fa-solid fa-camera" style="color:white;"></i>
                 </div>
@@ -340,13 +354,15 @@ window.setActiveItem = (index) => {
 // --- IMAGE UPLOAD ---
 window.triggerItemUpload = (index) => {
     state.activeEditorIndex = index;
+    const editVariant = state._editingVariant || 0;
     let input = document.createElement('input');
     input.type = 'file'; input.accept = 'image/*'; input.style.display = 'none';
     input.onchange = (e) => {
         if (e.target.files[0]) {
             const r = new FileReader();
             r.onload = async (ev) => {
-                state.editingItems[index].url = await compressDataUrl(ev.target.result, getEditingImageQuality());
+                const compressed = await compressDataUrl(ev.target.result, getEditingImageQuality());
+                setItemVariantUrl(state.editingItems[index], editVariant, compressed);
                 renderEditorList();
             };
             r.readAsDataURL(e.target.files[0]);
@@ -361,13 +377,28 @@ window.bulkUploadImages = (input) => {
     if (!input.files || input.files.length === 0) return;
     const files = Array.from(input.files);
     const preset = getEditingImageQuality();
+    const editVariant = state._editingVariant || 0;
 
     files.forEach(file => {
         const r = new FileReader();
         r.onload = async (ev) => {
             const name = file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
             const url = await compressDataUrl(ev.target.result, preset);
-            state.editingItems.push({ label: name, url, hidden: false });
+            if (editVariant === 0) {
+                state.editingItems.push({ label: name, url, hidden: false });
+            } else {
+                // For non-base variants, try to match by filename to existing items
+                const existing = state.editingItems.find(i =>
+                    i.label.toLowerCase().trim() === name.toLowerCase().trim());
+                if (existing) {
+                    setItemVariantUrl(existing, editVariant, url);
+                } else {
+                    // No matching item: create new item with this variant image
+                    const newItem = { label: name, url: null, hidden: false };
+                    setItemVariantUrl(newItem, editVariant, url);
+                    state.editingItems.push(newItem);
+                }
+            }
             renderEditorList();
         };
         r.readAsDataURL(file);
@@ -569,20 +600,147 @@ async function handlePaste(e) {
         }
     }
 
-    // Editor paste
+    // Editor paste (variant-aware)
     if (!document.getElementById('modal-editor').classList.contains('open')) return;
     if (state.activeEditorIndex === null || state.activeEditorIndex === undefined) return;
     const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+    const editVariant = state._editingVariant || 0;
     for (const item of items) {
         if (item.type.indexOf('image') === 0) {
             e.preventDefault();
             const blob = item.getAsFile();
             const r = new FileReader();
             r.onload = async (event) => {
-                state.editingItems[state.activeEditorIndex].url = await compressDataUrl(event.target.result, getEditingImageQuality());
+                const compressed = await compressDataUrl(event.target.result, getEditingImageQuality());
+                setItemVariantUrl(state.editingItems[state.activeEditorIndex], editVariant, compressed);
                 renderEditorList();
             };
             r.readAsDataURL(blob);
         }
     }
 }
+
+// === SET VARIANT SYSTEM ===
+// Helper: get the URL for a specific variant of an item
+function getItemVariantUrl(item, variantIndex) {
+    if (!variantIndex || variantIndex === 0) return item.url;
+    if (item.variantUrls && item.variantUrls[variantIndex]) return item.variantUrls[variantIndex];
+    return item.url; // fallback to base
+}
+window.getItemVariantUrl = getItemVariantUrl;
+
+// Helper: set the URL for a specific variant of an item
+function setItemVariantUrl(item, variantIndex, url) {
+    if (!variantIndex || variantIndex === 0) {
+        item.url = url;
+    } else {
+        if (!item.variantUrls) item.variantUrls = {};
+        item.variantUrls[variantIndex] = url;
+    }
+}
+window.setItemVariantUrl = setItemVariantUrl;
+
+// Render variant editor UI in the editor modal
+function renderVariantEditor() {
+    const container = document.getElementById('edit-variant-container');
+    if (!container) return;
+    const names = state._editingVariantNames || [];
+    const activeVar = state._editingVariant || 0;
+
+    // Variant chips: Base + each named variant
+    let html = '<div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">';
+
+    // Base variant chip
+    html += `<span class="tag-chip" style="cursor:pointer; font-size:0.8rem; padding:5px 12px;
+        ${activeVar === 0 ? 'background:rgba(99,102,241,0.3); border-color:var(--accent-color); color:white; font-weight:bold;' : ''}"
+        onclick="selectEditingVariant(0)">
+        <i class="fa-solid fa-image" style="margin-right:4px;"></i>Base
+    </span>`;
+
+    names.forEach((name, i) => {
+        const vIdx = i + 1;
+        const isActive = activeVar === vIdx;
+        // Count items that have this variant's image
+        const filled = state.editingItems.filter(item => item.variantUrls && item.variantUrls[vIdx]).length;
+        const total = state.editingItems.length;
+        html += `<span class="tag-chip" style="cursor:pointer; font-size:0.8rem; padding:5px 12px;
+            ${isActive ? 'background:rgba(99,102,241,0.3); border-color:var(--accent-color); color:white; font-weight:bold;' : ''}"
+            onclick="selectEditingVariant(${vIdx})">
+            <i class="fa-solid fa-layer-group" style="margin-right:4px;"></i>${name}
+            <span style="opacity:0.5; font-size:0.65rem; margin-left:4px;">${filled}/${total}</span>
+            <span onclick="event.stopPropagation(); renameVariant(${i})" style="cursor:pointer; opacity:0.5; margin-left:2px;" title="Rinomina"><i class="fa-solid fa-pen" style="font-size:0.6rem;"></i></span>
+            <span onclick="event.stopPropagation(); removeVariant(${i})" style="cursor:pointer; opacity:0.5; margin-left:2px; color:var(--danger-color);" title="Elimina"><i class="fa-solid fa-xmark" style="font-size:0.7rem;"></i></span>
+        </span>`;
+    });
+
+    // Add variant button
+    html += `<button class="btn btn-ghost" onclick="addVariant()" style="padding:4px 10px; font-size:0.75rem; border-radius:8px;">
+        <i class="fa-solid fa-plus"></i> Variante
+    </button>`;
+    html += '</div>';
+
+    // Hint when editing a non-base variant
+    if (activeVar > 0) {
+        const varName = names[activeVar - 1] || `Variante ${activeVar}`;
+        html += `<div style="margin-top:6px; font-size:0.75rem; color:var(--accent-color); background:rgba(99,102,241,0.1); padding:6px 10px; border-radius:8px;">
+            <i class="fa-solid fa-info-circle"></i> Stai modificando la variante <b>${varName}</b>. Le immagini caricate andranno in questa variante.
+            Le immagini con bordo tratteggiato non hanno ancora un'immagine per questa variante (verr&agrave; usata l'immagine base).
+        </div>`;
+    }
+
+    container.innerHTML = html;
+}
+window.renderVariantEditor = renderVariantEditor;
+
+window.selectEditingVariant = (idx) => {
+    state._editingVariant = idx;
+    renderVariantEditor();
+    renderEditorList();
+};
+
+window.addVariant = async () => {
+    const name = await themedPrompt('Nome della variante:', `Variante ${(state._editingVariantNames || []).length + 1}`);
+    if (!name) return;
+    if (!state._editingVariantNames) state._editingVariantNames = [];
+    state._editingVariantNames.push(name.trim());
+    // Switch to the new variant for editing
+    state._editingVariant = state._editingVariantNames.length;
+    renderVariantEditor();
+    renderEditorList();
+};
+
+window.renameVariant = async (index) => {
+    const current = state._editingVariantNames[index];
+    const newName = await themedPrompt('Rinomina variante:', current);
+    if (newName !== null && newName.trim()) {
+        state._editingVariantNames[index] = newName.trim();
+        renderVariantEditor();
+    }
+};
+
+window.removeVariant = async (index) => {
+    const name = state._editingVariantNames[index];
+    if (!await themedConfirm(`Eliminare la variante "${name}" e tutte le sue immagini?`)) return;
+    const vIdx = index + 1;
+    // Remove variant images from all items
+    state.editingItems.forEach(item => {
+        if (item.variantUrls) {
+            delete item.variantUrls[vIdx];
+            // Re-index higher variants
+            const newVarUrls = {};
+            for (const [k, v] of Object.entries(item.variantUrls)) {
+                const ki = parseInt(k);
+                if (ki > vIdx) newVarUrls[ki - 1] = v;
+                else if (ki < vIdx) newVarUrls[ki] = v;
+            }
+            item.variantUrls = Object.keys(newVarUrls).length > 0 ? newVarUrls : undefined;
+            if (item.variantUrls && Object.keys(item.variantUrls).length === 0) delete item.variantUrls;
+        }
+    });
+    state._editingVariantNames.splice(index, 1);
+    // Reset editing variant if it was the deleted one
+    if (state._editingVariant === vIdx) state._editingVariant = 0;
+    else if (state._editingVariant > vIdx) state._editingVariant--;
+    renderVariantEditor();
+    renderEditorList();
+};

@@ -128,6 +128,13 @@
                 </select>
             </div>
 
+            <div class="select-wrapper hidden" id="variant-selector-wrapper" style="max-width: 130px;">
+                <label><i class="fa-solid fa-layer-group"></i> Variante</label>
+                <select id="variant-select" onchange="window.onVariantChange()">
+                    <option value="0">Base</option>
+                </select>
+            </div>
+
             <div class="select-wrapper" style="max-width: 140px;">
                 <label><i class="fa-solid fa-clipboard-check"></i> Tipo</label>
                 <select id="session-type-select" onchange="onSessionTypeChange()">
@@ -302,6 +309,13 @@
                     <span style="font-size:0.7rem; opacity:0.6;">(compressione WebP all'upload)</span>
                 </label>
                 <div id="edit-image-quality-container" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;"></div>
+
+                <!-- VARIANT MANAGEMENT -->
+                <label style="font-size:0.8rem; color:#aaa; margin-top:12px; display:block;">
+                    <i class="fa-solid fa-layer-group"></i> Varianti Immagine
+                    <span style="font-size:0.7rem; opacity:0.6;">(stesse etichette, immagini diverse)</span>
+                </label>
+                <div id="edit-variant-container" style="margin-top:6px;"></div>
             </div>
             <div style="margin-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:15px; display:flex; gap:8px; flex-wrap:wrap;">
                  <button class="btn btn-ghost" onclick="document.getElementById('bulk-upload').click()"><i class="fa-solid fa-images"></i> Carica Immagini (Bulk)</button>

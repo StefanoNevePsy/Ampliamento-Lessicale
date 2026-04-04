@@ -672,6 +672,15 @@ window.loadSelectedSet = async (setId) => {
             if (typeof showSessionNameInput === 'function') showSessionNameInput();
             state._sfVariantIndex = 0; // Reset variant on set switch
             let playItems = state.items.filter(i => !i.hidden);
+            // Apply active variant URLs
+            const activeVariant = parseInt(document.getElementById('variant-select').value) || 0;
+            if (activeVariant > 0 && typeof getItemVariantUrl === 'function') {
+                playItems = playItems.map(item => {
+                    const varUrl = getItemVariantUrl(item, activeVariant);
+                    if (varUrl && varUrl !== item.url) return { ...item, url: varUrl, _originalUrl: item.url };
+                    return item;
+                });
+            }
             state.session.playItems = playItems;
             renderGameMode(mode, playItems);
         } else {
@@ -1125,6 +1134,9 @@ window.startGame = () => {
     // Standard modes: require loaded items
     if (!state.items.length) return;
 
+    // Update variant selector based on current set
+    _updateVariantSelector();
+
     state.session = { correct: 0, incorrect: 0, total: 0, active: true, itemResults: {} };
     state._ranGridIndex = 0; // Reset RAN grid scoring index
     updateScoreUI();
@@ -1157,6 +1169,18 @@ window.startGame = () => {
     if (engine !== 'search_find' && engine !== 'intraverbal_scenari' && gridSize !== 20) {
         const gridLimit = gridSize * gridSize;
         if (playItems.length > gridLimit) playItems = playItems.slice(0, gridLimit);
+    }
+
+    // Apply active variant URLs to play items
+    const activeVariant = parseInt(document.getElementById('variant-select').value) || 0;
+    if (activeVariant > 0 && typeof getItemVariantUrl === 'function') {
+        playItems = playItems.map(item => {
+            const varUrl = getItemVariantUrl(item, activeVariant);
+            if (varUrl && varUrl !== item.url) {
+                return { ...item, url: varUrl, _originalUrl: item.url };
+            }
+            return item;
+        });
     }
 
     state.tactIndex = 0;
@@ -1644,6 +1668,7 @@ async function _doSaveSession(p, noteText) {
             percentage: Math.round((totalV / totalAll) * 100),
             sessionType: type,
             fieldSize: fieldSize,
+            variant: parseInt(document.getElementById('variant-select').value) || 0,
             rawV: totalV,
             rawP: totalP,
             rawX: totalX,
@@ -1734,6 +1759,7 @@ async function _doSaveSession(p, noteText) {
         percentage: Math.round((correct / rawTotal) * 100),
         sessionType: type,
         fieldSize: fieldSize,
+        variant: parseInt(document.getElementById('variant-select').value) || 0,
         rawV: rawV,
         rawP: rawP,
         rawX: rawX
@@ -2630,6 +2656,35 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+// --- VARIANT SELECTOR ---
+function _updateVariantSelector() {
+    const wrapper = document.getElementById('variant-selector-wrapper');
+    const select = document.getElementById('variant-select');
+    if (!wrapper || !select) return;
+
+    const activeSet = state.activeSetId ? state.savedSets.find(s => s.id === state.activeSetId) : null;
+    const variantNames = activeSet?.variantNames;
+
+    if (variantNames && variantNames.length > 0) {
+        wrapper.classList.remove('hidden');
+        select.innerHTML = '<option value="0">Base</option>';
+        variantNames.forEach((name, i) => {
+            const opt = document.createElement('option');
+            opt.value = i + 1;
+            opt.textContent = name;
+            select.appendChild(opt);
+        });
+    } else {
+        wrapper.classList.add('hidden');
+        select.innerHTML = '<option value="0">Base</option>';
+        select.value = '0';
+    }
+}
+
+window.onVariantChange = () => {
+    window.startGame();
+};
 
 // --- GAME AREA FULLSCREEN ---
 window.toggleGameFullscreen = () => {
