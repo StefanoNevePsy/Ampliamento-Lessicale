@@ -1380,6 +1380,15 @@ window.recordResponse = (result) => {
         state.session.itemResults[currentIndex] = result;
         state.session.scoreHistory.push(currentIndex);
         state._ranGridIndex++;
+    } else if (engine === 'ricorda') {
+        // Ricorda: score the last revealed card via floating buttons, then auto-flip back
+        const idx = state._ricordaLastRevealed;
+        if (idx === null || idx === undefined) return;
+        const resultKey = 'ricorda_' + idx + '_' + Date.now();
+        state.session.itemResults[resultKey] = result;
+        state.session.scoreHistory.push(resultKey);
+        // Delegate visual feedback + auto-flip to game-modes handler
+        if (typeof window._ricordaHandleScore === 'function') window._ricordaHandleScore(result);
     } else {
         const id = Date.now().toString();
         state.session.itemResults[id] = result;
