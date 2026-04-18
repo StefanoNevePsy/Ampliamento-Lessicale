@@ -1123,6 +1123,7 @@ window.startGame = () => {
             state.activeSetId = 'ricorda_' + state.selectedPoolTags.join('_');
             renderGameMode(mode, poolItems);
         }
+        window._startTDCountdown();
         return;
     }
 
@@ -1569,6 +1570,18 @@ function handleShortcuts(e) {
         e.preventDefault();
         if (typeof window.toggleGlobalScrollLock === 'function') window.toggleGlobalScrollLock();
     }
+    // Label toggle shortcut — "E" key (Etichette)
+    if (e.key.toLowerCase() === 'e' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        if (typeof window.toggleLabelsVisibility === 'function') window.toggleLabelsVisibility();
+    }
+    // Skip round shortcut — "S" key
+    if (e.key.toLowerCase() === 's' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        const skipEngine = (typeof getModeEngine === 'function') ? getModeEngine(document.getElementById('mode-select').value) : '';
+        if (skipEngine === 'intruso' && typeof window.skipIntrusoRound === 'function') window.skipIntrusoRound();
+        else if (skipEngine === 'categorizzazione' && typeof window.skipCatRound === 'function') window.skipCatRound();
+    }
 }
 
 // --- SAVE SESSION (uses dropdown type, no modal) ---
@@ -1577,6 +1590,13 @@ window.confirmSaveSession = async () => {
     if (!state.activePatientId) return alert("Seleziona prima un paziente in alto.");
     const p = state.patients.find(x => x.id === state.activePatientId);
     if (!p) return;
+
+    // Quaderno/Task Analysis: delegate to their own save handler
+    const mode = document.getElementById('mode-select').value;
+    const engine = getModeEngine(mode);
+    if ((engine === 'quaderno' || engine === 'quaderno_task') && typeof window.saveQuadernoSession === 'function') {
+        return window.saveQuadernoSession();
+    }
 
     // Show note prompt overlay
     _showSessionNotePrompt(async (noteText) => {

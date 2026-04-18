@@ -898,6 +898,9 @@ function showIntrusoRound(stage, round) {
                 Categoria: ${round.targetTag}
             </span>
             <span style="color:var(--text-secondary); font-size:0.8rem;">Round ${current}</span>
+            <button class="btn btn-sm btn-ghost" onclick="skipIntrusoRound()" style="padding:3px 10px; font-size:0.7rem;" title="Salta round (S)">
+                <i class="fa-solid fa-forward-step"></i>
+            </button>
         </div>
         <div style="flex:1; min-height:0; padding:10px; display:grid;
                     grid-template-columns:repeat(${cols}, 1fr);
@@ -918,6 +921,7 @@ function showIntrusoRound(stage, round) {
 
 window.handleIntrusoClick = (idx) => {
     if (!state.session.active) return;
+    if (state._intrusoAdvancing) return;
     const round = state.currentIntrusoRound;
     if (!round) return;
 
@@ -976,7 +980,9 @@ window.handleIntrusoClick = (idx) => {
     if (isTimedelay && !card.isIntruder) return;
 
     // Generate next round after delay (infinite)
+    state._intrusoAdvancing = true;
     setTimeout(() => {
+        state._intrusoAdvancing = false;
         state._autoScoreErrored = false;
         state.intrusoRound++;
         const nextRound = generateIntrusoRound(state.selectedPoolTags, state.intrusoCardsPerRound);
@@ -984,6 +990,18 @@ window.handleIntrusoClick = (idx) => {
             showIntrusoRound(document.getElementById('game-stage'), nextRound);
         }
     }, 1200);
+};
+
+window.skipIntrusoRound = () => {
+    if (state._intrusoAdvancing) return;
+    state._intrusoAdvancing = true;
+    state._autoScoreErrored = false;
+    setTimeout(() => {
+        state._intrusoAdvancing = false;
+        state.intrusoRound++;
+        const nextRound = generateIntrusoRound(state.selectedPoolTags, state.intrusoCardsPerRound);
+        if (nextRound) showIntrusoRound(document.getElementById('game-stage'), nextRound);
+    }, 300);
 };
 
 // --- TOPOLOGIA (Drag & Drop) ---
@@ -1688,6 +1706,9 @@ function showCategorizzazioneItem(stage) {
                 <i class="fa-solid fa-layer-group"></i> A quale categoria appartiene?
             </span>
             <span style="color:var(--text-secondary); font-size:0.8rem;">${idx + 1}/${total}</span>
+            <button class="btn btn-sm btn-ghost" onclick="skipCatRound()" style="padding:3px 10px; font-size:0.7rem;" title="Salta (S)">
+                <i class="fa-solid fa-forward-step"></i>
+            </button>
         </div>
         <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:15px; min-height:0;">
             <div id="cat-card" style="background:white; border-radius:16px; padding:10px; max-width:300px; width:100%; max-height:55%; display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 10px 40px rgba(0,0,0,0.5); transition:0.3s;">
@@ -1711,6 +1732,7 @@ function showCategorizzazioneItem(stage) {
 
 window.handleCatChoice = (chosenTag) => {
     if (!state.session.active) return;
+    if (state._catAdvancing) return;
     const item = state.catItems[state.catIndex];
     const card = document.getElementById('cat-card');
     const isCorrect = chosenTag === item.correctTag;
@@ -1748,7 +1770,9 @@ window.handleCatChoice = (chosenTag) => {
     updateScoreUI();
     document.getElementById('btn-save-session').classList.remove('hidden');
 
+    state._catAdvancing = true;
     setTimeout(() => {
+        state._catAdvancing = false;
         // In TD mode, don't advance on wrong answer
         if (isCorrect || !isTimedelay) {
             state.catIndex++;
@@ -1756,6 +1780,17 @@ window.handleCatChoice = (chosenTag) => {
         }
         showCategorizzazioneItem(document.getElementById('game-stage'));
     }, 800);
+};
+
+window.skipCatRound = () => {
+    if (state._catAdvancing) return;
+    state._catAdvancing = true;
+    state._autoScoreErrored = false;
+    setTimeout(() => {
+        state._catAdvancing = false;
+        state.catIndex++;
+        showCategorizzazioneItem(document.getElementById('game-stage'));
+    }, 300);
 };
 
 // --- SEARCH & FIND ---

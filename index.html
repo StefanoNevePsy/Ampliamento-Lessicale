@@ -323,7 +323,14 @@
                  <button class="btn btn-ghost" onclick="openBulkPollinations()" style="color:var(--accent-color); border-color:rgba(99,102,241,0.3);"><i class="fa-solid fa-wand-magic-sparkles"></i> Genera Immagini AI</button>
             </div>
             <div id="editor-list"></div>
-            <button class="btn btn-primary" style="width:100%; margin-top:20px; padding:15px;" onclick="addNewItem()"><i class="fa-solid fa-plus"></i> Aggiungi Carta Vuota</button>
+            <div style="display:flex; gap:8px; margin-top:20px;">
+                <button class="btn btn-primary" style="flex:1; padding:15px;" onclick="addNewItem()"><i class="fa-solid fa-plus"></i> Aggiungi Carta</button>
+                <button class="btn btn-ghost" style="padding:15px;" onclick="toggleBulkAddPanel()" title="Aggiungi multipli"><i class="fa-solid fa-list"></i> Bulk</button>
+            </div>
+            <div id="bulk-add-panel" class="hidden" style="margin-top:10px;">
+                <textarea id="bulk-add-textarea" rows="6" placeholder="Scrivi un nome per riga&#10;es:&#10;Mela&#10;Pera&#10;Banana" style="width:100%; padding:10px; border-radius:10px; background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); color:white; font-size:0.85rem; resize:vertical;"></textarea>
+                <button class="btn btn-primary" style="width:100%; margin-top:6px; padding:10px;" onclick="bulkAddItems()"><i class="fa-solid fa-plus"></i> Aggiungi Tutti</button>
+            </div>
         </div>
     </div>
 

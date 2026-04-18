@@ -28,6 +28,8 @@
 * { box-sizing: border-box; outline: none; -webkit-tap-highlight-color: transparent; user-select: none; }
 body { font-family: 'Noto Sans', sans-serif; background: var(--bg-gradient); background-attachment: fixed; color: var(--text-primary); margin: 0; padding: env(safe-area-inset-top) 10px 10px 10px; min-height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 body.global-locked { overflow: hidden !important; touch-action: none; }
+body.global-locked #game-stage { overscroll-behavior: none; }
+body.global-locked .card-grid, body.global-locked .ricorda-card-wrapper { touch-action: manipulation; }
 
 /* APP SHELL */
 .app-shell {
@@ -326,9 +328,10 @@ select optgroup { background: var(--dropdown-deeper); color: var(--text-secondar
 .custom-ac-item:last-child { border-bottom: none; }
 .custom-ac-empty { padding: 12px 14px; font-size: 0.8rem; color: var(--text-secondary); text-align: center; font-style: italic; }
 
-.card-grid { cursor: pointer; transition: 0.2s; background: white; border-radius: 12px; padding: 5px; position:relative; aspect-ratio: 1; display:flex; align-items:center; justify-content:center;}
-.card-grid img { width: 100%; height: 100%; object-fit: contain; border-radius: 6px; }
+.card-grid { cursor: pointer; transition: 0.2s; background: white; border-radius: 12px; padding: 5px; position:relative; aspect-ratio: 1; display:flex; align-items:center; justify-content:center; touch-action: manipulation; -webkit-tap-highlight-color: transparent; user-select: none; }
+.card-grid img { width: 100%; height: 100%; object-fit: contain; border-radius: 6px; pointer-events: none; }
 .card-grid.matched { opacity: 0.3; filter: grayscale(100%); pointer-events: none; }
+.ricorda-card-wrapper { touch-action: manipulation; -webkit-tap-highlight-color: transparent; user-select: none; }
 
 .modal-fs { position: fixed; inset: 0; background: var(--modal-bg); z-index: 10000; display: flex; flex-direction: column; transform: translateY(100%); transition: transform 0.3s; }
 .modal-fs.open { transform: translateY(0); }

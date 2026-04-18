@@ -335,6 +335,32 @@ window.addNewItem = () => {
     }, 100);
 };
 
+window.toggleBulkAddPanel = () => {
+    const panel = document.getElementById('bulk-add-panel');
+    panel.classList.toggle('hidden');
+    if (!panel.classList.contains('hidden')) {
+        document.getElementById('bulk-add-textarea').focus();
+    }
+};
+
+window.bulkAddItems = () => {
+    const textarea = document.getElementById('bulk-add-textarea');
+    const text = textarea.value.trim();
+    if (!text) return;
+    const names = text.split('\n').map(n => n.trim()).filter(n => n.length > 0);
+    if (names.length === 0) return;
+    names.forEach(name => {
+        state.editingItems.push({ label: name, url: null, hidden: false });
+    });
+    textarea.value = '';
+    document.getElementById('bulk-add-panel').classList.add('hidden');
+    renderEditorList();
+    setTimeout(() => {
+        const list = document.getElementById('editor-list');
+        list.scrollTop = list.scrollHeight;
+    }, 100);
+};
+
 window.closeEditor = () => {
     document.getElementById('modal-editor').classList.remove('open');
     document.getElementById('modal-library').classList.add('open');
