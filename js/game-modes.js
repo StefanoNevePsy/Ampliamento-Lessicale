@@ -175,6 +175,7 @@ function renderGameMode(mode, items) {
     else if (engine === 'categorizzazione') renderCategorizzazione(items, stage);
     else if (engine === 'zoom') renderZoom(items, stage);
     else if (engine === 'ricorda') renderRicorda(items, stage);
+    else if (engine === 'singolare_plurale') renderSingolarePlurale(items, stage);
     else if (engine === 'quaderno' || engine === 'quaderno_task') renderQuaderno(stage, engine);
     // Re-insert pointer canvas on top after renderer runs (preserves event listeners and state)
     if (pointerCanvas) stage.appendChild(pointerCanvas);
@@ -1384,6 +1385,7 @@ window.startRacconto = async () => {
             p.history.push(sessionData);
             await DB.savePatient(p);
             if (nameInput) nameInput.value = '';
+            if (typeof filterSetsByMode === 'function') filterSetsByMode();
         }
     }
 
@@ -2541,6 +2543,212 @@ window.ricordaNewRound = () => {
 };
 
 // ============================================================
+// --- SINGOLARE / PLURALE ---
+// Pool engine that reuses existing tagged images. Each round shows either
+// a single image (singular) or N copies (numbered plural). Two sub-modes:
+//   - random: each round randomly picks singular or plural
+//   - pair: each round shows BOTH forms of the same item, in random order
+// ============================================================
+
+function renderSingolarePlurale(items, stage) {
+    if (!items || items.length === 0) {
+        stage.innerHTML = `
+            <div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; opacity:0.5; text-align:center; padding:20px;">
+                <i class="fa-solid fa-1 fa-3x" style="margin-bottom:15px;"></i>
+                <p>Nessun item trovato per i tag selezionati.<br>Assicurati che i set abbiano immagini e tag assegnati.</p>
+            </div>`;
+        return;
+    }
+
+    // Initialize state on first run (or set change)
+    const prev = state.spState;
+    const prevSubMode = prev?.subMode || localStorage.getItem('sp_sub_mode') || 'random';
+    const prevPluralMin = (prev && prev.pluralMin) || parseInt(localStorage.getItem('sp_plural_min')) || 2;
+    const prevPluralMax = (prev && prev.pluralMax) || parseInt(localStorage.getItem('sp_plural_max')) || 5;
+
+    const pool = [...items].sort(() => Math.random() - 0.5);
+    state.spState = {
+        items: pool,
+        index: 0,
+        subMode: prevSubMode,
+        pairStep: 0,
+        pairOrder: Math.random() < 0.5 ? 'sp' : 'ps',
+        currentForm: null,
+        pluralCount: 2,
+        pluralMin: prevPluralMin,
+        pluralMax: prevPluralMax,
+        round: 0
+    };
+
+    _spPrepareRound();
+    _spRender(stage);
+}
+
+function _spPrepareRound() {
+    const sp = state.spState;
+    if (!sp) return;
+    const item = sp.items[sp.index % sp.items.length];
+
+    if (sp.subMode === 'random') {
+        sp.currentForm = Math.random() < 0.5 ? 'singular' : 'plural';
+    } else {
+        // Pair mode: order is randomized per item, then advance through both steps
+        const order = sp.pairOrder;
+        const step = sp.pairStep;
+        if (order === 'sp') sp.currentForm = step === 0 ? 'singular' : 'plural';
+        else sp.currentForm = step === 0 ? 'plural' : 'singular';
+    }
+
+    if (sp.currentForm === 'plural') {
+        const range = Math.max(0, sp.pluralMax - sp.pluralMin);
+        sp.pluralCount = sp.pluralMin + Math.floor(Math.random() * (range + 1));
+    } else {
+        sp.pluralCount = 1;
+    }
+    sp.currentItem = item;
+}
+
+function _spRender(stage) {
+    const sp = state.spState;
+    if (!sp) return;
+    const item = sp.currentItem;
+    const isPlural = sp.currentForm === 'plural';
+    const count = sp.pluralCount;
+    const url = item.url || getPlaceholderUrl(item.label);
+
+    // Compute grid layout for plural display
+    let cols, rows;
+    if (count === 1) { cols = 1; rows = 1; }
+    else if (count === 2) { cols = 2; rows = 1; }
+    else if (count === 3) { cols = 3; rows = 1; }
+    else if (count === 4) { cols = 2; rows = 2; }
+    else if (count === 5) { cols = 3; rows = 2; }
+    else { cols = 3; rows = 2; }
+
+    const imagesHtml = Array.from({ length: count }, () => `
+        <div style="display:flex; align-items:center; justify-content:center; min-width:0; min-height:0;">
+            <img src="${url}" style="max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain;"
+                 onerror="handleImgError(this, '${(item.label || '').replace(/'/g, "\\'")}')">
+        </div>
+    `).join('');
+
+    const subModeLabel = sp.subMode === 'random' ? 'Random' : 'Coppia';
+    const pairProgress = sp.subMode === 'pair'
+        ? `<span style="color:var(--text-secondary); font-size:0.7rem;">(${sp.pairStep + 1}/2)</span>`
+        : '';
+    const formBadge = isPlural
+        ? `<span style="background:rgba(var(--accent-rgb),0.2); color:var(--accent-color); padding:3px 12px; border-radius:10px; font-size:0.85rem; font-weight:bold;">&times; ${count}</span>`
+        : `<span style="background:rgba(255,255,255,0.08); color:var(--text-secondary); padding:3px 12px; border-radius:10px; font-size:0.85rem;">Singolare</span>`;
+
+    stage.innerHTML = `
+    <div style="display:flex; height:100%; flex-direction:column;">
+        <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
+            <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
+                <i class="fa-solid fa-1"></i> Sing/Plur
+            </span>
+            ${formBadge}
+            <span style="color:var(--text-secondary); font-size:0.75rem;">Round ${sp.round + 1}</span>
+            ${pairProgress}
+            <button class="btn btn-sm btn-ghost" onclick="spToggleSubMode()" title="Modalit&agrave;: ${subModeLabel}" style="padding:3px 10px; font-size:0.7rem;">
+                <i class="fa-solid ${sp.subMode === 'random' ? 'fa-shuffle' : 'fa-link'}"></i> ${subModeLabel}
+            </button>
+            <button class="btn btn-sm btn-ghost" onclick="spOpenSettings()" title="Impostazioni Plurale" style="padding:3px 10px; font-size:0.7rem;">
+                <i class="fa-solid fa-sliders"></i> ${sp.pluralMin}-${sp.pluralMax}
+            </button>
+            <button class="btn btn-sm btn-ghost" onclick="spSkipRound()" title="Salta round (S)" style="padding:3px 10px; font-size:0.7rem;">
+                <i class="fa-solid fa-forward-step"></i>
+            </button>
+        </div>
+        <div style="flex:1; min-height:0; padding:14px; display:grid;
+                    grid-template-columns:repeat(${cols}, 1fr);
+                    grid-template-rows:repeat(${rows}, 1fr);
+                    gap:12px; place-items:center;">
+            ${imagesHtml}
+        </div>
+        ${item.label ? `<div style="text-align:center; padding:6px; color:var(--text-secondary); font-size:0.7rem; opacity:0.5; border-top:1px solid #ffffff10;">
+            ${item.label}${item.sourceSet ? ` &middot; <span style="opacity:0.7;">${item.sourceSet}</span>` : ''}
+        </div>` : ''}
+    </div>`;
+}
+
+window.spToggleSubMode = () => {
+    if (!state.spState) return;
+    state.spState.subMode = state.spState.subMode === 'random' ? 'pair' : 'random';
+    state.spState.pairStep = 0;
+    state.spState.pairOrder = Math.random() < 0.5 ? 'sp' : 'ps';
+    try { localStorage.setItem('sp_sub_mode', state.spState.subMode); } catch(e) {}
+    _spPrepareRound();
+    _spRender(document.getElementById('game-stage'));
+};
+
+window.spSkipRound = () => {
+    _spAdvance();
+    _spRender(document.getElementById('game-stage'));
+};
+
+window.spOpenSettings = async () => {
+    const sp = state.spState;
+    if (!sp) return;
+    const minStr = await themedPrompt('Numero MINIMO copie per il plurale (1-9):', String(sp.pluralMin));
+    if (minStr === null) return;
+    const maxStr = await themedPrompt('Numero MASSIMO copie per il plurale (1-9):', String(sp.pluralMax));
+    if (maxStr === null) return;
+    const min = Math.max(1, Math.min(9, parseInt(minStr) || 2));
+    const max = Math.max(min, Math.min(9, parseInt(maxStr) || 5));
+    sp.pluralMin = min;
+    sp.pluralMax = max;
+    try {
+        localStorage.setItem('sp_plural_min', String(min));
+        localStorage.setItem('sp_plural_max', String(max));
+    } catch(e) {}
+    _spRender(document.getElementById('game-stage'));
+};
+
+function _spAdvance() {
+    const sp = state.spState;
+    if (!sp) return;
+    if (sp.subMode === 'pair' && sp.pairStep === 0) {
+        sp.pairStep = 1;
+    } else {
+        sp.pairStep = 0;
+        sp.pairOrder = Math.random() < 0.5 ? 'sp' : 'ps';
+        sp.index++;
+        sp.round++;
+        if (sp.index >= sp.items.length) {
+            // Reshuffle and continue infinitely
+            sp.items = [...sp.items].sort(() => Math.random() - 0.5);
+            sp.index = 0;
+        }
+    }
+    _spPrepareRound();
+}
+
+window._spHandleScore = (result) => {
+    const sp = state.spState;
+    if (!sp) return;
+    const formLabel = sp.currentForm === 'plural' ? `plur_${sp.pluralCount}` : 'sing';
+    const itemLabel = sp.currentItem?.label || 'item';
+    const resultKey = `sp_${sp.round}_${sp.pairStep}_${formLabel}_${Date.now()}`;
+    state.session.itemResults[resultKey] = result;
+    state.session.scoreHistory.push(resultKey);
+
+    // Track itemDetails for richer reporting
+    if (!state.session._spDetails) state.session._spDetails = [];
+    state.session._spDetails.push({
+        label: itemLabel,
+        form: sp.currentForm,
+        count: sp.pluralCount,
+        result
+    });
+
+    setTimeout(() => {
+        _spAdvance();
+        _spRender(document.getElementById('game-stage'));
+        if (typeof window._startTDCountdown === 'function') window._startTDCountdown();
+    }, 350);
+};
+
+// ============================================================
 // --- QUADERNO STATE PERSISTENCE (survives keyboard attach/page reload) ---
 // ============================================================
 function _saveQuadernoState() {
@@ -3109,6 +3317,7 @@ window.saveQuadernoSession = async () => {
 
         await DB.savePatient(p);
         _clearQuadernoState();
+        if (typeof filterSetsByMode === 'function') filterSetsByMode();
         const mergeNote = merged ? ' (accorpata con sessione precedente)' : '';
         alert(`Task Analysis salvata${mergeNote}!\n${totalScored} LU (escl. N/A), ${totalCorrect} corrette (${Math.round((totalCorrect / totalScored) * 100)}%)\nCicli completati: ${(state._taskCycleCount || 0) + (state._taskCurrentStep > 0 ? 1 : 0)}`);
 
@@ -3153,6 +3362,7 @@ window.saveQuadernoSession = async () => {
 
         await DB.savePatient(p);
         _clearQuadernoState();
+        if (typeof filterSetsByMode === 'function') filterSetsByMode();
         alert(`Sessione salvata!\n${totalLU} LU, ${totalCorrect} corrette (${totalLU > 0 ? Math.round((totalCorrect / totalLU) * 100) : 0}%)`);
     }
 };

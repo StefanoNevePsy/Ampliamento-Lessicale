@@ -20,7 +20,8 @@ const BUILTIN_MODES = {
     'ran_intensivo': { label: 'RAN Intensivo', engine: 'ran_intensivo' },
     'quaderno': { label: 'Quaderno', engine: 'quaderno' },
     'quaderno_task': { label: 'Task Analysis', engine: 'quaderno_task' },
-    'ricorda': { label: 'Ricorda', engine: 'ricorda' }
+    'ricorda': { label: 'Ricorda', engine: 'ricorda' },
+    'singolare_plurale': { label: 'Singolare/Plurale', engine: 'singolare_plurale' }
 };
 
 // MODES_CONFIG: dynamic map of all modes (built-in + custom)
@@ -48,7 +49,7 @@ function getDefaultActivityLayout() {
         groups: [
             { name: '', modes: ['tact', 'ran', 'ran_intensivo', 'fluenza', 'tombola', 'tombola_sonora', 'memory', 'search_find', 'intraverbal_scenari', 'zoom', 'quaderno'] },
             { name: 'Avanzate', modes: ['topologia', 'sequenze', 'quaderno_task'] },
-            { name: 'Pool da Tag', modes: ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione', 'ricorda'] }
+            { name: 'Pool da Tag', modes: ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione', 'ricorda', 'singolare_plurale'] }
         ],
         modeEmojis: {},
         customModes: {} // key -> { label, engine (built-in mode key used for logic) }
@@ -150,7 +151,9 @@ let state = {
     fluenzaShowBar: true,
     // Multi-set session for search_find / intraverbal_scenari
     // Allows accumulating data across multiple sets, then saving one unified session
-    multiSetSession: null  // { sets: [ { setId, setName, setCat, itemResults, scoreHistory } ], active: false }
+    multiSetSession: null,  // { sets: [ { setId, setName, setCat, itemResults, scoreHistory } ], active: false }
+    // Singolare/Plurale state
+    spState: null  // { items, index, subMode, pairStep, pairOrder, currentForm, pluralCount, round }
 };
 
 // --- TAG IMAGE HELPERS (IndexedDB with in-memory cache) ---

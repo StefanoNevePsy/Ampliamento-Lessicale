@@ -257,7 +257,7 @@ function _showImportToast(message) {
 }
 
 // --- SET FILTERING & DROPDOWN ---
-const POOL_ENGINES = ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione', 'ricorda'];
+const POOL_ENGINES = ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione', 'ricorda', 'singolare_plurale'];
 // Keep POOL_MODES as alias for backward compat
 const POOL_MODES = POOL_ENGINES;
 
@@ -1170,6 +1170,11 @@ window.startGame = () => {
             poolItems.sort(() => Math.random() - 0.5);
             state.activeSetId = 'ricorda_' + state.selectedPoolTags.join('_');
             renderGameMode(mode, poolItems);
+        } else if (engine === 'singolare_plurale') {
+            let poolItems = getItemsByTags(state.selectedPoolTags);
+            poolItems.sort(() => Math.random() - 0.5);
+            state.activeSetId = 'sp_' + state.selectedPoolTags.join('_');
+            renderGameMode(mode, poolItems);
         }
         window._startTDCountdown();
         return;
@@ -1438,6 +1443,20 @@ window.recordResponse = (result) => {
         state.session.scoreHistory.push(resultKey);
         // Delegate visual feedback + auto-flip to game-modes handler
         if (typeof window._ricordaHandleScore === 'function') window._ricordaHandleScore(result);
+    } else if (engine === 'singolare_plurale') {
+        if (typeof window._spHandleScore === 'function') {
+            window._spHandleScore(result);
+            // _spHandleScore already pushes the resultKey, so update totals and bail out
+            const results0 = Object.values(state.session.itemResults);
+            state.session.correct = results0.filter(v => v === true).length;
+            state.session.incorrect = results0.filter(v => v === false).length;
+            state.session.prompts = results0.filter(v => v === 'prompt').length;
+            state.session.total = results0.length;
+            updateScoreUI();
+            document.getElementById('btn-save-session').classList.remove('hidden');
+            if (typeof showSessionNameInput === 'function') showSessionNameInput();
+            return;
+        }
     } else {
         const id = Date.now().toString();
         state.session.itemResults[id] = result;
@@ -1786,6 +1805,9 @@ async function _doSaveSession(p, noteText) {
         // Reset multi-set session
         state.multiSetSession = null;
 
+        // Refresh set dropdown so last-run % updates immediately
+        if (typeof filterSetsByMode === 'function') filterSetsByMode();
+
         setTimeout(() => {
             btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i>';
             btn.style.background = '#2563eb';
@@ -1876,6 +1898,12 @@ async function _doSaveSession(p, noteText) {
     // Save per-item details for modes with labeled items
     if (engine === 'ran_intensivo' && state.session._riDetails && state.session._riDetails.length > 0) {
         sessionData.itemDetails = state.session._riDetails;
+    } else if (engine === 'singolare_plurale' && state.session._spDetails && state.session._spDetails.length > 0) {
+        sessionData.itemDetails = state.session._spDetails.map(d => ({
+            label: d.form === 'plural' ? `${d.label} (${d.count})` : `${d.label} (sing.)`,
+            result: d.result
+        }));
+        sessionData.spSubMode = state.spState?.subMode;
     } else {
         const playItems = state.session.playItems || [];
         if (playItems.length > 0 && Object.keys(state.session.itemResults).length > 0) {
@@ -1902,6 +1930,10 @@ async function _doSaveSession(p, noteText) {
     btn.innerHTML = '<i class="fa-solid fa-check"></i>';
     btn.style.background = 'var(--success-color)';
     if (nameInput) nameInput.value = '';
+
+    // Refresh set dropdown so last-run % updates immediately
+    if (typeof filterSetsByMode === 'function') filterSetsByMode();
+
     setTimeout(() => {
         btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i>';
         btn.style.background = '#2563eb';
@@ -2189,7 +2221,8 @@ const MODE_ICONS = {
     search_find: 'fa-magnifying-glass', intraverbal_scenari: 'fa-comments',
     pool_random: 'fa-shuffle', pool_intraverbal: 'fa-random', intruso: 'fa-ban',
     topologia: 'fa-map-pin', sequenze: 'fa-arrow-right-arrow-left', categorizzazione: 'fa-sitemap',
-    zoom: 'fa-search-plus', quaderno: 'fa-book-open', quaderno_task: 'fa-list-check'
+    zoom: 'fa-search-plus', quaderno: 'fa-book-open', quaderno_task: 'fa-list-check',
+    ricorda: 'fa-brain', singolare_plurale: 'fa-1'
 };
 
 // Curated FA icon list for icon picker
