@@ -242,6 +242,9 @@ select optgroup { background: var(--dropdown-deeper); color: var(--text-secondar
 
 /* SCORING BUTTONS */
 .btn-score { width: 60px; height: 60px; border-radius: 50%; border: none; font-size: 1.8rem; color: white; box-shadow: 0 4px 15px rgba(0,0,0,0.4); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.1s; pointer-events: auto; }
+#scoring-controls.score-btns-hidden #btn-score-x,
+#scoring-controls.score-btns-hidden #td-timer-wrapper,
+#scoring-controls.score-btns-hidden .btn-score.success { display: none !important; }
 .btn-score:active { transform: scale(0.9); }
 .btn-score.success { background: var(--success-color); }
 .btn-score.fail { background: var(--danger-color); }

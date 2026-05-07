@@ -752,6 +752,36 @@ window.toggleLabelsVisibility = () => {
     state._labelsHidden = isHidden;
 };
 
+window.toggleScoreButtonsVisibility = () => {
+    const sc = document.getElementById('scoring-controls');
+    const btn = document.getElementById('btn-toggle-score-buttons');
+    if (!sc) return;
+    const isHidden = sc.classList.toggle('score-btns-hidden');
+    if (btn) {
+        const icon = btn.querySelector('i');
+        if (icon) icon.className = isHidden ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash';
+        btn.title = isHidden ? 'Mostra V/X/P' : 'Nascondi V/X/P (mantieni contatore)';
+    }
+    try { localStorage.setItem('score_buttons_hidden', isHidden ? '1' : '0'); } catch(e) {}
+};
+
+// Restore score buttons visibility on load
+function _restoreScoreButtonsVisibility() {
+    try {
+        if (localStorage.getItem('score_buttons_hidden') === '1') {
+            const sc = document.getElementById('scoring-controls');
+            const btn = document.getElementById('btn-toggle-score-buttons');
+            if (sc) sc.classList.add('score-btns-hidden');
+            if (btn) {
+                const icon = btn.querySelector('i');
+                if (icon) icon.className = 'fa-solid fa-eye';
+                btn.title = 'Mostra V/X/P';
+            }
+        }
+    } catch(e) {}
+}
+document.addEventListener('DOMContentLoaded', _restoreScoreButtonsVisibility);
+
 // --- POINTER / PEN TOOL ---
 (function initPointerPen() {
     let penActive = false;
