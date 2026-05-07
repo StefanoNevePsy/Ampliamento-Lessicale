@@ -782,6 +782,24 @@ function _restoreScoreButtonsVisibility() {
 }
 document.addEventListener('DOMContentLoaded', _restoreScoreButtonsVisibility);
 
+window.toggleSecondaryControls = () => {
+    const sec = document.getElementById('controls-secondary');
+    const btn = sec ? sec.querySelector('.controls-toggle-btn') : null;
+    if (!sec) return;
+    const isCollapsed = sec.classList.toggle('collapsed');
+    if (btn) btn.classList.toggle('expanded', !isCollapsed);
+    try { localStorage.setItem('controls_secondary_collapsed', isCollapsed ? '1' : '0'); } catch(e) {}
+};
+function _restoreSecondaryControls() {
+    try {
+        if (localStorage.getItem('controls_secondary_collapsed') === '1') {
+            const sec = document.getElementById('controls-secondary');
+            if (sec) sec.classList.add('collapsed');
+        }
+    } catch(e) {}
+}
+document.addEventListener('DOMContentLoaded', _restoreSecondaryControls);
+
 // --- POINTER / PEN TOOL ---
 (function initPointerPen() {
     let penActive = false;

@@ -43,18 +43,22 @@
                 </div>
 
                 <!-- ACTION BUTTONS -->
-                <button class="btn-icon" onclick="openPatients()" title="Gestione Pazienti" style="color:var(--success-color); border-color:rgba(16, 185, 129, 0.3);">
+                <button class="btn-icon btn-icon-labeled" onclick="openPatients()" title="Gestione Pazienti" style="color:var(--success-color); border-color:rgba(16, 185, 129, 0.3);">
                     <i class="fa-solid fa-user-doctor"></i>
+                    <span class="btn-icon-hint">Pazienti</span>
                 </button>
-                <button class="btn-icon" onclick="openLibrary()" title="Gestione Archivi">
+                <button class="btn-icon btn-icon-labeled" onclick="openLibrary()" title="Gestione Archivi">
                     <i class="fa-solid fa-folder-open"></i>
                     <span id="lib-count" class="badge-count">0</span>
+                    <span class="btn-icon-hint">Archivio</span>
                 </button>
-                <button class="btn-icon" onclick="openFirebaseSettings()" title="Firebase Sync" style="color:#f59e0b; border-color:rgba(245,158,11,0.3);">
+                <button class="btn-icon btn-icon-labeled" onclick="openFirebaseSettings()" title="Firebase Sync" style="color:var(--warning-color); border-color:rgba(245,158,11,0.3);">
                     <i class="fa-solid fa-cloud"></i>
+                    <span class="btn-icon-hint">Sync</span>
                 </button>
-                <button class="btn-icon" onclick="openSettings()" title="Impostazioni">
+                <button class="btn-icon btn-icon-labeled" onclick="openSettings()" title="Impostazioni">
                     <i class="fa-solid fa-gear"></i>
+                    <span class="btn-icon-hint">Opzioni</span>
                 </button>
                 <button class="btn-icon" onclick="toggleFullScreen()" title="Schermo Intero">
                     <i class="fa-solid fa-expand" id="fs-icon"></i>
@@ -118,34 +122,43 @@
                 </select>
             </div>
 
-            <div class="select-wrapper" style="max-width: 100px;">
-                <label>Griglia</label>
-                <select id="grid-size" onchange="window.startGame()">
-                    <option value="20">Auto</option>
-                    <option value="3">3x3</option>
-                    <option value="4">4x4</option>
-                    <option value="5">5x5</option>
-                </select>
-            </div>
+            <div class="controls-divider"></div>
 
-            <div class="select-wrapper hidden" id="variant-selector-wrapper" style="max-width: 130px;">
-                <label><i class="fa-solid fa-layer-group"></i> Variante</label>
-                <select id="variant-select" onchange="window.onVariantChange()">
-                    <option value="0">Base</option>
-                </select>
-            </div>
+            <!-- Secondary controls (collapsible) -->
+            <div class="controls-secondary" id="controls-secondary">
+                <button class="controls-toggle-btn" onclick="toggleSecondaryControls()" title="Mostra/Nascondi opzioni avanzate">
+                    <i class="fa-solid fa-sliders" id="secondary-toggle-icon"></i>
+                </button>
 
-            <div class="select-wrapper" style="max-width: 140px;">
-                <label><i class="fa-solid fa-clipboard-check"></i> Tipo</label>
-                <select id="session-type-select" onchange="onSessionTypeChange()">
-                    <option value="independent">Indipendente</option>
-                    <option value="timedelay">Time Delay</option>
-                </select>
-            </div>
+                <div class="select-wrapper" style="max-width: 100px;">
+                    <label>Griglia</label>
+                    <select id="grid-size" onchange="window.startGame()">
+                        <option value="20">Auto</option>
+                        <option value="3">3x3</option>
+                        <option value="4">4x4</option>
+                        <option value="5">5x5</option>
+                    </select>
+                </div>
 
-            <div class="select-wrapper" id="td-seconds-wrapper" style="max-width: 70px; display:none;">
-                <label>Sec TD</label>
-                <input type="number" id="td-seconds-ctrl" value="5" min="1" max="30" style="padding:8px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.9rem; width:100%; text-align:center;">
+                <div class="select-wrapper hidden" id="variant-selector-wrapper" style="max-width: 130px;">
+                    <label><i class="fa-solid fa-layer-group"></i> Variante</label>
+                    <select id="variant-select" onchange="window.onVariantChange()">
+                        <option value="0">Base</option>
+                    </select>
+                </div>
+
+                <div class="select-wrapper" style="max-width: 140px;">
+                    <label><i class="fa-solid fa-clipboard-check"></i> Tipo</label>
+                    <select id="session-type-select" onchange="onSessionTypeChange()">
+                        <option value="independent">Indipendente</option>
+                        <option value="timedelay">Time Delay</option>
+                    </select>
+                </div>
+
+                <div class="select-wrapper" id="td-seconds-wrapper" style="max-width: 70px; display:none;">
+                    <label>Sec TD</label>
+                    <input type="number" id="td-seconds-ctrl" value="5" min="1" max="30" style="padding:8px; border-radius:var(--radius-sm); background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.9rem; width:100%; text-align:center;">
+                </div>
             </div>
 
             <button class="btn-icon" onclick="startGame()" title="Riavvia Sessione" style="margin-top: 18px; background: var(--accent-color); border:none; color:white;">
@@ -156,9 +169,23 @@
         <!-- GAME STAGE -->
         <div id="game-stage">
             <canvas id="pointer-canvas"></canvas>
-            <div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; color:var(--text-secondary); text-align:center;">
-                <i class="fa-solid fa-shapes" style="font-size:4rem; margin-bottom:20px; opacity:0.2;"></i>
-                <p style="font-size:1.2rem;">Seleziona un'<b>Attivit&agrave;</b> e un <b>Set</b><br>per iniziare la sessione clinica.</p>
+            <div class="empty-state">
+                <i class="fa-solid fa-shapes empty-state-icon"></i>
+                <p class="empty-state-text">Seleziona un'<b>Attivit&agrave;</b> e un <b>Set</b><br>per iniziare la sessione clinica.</p>
+                <div class="empty-state-steps">
+                    <div class="empty-state-step">
+                        <span class="empty-state-step-num">1</span>
+                        <span>Attivit&agrave;</span>
+                    </div>
+                    <div class="empty-state-step">
+                        <span class="empty-state-step-num">2</span>
+                        <span>Set / Tag</span>
+                    </div>
+                    <div class="empty-state-step">
+                        <span class="empty-state-step-num">3</span>
+                        <span>Inizia</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -266,7 +293,7 @@
                 <button class="btn btn-ghost" onclick="exportAllSets()"><i class="fa-solid fa-file-arrow-down"></i> Backup</button>
                 <button class="btn btn-ghost" onclick="document.getElementById('file-upload').click()"><i class="fa-solid fa-file-arrow-up"></i> Importa</button>
                 <input type="file" id="file-upload" class="hidden" accept=".json,.zip" onchange="importSets(this)">
-                <button class="btn btn-ghost" onclick="openQuickShare()" style="border-color:rgba(251,191,36,0.3); color:#fbbf24;"><i class="fa-solid fa-share-from-square"></i> Quick Share</button>
+                <button class="btn btn-ghost" onclick="openQuickShare()" style="border-color:rgba(251,191,36,0.3); color:var(--warning-color);"><i class="fa-solid fa-share-from-square"></i> Quick Share</button>
                 <button class="btn btn-ghost" onclick="openP2PSync()" style="border-color:rgba(99,102,241,0.3); color:var(--accent-color);"><i class="fa-solid fa-wifi"></i> Sync Diretto</button>
                 <button class="btn btn-ghost" onclick="openOfflineShare()" style="border-color:rgba(16,185,129,0.3); color:var(--success-color);"><i class="fa-solid fa-tower-broadcast"></i> Offline</button>
             </div>
@@ -287,34 +314,34 @@
 
         <div class="modal-body">
             <div style="background: rgba(0,0,0,0.2); padding:15px; border-radius:12px; margin-bottom:20px;">
-                <label style="font-size:0.8rem; color:#aaa;">Nome del Set</label>
+                <label style="font-size:0.8rem; color:var(--text-muted);">Nome del Set</label>
                 <input type="text" id="edit-set-name" style="margin-bottom:10px; font-size:1.2rem; font-weight:bold;">
 
-                <label style="font-size:0.8rem; color:#aaa;"><i class="fa-solid fa-folder"></i> Categoria</label>
+                <label style="font-size:0.8rem; color:var(--text-muted);"><i class="fa-solid fa-folder"></i> Categoria</label>
                 <div style="display:flex; gap:8px; margin-bottom:10px;">
                     <select id="edit-set-category" onchange="onEditCategoryChange(this)" style="flex:1; margin-bottom:0;"></select>
                     <input type="text" id="edit-set-category-custom" placeholder="Nome categoria..." style="flex:1; margin-bottom:0; display:none;">
                 </div>
 
-                <label style="font-size:0.8rem; color:#aaa;">Modalit&agrave; Compatibili</label>
+                <label style="font-size:0.8rem; color:var(--text-muted);">Modalit&agrave; Compatibili</label>
                 <div class="mode-tags" id="edit-modes-container"></div>
 
                 <!-- TAG EDITOR (Phase 1.c) -->
-                <label style="font-size:0.8rem; color:#aaa; margin-top:12px; display:block;">
+                <label style="font-size:0.8rem; color:var(--text-muted); margin-top:12px; display:block;">
                     <i class="fa-solid fa-tags"></i> Tag Semantici
                     <span style="font-size:0.7rem; opacity:0.6;">(es. animali, verbi, colori)</span>
                 </label>
                 <div id="edit-tags-container"></div>
 
                 <!-- IMAGE QUALITY -->
-                <label style="font-size:0.8rem; color:#aaa; margin-top:12px; display:block;">
+                <label style="font-size:0.8rem; color:var(--text-muted); margin-top:12px; display:block;">
                     <i class="fa-solid fa-image"></i> Qualit&agrave; Immagini
                     <span style="font-size:0.7rem; opacity:0.6;">(compressione WebP all'upload)</span>
                 </label>
                 <div id="edit-image-quality-container" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;"></div>
 
                 <!-- VARIANT MANAGEMENT -->
-                <label style="font-size:0.8rem; color:#aaa; margin-top:12px; display:block;">
+                <label style="font-size:0.8rem; color:var(--text-muted); margin-top:12px; display:block;">
                     <i class="fa-solid fa-layer-group"></i> Varianti Immagine
                     <span style="font-size:0.7rem; opacity:0.6;">(stesse etichette, immagini diverse)</span>
                 </label>
@@ -338,25 +365,25 @@
     </div>
 
     <!-- MODAL: SETTINGS (Unified) -->
-    <div id="modal-settings" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:2000; justify-content:center; align-items:center; overflow-y:auto; padding:20px;">
-        <div style="background:#1e1e2f; padding:25px; border-radius:20px; width:90%; max-width:500px; border:1px solid var(--glass-border); max-height:90vh; overflow-y:auto;">
+    <div id="modal-settings" class="modal-backdrop" style="z-index:2000;">
+        <div class="modal-dialog modal-dialog-md">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <h3 style="margin:0;"><i class="fa-solid fa-gear"></i> Impostazioni</h3>
+                <h3 class="modal-heading" style="margin:0;"><i class="fa-solid fa-gear"></i> Impostazioni</h3>
                 <button class="btn-icon" onclick="closeSettings()" style="width:32px; height:32px;"><i class="fa-solid fa-xmark"></i></button>
             </div>
 
             <!-- TABS -->
             <div id="settings-tabs" style="display:flex; gap:4px; margin-bottom:16px; border-bottom:1px solid var(--glass-border); padding-bottom:8px;">
-                <button class="settings-tab active" onclick="switchSettingsTab('api')" data-tab="api" style="padding:8px 14px; border:none; border-radius:8px 8px 0 0; background:rgba(99,102,241,0.2); color:var(--accent-color); cursor:pointer; font-size:0.85rem; font-weight:600;">
+                <button class="settings-tab active" onclick="switchSettingsTab('api')" data-tab="api" style="padding:8px 14px; border:none; border-radius:var(--radius-sm) var(--radius-sm) 0 0; background:rgba(var(--accent-rgb),0.2); color:var(--accent-color); cursor:pointer; font-size:0.85rem; font-weight:600;">
                     <i class="fa-solid fa-key"></i> API
                 </button>
-                <button class="settings-tab" onclick="switchSettingsTab('images')" data-tab="images" style="padding:8px 14px; border:none; border-radius:8px 8px 0 0; background:transparent; color:var(--text-secondary); cursor:pointer; font-size:0.85rem; font-weight:600;">
+                <button class="settings-tab" onclick="switchSettingsTab('images')" data-tab="images" style="padding:8px 14px; border:none; border-radius:var(--radius-sm) var(--radius-sm) 0 0; background:transparent; color:var(--text-secondary); cursor:pointer; font-size:0.85rem; font-weight:600;">
                     <i class="fa-solid fa-image"></i> Immagini
                 </button>
-                <button class="settings-tab" onclick="switchSettingsTab('theme')" data-tab="theme" style="padding:8px 14px; border:none; border-radius:8px 8px 0 0; background:transparent; color:var(--text-secondary); cursor:pointer; font-size:0.85rem; font-weight:600;">
+                <button class="settings-tab" onclick="switchSettingsTab('theme')" data-tab="theme" style="padding:8px 14px; border:none; border-radius:var(--radius-sm) var(--radius-sm) 0 0; background:transparent; color:var(--text-secondary); cursor:pointer; font-size:0.85rem; font-weight:600;">
                     <i class="fa-solid fa-palette"></i> Tema
                 </button>
-                <button class="settings-tab" onclick="switchSettingsTab('session')" data-tab="session" style="padding:8px 14px; border:none; border-radius:8px 8px 0 0; background:transparent; color:var(--text-secondary); cursor:pointer; font-size:0.85rem; font-weight:600;">
+                <button class="settings-tab" onclick="switchSettingsTab('session')" data-tab="session" style="padding:8px 14px; border:none; border-radius:var(--radius-sm) var(--radius-sm) 0 0; background:transparent; color:var(--text-secondary); cursor:pointer; font-size:0.85rem; font-weight:600;">
                     <i class="fa-solid fa-sliders"></i> Sessione
                 </button>
             </div>
@@ -364,55 +391,55 @@
             <!-- TAB: API -->
             <div id="settings-tab-api" class="settings-tab-content">
                 <h4 style="margin:0 0 10px; color:var(--accent-color);"><i class="fa-solid fa-wand-magic-sparkles"></i> Gemini AI</h4>
-                <p style="color:#aaa; font-size:0.85rem; margin-bottom:10px;">Per generare set con AI (gratuito).<br>
+                <p style="color:var(--text-secondary); font-size:0.85rem; margin-bottom:10px;">Per generare set con AI (gratuito).<br>
                 <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent-color);">Ottieni la chiave gratuita &rarr;</a></p>
                 <input type="password" id="api-key" placeholder="AIzaSy...">
 
-                <label style="display:block; margin-top:14px; font-size:0.85rem; color:#aaa;">Modello Gemini</label>
+                <label class="modal-label" style="margin-top:14px;">Modello Gemini</label>
                 <div style="display:flex; gap:6px; align-items:center; margin-top:4px;">
-                    <select id="gemini-model" style="flex:1; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.95rem;">
+                    <select id="gemini-model" style="flex:1;">
                         <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                     </select>
                     <button class="btn-ghost" onclick="refreshGeminiModels()" title="Aggiorna lista modelli" style="padding:8px 10px; font-size:0.9rem;">
                         <i class="fa-solid fa-rotate" id="gemini-refresh-icon"></i>
                     </button>
                 </div>
-                <p id="gemini-model-hint" style="color:#666; font-size:0.75rem; margin-top:6px;">
+                <p id="gemini-model-hint" class="modal-hint">
                     Premi aggiorna per caricare i modelli disponibili.
                 </p>
             </div>
 
             <!-- TAB: IMAGES -->
             <div id="settings-tab-images" class="settings-tab-content" style="display:none;">
-                <h4 style="margin:0 0 10px; color:#ec4899;"><i class="fa-solid fa-image"></i> Ricerca Immagini</h4>
+                <h4 style="margin:0 0 10px; color:var(--danger-color);"><i class="fa-solid fa-image"></i> Ricerca Immagini</h4>
 
-                <label style="display:block; font-size:0.85rem; color:#aaa; margin-bottom:4px;">Pixabay API Key <span style="font-size:0.75rem; opacity:0.6;">(ricerca foto gratis)</span></label>
+                <label class="modal-label">Pixabay API Key <span class="modal-label-sm">(ricerca foto gratis)</span></label>
                 <input type="text" id="pixabay-api-key" placeholder="La tua Pixabay API key...">
-                <p style="color:#666; font-size:0.75rem; margin-top:4px;">
+                <p class="modal-hint">
                     <a href="https://pixabay.com/api/docs/" target="_blank" style="color:var(--accent-color);">Ottieni chiave gratuita Pixabay &rarr;</a>
                 </p>
 
-                <label style="display:block; font-size:0.85rem; color:#aaa; margin-top:14px; margin-bottom:4px;">Together AI API Key <span style="font-size:0.75rem; opacity:0.6;">(genera immagini AI)</span></label>
+                <label class="modal-label" style="margin-top:14px;">Together AI API Key <span class="modal-label-sm">(genera immagini AI)</span></label>
                 <input type="password" id="together-api-key" placeholder="La tua Together AI API key...">
-                <p style="color:#666; font-size:0.75rem; margin-top:4px;">
+                <p class="modal-hint">
                     <a href="https://api.together.xyz/settings/api-keys" target="_blank" style="color:var(--accent-color);">Ottieni chiave Together AI &rarr;</a>
                 </p>
             </div>
 
             <!-- TAB: THEME -->
             <div id="settings-tab-theme" class="settings-tab-content" style="display:none;">
-                <h4 style="margin:0 0 12px; color:#f59e0b;"><i class="fa-solid fa-palette"></i> Tema Applicazione</h4>
+                <h4 style="margin:0 0 12px; color:var(--warning-color);"><i class="fa-solid fa-palette"></i> Tema Applicazione</h4>
                 <div id="theme-picker" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px;"></div>
             </div>
 
             <!-- TAB: SESSION -->
             <div id="settings-tab-session" class="settings-tab-content" style="display:none;">
                 <h4 style="margin:0 0 12px; color:var(--accent-color);"><i class="fa-solid fa-sliders"></i> Opzioni Sessione</h4>
-                <label style="display:flex; align-items:center; gap:10px; cursor:pointer; padding:10px; border-radius:10px; background:rgba(0,0,0,0.2); border:1px solid var(--glass-border);">
+                <label class="setting-option">
                     <input type="checkbox" id="setting-td-timer" style="width:18px; height:18px; accent-color:var(--accent-color);">
                     <div>
-                        <div style="font-size:0.9rem; font-weight:600;">Timer Time Delay</div>
-                        <div style="font-size:0.75rem; color:var(--text-secondary);">Mostra l'anello di countdown intorno al tasto Prompt (P) durante la modalità Time Delay</div>
+                        <div class="setting-option-label">Timer Time Delay</div>
+                        <div class="setting-option-desc">Mostra l'anello di countdown intorno al tasto Prompt (P) durante la modalit&agrave; Time Delay</div>
                     </div>
                 </label>
             </div>
@@ -435,7 +462,7 @@
             <h2><i class="fa-solid fa-book-open"></i> Guida Utente</h2>
             <button class="btn btn-danger" onclick="closeInstructions()">Chiudi</button>
         </div>
-        <div class="modal-body" style="padding: 20px; max-width: 1100px; margin: 0 auto; color: #e2e8f0;">
+        <div class="modal-body" style="padding: 20px; max-width: 1100px; margin: 0 auto; color: var(--text-primary);">
 
             <!-- Intro Card -->
             <div style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(99, 102, 241, 0.05) 100%); padding: 20px; border-radius: 16px; margin-bottom: 30px; border: 1px solid rgba(99, 102, 241, 0.2); display: flex; gap: 20px; align-items: center;">
@@ -458,9 +485,9 @@
                         <li><i class="fa-solid fa-gamepad" style="color:var(--accent-color); width:20px;"></i> <strong>Selettore Attivit&agrave;:</strong> Dropdown ricco con icone, colori per categoria e conteggio set compatibili.</li>
                         <li><i class="fa-solid fa-images" style="color:var(--accent-color); width:20px;"></i> <strong>Selettore Set:</strong> Anteprima immagine, conteggio stimoli e <b>badge di stato</b> per paziente:<br>
                             <span style="font-size:0.85em; display:flex; gap:8px; flex-wrap:wrap; margin-top:4px;">
-                                <span style="background:rgba(251,191,36,0.15); color:#fbbf24; padding:1px 8px; border-radius:6px;"><i class="fa-solid fa-trophy"></i> Criterio</span>
-                                <span style="background:rgba(251,191,36,0.15); color:#fbbf24; padding:1px 8px; border-radius:6px;"><i class="fa-solid fa-star"></i> Repertorio</span>
-                                <span style="background:rgba(16,185,129,0.15); color:#10b981; padding:1px 8px; border-radius:6px;"><i class="fa-solid fa-arrow-trend-up"></i> Vicino</span>
+                                <span style="background:rgba(251,191,36,0.15); color:var(--warning-color); padding:1px 8px; border-radius:6px;"><i class="fa-solid fa-trophy"></i> Criterio</span>
+                                <span style="background:rgba(251,191,36,0.15); color:var(--warning-color); padding:1px 8px; border-radius:6px;"><i class="fa-solid fa-star"></i> Repertorio</span>
+                                <span style="background:rgba(16,185,129,0.15); color:var(--success-color); padding:1px 8px; border-radius:6px;"><i class="fa-solid fa-arrow-trend-up"></i> Vicino</span>
                                 <span style="background:rgba(99,102,241,0.15); color:var(--accent-color); padding:1px 8px; border-radius:6px;">85%</span>
                             </span>
                         </li>
@@ -483,34 +510,34 @@
                             <span style="font-size:0.9em;"><i class="fa-solid fa-chart-line" style="width:16px;"></i> <b>Panoramica</b> &ndash; Statistiche giornaliere, grafico LU, ultima sessione.<br>
                             <i class="fa-solid fa-calendar-days" style="width:16px;"></i> <b>Giornate</b> &ndash; Storico espandibile per data, con icone modalit&agrave; e anteprima set.<br>
                             <i class="fa-solid fa-list-check" style="width:16px;"></i> <b>Attivit&agrave;</b> &ndash; Grafici di progressione con badge criterio, icone modalit&agrave; e miniatura del set.</span></li>
-                        <li><i class="fa-solid fa-trophy" style="color:#fbbf24; width:20px;"></i> <strong>Criterio (Mastery):</strong> 2 sessioni consecutive &ge;90% in giorni diversi.</li>
-                        <li><i class="fa-solid fa-star" style="color:#fbbf24; width:20px;"></i> <strong>Repertorio:</strong> Prima sessione in assoluto &ge;90%.</li>
+                        <li><i class="fa-solid fa-trophy" style="color:var(--warning-color); width:20px;"></i> <strong>Criterio (Mastery):</strong> 2 sessioni consecutive &ge;90% in giorni diversi.</li>
+                        <li><i class="fa-solid fa-star" style="color:var(--warning-color); width:20px;"></i> <strong>Repertorio:</strong> Prima sessione in assoluto &ge;90%.</li>
                         <li><i class="fa-solid fa-file-excel" style="color:var(--success-color); width:20px;"></i> <strong>Export Excel:</strong> Esporta i dati del paziente in formato tabellare.</li>
                     </ul>
                 </div>
 
                 <!-- MODES -->
-                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid #a855f7;">
+                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--cat-5);">
                     <h3 style="margin-top: 0; color: #a855f7; display: flex; align-items: center; gap: 10px;">
                         <i class="fa-solid fa-gamepad"></i> Modalit&agrave; (17)
                     </h3>
                     <ul style="padding-left: 20px; line-height: 1.8;">
-                        <li><i class="fa-solid fa-hand-pointer" style="color:#a855f7; width:20px;"></i> <strong>TACT:</strong> Flashcards sequenziali per denominazione pura.</li>
-                        <li><i class="fa-solid fa-bolt" style="color:#a855f7; width:20px;"></i> <strong>RAN:</strong> Denominazione rapida. <i class="fa-solid fa-table-cells"></i> per Griglia/Sequenza.</li>
-                        <li><i class="fa-solid fa-comment-dots" style="color:#a855f7; width:20px;"></i> <strong>Fluenza:</strong> A tempo (15s-120s). Obiettivo = max storico + 2. Barra tempo nascondibile.</li>
-                        <li><i class="fa-solid fa-table-cells" style="color:#a855f7; width:20px;"></i> <strong>Tombola:</strong> Matching visivo target-griglia.</li>
-                        <li><i class="fa-solid fa-volume-high" style="color:#a855f7; width:20px;"></i> <strong>Tombola Sonora:</strong> Ascolta e tocca. Richiede audio <i class="fa-solid fa-music"></i>.</li>
-                        <li><i class="fa-solid fa-clone" style="color:#a855f7; width:20px;"></i> <strong>Memory:</strong> Gioco di memoria per funzioni esecutive.</li>
-                        <li><i class="fa-solid fa-magnifying-glass" style="color:#a855f7; width:20px;"></i> <strong>Cerca Trova:</strong> Esplorazione visiva su scene con marker.</li>
-                        <li><i class="fa-solid fa-comments" style="color:#a855f7; width:20px;"></i> <strong>Intraverbal-Scenari:</strong> Come Cerca Trova, dati separati.</li>
-                        <li><i class="fa-solid fa-search-plus" style="color:#a855f7; width:20px;"></i> <strong>Zoom:</strong> Dettaglio zoomato da indovinare. Area definibile nell'editor (<i class="fa-solid fa-crop"></i>).</li>
-                        <li><i class="fa-solid fa-map-pin" style="color:#a855f7; width:20px;"></i> <strong>Topologia:</strong> Trascina per disposizione spaziale.</li>
-                        <li><i class="fa-solid fa-arrow-right-arrow-left" style="color:#a855f7; width:20px;"></i> <strong>Sequenze:</strong> Ordina per numero progressivo. Sottoinsieme casuale se N.Stimoli &lt; totale.</li>
-                        <li><i class="fa-solid fa-shuffle" style="color:#a855f7; width:20px;"></i> <strong>Pool Random:</strong> Griglia casuale dai tag. Avanza all'infinito.</li>
-                        <li><i class="fa-solid fa-random" style="color:#a855f7; width:20px;"></i> <strong>Pool Intraverbal:</strong> Come Pool Random, dati separati.</li>
-                        <li><i class="fa-solid fa-ban" style="color:#a855f7; width:20px;"></i> <strong>Intruso:</strong> Trova l'intruso! 2+ tag richiesti.</li>
-                        <li><i class="fa-solid fa-sitemap" style="color:#a855f7; width:20px;"></i> <strong>Categorizzazione:</strong> Assegna a categoria corretta. 2+ tag richiesti.</li>
-                        <li><i class="fa-solid fa-book-open" style="color:#a855f7; width:20px;"></i> <strong>Quaderno:</strong> Registro manuale (Generale: X/P/V, Task Analysis: X/P/V/N.A.).<br>
+                        <li><i class="fa-solid fa-hand-pointer" style="color:var(--cat-5); width:20px;"></i> <strong>TACT:</strong> Flashcards sequenziali per denominazione pura.</li>
+                        <li><i class="fa-solid fa-bolt" style="color:var(--cat-5); width:20px;"></i> <strong>RAN:</strong> Denominazione rapida. <i class="fa-solid fa-table-cells"></i> per Griglia/Sequenza.</li>
+                        <li><i class="fa-solid fa-comment-dots" style="color:var(--cat-5); width:20px;"></i> <strong>Fluenza:</strong> A tempo (15s-120s). Obiettivo = max storico + 2. Barra tempo nascondibile.</li>
+                        <li><i class="fa-solid fa-table-cells" style="color:var(--cat-5); width:20px;"></i> <strong>Tombola:</strong> Matching visivo target-griglia.</li>
+                        <li><i class="fa-solid fa-volume-high" style="color:var(--cat-5); width:20px;"></i> <strong>Tombola Sonora:</strong> Ascolta e tocca. Richiede audio <i class="fa-solid fa-music"></i>.</li>
+                        <li><i class="fa-solid fa-clone" style="color:var(--cat-5); width:20px;"></i> <strong>Memory:</strong> Gioco di memoria per funzioni esecutive.</li>
+                        <li><i class="fa-solid fa-magnifying-glass" style="color:var(--cat-5); width:20px;"></i> <strong>Cerca Trova:</strong> Esplorazione visiva su scene con marker.</li>
+                        <li><i class="fa-solid fa-comments" style="color:var(--cat-5); width:20px;"></i> <strong>Intraverbal-Scenari:</strong> Come Cerca Trova, dati separati.</li>
+                        <li><i class="fa-solid fa-search-plus" style="color:var(--cat-5); width:20px;"></i> <strong>Zoom:</strong> Dettaglio zoomato da indovinare. Area definibile nell'editor (<i class="fa-solid fa-crop"></i>).</li>
+                        <li><i class="fa-solid fa-map-pin" style="color:var(--cat-5); width:20px;"></i> <strong>Topologia:</strong> Trascina per disposizione spaziale.</li>
+                        <li><i class="fa-solid fa-arrow-right-arrow-left" style="color:var(--cat-5); width:20px;"></i> <strong>Sequenze:</strong> Ordina per numero progressivo. Sottoinsieme casuale se N.Stimoli &lt; totale.</li>
+                        <li><i class="fa-solid fa-shuffle" style="color:var(--cat-5); width:20px;"></i> <strong>Pool Random:</strong> Griglia casuale dai tag. Avanza all'infinito.</li>
+                        <li><i class="fa-solid fa-random" style="color:var(--cat-5); width:20px;"></i> <strong>Pool Intraverbal:</strong> Come Pool Random, dati separati.</li>
+                        <li><i class="fa-solid fa-ban" style="color:var(--cat-5); width:20px;"></i> <strong>Intruso:</strong> Trova l'intruso! 2+ tag richiesti.</li>
+                        <li><i class="fa-solid fa-sitemap" style="color:var(--cat-5); width:20px;"></i> <strong>Categorizzazione:</strong> Assegna a categoria corretta. 2+ tag richiesti.</li>
+                        <li><i class="fa-solid fa-book-open" style="color:var(--cat-5); width:20px;"></i> <strong>Quaderno:</strong> Registro manuale (Generale: X/P/V, Task Analysis: X/P/V/N.A.).<br>
                             <span style="font-size:0.85em; opacity:0.8;"><i class="fa-solid fa-floppy-disk" style="width:14px;"></i> I template si salvano come set nella libreria, modificabili e riordinabili.</span></li>
                     </ul>
                 </div>
@@ -540,60 +567,62 @@
                                 <span><b>D</b> = Puntatore</span>
                                 <span><b>F</b> = Fullscreen area</span>
                                 <span><b>L</b> = Blocco scorrimento</span>
+                                <span><b>E</b> = Etichette</span>
+                                <span><b>S</b> = Salta round</span>
                             </span></li>
                     </ul>
                 </div>
 
                 <!-- EDITOR & LIBRARY -->
-                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid #ec4899;">
+                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--cat-6);">
                     <h3 style="margin-top: 0; color: #ec4899; display: flex; align-items: center; gap: 10px;">
                         <i class="fa-solid fa-pen-ruler"></i> Editor & Libreria
                     </h3>
                     <ul style="padding-left: 20px; line-height: 1.8;">
-                        <li><i class="fa-solid fa-plus-circle" style="color:#ec4899; width:20px;"></i> <strong>Creazione:</strong> Crea set personalizzati caricando immagini, con nome e categoria.</li>
-                        <li><i class="fa-solid fa-tags" style="color:#ec4899; width:20px;"></i> <strong>Tag Semantici:</strong> Assegna tag (es. "animali", "verbi") per le modalit&agrave; Pool, Intruso e Categorizzazione.</li>
-                        <li><i class="fa-solid fa-upload" style="color:#ec4899; width:20px;"></i> <strong>Caricamento:</strong> Fotocamera <i class="fa-solid fa-camera"></i>, <b>Ctrl+V</b> per incollare, o <b>Bulk</b> per intere cartelle.</li>
-                        <li><i class="fa-solid fa-music" style="color:#ec4899; width:20px;"></i> <strong>Audio:</strong> Carica file audio per ogni item (Tombola Sonora).</li>
-                        <li><i class="fa-solid fa-crop" style="color:#ec4899; width:20px;"></i> <strong>Zoom Area:</strong> Definisci il dettaglio per la modalit&agrave; Zoom.</li>
-                        <li><i class="fa-solid fa-arrow-down-1-9" style="color:#ec4899; width:20px;"></i> <strong>Sequenze (#):</strong> Numeri progressivi per la modalit&agrave; Sequenze.</li>
-                        <li><i class="fa-solid fa-folder" style="color:#ec4899; width:20px;"></i> <strong>Libreria:</strong> Ordinamento per categoria, nome, recenti, N.stimoli, modalit&agrave;. Categorie collassabili. Riordina i set con le frecce <i class="fa-solid fa-arrow-left"></i><i class="fa-solid fa-arrow-right"></i>.</li>
+                        <li><i class="fa-solid fa-plus-circle" style="color:var(--cat-6); width:20px;"></i> <strong>Creazione:</strong> Crea set personalizzati caricando immagini, con nome e categoria.</li>
+                        <li><i class="fa-solid fa-tags" style="color:var(--cat-6); width:20px;"></i> <strong>Tag Semantici:</strong> Assegna tag (es. "animali", "verbi") per le modalit&agrave; Pool, Intruso e Categorizzazione.</li>
+                        <li><i class="fa-solid fa-upload" style="color:var(--cat-6); width:20px;"></i> <strong>Caricamento:</strong> Fotocamera <i class="fa-solid fa-camera"></i>, <b>Ctrl+V</b> per incollare, o <b>Bulk</b> per intere cartelle.</li>
+                        <li><i class="fa-solid fa-music" style="color:var(--cat-6); width:20px;"></i> <strong>Audio:</strong> Carica file audio per ogni item (Tombola Sonora).</li>
+                        <li><i class="fa-solid fa-crop" style="color:var(--cat-6); width:20px;"></i> <strong>Zoom Area:</strong> Definisci il dettaglio per la modalit&agrave; Zoom.</li>
+                        <li><i class="fa-solid fa-arrow-down-1-9" style="color:var(--cat-6); width:20px;"></i> <strong>Sequenze (#):</strong> Numeri progressivi per la modalit&agrave; Sequenze.</li>
+                        <li><i class="fa-solid fa-folder" style="color:var(--cat-6); width:20px;"></i> <strong>Libreria:</strong> Ordinamento per categoria, nome, recenti, N.stimoli, modalit&agrave;. Categorie collassabili. Riordina i set con le frecce <i class="fa-solid fa-arrow-left"></i><i class="fa-solid fa-arrow-right"></i>.</li>
                     </ul>
                 </div>
 
                 <!-- ACTIVITY LAYOUT -->
-                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid #f59e0b;">
+                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--cat-2);">
                     <h3 style="margin-top: 0; color: #f59e0b; display: flex; align-items: center; gap: 10px;">
                         <i class="fa-solid fa-sliders"></i> Personalizzazione Attivit&agrave;
                     </h3>
                     <ul style="padding-left: 20px; line-height: 1.8;">
-                        <li><i class="fa-solid fa-palette" style="color:#f59e0b; width:20px;"></i> <strong>Categorie Attivit&agrave;:</strong> Raggruppa le modalit&agrave; in categorie con <b>nome</b> e <b>colore</b> personalizzati.</li>
-                        <li><i class="fa-solid fa-icons" style="color:#f59e0b; width:20px;"></i> <strong>Icone Modalit&agrave;:</strong> Clicca sull'icona di una modalit&agrave; per scegliere tra 90+ icone Font Awesome. L'icona appare nel selettore e nella cartella clinica.</li>
-                        <li><i class="fa-solid fa-face-smile" style="color:#f59e0b; width:20px;"></i> <strong>Emoji:</strong> Aggiungi un emoji personalizzato per ogni modalit&agrave;.</li>
-                        <li><i class="fa-solid fa-plus-circle" style="color:#f59e0b; width:20px;"></i> <strong>Attivit&agrave; Personalizzate:</strong> Crea attivit&agrave; con nome personalizzato basate su una modalit&agrave; base (es. "Scena Azioni" basata su Cerca Trova).</li>
-                        <li><i class="fa-solid fa-arrows-up-down" style="color:#f59e0b; width:20px;"></i> <strong>Riordina:</strong> Sposta categorie e modalit&agrave; con le frecce. Trasferisci attivit&agrave; tra categorie.</li>
+                        <li><i class="fa-solid fa-palette" style="color:var(--cat-2); width:20px;"></i> <strong>Categorie Attivit&agrave;:</strong> Raggruppa le modalit&agrave; in categorie con <b>nome</b> e <b>colore</b> personalizzati.</li>
+                        <li><i class="fa-solid fa-icons" style="color:var(--cat-2); width:20px;"></i> <strong>Icone Modalit&agrave;:</strong> Clicca sull'icona di una modalit&agrave; per scegliere tra 90+ icone Font Awesome. L'icona appare nel selettore e nella cartella clinica.</li>
+                        <li><i class="fa-solid fa-face-smile" style="color:var(--cat-2); width:20px;"></i> <strong>Emoji:</strong> Aggiungi un emoji personalizzato per ogni modalit&agrave;.</li>
+                        <li><i class="fa-solid fa-plus-circle" style="color:var(--cat-2); width:20px;"></i> <strong>Attivit&agrave; Personalizzate:</strong> Crea attivit&agrave; con nome personalizzato basate su una modalit&agrave; base (es. "Scena Azioni" basata su Cerca Trova).</li>
+                        <li><i class="fa-solid fa-arrows-up-down" style="color:var(--cat-2); width:20px;"></i> <strong>Riordina:</strong> Sposta categorie e modalit&agrave; con le frecce. Trasferisci attivit&agrave; tra categorie.</li>
                     </ul>
                 </div>
 
                 <!-- BACKUP & SYNC -->
-                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid #06b6d4;">
+                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--accent-color);">
                     <h3 style="margin-top: 0; color: #06b6d4; display: flex; align-items: center; gap: 10px;">
                         <i class="fa-solid fa-cloud-arrow-up"></i> Backup & Sincronizzazione
                     </h3>
                     <ul style="padding-left: 20px; line-height: 1.8;">
-                        <li><i class="fa-solid fa-file-export" style="color:#06b6d4; width:20px;"></i> <strong>Esporta Singolo Set:</strong> Con immagini, tag e ordinamento inclusi.</li>
-                        <li><i class="fa-solid fa-box-archive" style="color:#06b6d4; width:20px;"></i> <strong>Backup Completo:</strong> Tutti i set, pazienti, tag images, template, nomi sessione, layout attivit&agrave; (icone, colori, emoji).</li>
-                        <li><i class="fa-solid fa-arrows-rotate" style="color:#06b6d4; width:20px;"></i> <strong>Importazione:</strong> <b>Non distruttiva</b> &ndash; set e pazienti aggiornati, dati locali mantenuti, nessuna cancellazione.</li>
-                        <li><i class="fa-solid fa-share-from-square" style="color:#fbbf24; width:20px;"></i> <strong>Quick Share:</strong> Condividi set, pazienti o backup completo via <b>Nearby Share / Quick Share / AirDrop</b>. Offline e velocissimo!<br>
+                        <li><i class="fa-solid fa-file-export" style="color:var(--accent-color); width:20px;"></i> <strong>Esporta Singolo Set:</strong> Con immagini, tag e ordinamento inclusi.</li>
+                        <li><i class="fa-solid fa-box-archive" style="color:var(--accent-color); width:20px;"></i> <strong>Backup Completo:</strong> Tutti i set, pazienti, tag images, template, nomi sessione, layout attivit&agrave; (icone, colori, emoji).</li>
+                        <li><i class="fa-solid fa-arrows-rotate" style="color:var(--accent-color); width:20px;"></i> <strong>Importazione:</strong> <b>Non distruttiva</b> &ndash; set e pazienti aggiornati, dati locali mantenuti, nessuna cancellazione.</li>
+                        <li><i class="fa-solid fa-share-from-square" style="color:var(--warning-color); width:20px;"></i> <strong>Quick Share:</strong> Condividi set, pazienti o backup completo via <b>Nearby Share / Quick Share / AirDrop</b>. Offline e velocissimo!<br>
                             <span style="font-size:0.85em; opacity:0.8;">Seleziona &rarr; Condividi &rarr; Scegli dispositivo vicino. Zero configurazione.</span></li>
-                        <li><i class="fa-solid fa-wifi" style="color:#06b6d4; width:20px;"></i> <strong>Sync Diretto (P2P):</strong> Trasferisci via QR code tra dispositivi. Ogni set ha il bottone <i class="fa-solid fa-wifi"></i>.<br>
+                        <li><i class="fa-solid fa-wifi" style="color:var(--accent-color); width:20px;"></i> <strong>Sync Diretto (P2P):</strong> Trasferisci via QR code tra dispositivi. Ogni set ha il bottone <i class="fa-solid fa-wifi"></i>.<br>
                             <span style="font-size:0.85em; opacity:0.8;">Invia &rarr; QR &rarr; Ricevi scansiona &rarr; Merge automatico.</span></li>
-                        <li><i class="fa-solid fa-cloud" style="color:#06b6d4; width:20px;"></i> <strong>Firebase Sync:</strong> Sincronizzazione automatica dati pazienti tra dispositivi via Firebase Realtime Database.</li>
+                        <li><i class="fa-solid fa-cloud" style="color:var(--accent-color); width:20px;"></i> <strong>Firebase Sync:</strong> Sincronizzazione automatica dati pazienti tra dispositivi via Firebase Realtime Database.</li>
                     </ul>
                 </div>
 
                 <!-- SHORTCUTS -->
-                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid #64748b;">
-                    <h3 style="margin-top: 0; color: #94a3b8; display: flex; align-items: center; gap: 10px;">
+                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--text-secondary);">
+                    <h3 style="margin-top: 0; color: var(--text-secondary); display: flex; align-items: center; gap: 10px;">
                         <i class="fa-solid fa-keyboard"></i> Scorciatoie Tastiera
                     </h3>
                     <div style="display:grid; grid-template-columns:auto 1fr; gap:8px 15px; font-size:0.9rem; line-height:1.6;">
@@ -604,35 +633,40 @@
                         <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">Ctrl+V</kbd> <span>Incolla immagine (editor/foto paziente)</span>
                         <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">&larr; &rarr;</kbd> <span>Naviga TACT/RAN/Fluenza</span>
                         <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">Del</kbd> <span>Cancella marker (Cerca Trova)</span>
+                        <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">D</kbd> <span>Puntatore/Penna</span>
+                        <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">F</kbd> <span>Fullscreen area di gioco</span>
+                        <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">L</kbd> <span>Blocco scorrimento</span>
+                        <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">E</kbd> <span>Mostra/Nascondi etichette</span>
+                        <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">S</kbd> <span>Salta round (Intruso/Categorizzazione)</span>
                     </div>
                 </div>
 
             </div>
 
-            <div style="text-align: center; margin-top: 40px; color: #666; font-size: 0.8rem;">
+            <div style="text-align: center; margin-top: 40px; color: var(--text-muted); font-size: 0.8rem;">
                 Design e Sviluppo per uso Professionale &ndash; Terapia Attiva v40
             </div>
         </div>
     </div>
 
     <!-- MODAL: FIREBASE SETTINGS -->
-    <div id="modal-firebase" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:2000; justify-content:center; align-items:center;">
-        <div style="background:#1e1e2f; padding:25px; border-radius:20px; width:90%; max-width:420px; border:1px solid var(--glass-border);">
+    <div id="modal-firebase" class="modal-backdrop" style="z-index:2000;">
+        <div class="modal-dialog modal-dialog-sm">
             <h3 style="margin-top:0;"><i class="fa-solid fa-cloud"></i> Firebase Sync</h3>
-            <p style="color:#aaa; font-size:0.85rem;">Sincronizza i dati dei pazienti tra dispositivi via Firebase Realtime Database. Solo i dati delle sessioni vengono sincronizzati (non le immagini).</p>
+            <p style="color:var(--text-secondary); font-size:0.85rem;">Sincronizza i dati dei pazienti tra dispositivi via Firebase Realtime Database. Solo i dati delle sessioni vengono sincronizzati (non le immagini).</p>
 
-            <div style="display:flex; align-items:center; gap:10px; margin:15px 0; padding:10px; background:rgba(0,0,0,0.2); border-radius:10px;">
-                <label style="font-size:0.9rem; flex:1; color:white;">Abilita Sync</label>
+            <div class="setting-option" style="margin:15px 0;">
+                <label style="font-size:0.9rem; flex:1; color:var(--text-primary);">Abilita Sync</label>
                 <input type="checkbox" id="firebase-enabled-toggle" style="width:20px; height:20px;">
             </div>
 
-            <label style="font-size:0.8rem; color:#aaa; display:block; margin-top:10px;">Database URL</label>
+            <label class="modal-label" style="margin-top:10px;">Database URL</label>
             <input type="text" id="firebase-db-url" placeholder="https://tuo-progetto.firebaseio.com" style="margin-bottom:8px;">
 
-            <label style="font-size:0.8rem; color:#aaa; display:block;">API Key (opzionale)</label>
+            <label class="modal-label">API Key (opzionale)</label>
             <input type="text" id="firebase-api-key" placeholder="AIzaSy..." style="margin-bottom:8px;">
 
-            <label style="font-size:0.8rem; color:#aaa; display:block;">Project ID (opzionale)</label>
+            <label class="modal-label">Project ID (opzionale)</label>
             <input type="text" id="firebase-project-id" placeholder="il-tuo-progetto" style="margin-bottom:15px;">
 
             <div id="firebase-sync-status" style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:10px;"></div>
@@ -647,7 +681,7 @@
 
     <!-- MODAL: P2P SYNC -->
     <div id="modal-p2p-sync" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:10500; justify-content:center; align-items:center;">
-        <div style="background:#1e1e2f; padding:25px; border-radius:20px; width:90%; max-width:480px; border:1px solid var(--glass-border); max-height:90vh; overflow-y:auto;">
+        <div style="background:var(--modal-bg); padding:25px; border-radius:var(--radius-lg); width:90%; max-width:480px; border:1px solid var(--glass-border); max-height:90vh; overflow-y:auto;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                 <h3 style="margin:0;"><i class="fa-solid fa-wifi"></i> Sync Diretto</h3>
                 <button class="btn-icon" onclick="closeP2PSync()" style="width:32px; height:32px;"><i class="fa-solid fa-xmark"></i></button>
@@ -655,7 +689,7 @@
 
             <!-- Role selection -->
             <div id="p2p-role-select">
-                <p style="color:#aaa; font-size:0.85rem; margin-bottom:15px;">Trasferisci set e dati direttamente tra due dispositivi via connessione peer-to-peer. Entrambi devono avere accesso a internet per la connessione iniziale, poi i dati viaggiano direttamente.</p>
+                <p style="color:var(--text-secondary); font-size:0.85rem; margin-bottom:15px;">Trasferisci set e dati direttamente tra due dispositivi via connessione peer-to-peer. Entrambi devono avere accesso a internet per la connessione iniziale, poi i dati viaggiano direttamente.</p>
                 <div style="display:flex; gap:10px; flex-direction:column;">
                     <button class="btn btn-primary" onclick="openP2PSendSelect()" style="padding:15px; font-size:1rem;">
                         <i class="fa-solid fa-upload"></i> Invia
@@ -671,8 +705,8 @@
             <!-- Selection panel -->
             <div id="p2p-select-panel" style="display:none;">
                 <div id="p2p-select-body" style="margin-bottom:12px;"></div>
-                <div id="p2p-size-info" style="background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.3); border-radius:10px; padding:10px; margin-bottom:12px; font-size:0.8rem; color:#aaa; text-align:center;"></div>
-                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.8rem; color:#ccc; margin-bottom:10px; padding:8px 10px; background:rgba(0,0,0,0.2); border-radius:8px;">
+                <div id="p2p-size-info" style="background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.3); border-radius:10px; padding:10px; margin-bottom:12px; font-size:0.8rem; color:var(--text-muted); text-align:center;"></div>
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:0.8rem; color:var(--text-primary); margin-bottom:10px; padding:8px 10px; background:rgba(0,0,0,0.2); border-radius:8px;">
                     <input type="checkbox" id="p2p-compress" checked onchange="updateP2PSizeEstimate()" style="width:16px; height:16px;">
                     <i class="fa-solid fa-compress"></i> Comprimi dati (consigliato per trasferimenti grandi)
                 </label>
@@ -690,15 +724,15 @@
             <div id="p2p-sender-panel" style="display:none; text-align:center;">
                 <div id="p2p-qr-container" style="margin:15px auto; background:white; padding:10px; border-radius:12px; display:inline-block;"></div>
                 <div style="margin:10px 0;">
-                    <span style="font-size:0.75rem; color:#888;">Codice:</span>
+                    <span style="font-size:0.75rem; color:var(--text-muted);">Codice:</span>
                     <span id="p2p-sender-code" style="font-family:monospace; font-size:1.3rem; font-weight:bold; color:var(--accent-color); letter-spacing:2px; user-select:all;"></span>
                 </div>
-                <p id="p2p-sender-status" style="color:#aaa; font-size:0.85rem;"></p>
+                <p id="p2p-sender-status" style="color:var(--text-secondary); font-size:0.85rem;"></p>
             </div>
 
             <!-- Receiver panel -->
             <div id="p2p-receiver-panel" style="display:none;">
-                <p id="p2p-receiver-status" style="color:#aaa; font-size:0.85rem;"></p>
+                <p id="p2p-receiver-status" style="color:var(--text-secondary); font-size:0.85rem;"></p>
                 <div style="display:flex; gap:8px; margin:15px 0;">
                     <button class="btn btn-primary" onclick="startQRScan()" style="flex:1;">
                         <i class="fa-solid fa-qrcode"></i> Scansiona QR
@@ -720,14 +754,14 @@
                 <div style="margin:20px 0; height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden;">
                     <div id="p2p-progress-bar-fill" style="width:0%; height:100%; background:var(--accent-color); border-radius:4px; transition:width 0.3s;"></div>
                 </div>
-                <p id="p2p-progress-text" style="color:#aaa; font-size:0.9rem;"></p>
+                <p id="p2p-progress-text" style="color:var(--text-secondary); font-size:0.9rem;"></p>
             </div>
         </div>
     </div>
 
     <!-- MODAL: OFFLINE SHARE (no internet needed) -->
     <div id="modal-offline-share" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:10600; justify-content:center; align-items:center;">
-        <div style="background:#1e1e2f; padding:25px; border-radius:20px; width:90%; max-width:480px; border:1px solid var(--glass-border); max-height:90vh; overflow-y:auto;">
+        <div style="background:var(--modal-bg); padding:25px; border-radius:var(--radius-lg); width:90%; max-width:480px; border:1px solid var(--glass-border); max-height:90vh; overflow-y:auto;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                 <h3 style="margin:0;"><i class="fa-solid fa-tower-broadcast"></i> Condivisione Offline</h3>
                 <button class="btn-icon" onclick="closeOfflineShare()" style="width:32px; height:32px;"><i class="fa-solid fa-xmark"></i></button>
@@ -735,7 +769,7 @@
 
             <!-- Role selection -->
             <div id="offline-role-select">
-                <p style="color:#aaa; font-size:0.85rem; margin-bottom:15px;">Trasferisci i dati di un paziente tra dispositivi <b>senza internet</b>. Funziona via QR code animato o condivisione file locale.</p>
+                <p style="color:var(--text-secondary); font-size:0.85rem; margin-bottom:15px;">Trasferisci i dati di un paziente tra dispositivi <b>senza internet</b>. Funziona via QR code animato o condivisione file locale.</p>
                 <div style="display:flex; gap:10px; flex-direction:column;">
                     <button class="btn btn-primary" onclick="offlineShareSendSelect()" style="padding:15px; font-size:1rem;">
                         <i class="fa-solid fa-upload"></i> Invia Paziente
@@ -761,8 +795,8 @@
             <!-- Send: QR display -->
             <div id="offline-send-qr" style="display:none; text-align:center;">
                 <div id="offline-qr-container" style="margin:15px auto; background:white; padding:10px; border-radius:12px; display:inline-block;"></div>
-                <div id="offline-qr-progress" style="margin:10px 0; font-size:0.8rem; color:#aaa;"></div>
-                <p id="offline-send-status" style="color:#aaa; font-size:0.85rem;"></p>
+                <div id="offline-qr-progress" style="margin:10px 0; font-size:0.8rem; color:var(--text-muted);"></div>
+                <p id="offline-send-status" style="color:var(--text-secondary); font-size:0.85rem;"></p>
                 <div style="display:flex; gap:8px; margin-top:12px; justify-content:center;">
                     <button class="btn btn-ghost" onclick="offlineShareBackToRole()" style="padding:8px 16px; font-size:0.85rem;">
                         <i class="fa-solid fa-arrow-left"></i> Indietro
@@ -772,7 +806,7 @@
 
             <!-- Receive panel -->
             <div id="offline-receive-panel" style="display:none;">
-                <p id="offline-receive-status" style="color:#aaa; font-size:0.85rem; margin-bottom:12px;">Scegli come ricevere i dati del paziente.</p>
+                <p id="offline-receive-status" style="color:var(--text-secondary); font-size:0.85rem; margin-bottom:12px;">Scegli come ricevere i dati del paziente.</p>
                 <div style="display:flex; gap:8px; margin-bottom:15px; flex-direction:column;">
                     <button class="btn btn-primary" onclick="offlineStartQRScan()" style="padding:12px;">
                         <i class="fa-solid fa-qrcode"></i> Scansiona QR Animato
@@ -789,7 +823,7 @@
                     <div style="height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden;">
                         <div id="offline-receive-bar" style="width:0%; height:100%; background:var(--accent-color); border-radius:4px; transition:width 0.3s;"></div>
                     </div>
-                    <p id="offline-receive-text" style="color:#aaa; font-size:0.8rem; margin-top:6px; text-align:center;"></p>
+                    <p id="offline-receive-text" style="color:var(--text-secondary); font-size:0.8rem; margin-top:6px; text-align:center;"></p>
                 </div>
                 <div style="display:flex; gap:8px; margin-top:8px;">
                     <button class="btn btn-ghost" onclick="offlineShareBackToRole()" style="padding:8px 16px; font-size:0.85rem;">
@@ -802,7 +836,7 @@
 
     <!-- MODAL: QUICK SHARE (Nearby Share / Quick Share) -->
     <div id="modal-quick-share" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:10700; justify-content:center; align-items:center;">
-        <div style="background:#1e1e2f; padding:25px; border-radius:20px; width:90%; max-width:480px; border:1px solid var(--glass-border); max-height:90vh; overflow-y:auto;">
+        <div style="background:var(--modal-bg); padding:25px; border-radius:var(--radius-lg); width:90%; max-width:480px; border:1px solid var(--glass-border); max-height:90vh; overflow-y:auto;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                 <h3 style="margin:0;"><i class="fa-solid fa-share-from-square"></i> Quick Share</h3>
                 <button class="btn-icon" onclick="closeQuickShare()" style="width:32px; height:32px;"><i class="fa-solid fa-xmark"></i></button>
@@ -810,7 +844,7 @@
 
             <!-- Hub: choose what to share -->
             <div id="qs-hub">
-                <p style="color:#aaa; font-size:0.85rem; margin-bottom:15px;">Condividi istantaneamente via <b>Nearby Share</b>, <b>Quick Share</b>, AirDrop o Bluetooth. Funziona <b>offline</b> ed &egrave; velocissimo.</p>
+                <p style="color:var(--text-secondary); font-size:0.85rem; margin-bottom:15px;">Condividi istantaneamente via <b>Nearby Share</b>, <b>Quick Share</b>, AirDrop o Bluetooth. Funziona <b>offline</b> ed &egrave; velocissimo.</p>
                 <div style="display:flex; gap:10px; flex-direction:column;">
                     <button class="btn btn-primary" onclick="quickSharePatientSelect()" style="padding:15px; font-size:1rem; text-align:left; display:flex; align-items:center; gap:12px;">
                         <i class="fa-solid fa-user-group" style="font-size:1.3rem; width:28px; text-align:center;"></i>
@@ -835,8 +869,8 @@
                     </button>
                 </div>
                 <div style="margin-top:15px; padding:12px; border-radius:10px; background:rgba(99,102,241,0.08); border:1px solid rgba(99,102,241,0.15);">
-                    <p style="margin:0; font-size:0.8rem; color:#aaa;">
-                        <i class="fa-solid fa-bolt" style="color:#facc15;"></i> <b>Come funziona:</b> Seleziona cosa condividere &rarr; si apre il pannello di condivisione del sistema &rarr; scegli il dispositivo vicino. Nessun internet necessario!
+                    <p style="margin:0; font-size:0.8rem; color:var(--text-muted);">
+                        <i class="fa-solid fa-bolt" style="color:var(--warning-color);"></i> <b>Come funziona:</b> Seleziona cosa condividere &rarr; si apre il pannello di condivisione del sistema &rarr; scegli il dispositivo vicino. Nessun internet necessario!
                     </p>
                 </div>
             </div>
@@ -861,7 +895,7 @@
                 <div style="height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden; margin-bottom:10px;">
                     <div id="qs-progress-bar" style="width:0%; height:100%; background:var(--accent-color); border-radius:4px; transition:width 0.3s;"></div>
                 </div>
-                <p id="qs-progress-text" style="color:#aaa; font-size:0.9rem;"></p>
+                <p id="qs-progress-text" style="color:var(--text-secondary); font-size:0.9rem;"></p>
                 <button class="btn btn-ghost" onclick="document.getElementById('qs-progress-panel').style.display='none'; document.getElementById('qs-hub').style.display='';" style="margin-top:15px; padding:8px 20px;">
                     <i class="fa-solid fa-arrow-left"></i> Indietro
                 </button>
