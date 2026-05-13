@@ -1607,6 +1607,7 @@ function handleShortcuts(e) {
     if (engine === 'fluenza') {
         if (e.key === 'ArrowRight') fluenzaNext();
         if (e.key.toLowerCase() === 'x') fluenzaMarkError();
+        if (e.key.toLowerCase() === 'e') { state.fluenzaHideLabels = !state.fluenzaHideLabels; renderFluenzaUI(document.getElementById('game-stage')); }
     }
     if (engine === 'search_find' || engine === 'intraverbal_scenari') {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { if (typeof window.undoLastAction === 'function') window.undoLastAction(); }

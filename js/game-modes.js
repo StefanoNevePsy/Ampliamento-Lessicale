@@ -496,6 +496,11 @@ function renderFluenzaUI(stage) {
             </div>` : '<div style="flex:1;"></div>'}
             <span style="font-size:1rem; font-weight:bold; color:white;">${correct} <span style="font-size:0.7rem; color:var(--text-secondary);">/ ${count}</span></span>
             ${errors > 0 ? `<span style="font-size:0.85rem; color:var(--danger-color); font-weight:bold;">${errors}<i class="fa-solid fa-xmark" style="font-size:0.7rem; margin-left:2px;"></i></span>` : ''}
+            <button class="btn-icon" onclick="state.fluenzaHideLabels=!state.fluenzaHideLabels; renderFluenzaUI(document.getElementById('game-stage'));"
+                    title="Mostra/Nascondi etichette (E)"
+                    style="width:30px; height:30px; font-size:0.7rem; ${state.fluenzaHideLabels ? 'opacity:0.4;' : ''}">
+                <i class="fa-solid fa-font"></i>
+            </button>
         </div>
 
         <!-- Image area -->
@@ -505,7 +510,7 @@ function renderFluenzaUI(stage) {
                      class="ran-main-img ${currentResult === false ? 'feedback-fail' : currentResult === true ? 'feedback-success' : ''}"
                      style="transition:0.3s;"
                      onerror="handleImgError(this,'${currentItem.label}')">
-                <h2 style="text-align:center; margin-top:10px;">${currentItem.label}</h2>
+                ${!state.fluenzaHideLabels ? `<h2 style="text-align:center; margin-top:10px;">${currentItem.label}</h2>` : ''}
             ` : `
                 <p style="color:var(--text-secondary); font-size:1.1rem;">Premi <b>Avanti</b> per iniziare</p>
             `}
@@ -556,8 +561,9 @@ window.fluenzaNext = () => {
     state.fluenzaIndex++;
     state.fluenzaCount++;
 
-    // If we've exhausted all items, wrap around
+    // If we've exhausted all items, reshuffle and wrap around
     if (state.fluenzaIndex >= items.length) {
+        state.fluenzaDisplayItems = [...items].sort(() => Math.random() - 0.5);
         state.fluenzaIndex = 0;
     }
 
