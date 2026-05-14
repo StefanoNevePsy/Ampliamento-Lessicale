@@ -21,7 +21,10 @@ const BUILTIN_MODES = {
     'quaderno': { label: 'Quaderno', engine: 'quaderno' },
     'quaderno_task': { label: 'Task Analysis', engine: 'quaderno_task' },
     'ricorda': { label: 'Ricorda', engine: 'ricorda' },
-    'singolare_plurale': { label: 'Singolare/Plurale', engine: 'singolare_plurale' }
+    'singolare_plurale': { label: 'Singolare/Plurale', engine: 'singolare_plurale' },
+    'stroop_numerico': { label: 'Stroop Numerico', engine: 'stroop_numerico' },
+    'go_nogo': { label: 'Go/No-Go', engine: 'go_nogo' },
+    'stroop_etichetta': { label: 'Stroop Etichetta', engine: 'stroop_etichetta' }
 };
 
 // MODES_CONFIG: dynamic map of all modes (built-in + custom)
@@ -49,7 +52,8 @@ function getDefaultActivityLayout() {
         groups: [
             { name: '', modes: ['tact', 'ran', 'ran_intensivo', 'fluenza', 'tombola', 'tombola_sonora', 'memory', 'search_find', 'intraverbal_scenari', 'zoom', 'quaderno'] },
             { name: 'Avanzate', modes: ['topologia', 'sequenze', 'quaderno_task'] },
-            { name: 'Pool da Tag', modes: ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione', 'ricorda', 'singolare_plurale'] }
+            { name: 'Pool da Tag', modes: ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione', 'ricorda', 'singolare_plurale'] },
+            { name: 'Inibizione', modes: ['stroop_numerico', 'go_nogo', 'stroop_etichetta'] }
         ],
         modeEmojis: {},
         customModes: {} // key -> { label, engine (built-in mode key used for logic) }

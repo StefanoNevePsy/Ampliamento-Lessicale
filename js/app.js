@@ -257,7 +257,7 @@ function _showImportToast(message) {
 }
 
 // --- SET FILTERING & DROPDOWN ---
-const POOL_ENGINES = ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione', 'ricorda', 'singolare_plurale'];
+const POOL_ENGINES = ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione', 'ricorda', 'singolare_plurale', 'stroop_numerico', 'go_nogo', 'stroop_etichetta'];
 // Keep POOL_MODES as alias for backward compat
 const POOL_MODES = POOL_ENGINES;
 
@@ -1175,6 +1175,21 @@ window.startGame = () => {
             poolItems.sort(() => Math.random() - 0.5);
             state.activeSetId = 'sp_' + state.selectedPoolTags.join('_');
             renderGameMode(mode, poolItems);
+        } else if (engine === 'stroop_numerico') {
+            let poolItems = getItemsByTags(state.selectedPoolTags);
+            poolItems.sort(() => Math.random() - 0.5);
+            state.activeSetId = 'strnum_' + state.selectedPoolTags.join('_');
+            renderGameMode(mode, poolItems);
+        } else if (engine === 'go_nogo') {
+            let poolItems = getItemsByTags(state.selectedPoolTags);
+            poolItems.sort(() => Math.random() - 0.5);
+            state.activeSetId = 'gonogo_' + state.selectedPoolTags.join('_');
+            renderGameMode(mode, poolItems);
+        } else if (engine === 'stroop_etichetta') {
+            let poolItems = getItemsByTags(state.selectedPoolTags);
+            poolItems.sort(() => Math.random() - 0.5);
+            state.activeSetId = 'stret_' + state.selectedPoolTags.join('_');
+            renderGameMode(mode, poolItems);
         }
         window._startTDCountdown();
         return;
@@ -1446,7 +1461,45 @@ window.recordResponse = (result) => {
     } else if (engine === 'singolare_plurale') {
         if (typeof window._spHandleScore === 'function') {
             window._spHandleScore(result);
-            // _spHandleScore already pushes the resultKey, so update totals and bail out
+            const results0 = Object.values(state.session.itemResults);
+            state.session.correct = results0.filter(v => v === true).length;
+            state.session.incorrect = results0.filter(v => v === false).length;
+            state.session.prompts = results0.filter(v => v === 'prompt').length;
+            state.session.total = results0.length;
+            updateScoreUI();
+            document.getElementById('btn-save-session').classList.remove('hidden');
+            if (typeof showSessionNameInput === 'function') showSessionNameInput();
+            return;
+        }
+    } else if (engine === 'stroop_numerico') {
+        if (typeof window._stroopNumHandleScore === 'function') {
+            window._stroopNumHandleScore(result);
+            const results0 = Object.values(state.session.itemResults);
+            state.session.correct = results0.filter(v => v === true).length;
+            state.session.incorrect = results0.filter(v => v === false).length;
+            state.session.prompts = results0.filter(v => v === 'prompt').length;
+            state.session.total = results0.length;
+            updateScoreUI();
+            document.getElementById('btn-save-session').classList.remove('hidden');
+            if (typeof showSessionNameInput === 'function') showSessionNameInput();
+            return;
+        }
+    } else if (engine === 'go_nogo') {
+        if (typeof window._goNogoHandleScore === 'function') {
+            window._goNogoHandleScore(result);
+            const results0 = Object.values(state.session.itemResults);
+            state.session.correct = results0.filter(v => v === true).length;
+            state.session.incorrect = results0.filter(v => v === false).length;
+            state.session.prompts = results0.filter(v => v === 'prompt').length;
+            state.session.total = results0.length;
+            updateScoreUI();
+            document.getElementById('btn-save-session').classList.remove('hidden');
+            if (typeof showSessionNameInput === 'function') showSessionNameInput();
+            return;
+        }
+    } else if (engine === 'stroop_etichetta') {
+        if (typeof window._stroopEtHandleScore === 'function') {
+            window._stroopEtHandleScore(result);
             const results0 = Object.values(state.session.itemResults);
             state.session.correct = results0.filter(v => v === true).length;
             state.session.incorrect = results0.filter(v => v === false).length;
@@ -2223,7 +2276,8 @@ const MODE_ICONS = {
     pool_random: 'fa-shuffle', pool_intraverbal: 'fa-random', intruso: 'fa-ban',
     topologia: 'fa-map-pin', sequenze: 'fa-arrow-right-arrow-left', categorizzazione: 'fa-sitemap',
     zoom: 'fa-search-plus', quaderno: 'fa-book-open', quaderno_task: 'fa-list-check',
-    ricorda: 'fa-brain', singolare_plurale: 'fa-1'
+    ricorda: 'fa-brain', singolare_plurale: 'fa-1',
+    stroop_numerico: 'fa-hashtag', go_nogo: 'fa-traffic-light', stroop_etichetta: 'fa-font'
 };
 
 // Curated FA icon list for icon picker

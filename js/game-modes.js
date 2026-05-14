@@ -176,6 +176,9 @@ function renderGameMode(mode, items) {
     else if (engine === 'zoom') renderZoom(items, stage);
     else if (engine === 'ricorda') renderRicorda(items, stage);
     else if (engine === 'singolare_plurale') renderSingolarePlurale(items, stage);
+    else if (engine === 'stroop_numerico') renderStroopNumerico(items, stage);
+    else if (engine === 'go_nogo') renderGoNogo(items, stage);
+    else if (engine === 'stroop_etichetta') renderStroopEtichetta(items, stage);
     else if (engine === 'quaderno' || engine === 'quaderno_task') renderQuaderno(stage, engine);
     // Re-insert pointer canvas on top after renderer runs (preserves event listeners and state)
     if (pointerCanvas) stage.appendChild(pointerCanvas);
@@ -2752,6 +2755,428 @@ window._spHandleScore = (result) => {
         _spRender(document.getElementById('game-stage'));
         if (typeof window._startTDCountdown === 'function') window._startTDCountdown();
     }, 350);
+};
+
+// ============================================================
+// --- STROOP NUMERICO ---
+// Show N copies of an image; the patient must say the NUMBER, not the object name.
+// ============================================================
+function renderStroopNumerico(items, stage) {
+    if (!items || items.length === 0) {
+        stage.innerHTML = `
+            <div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; opacity:0.5; text-align:center; padding:20px;">
+                <i class="fa-solid fa-hashtag fa-3x" style="margin-bottom:15px;"></i>
+                <p>Nessun item trovato per i tag selezionati.<br>Assicurati che i set abbiano immagini e tag assegnati.</p>
+            </div>`;
+        return;
+    }
+
+    const prev = state._stroopNumState;
+    const prevMin = (prev && prev.countMin) || parseInt(localStorage.getItem('strnum_min')) || 2;
+    const prevMax = (prev && prev.countMax) || parseInt(localStorage.getItem('strnum_max')) || 5;
+
+    const pool = [...items].sort(() => Math.random() - 0.5);
+    state._stroopNumState = {
+        items: pool,
+        index: 0,
+        countMin: prevMin,
+        countMax: prevMax,
+        currentCount: 0,
+        currentItem: null,
+        round: 0
+    };
+
+    _stroopNumPrepareRound();
+    _stroopNumRender(stage);
+}
+
+function _stroopNumPrepareRound() {
+    const sn = state._stroopNumState;
+    if (!sn) return;
+    const item = sn.items[sn.index % sn.items.length];
+    const range = Math.max(0, sn.countMax - sn.countMin);
+    sn.currentCount = sn.countMin + Math.floor(Math.random() * (range + 1));
+    sn.currentItem = item;
+}
+
+function _stroopNumRender(stage) {
+    const sn = state._stroopNumState;
+    if (!sn) return;
+    const item = sn.currentItem;
+    const count = sn.currentCount;
+    const url = item.url || getPlaceholderUrl(item.label);
+
+    let cols, rows;
+    if (count === 1) { cols = 1; rows = 1; }
+    else if (count === 2) { cols = 2; rows = 1; }
+    else if (count === 3) { cols = 3; rows = 1; }
+    else if (count === 4) { cols = 2; rows = 2; }
+    else if (count === 5) { cols = 3; rows = 2; }
+    else if (count <= 6) { cols = 3; rows = 2; }
+    else if (count <= 9) { cols = 3; rows = 3; }
+    else { cols = 4; rows = Math.ceil(count / 4); }
+
+    const imagesHtml = Array.from({ length: count }, () => `
+        <div style="display:flex; align-items:center; justify-content:center; min-width:0; min-height:0;">
+            <img src="${url}" style="max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain;"
+                 onerror="handleImgError(this, '${(item.label || '').replace(/'/g, "\\'")}')">
+        </div>
+    `).join('');
+
+    stage.innerHTML = `
+    <div style="display:flex; height:100%; flex-direction:column;">
+        <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
+            <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
+                <i class="fa-solid fa-hashtag"></i> Stroop Numerico
+            </span>
+            <span style="background:rgba(var(--accent-rgb),0.2); color:var(--accent-color); padding:3px 12px; border-radius:10px; font-size:0.85rem; font-weight:bold;">
+                Quanti? &times; ${count}
+            </span>
+            <span style="color:var(--text-secondary); font-size:0.75rem;">Round ${sn.round + 1}</span>
+            <button class="btn btn-sm btn-ghost" onclick="stroopNumOpenSettings()" title="Impostazioni quantit&agrave;" style="padding:3px 10px; font-size:0.7rem;">
+                <i class="fa-solid fa-sliders"></i> ${sn.countMin}-${sn.countMax}
+            </button>
+            <button class="btn btn-sm btn-ghost" onclick="stroopNumSkip()" title="Salta" style="padding:3px 10px; font-size:0.7rem;">
+                <i class="fa-solid fa-forward-step"></i>
+            </button>
+        </div>
+        <div style="flex:1; min-height:0; padding:14px; display:grid;
+                    grid-template-columns:repeat(${cols}, 1fr);
+                    grid-template-rows:repeat(${rows}, 1fr);
+                    gap:12px; place-items:center;">
+            ${imagesHtml}
+        </div>
+    </div>`;
+}
+
+function _stroopNumAdvance() {
+    const sn = state._stroopNumState;
+    if (!sn) return;
+    sn.index++;
+    sn.round++;
+    if (sn.index >= sn.items.length) {
+        sn.items = [...sn.items].sort(() => Math.random() - 0.5);
+        sn.index = 0;
+    }
+    _stroopNumPrepareRound();
+}
+
+window._stroopNumHandleScore = (result) => {
+    const sn = state._stroopNumState;
+    if (!sn) return;
+    const resultKey = `strnum_${sn.round}_${sn.currentCount}_${Date.now()}`;
+    state.session.itemResults[resultKey] = result;
+    state.session.scoreHistory.push(resultKey);
+
+    setTimeout(() => {
+        _stroopNumAdvance();
+        _stroopNumRender(document.getElementById('game-stage'));
+        if (typeof window._startTDCountdown === 'function') window._startTDCountdown();
+    }, 350);
+};
+
+window.stroopNumSkip = () => {
+    _stroopNumAdvance();
+    _stroopNumRender(document.getElementById('game-stage'));
+};
+
+window.stroopNumOpenSettings = async () => {
+    const sn = state._stroopNumState;
+    if (!sn) return;
+    const minStr = await themedPrompt('Numero MINIMO copie (1-9):', String(sn.countMin));
+    if (minStr === null) return;
+    const maxStr = await themedPrompt('Numero MASSIMO copie (1-9):', String(sn.countMax));
+    if (maxStr === null) return;
+    const min = Math.max(1, Math.min(9, parseInt(minStr) || 2));
+    const max = Math.max(min, Math.min(9, parseInt(maxStr) || 5));
+    sn.countMin = min;
+    sn.countMax = max;
+    try {
+        localStorage.setItem('strnum_min', String(min));
+        localStorage.setItem('strnum_max', String(max));
+    } catch(e) {}
+    _stroopNumPrepareRound();
+    _stroopNumRender(document.getElementById('game-stage'));
+};
+
+// ============================================================
+// --- GO / NO-GO ---
+// Pool of images from multiple tags. The clinician selects one tag as "No-Go".
+// Patient names everything EXCEPT items from the No-Go tag.
+// V = correct inhibition or correct naming. X = failed inhibition or naming error.
+// ============================================================
+function renderGoNogo(items, stage) {
+    if (!items || items.length === 0) {
+        stage.innerHTML = `
+            <div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; opacity:0.5; text-align:center; padding:20px;">
+                <i class="fa-solid fa-traffic-light fa-3x" style="margin-bottom:15px;"></i>
+                <p>Nessun item trovato per i tag selezionati.<br>Seleziona almeno 2 tag per usare Go/No-Go.</p>
+            </div>`;
+        return;
+    }
+
+    if (state.selectedPoolTags.length < 2) {
+        stage.innerHTML = `
+            <div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; opacity:0.5; text-align:center; padding:20px;">
+                <i class="fa-solid fa-traffic-light fa-3x" style="margin-bottom:15px;"></i>
+                <p>Go/No-Go richiede almeno <b>2 tag</b>.<br>Il paziente nomina tutto tranne gli item del tag <b>No-Go</b>.</p>
+            </div>`;
+        return;
+    }
+
+    const prev = state._goNogoState;
+    const prevNoGoTag = (prev && prev.noGoTag) || localStorage.getItem('gonogo_nogo_tag') || state.selectedPoolTags[0];
+    const validNoGo = state.selectedPoolTags.includes(prevNoGoTag) ? prevNoGoTag : state.selectedPoolTags[0];
+
+    const pool = balancedShuffle(items, item => {
+        if (item.sourceTags) {
+            return item.sourceTags.find(t => state.selectedPoolTags.includes(t)) || item.sourceTags[0];
+        }
+        return item.sourceTag || '_default';
+    });
+
+    state._goNogoState = {
+        items: pool,
+        index: 0,
+        noGoTag: validNoGo,
+        round: 0,
+        currentItem: null
+    };
+
+    _goNogoPrepareRound();
+    _goNogoRender(stage);
+}
+
+function _goNogoPrepareRound() {
+    const gn = state._goNogoState;
+    if (!gn) return;
+    gn.currentItem = gn.items[gn.index % gn.items.length];
+}
+
+function _isNoGoItem(item, noGoTag) {
+    const tagLower = noGoTag.toLowerCase().trim();
+    if (item.sourceTags) return item.sourceTags.some(t => t.toLowerCase().trim() === tagLower);
+    if (item.sourceTag) return item.sourceTag.toLowerCase().trim() === tagLower;
+    return false;
+}
+
+function _goNogoRender(stage) {
+    const gn = state._goNogoState;
+    if (!gn) return;
+    const item = gn.currentItem;
+    const url = item.url || getPlaceholderUrl(item.label);
+    const isNoGo = _isNoGoItem(item, gn.noGoTag);
+
+    const tagOptions = state.selectedPoolTags.map(t =>
+        `<option value="${t}" ${t === gn.noGoTag ? 'selected' : ''}>${t}</option>`
+    ).join('');
+
+    const statusBadge = isNoGo
+        ? `<span style="background:rgba(239,68,68,0.2); color:var(--danger-color); padding:3px 12px; border-radius:10px; font-size:0.85rem; font-weight:bold;">
+            <i class="fa-solid fa-hand"></i> NO-GO
+          </span>`
+        : `<span style="background:rgba(34,197,94,0.2); color:var(--success-color); padding:3px 12px; border-radius:10px; font-size:0.85rem; font-weight:bold;">
+            <i class="fa-solid fa-check"></i> GO
+          </span>`;
+
+    stage.innerHTML = `
+    <div style="display:flex; height:100%; flex-direction:column;">
+        <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
+            <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
+                <i class="fa-solid fa-traffic-light"></i> Go/No-Go
+            </span>
+            ${statusBadge}
+            <span style="color:var(--text-secondary); font-size:0.75rem;">Round ${gn.round + 1}</span>
+            <label style="display:flex; align-items:center; gap:4px; font-size:0.7rem; color:var(--text-secondary);">
+                No-Go:
+                <select onchange="goNogoSetTag(this.value)" style="background:var(--input-bg); color:var(--text-primary); border:1px solid var(--glass-border); border-radius:var(--radius-sm); padding:2px 6px; font-size:0.7rem;">
+                    ${tagOptions}
+                </select>
+            </label>
+            <button class="btn btn-sm btn-ghost" onclick="goNogoSkip()" title="Salta" style="padding:3px 10px; font-size:0.7rem;">
+                <i class="fa-solid fa-forward-step"></i>
+            </button>
+        </div>
+        <div style="flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:20px;" onclick="goNogoSkip()">
+            <img src="${url}" style="max-width:100%; max-height:100%; object-fit:contain; border-radius:var(--radius-md);"
+                 onerror="handleImgError(this, '${(item.label || '').replace(/'/g, "\\'")}')">
+        </div>
+        ${item.label ? `<div style="text-align:center; padding:6px; color:var(--text-secondary); font-size:0.7rem; opacity:0.5; border-top:1px solid #ffffff10;">
+            ${item.label}${item.sourceSet ? ` &middot; <span style="opacity:0.7;">${item.sourceSet}</span>` : ''}
+        </div>` : ''}
+    </div>`;
+}
+
+function _goNogoAdvance() {
+    const gn = state._goNogoState;
+    if (!gn) return;
+    gn.index++;
+    gn.round++;
+    if (gn.index >= gn.items.length) {
+        gn.items = balancedShuffle([...gn.items], item => {
+            if (item.sourceTags) return item.sourceTags[0] || '_default';
+            return item.sourceTag || '_default';
+        });
+        gn.index = 0;
+    }
+    _goNogoPrepareRound();
+}
+
+window._goNogoHandleScore = (result) => {
+    const gn = state._goNogoState;
+    if (!gn) return;
+    const isNoGo = _isNoGoItem(gn.currentItem, gn.noGoTag);
+    const label = gn.currentItem.label || 'item';
+    const resultKey = `gonogo_${gn.round}_${isNoGo ? 'nogo' : 'go'}_${Date.now()}`;
+    state.session.itemResults[resultKey] = result;
+    state.session.scoreHistory.push(resultKey);
+
+    const targetImg = document.querySelector('#game-stage img');
+    if (targetImg) {
+        targetImg.classList.remove('feedback-success', 'feedback-fail', 'feedback-prompt');
+        void targetImg.offsetWidth;
+        if (result === 'prompt') targetImg.classList.add('feedback-prompt');
+        else targetImg.classList.add(result ? 'feedback-success' : 'feedback-fail');
+    }
+
+    setTimeout(() => {
+        _goNogoAdvance();
+        _goNogoRender(document.getElementById('game-stage'));
+        if (typeof window._startTDCountdown === 'function') window._startTDCountdown();
+    }, 350);
+};
+
+window.goNogoSkip = () => {
+    _goNogoAdvance();
+    _goNogoRender(document.getElementById('game-stage'));
+};
+
+window.goNogoSetTag = (tag) => {
+    const gn = state._goNogoState;
+    if (!gn) return;
+    gn.noGoTag = tag;
+    try { localStorage.setItem('gonogo_nogo_tag', tag); } catch(e) {}
+    _goNogoRender(document.getElementById('game-stage'));
+};
+
+// ============================================================
+// --- STROOP ETICHETTA (Image-Label Mismatch) ---
+// Show one image with a WRONG label from another item in the same tag.
+// Patient must say what they SEE, not what they READ.
+// ============================================================
+function renderStroopEtichetta(items, stage) {
+    if (!items || items.length < 2) {
+        stage.innerHTML = `
+            <div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; opacity:0.5; text-align:center; padding:20px;">
+                <i class="fa-solid fa-font fa-3x" style="margin-bottom:15px;"></i>
+                <p>Servono almeno <b>2 item</b> con immagini per Stroop Etichetta.<br>Seleziona tag con pi&ugrave; immagini.</p>
+            </div>`;
+        return;
+    }
+
+    const pool = [...items].sort(() => Math.random() - 0.5);
+    state._stroopEtState = {
+        items: pool,
+        index: 0,
+        round: 0,
+        currentItem: null,
+        mismatchLabel: null
+    };
+
+    _stroopEtPrepareRound();
+    _stroopEtRender(stage);
+}
+
+function _stroopEtPrepareRound() {
+    const se = state._stroopEtState;
+    if (!se) return;
+    const item = se.items[se.index % se.items.length];
+    se.currentItem = item;
+
+    // Pick a DIFFERENT label from the pool (ideally same tag, but any other item works)
+    const sameTagItems = se.items.filter(i =>
+        i !== item && i.label !== item.label
+    );
+    const candidates = sameTagItems.length > 0 ? sameTagItems : se.items.filter(i => i.label !== item.label);
+    if (candidates.length > 0) {
+        const pick = candidates[Math.floor(Math.random() * candidates.length)];
+        se.mismatchLabel = pick.label;
+    } else {
+        se.mismatchLabel = '???';
+    }
+}
+
+function _stroopEtRender(stage) {
+    const se = state._stroopEtState;
+    if (!se) return;
+    const item = se.currentItem;
+    const url = item.url || getPlaceholderUrl(item.label);
+    const wrongLabel = se.mismatchLabel;
+    const correctLabel = item.label || '';
+
+    stage.innerHTML = `
+    <div style="display:flex; height:100%; flex-direction:column;">
+        <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
+            <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
+                <i class="fa-solid fa-font"></i> Stroop Etichetta
+            </span>
+            <span style="background:rgba(var(--accent-rgb),0.2); color:var(--accent-color); padding:3px 12px; border-radius:10px; font-size:0.85rem; font-weight:bold;">
+                <i class="fa-solid fa-eye"></i> Dire cosa VEDI
+            </span>
+            <span style="color:var(--text-secondary); font-size:0.75rem;">Round ${se.round + 1}</span>
+            <button class="btn btn-sm btn-ghost" onclick="stroopEtSkip()" title="Salta" style="padding:3px 10px; font-size:0.7rem;">
+                <i class="fa-solid fa-forward-step"></i>
+            </button>
+        </div>
+        <div style="flex:1; min-height:0; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; gap:12px;">
+            <div style="flex:1; min-height:0; display:flex; align-items:center; justify-content:center; width:100%;">
+                <img src="${url}" style="max-width:100%; max-height:100%; object-fit:contain; border-radius:var(--radius-md);"
+                     onerror="handleImgError(this, '${correctLabel.replace(/'/g, "\\'")}')">
+            </div>
+            <div style="background:rgba(239,68,68,0.15); border:2px solid rgba(239,68,68,0.4); border-radius:var(--radius-md); padding:12px 28px; text-align:center;">
+                <span style="font-size:1.6rem; font-weight:bold; color:var(--danger-color); letter-spacing:1px; text-transform:uppercase;">${wrongLabel}</span>
+            </div>
+        </div>
+    </div>`;
+}
+
+function _stroopEtAdvance() {
+    const se = state._stroopEtState;
+    if (!se) return;
+    se.index++;
+    se.round++;
+    if (se.index >= se.items.length) {
+        se.items = [...se.items].sort(() => Math.random() - 0.5);
+        se.index = 0;
+    }
+    _stroopEtPrepareRound();
+}
+
+window._stroopEtHandleScore = (result) => {
+    const se = state._stroopEtState;
+    if (!se) return;
+    const resultKey = `stret_${se.round}_${Date.now()}`;
+    state.session.itemResults[resultKey] = result;
+    state.session.scoreHistory.push(resultKey);
+
+    const targetImg = document.querySelector('#game-stage img');
+    if (targetImg) {
+        targetImg.classList.remove('feedback-success', 'feedback-fail', 'feedback-prompt');
+        void targetImg.offsetWidth;
+        if (result === 'prompt') targetImg.classList.add('feedback-prompt');
+        else targetImg.classList.add(result ? 'feedback-success' : 'feedback-fail');
+    }
+
+    setTimeout(() => {
+        _stroopEtAdvance();
+        _stroopEtRender(document.getElementById('game-stage'));
+        if (typeof window._startTDCountdown === 'function') window._startTDCountdown();
+    }, 350);
+};
+
+window.stroopEtSkip = () => {
+    _stroopEtAdvance();
+    _stroopEtRender(document.getElementById('game-stage'));
 };
 
 // ============================================================
