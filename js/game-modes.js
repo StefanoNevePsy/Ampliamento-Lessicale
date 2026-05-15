@@ -3152,6 +3152,25 @@ function _goNogoRender(stage) {
             <i class="fa-solid fa-check"></i> GO
           </span>`;
 
+    // Build tag legend: one mini-card per selected tag, green border = GO, red border = No-Go
+    const noGoLower = gn.noGoTag.toLowerCase().trim();
+    const tagLegendHtml = state.selectedPoolTags.map(t => {
+        const isNoGoTag = t.toLowerCase().trim() === noGoLower;
+        const borderColor = isNoGoTag ? 'var(--danger-color)' : 'var(--success-color)';
+        const bgColor = isNoGoTag ? 'rgba(239,68,68,0.08)' : 'rgba(34,197,94,0.08)';
+        const tagImg = (typeof getTagImage === 'function') ? getTagImage(t) : null;
+        const imgHtml = tagImg
+            ? `<img src="${tagImg}" style="max-width:100%; max-height:100%; object-fit:contain;" onerror="this.style.display='none'">`
+            : `<i class="fa-solid ${isNoGoTag ? 'fa-hand' : 'fa-check'}" style="font-size:1.8rem; color:${borderColor}; opacity:0.6;"></i>`;
+        return `
+            <div onclick="goNogoSetTag('${t.replace(/'/g, "\\'")}')" style="cursor:pointer; background:${bgColor}; border:3px solid ${borderColor}; border-radius:var(--radius-md); padding:6px; display:flex; flex-direction:column; align-items:center; gap:4px; aspect-ratio:1; min-height:60px;">
+                <div style="flex:1; min-height:0; display:flex; align-items:center; justify-content:center; width:100%;">
+                    ${imgHtml}
+                </div>
+                <div style="font-size:0.65rem; font-weight:bold; color:${borderColor}; text-transform:uppercase; text-align:center; line-height:1; word-break:break-word;">${t}</div>
+            </div>`;
+    }).join('');
+
     stage.innerHTML = `
     <div style="display:flex; height:100%; flex-direction:column;">
         <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
@@ -3170,9 +3189,14 @@ function _goNogoRender(stage) {
                 <i class="fa-solid fa-forward-step"></i>
             </button>
         </div>
-        <div style="flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:20px;" onclick="goNogoSkip()">
-            <img src="${url}" style="max-width:100%; max-height:100%; object-fit:contain; border-radius:var(--radius-md);"
-                 onerror="handleImgError(this, '${(item.label || '').replace(/'/g, "\\'")}')">
+        <div style="flex:1; min-height:0; display:flex; gap:14px; padding:20px;">
+            <div style="flex:1; min-width:0; display:flex; align-items:center; justify-content:center;" onclick="goNogoSkip()">
+                <img src="${url}" style="max-width:100%; max-height:100%; object-fit:contain; border-radius:var(--radius-md);"
+                     onerror="handleImgError(this, '${(item.label || '').replace(/'/g, "\\'")}')">
+            </div>
+            <div style="width:clamp(80px, 14vw, 130px); flex-shrink:0; display:flex; flex-direction:column; gap:10px; overflow-y:auto;">
+                ${tagLegendHtml}
+            </div>
         </div>
         ${item.label ? `<div style="text-align:center; padding:6px; color:var(--text-secondary); font-size:0.7rem; opacity:0.5; border-top:1px solid #ffffff10;">
             ${item.label}${item.sourceSet ? ` &middot; <span style="opacity:0.7;">${item.sourceSet}</span>` : ''}
