@@ -1214,8 +1214,8 @@ window.startGame = () => {
     state.session = { correct: 0, incorrect: 0, total: 0, active: true, itemResults: {} };
     state._ranGridIndex = 0; // Reset RAN grid scoring index
     updateScoreUI();
-    // Fluenza has its own built-in controls
-    if (engine === 'fluenza') {
+    // Fluenza and Memory have their own built-in controls/scoring
+    if (engine === 'fluenza' || engine === 'memory') {
         document.getElementById('scoring-controls').classList.add('hidden');
     } else {
         document.getElementById('scoring-controls').classList.remove('hidden');
@@ -1324,6 +1324,9 @@ window.recordResponse = (result) => {
     window._stopTDCountdown();
     const mode = document.getElementById('mode-select').value;
     const engine = getModeEngine(mode);
+
+    // Memory uses its own internal scoring driven by card flips
+    if (engine === 'memory') return;
 
     if (!state.session.scoreHistory) state.session.scoreHistory = [];
 
@@ -1647,7 +1650,7 @@ function getSelectedTDSeconds() {
 function handleShortcuts(e) {
     const mode = document.getElementById('mode-select').value;
     const engine = getModeEngine(mode);
-    if (state.session.active && engine !== 'fluenza' && !['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
+    if (state.session.active && engine !== 'fluenza' && engine !== 'memory' && !['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
         const type = getSelectedSessionType();
         if (e.key.toLowerCase() === 'v') recordResponse(true);
         if (type === 'independent' && e.key.toLowerCase() === 'x') recordResponse(false);
@@ -1949,8 +1952,38 @@ async function _doSaveSession(p, noteText) {
         sessionData.setName = setName + ` [${phaseLabel} ${stimCount}]`;
     }
 
+    // Memory: efficiency-based scoring + completion metrics
+    if (engine === 'memory' && state.memory) {
+        const m = state.memory;
+        const scored = m.matches + m.memoryErrors;
+        sessionData.correct = m.matches;
+        sessionData.rawV = m.matches;
+        sessionData.rawX = m.memoryErrors;
+        sessionData.rawP = 0;
+        sessionData.prompts = 0;
+        sessionData.total = scored;
+        sessionData.percentage = scored > 0 ? Math.round((m.matches / scored) * 100) : 0;
+        sessionData.memoryStats = {
+            totalPairs: m.totalPairs,
+            matches: m.matches,
+            pairAttempts: m.pairAttempts,
+            memoryErrors: m.memoryErrors,
+            discoveries: m.discoveries,
+            efficiency: sessionData.percentage,
+            durationSeconds: m.endTime && m.startTime ? Math.round((m.endTime - m.startTime) / 1000) : 0,
+            completed: m.completed
+        };
+    }
+
     // Save per-item details for modes with labeled items
-    if (engine === 'ran_intensivo' && state.session._riDetails && state.session._riDetails.length > 0) {
+    if (engine === 'memory' && state.memory) {
+        sessionData.itemDetails = Object.entries(state.memory.pairDetails).map(([label, d]) => ({
+            label: label,
+            attempts: d.attempts,
+            errors: Math.max(0, d.attempts - 1),
+            result: d.attempts === 1
+        }));
+    } else if (engine === 'ran_intensivo' && state.session._riDetails && state.session._riDetails.length > 0) {
         sessionData.itemDetails = state.session._riDetails;
     } else if (engine === 'singolare_plurale' && state.session._spDetails && state.session._spDetails.length > 0) {
         sessionData.itemDetails = state.session._spDetails.map(d => ({

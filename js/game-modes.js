@@ -723,47 +723,220 @@ window.handleMatchClick = (idx, label) => {
 function renderMemory(items, stage) {
     let useItems = items.length > 10 ? items.slice(0, 10) : items;
     let deck = [...useItems, ...useItems].sort(() => Math.random() - 0.5);
-    state.memory = { flipped: [], matched: [], deck: deck, lockBoard: false };
+    const totalPairs = useItems.length;
+    state.memory = {
+        flipped: [],
+        matched: [],
+        deck: deck,
+        lockBoard: false,
+        cardFlips: new Array(deck.length).fill(0),
+        matches: 0,
+        memoryErrors: 0,
+        discoveries: 0,
+        pairAttempts: 0,
+        startTime: null,
+        endTime: null,
+        pairDetails: {},
+        totalPairs: totalPairs,
+        completed: false
+    };
     const cols = Math.ceil(Math.sqrt(deck.length));
     const rows = Math.ceil(deck.length / cols);
 
     stage.innerHTML = `
-        <div style="height:100%; padding:10px; display:grid;
-                    grid-template-columns:repeat(${cols}, 1fr);
-                    grid-template-rows:repeat(${rows}, minmax(80px, 1fr));
-                    gap:10px; overflow-y:auto; min-height:0;">
-            ${deck.map((item, idx) => `
-                <div class="card-grid" id="mem-${idx}" onclick="flipCard(${idx})"
-                     style="background:var(--accent-color); aspect-ratio:unset; height:auto; min-height:0; min-width:0; overflow:hidden;">
-                    <div class="mem-content" style="display:none; width:100%; height:100%;">
-                        <img src="${item.url || getPlaceholderUrl(item.label)}"
-                             style="max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; background:white; border-radius:6px;"
-                             onerror="handleImgError(this, '${item.label}')">
+        <div style="display:flex; height:100%; flex-direction:column;">
+            <div id="mem-stats-bar" style="padding:8px 12px; background:rgba(0,0,0,0.2); display:flex; gap:14px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap; font-size:0.8rem;">
+                <span><i class="fa-solid fa-clone" style="color:var(--accent-color);"></i> <b id="mem-stat-matches">0</b>/${totalPairs}</span>
+                <span style="color:var(--text-secondary);"><i class="fa-solid fa-hand-pointer"></i> Tentativi: <b id="mem-stat-attempts">0</b></span>
+                <span style="color:var(--danger-color);"><i class="fa-solid fa-x"></i> Errori: <b id="mem-stat-errors">0</b></span>
+                <span style="color:var(--success-color);"><i class="fa-solid fa-gauge-high"></i> Eff: <b id="mem-stat-eff">&mdash;</b></span>
+                <span style="color:var(--text-secondary);"><i class="fa-solid fa-stopwatch"></i> <b id="mem-stat-time">0:00</b></span>
+            </div>
+            <div style="flex:1; min-height:0; padding:10px; display:grid;
+                        grid-template-columns:repeat(${cols}, 1fr);
+                        grid-template-rows:repeat(${rows}, minmax(80px, 1fr));
+                        gap:10px; overflow-y:auto;">
+                ${deck.map((item, idx) => `
+                    <div class="card-grid" id="mem-${idx}" onclick="flipCard(${idx})"
+                         style="background:var(--accent-color); aspect-ratio:unset; height:auto; min-height:0; min-width:0; overflow:hidden;">
+                        <div class="mem-content" style="display:none; width:100%; height:100%;">
+                            <img src="${item.url || getPlaceholderUrl(item.label)}"
+                                 style="max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; background:white; border-radius:6px;"
+                                 onerror="handleImgError(this, '${item.label}')">
+                        </div>
+                        <i class="fa-solid fa-question icon-back" style="color:white; font-size:2rem;"></i>
                     </div>
-                    <i class="fa-solid fa-question icon-back" style="color:white; font-size:2rem;"></i>
+                `).join('')}
+            </div>
+        </div>`;
+}
+
+function _memUpdateStats() {
+    const m = state.memory;
+    if (!m) return;
+    const matchesEl = document.getElementById('mem-stat-matches');
+    const attemptsEl = document.getElementById('mem-stat-attempts');
+    const errorsEl = document.getElementById('mem-stat-errors');
+    const effEl = document.getElementById('mem-stat-eff');
+    const timeEl = document.getElementById('mem-stat-time');
+    if (matchesEl) matchesEl.textContent = String(m.matches);
+    if (attemptsEl) attemptsEl.textContent = String(m.pairAttempts);
+    if (errorsEl) errorsEl.textContent = String(m.memoryErrors);
+    const scored = m.matches + m.memoryErrors;
+    if (effEl) effEl.textContent = scored > 0 ? Math.round((m.matches / scored) * 100) + '%' : '—';
+    if (timeEl && m.startTime) {
+        const elapsed = Math.floor(((m.endTime || Date.now()) - m.startTime) / 1000);
+        const mm = Math.floor(elapsed / 60);
+        const ss = (elapsed % 60).toString().padStart(2, '0');
+        timeEl.textContent = `${mm}:${ss}`;
+    }
+
+    // Mirror into session state so updateScoreUI / save works seamlessly
+    if (state.session) {
+        state.session.correct = m.matches;
+        state.session.incorrect = m.memoryErrors;
+        state.session.total = m.matches + m.memoryErrors;
+        if (typeof updateScoreUI === 'function') updateScoreUI();
+    }
+}
+
+// Update timer once per second while the game is running
+if (!window._memTimerId) {
+    window._memTimerId = setInterval(() => {
+        const m = state.memory;
+        if (!m || !m.startTime || m.completed) return;
+        const timeEl = document.getElementById('mem-stat-time');
+        if (!timeEl) return;
+        const elapsed = Math.floor((Date.now() - m.startTime) / 1000);
+        const mm = Math.floor(elapsed / 60);
+        const ss = (elapsed % 60).toString().padStart(2, '0');
+        timeEl.textContent = `${mm}:${ss}`;
+    }, 1000);
+}
+
+function _memShowSummary() {
+    const m = state.memory;
+    if (!m) return;
+    const stage = document.getElementById('game-stage');
+    if (!stage) return;
+    const elapsed = Math.floor((m.endTime - m.startTime) / 1000);
+    const mm = Math.floor(elapsed / 60);
+    const ss = (elapsed % 60).toString().padStart(2, '0');
+    const scored = m.matches + m.memoryErrors;
+    const eff = scored > 0 ? Math.round((m.matches / scored) * 100) : 0;
+
+    // Pair details sorted by attempts (hardest first)
+    const pairList = Object.entries(m.pairDetails)
+        .sort((a, b) => b[1].attempts - a[1].attempts)
+        .map(([label, d]) => `<tr>
+            <td style="padding:4px 8px; text-align:left;">${label}</td>
+            <td style="padding:4px 8px; text-align:center;">${d.attempts}</td>
+            <td style="padding:4px 8px; text-align:center; color:${d.attempts === 1 ? 'var(--success-color)' : (d.attempts <= 2 ? 'var(--text-secondary)' : 'var(--danger-color)')};">${d.attempts === 1 ? '✓' : (d.attempts - 1)}</td>
+        </tr>`).join('');
+
+    stage.innerHTML = `
+        <div style="height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; overflow-y:auto;">
+            <i class="fa-solid fa-trophy fa-3x" style="color:var(--warning-color); margin-bottom:12px;"></i>
+            <h2 style="margin:0 0 6px 0; color:var(--success-color);">Sessione completata!</h2>
+            <p style="color:var(--text-secondary); margin:0 0 18px 0;">Salva per registrare i risultati.</p>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:10px; width:100%; max-width:500px; margin-bottom:18px;">
+                <div style="background:rgba(var(--accent-rgb),0.1); border:1px solid rgba(var(--accent-rgb),0.3); border-radius:var(--radius-md); padding:10px; text-align:center;">
+                    <div style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase;">Coppie</div>
+                    <div style="font-size:1.5rem; font-weight:bold;">${m.matches}/${m.totalPairs}</div>
                 </div>
-            `).join('')}
+                <div style="background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); border-radius:var(--radius-md); padding:10px; text-align:center;">
+                    <div style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase;">Tentativi</div>
+                    <div style="font-size:1.5rem; font-weight:bold;">${m.pairAttempts}</div>
+                </div>
+                <div style="background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.3); border-radius:var(--radius-md); padding:10px; text-align:center;">
+                    <div style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase;">Errori</div>
+                    <div style="font-size:1.5rem; font-weight:bold; color:var(--danger-color);">${m.memoryErrors}</div>
+                </div>
+                <div style="background:rgba(34,197,94,0.1); border:1px solid rgba(34,197,94,0.3); border-radius:var(--radius-md); padding:10px; text-align:center;">
+                    <div style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase;">Efficienza</div>
+                    <div style="font-size:1.5rem; font-weight:bold; color:var(--success-color);">${eff}%</div>
+                </div>
+                <div style="background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); border-radius:var(--radius-md); padding:10px; text-align:center;">
+                    <div style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase;">Tempo</div>
+                    <div style="font-size:1.5rem; font-weight:bold;">${mm}:${ss}</div>
+                </div>
+            </div>
+            ${pairList ? `<div style="width:100%; max-width:500px;">
+                <div style="font-size:0.75rem; color:var(--text-secondary); text-transform:uppercase; margin-bottom:6px; padding:0 8px;">Dettaglio coppie</div>
+                <table style="width:100%; border-collapse:collapse; background:rgba(255,255,255,0.03); border-radius:var(--radius-md); overflow:hidden; font-size:0.85rem;">
+                    <thead style="background:rgba(0,0,0,0.2); color:var(--text-secondary); font-size:0.7rem; text-transform:uppercase;">
+                        <tr>
+                            <th style="padding:6px 8px; text-align:left;">Coppia</th>
+                            <th style="padding:6px 8px; text-align:center;">Tentativi</th>
+                            <th style="padding:6px 8px; text-align:center;">Errori</th>
+                        </tr>
+                    </thead>
+                    <tbody>${pairList}</tbody>
+                </table>
+            </div>` : ''}
         </div>`;
 }
 
 window.flipCard = (idx) => {
     if (state.memory.lockBoard || state.memory.flipped.includes(idx) || state.memory.matched.includes(idx)) return;
+    const m = state.memory;
+    if (m.completed) return;
+
+    // Start timer on first flip
+    if (!m.startTime) m.startTime = Date.now();
+
     const card = document.getElementById(`mem-${idx}`);
     card.querySelector('.mem-content').style.display = 'block';
     card.querySelector('.icon-back').style.display = 'none';
     card.style.background = 'white';
-    state.memory.flipped.push(idx);
+    m.flipped.push(idx);
+    m.cardFlips[idx]++;
 
-    if (state.memory.flipped.length === 2) {
-        state.memory.lockBoard = true;
-        const [i1, i2] = state.memory.flipped;
-        if (state.memory.deck[i1].label === state.memory.deck[i2].label) {
-            state.memory.matched.push(i1, i2);
-            state.memory.flipped = [];
-            state.memory.lockBoard = false;
+    if (m.flipped.length === 2) {
+        m.lockBoard = true;
+        const [i1, i2] = m.flipped;
+        m.pairAttempts++;
+
+        const label1 = m.deck[i1].label;
+        const label2 = m.deck[i2].label;
+        const wasSeen1 = m.cardFlips[i1] > 1;
+        const wasSeen2 = m.cardFlips[i2] > 1;
+
+        // Track per-pair attempts for both labels involved
+        [label1, label2].forEach(lbl => {
+            if (!m.pairDetails[lbl]) m.pairDetails[lbl] = { attempts: 0, matched: false };
+            if (!m.pairDetails[lbl].matched) m.pairDetails[lbl].attempts++;
+        });
+
+        if (label1 === label2) {
+            // MATCH
+            m.matches++;
+            m.matched.push(i1, i2);
+            m.flipped = [];
+            m.lockBoard = false;
             document.getElementById(`mem-${i1}`).classList.add('matched');
             document.getElementById(`mem-${i2}`).classList.add('matched');
+            if (m.pairDetails[label1]) m.pairDetails[label1].matched = true;
+
+            // Game complete?
+            if (m.matched.length === m.deck.length) {
+                m.completed = true;
+                m.endTime = Date.now();
+                _memUpdateStats();
+                if (typeof showSessionNameInput === 'function') showSessionNameInput();
+                document.getElementById('btn-save-session').classList.remove('hidden');
+                setTimeout(_memShowSummary, 600);
+                return;
+            }
+            _memUpdateStats();
         } else {
+            // NO MATCH
+            if (wasSeen1 || wasSeen2) {
+                m.memoryErrors++;
+            } else {
+                m.discoveries++;
+            }
+            _memUpdateStats();
             setTimeout(() => {
                 [i1, i2].forEach(i => {
                     const c = document.getElementById(`mem-${i}`);
@@ -771,8 +944,8 @@ window.flipCard = (idx) => {
                     c.querySelector('.icon-back').style.display = 'block';
                     c.style.background = 'var(--accent-color)';
                 });
-                state.memory.flipped = [];
-                state.memory.lockBoard = false;
+                m.flipped = [];
+                m.lockBoard = false;
             }, 1000);
         }
     }
