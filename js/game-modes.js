@@ -3108,12 +3108,15 @@ function renderGoNogo(items, stage) {
         return item.sourceTag || '_default';
     });
 
+    const prevShowLegend = (prev && prev.showLegend !== undefined) ? prev.showLegend : localStorage.getItem('gonogo_legend') !== 'false';
+
     state._goNogoState = {
         items: pool,
         index: 0,
         noGoTag: validNoGo,
         round: 0,
-        currentItem: null
+        currentItem: null,
+        showLegend: prevShowLegend
     };
 
     _goNogoPrepareRound();
@@ -3138,19 +3141,10 @@ function _goNogoRender(stage) {
     if (!gn) return;
     const item = gn.currentItem;
     const url = item.url || getPlaceholderUrl(item.label);
-    const isNoGo = _isNoGoItem(item, gn.noGoTag);
 
     const tagOptions = state.selectedPoolTags.map(t =>
         `<option value="${t}" ${t === gn.noGoTag ? 'selected' : ''}>${t}</option>`
     ).join('');
-
-    const statusBadge = isNoGo
-        ? `<span style="background:rgba(239,68,68,0.2); color:var(--danger-color); padding:3px 12px; border-radius:10px; font-size:0.85rem; font-weight:bold;">
-            <i class="fa-solid fa-hand"></i> NO-GO
-          </span>`
-        : `<span style="background:rgba(34,197,94,0.2); color:var(--success-color); padding:3px 12px; border-radius:10px; font-size:0.85rem; font-weight:bold;">
-            <i class="fa-solid fa-check"></i> GO
-          </span>`;
 
     // Build tag legend: one mini-card per selected tag, green border = GO, red border = No-Go
     const noGoLower = gn.noGoTag.toLowerCase().trim();
@@ -3171,13 +3165,14 @@ function _goNogoRender(stage) {
             </div>`;
     }).join('');
 
+    const legendVisible = gn.showLegend;
+
     stage.innerHTML = `
     <div style="display:flex; height:100%; flex-direction:column;">
         <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
             <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
                 <i class="fa-solid fa-traffic-light"></i> Go/No-Go
             </span>
-            ${statusBadge}
             <span style="color:var(--text-secondary); font-size:0.75rem;">Round ${gn.round + 1}</span>
             <label style="display:flex; align-items:center; gap:4px; font-size:0.7rem; color:var(--text-secondary);">
                 No-Go:
@@ -3185,6 +3180,9 @@ function _goNogoRender(stage) {
                     ${tagOptions}
                 </select>
             </label>
+            <button class="btn btn-sm btn-ghost" onclick="goNogoToggleLegend()" title="${legendVisible ? 'Nascondi' : 'Mostra'} categorie" style="padding:3px 10px; font-size:0.7rem;">
+                <i class="fa-solid ${legendVisible ? 'fa-eye-slash' : 'fa-eye'}"></i> Categorie
+            </button>
             <button class="btn btn-sm btn-ghost" onclick="goNogoSkip()" title="Salta" style="padding:3px 10px; font-size:0.7rem;">
                 <i class="fa-solid fa-forward-step"></i>
             </button>
@@ -3194,9 +3192,9 @@ function _goNogoRender(stage) {
                 <img src="${url}" style="max-width:100%; max-height:100%; object-fit:contain; border-radius:var(--radius-md);"
                      onerror="handleImgError(this, '${(item.label || '').replace(/'/g, "\\'")}')">
             </div>
-            <div style="width:clamp(80px, 14vw, 130px); flex-shrink:0; display:flex; flex-direction:column; gap:10px; overflow-y:auto;">
+            ${legendVisible ? `<div style="width:clamp(80px, 14vw, 130px); flex-shrink:0; display:flex; flex-direction:column; gap:10px; overflow-y:auto;">
                 ${tagLegendHtml}
-            </div>
+            </div>` : ''}
         </div>
         ${item.label ? `<div style="text-align:center; padding:6px; color:var(--text-secondary); font-size:0.7rem; opacity:0.5; border-top:1px solid #ffffff10;">
             ${item.label}${item.sourceSet ? ` &middot; <span style="opacity:0.7;">${item.sourceSet}</span>` : ''}
@@ -3245,6 +3243,14 @@ window._goNogoHandleScore = (result) => {
 
 window.goNogoSkip = () => {
     _goNogoAdvance();
+    _goNogoRender(document.getElementById('game-stage'));
+};
+
+window.goNogoToggleLegend = () => {
+    const gn = state._goNogoState;
+    if (!gn) return;
+    gn.showLegend = !gn.showLegend;
+    try { localStorage.setItem('gonogo_legend', gn.showLegend ? 'true' : 'false'); } catch(e) {}
     _goNogoRender(document.getElementById('game-stage'));
 };
 
