@@ -2215,6 +2215,12 @@ function renderLibCard(s, idxInCat, catLength) {
         </div>`;
     }
 
+    const imgCount = s.items.filter(i => i.url).length;
+    const maskedCount = s.items.filter(i => i.maskedUrl).length;
+    const scontornoIcon = maskedCount === imgCount && imgCount > 0
+        ? 'color:var(--success-color)'
+        : (maskedCount > 0 ? 'color:var(--warning-color)' : 'opacity:0.4');
+
     return `
     <div class="lib-card ${s.isClinical ? 'clinical' : ''}">
         ${reorderHtml}
@@ -2233,6 +2239,9 @@ function renderLibCard(s, idxInCat, catLength) {
             <button class="btn btn-ghost" style="padding:6px 12px;" onclick="editSet('${s.id}')" title="Modifica">
                 <i class="fa-solid fa-pen"></i>
             </button>
+            <button class="btn btn-ghost" style="padding:6px 12px;" onclick="scontornaSet('${s.id}')" title="Scontorna set (${maskedCount}/${imgCount})">
+                <i class="fa-solid fa-eraser" style="${scontornoIcon}"></i>
+            </button>
             <button class="btn btn-ghost" style="padding:6px 12px;" onclick="exportSingleSet('${s.id}')" title="Esporta file">
                 <i class="fa-solid fa-file-export"></i>
             </button>
@@ -2248,6 +2257,39 @@ function renderLibCard(s, idxInCat, catLength) {
         </div>
     </div>`;
 }
+
+window.scontornaSet = async (setId) => {
+    if (typeof removeBackground !== 'function') return;
+    const s = state.savedSets.find(x => x.id === setId);
+    if (!s) return;
+
+    const items = s.items.filter(i => i.url && !i.maskedUrl);
+    if (items.length === 0) {
+        const allMasked = s.items.filter(i => i.maskedUrl).length;
+        if (allMasked > 0) {
+            const redo = await themedConfirm(`Tutte le ${allMasked} immagini sono già scontornate. Vuoi rifare lo scontorno?`);
+            if (!redo) return;
+            s.items.forEach(i => { if (i.maskedUrl) delete i.maskedUrl; });
+            return scontornaSet(setId);
+        }
+        return;
+    }
+
+    const btn = document.querySelector(`[onclick*="scontornaSet('${setId}')"]`);
+    const originalHtml = btn ? btn.innerHTML : '';
+    let done = 0;
+
+    for (const item of items) {
+        const result = await removeBackground(item.url);
+        if (result) item.maskedUrl = result;
+        done++;
+        if (btn) btn.innerHTML = `<span style="font-size:0.6rem;">${done}/${items.length}</span>`;
+    }
+
+    await DB.saveSet(s);
+    if (btn) btn.innerHTML = originalHtml;
+    renderLibList();
+};
 
 // Move set position within its category
 window.moveSetInCategory = async (setId, dir) => {
