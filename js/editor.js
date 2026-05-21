@@ -310,6 +310,9 @@ function renderEditorList() {
             <button class="btn btn-ghost" style="padding:6px;" onclick="triggerAudioUpload(${idx}); event.stopPropagation();" title="Carica Audio">
                 <i class="fa-solid fa-music" style="font-size:0.8rem; ${item.audio ? 'color:var(--success-color)' : 'opacity:0.4'}"></i>
             </button>
+            <button class="btn btn-ghost" style="padding:6px;" onclick="scontornaEditorItem(${idx}); event.stopPropagation();" title="${item.maskedUrl ? 'Scontorno OK (clicca per rifare)' : 'Rimuovi sfondo'}">
+                <i class="fa-solid fa-eraser" style="font-size:0.8rem; ${item.maskedUrl ? 'color:var(--success-color)' : 'opacity:0.4'}"></i>
+            </button>
             <button class="btn btn-ghost" style="padding:6px;" onclick="openZoomEditor(${idx}); event.stopPropagation();" title="Imposta Area Zoom">
                 <i class="fa-solid fa-crop" style="font-size:0.8rem; ${item.zoomArea ? 'color:var(--warning-color)' : 'opacity:0.4'}"></i>
             </button>
@@ -324,6 +327,44 @@ function renderEditorList() {
 
     container.innerHTML = counterHtml + listHtml;
 }
+
+// --- SCONTORNO (Background removal) ---
+window.scontornaEditorItem = async (idx) => {
+    const item = state.editingItems[idx];
+    if (!item || !item.url) return;
+    if (typeof removeBackground !== 'function') return;
+
+    // Show a subtle processing indicator on the button
+    const btn = document.querySelector(`[onclick*="scontornaEditorItem(${idx})"]`);
+    if (btn) { btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="font-size:0.8rem;"></i>'; btn.disabled = true; }
+
+    const result = await removeBackground(item.url);
+    if (result) {
+        item.maskedUrl = result;
+    } else {
+        if (item.maskedUrl) delete item.maskedUrl;
+    }
+    renderEditorList();
+};
+
+window.batchScontornoEditor = async () => {
+    if (typeof removeBackground !== 'function') return;
+    const items = state.editingItems.filter(i => i.url && !i.maskedUrl);
+    if (items.length === 0) return;
+
+    const btn = document.getElementById('btn-batch-scontorno');
+    if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 0/' + items.length;
+
+    let done = 0;
+    for (const item of items) {
+        const result = await removeBackground(item.url);
+        if (result) item.maskedUrl = result;
+        done++;
+        if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ' + done + '/' + items.length;
+    }
+    if (btn) btn.innerHTML = '<i class="fa-solid fa-eraser"></i> Scontorna tutti';
+    renderEditorList();
+};
 
 // --- EDITOR ACTIONS ---
 window.addNewItem = () => {

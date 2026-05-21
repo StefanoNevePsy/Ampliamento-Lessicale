@@ -24,7 +24,8 @@ const BUILTIN_MODES = {
     'singolare_plurale': { label: 'Singolare/Plurale', engine: 'singolare_plurale' },
     'stroop_numerico': { label: 'Stroop Numerico', engine: 'stroop_numerico' },
     'go_nogo': { label: 'Go/No-Go', engine: 'go_nogo' },
-    'stroop_etichetta': { label: 'Stroop Etichetta', engine: 'stroop_etichetta' }
+    'stroop_etichetta': { label: 'Stroop Etichetta', engine: 'stroop_etichetta' },
+    'topologia_comp': { label: 'Topologia Compositiva', engine: 'topologia_comp' }
 };
 
 // MODES_CONFIG: dynamic map of all modes (built-in + custom)
@@ -53,7 +54,8 @@ function getDefaultActivityLayout() {
             { name: '', modes: ['tact', 'ran', 'ran_intensivo', 'fluenza', 'tombola', 'tombola_sonora', 'memory', 'search_find', 'intraverbal_scenari', 'zoom', 'quaderno'] },
             { name: 'Avanzate', modes: ['topologia', 'sequenze', 'quaderno_task'] },
             { name: 'Pool da Tag', modes: ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione', 'ricorda', 'singolare_plurale'] },
-            { name: 'Inibizione', modes: ['stroop_numerico', 'go_nogo', 'stroop_etichetta'] }
+            { name: 'Inibizione', modes: ['stroop_numerico', 'go_nogo', 'stroop_etichetta'] },
+            { name: 'Composizione', modes: ['topologia_comp'] }
         ],
         modeEmojis: {},
         customModes: {} // key -> { label, engine (built-in mode key used for logic) }

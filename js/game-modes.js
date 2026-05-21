@@ -179,6 +179,7 @@ function renderGameMode(mode, items) {
     else if (engine === 'stroop_numerico') renderStroopNumerico(items, stage);
     else if (engine === 'go_nogo') renderGoNogo(items, stage);
     else if (engine === 'stroop_etichetta') renderStroopEtichetta(items, stage);
+    else if (engine === 'topologia_comp') renderTopologiaComp(items, stage);
     else if (engine === 'quaderno' || engine === 'quaderno_task') renderQuaderno(stage, engine);
     // Re-insert pointer canvas on top after renderer runs (preserves event listeners and state)
     if (pointerCanvas) stage.appendChild(pointerCanvas);
@@ -2762,6 +2763,9 @@ function renderSingolarePlurale(items, stage) {
         round: 0
     };
 
+    // Pre-process scontorno for better plural rendering
+    if (typeof _topoCompPreScontorno === 'function') _topoCompPreScontorno(pool.slice(0, 6));
+
     _spPrepareRound();
     _spRender(stage);
 }
@@ -2796,7 +2800,7 @@ function _spRender(stage) {
     const item = sp.currentItem;
     const isPlural = sp.currentForm === 'plural';
     const count = sp.pluralCount;
-    const url = item.url || getPlaceholderUrl(item.label);
+    const url = (isPlural && count > 1 && item.maskedUrl) ? item.maskedUrl : (item.url || getPlaceholderUrl(item.label));
 
     // Compute grid layout for plural display
     let cols, rows;
@@ -2977,7 +2981,7 @@ function _stroopNumRender(stage) {
     if (!sn) return;
     const item = sn.currentItem;
     const count = sn.currentCount;
-    const url = item.url || getPlaceholderUrl(item.label);
+    const url = (count > 1 && item.maskedUrl) ? item.maskedUrl : (item.url || getPlaceholderUrl(item.label));
 
     let cols, rows;
     if (count === 1) { cols = 1; rows = 1; }
@@ -3380,6 +3384,364 @@ window._stroopEtHandleScore = (result) => {
 window.stroopEtSkip = () => {
     _stroopEtAdvance();
     _stroopEtRender(document.getElementById('game-stage'));
+};
+
+// ============================================================
+// --- TOPOLOGIA COMPOSITIVA ---
+// Two objects composed on a canvas. Patient describes the spatial relation.
+// Sub-modes: template (fixed character) and random (both objects random).
+// ============================================================
+const TOPO_POSITIONS = {
+    'sopra':      { label: 'Sopra',      icon: 'fa-arrow-up',          charPos: [0.5, 0.18], refPos: [0.5, 0.68] },
+    'sotto':      { label: 'Sotto',      icon: 'fa-arrow-down',        charPos: [0.5, 0.78], refPos: [0.5, 0.28] },
+    'davanti':    { label: 'Davanti',    icon: 'fa-person-walking',    charPos: [0.5, 0.58], refPos: [0.5, 0.38], charScale: 1.1, refScale: 0.85, drawCharLast: true },
+    'dietro':     { label: 'Dietro',     icon: 'fa-eye-slash',         charPos: [0.5, 0.35], refPos: [0.5, 0.58], charScale: 0.8, refScale: 1.0, drawCharLast: false },
+    'vicino':     { label: 'Vicino',     icon: 'fa-arrows-left-right', charPos: [0.35, 0.5], refPos: [0.65, 0.5] },
+    'lontano':    { label: 'Lontano',    icon: 'fa-expand',            charPos: [0.12, 0.5], refPos: [0.88, 0.5], charScale: 0.65, refScale: 0.65 },
+    'dentro':     { label: 'Dentro',     icon: 'fa-box-open',          charPos: [0.5, 0.5],  refPos: [0.5, 0.5],  charScale: 0.4, refScale: 1.15, drawCharLast: true },
+    'a destra':   { label: 'A destra',   icon: 'fa-arrow-right',       charPos: [0.72, 0.5], refPos: [0.28, 0.5] },
+    'a sinistra': { label: 'A sinistra', icon: 'fa-arrow-left',        charPos: [0.28, 0.5], refPos: [0.72, 0.5] }
+};
+
+function _topoCompGetEnabledPositions() {
+    try {
+        const saved = localStorage.getItem('topo_comp_positions');
+        if (saved) return JSON.parse(saved);
+    } catch(e) {}
+    return Object.keys(TOPO_POSITIONS);
+}
+
+function renderTopologiaComp(items, stage) {
+    if (!items || items.length < 2) {
+        stage.innerHTML = `
+            <div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; opacity:0.5; text-align:center; padding:20px;">
+                <i class="fa-solid fa-layer-group fa-3x" style="margin-bottom:15px;"></i>
+                <p>Servono almeno <b>2 item</b> con immagini.<br>Seleziona tag con pi&ugrave; immagini.</p>
+            </div>`;
+        return;
+    }
+
+    const prev = state._topoCompState;
+    const prevSubMode = (prev && prev.subMode) || localStorage.getItem('topo_comp_submode') || 'random';
+    const prevPersonaggio = prev ? prev.personaggio : null;
+    const enabledPositions = _topoCompGetEnabledPositions();
+    const showAnswer = (prev && prev.showAnswer !== undefined) ? prev.showAnswer : false;
+
+    const pool = [...items].sort(() => Math.random() - 0.5);
+    state._topoCompState = {
+        items: pool,
+        index: 0,
+        round: 0,
+        subMode: prevSubMode,
+        personaggio: prevPersonaggio,
+        enabledPositions: enabledPositions,
+        currentPosition: null,
+        currentChar: null,
+        currentRef: null,
+        showAnswer: showAnswer,
+        scontornoReady: {}
+    };
+
+    // Pre-process scontorno for first few items in background
+    _topoCompPreScontorno(pool.slice(0, 6));
+
+    _topoCompPrepareRound();
+    _topoCompRender(stage);
+}
+
+async function _topoCompPreScontorno(items) {
+    if (typeof getScontornata !== 'function') return;
+    for (const item of items) {
+        if (!item.maskedUrl && item.url) {
+            const result = await getScontornata(item);
+            if (result) item.maskedUrl = result;
+        }
+    }
+}
+
+function _topoCompPrepareRound() {
+    const tc = state._topoCompState;
+    if (!tc || tc.enabledPositions.length === 0) return;
+
+    tc.currentPosition = tc.enabledPositions[Math.floor(Math.random() * tc.enabledPositions.length)];
+
+    if (tc.subMode === 'template' && tc.personaggio) {
+        tc.currentChar = tc.personaggio;
+        const others = tc.items.filter(i => i.label !== tc.personaggio.label || i.url !== tc.personaggio.url);
+        tc.currentRef = others.length > 0
+            ? others[tc.index % others.length]
+            : tc.items[tc.index % tc.items.length];
+    } else {
+        const i1 = tc.index % tc.items.length;
+        let i2 = (tc.index + 1 + Math.floor(Math.random() * (tc.items.length - 1))) % tc.items.length;
+        if (i2 === i1) i2 = (i1 + 1) % tc.items.length;
+        tc.currentChar = tc.items[i1];
+        tc.currentRef = tc.items[i2];
+    }
+}
+
+function _topoCompGetImgUrl(item) {
+    return item.maskedUrl || item.url || getPlaceholderUrl(item.label);
+}
+
+function _topoCompRender(stage) {
+    const tc = state._topoCompState;
+    if (!tc) return;
+
+    const posConfig = TOPO_POSITIONS[tc.currentPosition] || TOPO_POSITIONS['sopra'];
+    const subModeLabel = tc.subMode === 'template' ? 'Template' : 'Random';
+    const persLabel = tc.personaggio ? tc.personaggio.label : 'Nessuno';
+
+    const positionBadge = tc.showAnswer
+        ? `<span style="background:rgba(var(--accent-rgb),0.2); color:var(--accent-color); padding:3px 12px; border-radius:10px; font-size:0.85rem; font-weight:bold;">
+            <i class="fa-solid ${posConfig.icon}"></i> ${posConfig.label}
+          </span>`
+        : `<span style="background:rgba(255,255,255,0.08); color:var(--text-secondary); padding:3px 12px; border-radius:10px; font-size:0.85rem;">
+            <i class="fa-solid fa-question"></i> ?
+          </span>`;
+
+    stage.innerHTML = `
+    <div style="display:flex; height:100%; flex-direction:column;">
+        <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:8px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
+            <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
+                <i class="fa-solid fa-layer-group"></i> Topologia
+            </span>
+            ${positionBadge}
+            <span style="color:var(--text-secondary); font-size:0.75rem;">Round ${tc.round + 1}</span>
+            <button class="btn btn-sm btn-ghost" onclick="topoCompToggleAnswer()" title="${tc.showAnswer ? 'Nascondi' : 'Mostra'} risposta" style="padding:3px 10px; font-size:0.7rem;">
+                <i class="fa-solid ${tc.showAnswer ? 'fa-eye-slash' : 'fa-eye'}"></i>
+            </button>
+            <button class="btn btn-sm btn-ghost" onclick="topoCompToggleSubMode()" title="Modalit&agrave;: ${subModeLabel}" style="padding:3px 10px; font-size:0.7rem;">
+                <i class="fa-solid ${tc.subMode === 'template' ? 'fa-user-tag' : 'fa-shuffle'}"></i> ${subModeLabel}
+            </button>
+            ${tc.subMode === 'template' ? `<button class="btn btn-sm btn-ghost" onclick="topoCompSelectPersonaggio()" title="Personaggio: ${persLabel}" style="padding:3px 10px; font-size:0.7rem;">
+                <i class="fa-solid fa-child"></i> ${persLabel.length > 10 ? persLabel.substring(0, 10) + '…' : persLabel}
+            </button>` : ''}
+            <button class="btn btn-sm btn-ghost" onclick="topoCompOpenSettings()" title="Posizioni attive" style="padding:3px 10px; font-size:0.7rem;">
+                <i class="fa-solid fa-sliders"></i>
+            </button>
+            <button class="btn btn-sm btn-ghost" onclick="topoCompSkip()" title="Salta" style="padding:3px 10px; font-size:0.7rem;">
+                <i class="fa-solid fa-forward-step"></i>
+            </button>
+        </div>
+        <div id="topo-comp-canvas-area" style="flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:10px; background:rgba(255,255,255,0.03);"></div>
+        <div style="text-align:center; padding:6px; color:var(--text-secondary); font-size:0.7rem; opacity:0.6; border-top:1px solid #ffffff10; display:flex; gap:16px; justify-content:center;">
+            <span><i class="fa-solid fa-child"></i> ${tc.currentChar.label || '?'}</span>
+            <span><i class="fa-solid fa-cube"></i> ${tc.currentRef.label || '?'}</span>
+        </div>
+    </div>`;
+
+    _topoCompDrawCanvas();
+}
+
+function _topoCompDrawCanvas() {
+    const tc = state._topoCompState;
+    if (!tc) return;
+    const area = document.getElementById('topo-comp-canvas-area');
+    if (!area) return;
+
+    const posConfig = TOPO_POSITIONS[tc.currentPosition] || TOPO_POSITIONS['sopra'];
+    const charUrl = _topoCompGetImgUrl(tc.currentChar);
+    const refUrl = _topoCompGetImgUrl(tc.currentRef);
+
+    const charImg = new Image();
+    const refImg = new Image();
+    let loaded = 0;
+
+    const onBothLoaded = () => {
+        if (++loaded < 2) return;
+        const areaRect = area.getBoundingClientRect();
+        const cw = Math.round(areaRect.width) || 600;
+        const ch = Math.round(areaRect.height) || 500;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = cw;
+        canvas.height = ch;
+        canvas.style.cssText = 'max-width:100%; max-height:100%; border-radius:var(--radius-md);';
+        const ctx = canvas.getContext('2d');
+
+        const baseSize = Math.min(cw, ch) * 0.38;
+        const charScale = posConfig.charScale || 1.0;
+        const refScale = posConfig.refScale || 1.0;
+        const drawCharLast = posConfig.drawCharLast !== false;
+
+        const fitAndDraw = (img, cx, cy, scale) => {
+            const maxW = baseSize * scale;
+            const maxH = baseSize * scale;
+            let w = img.naturalWidth || img.width;
+            let h = img.naturalHeight || img.height;
+            const ratio = Math.min(maxW / w, maxH / h);
+            w = Math.round(w * ratio);
+            h = Math.round(h * ratio);
+            ctx.drawImage(img, Math.round(cx - w / 2), Math.round(cy - h / 2), w, h);
+        };
+
+        const charCx = posConfig.charPos[0] * cw;
+        const charCy = posConfig.charPos[1] * ch;
+        const refCx = posConfig.refPos[0] * cw;
+        const refCy = posConfig.refPos[1] * ch;
+
+        if (drawCharLast) {
+            fitAndDraw(refImg, refCx, refCy, refScale);
+            fitAndDraw(charImg, charCx, charCy, charScale);
+        } else {
+            fitAndDraw(charImg, charCx, charCy, charScale);
+            fitAndDraw(refImg, refCx, refCy, refScale);
+        }
+
+        area.innerHTML = '';
+        area.appendChild(canvas);
+    };
+
+    charImg.crossOrigin = 'anonymous';
+    refImg.crossOrigin = 'anonymous';
+    charImg.onload = onBothLoaded;
+    refImg.onload = onBothLoaded;
+    charImg.onerror = () => { charImg.src = getPlaceholderUrl(tc.currentChar.label); };
+    refImg.onerror = () => { refImg.src = getPlaceholderUrl(tc.currentRef.label); };
+    charImg.src = charUrl;
+    refImg.src = refUrl;
+}
+
+function _topoCompAdvance() {
+    const tc = state._topoCompState;
+    if (!tc) return;
+    tc.index++;
+    tc.round++;
+    if (tc.index >= tc.items.length) {
+        tc.items = [...tc.items].sort(() => Math.random() - 0.5);
+        tc.index = 0;
+    }
+    // Pre-scontorno next batch
+    _topoCompPreScontorno(tc.items.slice(tc.index, tc.index + 4));
+    _topoCompPrepareRound();
+}
+
+window._topoCompHandleScore = (result) => {
+    const tc = state._topoCompState;
+    if (!tc) return;
+    const resultKey = `topocomp_${tc.round}_${tc.currentPosition}_${Date.now()}`;
+    state.session.itemResults[resultKey] = result;
+    state.session.scoreHistory.push(resultKey);
+
+    setTimeout(() => {
+        _topoCompAdvance();
+        _topoCompRender(document.getElementById('game-stage'));
+        if (typeof window._startTDCountdown === 'function') window._startTDCountdown();
+    }, 350);
+};
+
+window.topoCompSkip = () => {
+    _topoCompAdvance();
+    _topoCompRender(document.getElementById('game-stage'));
+};
+
+window.topoCompToggleSubMode = () => {
+    const tc = state._topoCompState;
+    if (!tc) return;
+    tc.subMode = tc.subMode === 'random' ? 'template' : 'random';
+    try { localStorage.setItem('topo_comp_submode', tc.subMode); } catch(e) {}
+    _topoCompPrepareRound();
+    _topoCompRender(document.getElementById('game-stage'));
+};
+
+window.topoCompToggleAnswer = () => {
+    const tc = state._topoCompState;
+    if (!tc) return;
+    tc.showAnswer = !tc.showAnswer;
+    _topoCompRender(document.getElementById('game-stage'));
+};
+
+window.topoCompSelectPersonaggio = () => {
+    const tc = state._topoCompState;
+    if (!tc) return;
+    const stage = document.getElementById('game-stage');
+
+    const gridHtml = tc.items.map((item, idx) => {
+        const url = item.maskedUrl || item.url || getPlaceholderUrl(item.label);
+        const isSelected = tc.personaggio && tc.personaggio.label === item.label && tc.personaggio.url === item.url;
+        return `<div onclick="topoCompPickPersonaggio(${idx})" style="cursor:pointer; padding:6px; border:3px solid ${isSelected ? 'var(--accent-color)' : 'transparent'}; border-radius:var(--radius-md); background:rgba(255,255,255,0.05); display:flex; flex-direction:column; align-items:center; gap:4px;">
+            <img src="${url}" style="width:60px; height:60px; object-fit:contain;" onerror="handleImgError(this, '${(item.label || '').replace(/'/g, "\\'")}')">
+            <div style="font-size:0.65rem; color:var(--text-secondary); text-align:center;">${item.label || ''}</div>
+        </div>`;
+    }).join('');
+
+    stage.innerHTML = `
+    <div style="height:100%; display:flex; flex-direction:column;">
+        <div style="padding:12px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10;">
+            <span style="font-size:0.9rem; font-weight:bold;"><i class="fa-solid fa-child"></i> Scegli Personaggio</span>
+            <button class="btn btn-sm btn-ghost" onclick="topoCompClosePersonaggio()" style="padding:3px 10px; font-size:0.7rem;">
+                <i class="fa-solid fa-xmark"></i> Chiudi
+            </button>
+        </div>
+        <div style="flex:1; overflow-y:auto; padding:14px; display:grid; grid-template-columns:repeat(auto-fill, minmax(80px, 1fr)); gap:10px; align-content:start;">
+            ${gridHtml}
+        </div>
+    </div>`;
+};
+
+window.topoCompPickPersonaggio = (idx) => {
+    const tc = state._topoCompState;
+    if (!tc) return;
+    tc.personaggio = tc.items[idx];
+    tc.subMode = 'template';
+    try { localStorage.setItem('topo_comp_submode', 'template'); } catch(e) {}
+    _topoCompPrepareRound();
+    _topoCompRender(document.getElementById('game-stage'));
+};
+
+window.topoCompClosePersonaggio = () => {
+    _topoCompRender(document.getElementById('game-stage'));
+};
+
+window.topoCompOpenSettings = async () => {
+    const tc = state._topoCompState;
+    if (!tc) return;
+    const allPos = Object.keys(TOPO_POSITIONS);
+    const enabled = new Set(tc.enabledPositions);
+
+    const overlay = document.createElement('div');
+    overlay.className = 'themed-dialog-overlay';
+    const checkboxes = allPos.map(k => {
+        const p = TOPO_POSITIONS[k];
+        return `<label style="display:flex; align-items:center; gap:8px; padding:6px 0; cursor:pointer;">
+            <input type="checkbox" value="${k}" ${enabled.has(k) ? 'checked' : ''} style="width:18px; height:18px;">
+            <i class="fa-solid ${p.icon}" style="width:20px; text-align:center;"></i>
+            <span>${p.label}</span>
+        </label>`;
+    }).join('');
+
+    overlay.innerHTML = `
+        <div class="themed-dialog" style="max-width:340px;">
+            <div class="themed-dialog-msg" style="margin-bottom:8px;"><b>Posizioni attive</b></div>
+            <div style="display:flex; flex-direction:column; max-height:50vh; overflow-y:auto;">
+                ${checkboxes}
+            </div>
+            <div class="themed-dialog-btns" style="margin-top:12px;">
+                <button class="btn btn-ghost themed-dialog-cancel">Annulla</button>
+                <button class="btn btn-primary themed-dialog-ok">OK</button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add('open'));
+
+    const ok = overlay.querySelector('.themed-dialog-ok');
+    const cancel = overlay.querySelector('.themed-dialog-cancel');
+
+    const close = (save) => {
+        if (save) {
+            const checked = [...overlay.querySelectorAll('input[type=checkbox]:checked')].map(cb => cb.value);
+            if (checked.length > 0) {
+                tc.enabledPositions = checked;
+                try { localStorage.setItem('topo_comp_positions', JSON.stringify(checked)); } catch(e) {}
+            }
+        }
+        overlay.classList.remove('open');
+        setTimeout(() => overlay.remove(), 200);
+    };
+    ok.onclick = () => close(true);
+    cancel.onclick = () => close(false);
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(false); });
 };
 
 // ============================================================

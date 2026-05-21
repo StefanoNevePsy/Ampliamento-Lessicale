@@ -257,7 +257,7 @@ function _showImportToast(message) {
 }
 
 // --- SET FILTERING & DROPDOWN ---
-const POOL_ENGINES = ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione', 'ricorda', 'singolare_plurale', 'stroop_numerico', 'go_nogo', 'stroop_etichetta'];
+const POOL_ENGINES = ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione', 'ricorda', 'singolare_plurale', 'stroop_numerico', 'go_nogo', 'stroop_etichetta', 'topologia_comp'];
 // Keep POOL_MODES as alias for backward compat
 const POOL_MODES = POOL_ENGINES;
 
@@ -1190,6 +1190,11 @@ window.startGame = () => {
             poolItems.sort(() => Math.random() - 0.5);
             state.activeSetId = 'stret_' + state.selectedPoolTags.join('_');
             renderGameMode(mode, poolItems);
+        } else if (engine === 'topologia_comp') {
+            let poolItems = getItemsByTags(state.selectedPoolTags);
+            poolItems.sort(() => Math.random() - 0.5);
+            state.activeSetId = 'topocomp_' + state.selectedPoolTags.join('_');
+            renderGameMode(mode, poolItems);
         }
         window._startTDCountdown();
         return;
@@ -1503,6 +1508,19 @@ window.recordResponse = (result) => {
     } else if (engine === 'stroop_etichetta') {
         if (typeof window._stroopEtHandleScore === 'function') {
             window._stroopEtHandleScore(result);
+            const results0 = Object.values(state.session.itemResults);
+            state.session.correct = results0.filter(v => v === true).length;
+            state.session.incorrect = results0.filter(v => v === false).length;
+            state.session.prompts = results0.filter(v => v === 'prompt').length;
+            state.session.total = results0.length;
+            updateScoreUI();
+            document.getElementById('btn-save-session').classList.remove('hidden');
+            if (typeof showSessionNameInput === 'function') showSessionNameInput();
+            return;
+        }
+    } else if (engine === 'topologia_comp') {
+        if (typeof window._topoCompHandleScore === 'function') {
+            window._topoCompHandleScore(result);
             const results0 = Object.values(state.session.itemResults);
             state.session.correct = results0.filter(v => v === true).length;
             state.session.incorrect = results0.filter(v => v === false).length;
@@ -2310,7 +2328,8 @@ const MODE_ICONS = {
     topologia: 'fa-map-pin', sequenze: 'fa-arrow-right-arrow-left', categorizzazione: 'fa-sitemap',
     zoom: 'fa-search-plus', quaderno: 'fa-book-open', quaderno_task: 'fa-list-check',
     ricorda: 'fa-brain', singolare_plurale: 'fa-1',
-    stroop_numerico: 'fa-hashtag', go_nogo: 'fa-traffic-light', stroop_etichetta: 'fa-font'
+    stroop_numerico: 'fa-hashtag', go_nogo: 'fa-traffic-light', stroop_etichetta: 'fa-font',
+    topologia_comp: 'fa-layer-group'
 };
 
 // Curated FA icon list for icon picker
