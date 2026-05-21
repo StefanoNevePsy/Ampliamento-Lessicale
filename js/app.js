@@ -2277,10 +2277,11 @@ window.scontornaSet = async (setId) => {
 
     const btn = document.querySelector(`[onclick*="scontornaSet('${setId}')"]`);
     const originalHtml = btn ? btn.innerHTML : '';
+    const tolerance = typeof getScontornoTolerance === 'function' ? getScontornoTolerance() : 35;
     let done = 0;
 
     for (const item of items) {
-        const result = await removeBackground(item.url);
+        const result = await removeBackground(item.url, tolerance);
         if (result) item.maskedUrl = result;
         done++;
         if (btn) btn.innerHTML = `<span style="font-size:0.6rem;">${done}/${items.length}</span>`;

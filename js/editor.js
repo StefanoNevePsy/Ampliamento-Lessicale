@@ -334,36 +334,114 @@ window.scontornaEditorItem = async (idx) => {
     if (!item || !item.url) return;
     if (typeof removeBackground !== 'function') return;
 
-    // Show a subtle processing indicator on the button
-    const btn = document.querySelector(`[onclick*="scontornaEditorItem(${idx})"]`);
-    if (btn) { btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="font-size:0.8rem;"></i>'; btn.disabled = true; }
-
-    const result = await removeBackground(item.url);
-    if (result) {
-        item.maskedUrl = result;
-    } else {
-        if (item.maskedUrl) delete item.maskedUrl;
-    }
-    renderEditorList();
+    // Open preview overlay with tolerance slider
+    _openScontornoPreview(item, () => renderEditorList());
 };
+
+function _openScontornoPreview(item, onDone) {
+    const tolerance = getScontornoTolerance();
+    const overlay = document.createElement('div');
+    overlay.className = 'themed-dialog-overlay';
+    overlay.innerHTML = `
+        <div class="themed-dialog" style="max-width:500px; padding:16px;">
+            <div style="font-weight:bold; margin-bottom:10px;"><i class="fa-solid fa-eraser"></i> Scontorno — ${item.label || 'Item'}</div>
+            <div style="display:flex; gap:10px; margin-bottom:12px;">
+                <div style="flex:1; text-align:center;">
+                    <div style="font-size:0.65rem; color:var(--text-secondary); text-transform:uppercase; margin-bottom:4px;">Originale</div>
+                    <img id="sc-preview-orig" src="${item.url}" style="max-width:100%; max-height:200px; object-fit:contain; border-radius:var(--radius-sm); background:repeating-conic-gradient(#808080 0% 25%, transparent 0% 50%) 50%/16px 16px;">
+                </div>
+                <div style="flex:1; text-align:center;">
+                    <div style="font-size:0.65rem; color:var(--text-secondary); text-transform:uppercase; margin-bottom:4px;">Scontornata</div>
+                    <div id="sc-preview-result" style="min-height:100px; display:flex; align-items:center; justify-content:center; background:repeating-conic-gradient(#808080 0% 25%, transparent 0% 50%) 50%/16px 16px; border-radius:var(--radius-sm);">
+                        <i class="fa-solid fa-spinner fa-spin" style="font-size:1.5rem; color:var(--text-secondary);"></i>
+                    </div>
+                </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:14px;">
+                <label style="font-size:0.75rem; color:var(--text-secondary); white-space:nowrap;">Tolleranza:</label>
+                <input id="sc-tolerance-slider" type="range" min="5" max="80" step="1" value="${tolerance}" style="flex:1; accent-color:var(--accent-color);">
+                <span id="sc-tolerance-val" style="font-size:0.85rem; font-weight:bold; min-width:30px; text-align:center;">${tolerance}</span>
+            </div>
+            <div style="font-size:0.65rem; color:var(--text-muted); margin-bottom:12px;">
+                Bassa = conservativo (mantiene più dettagli). Alta = aggressivo (rimuove più sfondo).
+            </div>
+            <div class="themed-dialog-btns">
+                <button class="btn btn-ghost" id="sc-btn-cancel">Annulla</button>
+                <button class="btn btn-ghost" id="sc-btn-clear" style="${item.maskedUrl ? '' : 'display:none;'} color:var(--danger-color);">Rimuovi scontorno</button>
+                <button class="btn btn-primary" id="sc-btn-apply">Applica</button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => overlay.classList.add('open'));
+
+    const slider = overlay.querySelector('#sc-tolerance-slider');
+    const valLabel = overlay.querySelector('#sc-tolerance-val');
+    const resultDiv = overlay.querySelector('#sc-preview-result');
+    let currentResult = null;
+    let debounceTimer = null;
+
+    const runPreview = async (tol) => {
+        resultDiv.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="font-size:1.5rem; color:var(--text-secondary);"></i>';
+        const result = await removeBackground(item.url, tol);
+        currentResult = result;
+        if (result) {
+            resultDiv.innerHTML = `<img src="${result}" style="max-width:100%; max-height:200px; object-fit:contain;">`;
+        } else {
+            resultDiv.innerHTML = '<div style="padding:20px; font-size:0.75rem; color:var(--text-muted);">Sfondo non uniforme — nessuna modifica</div>';
+        }
+    };
+
+    runPreview(tolerance);
+
+    slider.addEventListener('input', () => {
+        valLabel.textContent = slider.value;
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => runPreview(parseInt(slider.value)), 300);
+    });
+
+    const close = () => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 200); };
+
+    overlay.querySelector('#sc-btn-cancel').onclick = () => close();
+    overlay.querySelector('#sc-btn-clear').onclick = () => {
+        delete item.maskedUrl;
+        close();
+        if (onDone) onDone();
+    };
+    overlay.querySelector('#sc-btn-apply').onclick = () => {
+        const tol = parseInt(slider.value);
+        setScontornoTolerance(tol);
+        if (currentResult) item.maskedUrl = currentResult;
+        close();
+        if (onDone) onDone();
+    };
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+}
 
 window.batchScontornoEditor = async () => {
     if (typeof removeBackground !== 'function') return;
     const items = state.editingItems.filter(i => i.url && !i.maskedUrl);
     if (items.length === 0) return;
 
+    const tolerance = getScontornoTolerance();
     const btn = document.getElementById('btn-batch-scontorno');
     if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 0/' + items.length;
 
     let done = 0;
     for (const item of items) {
-        const result = await removeBackground(item.url);
+        const result = await removeBackground(item.url, tolerance);
         if (result) item.maskedUrl = result;
         done++;
         if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ' + done + '/' + items.length;
     }
     if (btn) btn.innerHTML = '<i class="fa-solid fa-eraser"></i> Scontorna tutti';
     renderEditorList();
+};
+
+window.openScontornoSettings = async () => {
+    const current = getScontornoTolerance();
+    const val = await themedPrompt('Tolleranza scontorno (5-80).\nBassa = conservativo, Alta = aggressivo:', String(current));
+    if (val === null) return;
+    setScontornoTolerance(parseInt(val) || 35);
 };
 
 // --- EDITOR ACTIONS ---

@@ -4,6 +4,14 @@
 
 const _scontornoMemCache = {};
 
+function getScontornoTolerance() {
+    return parseInt(localStorage.getItem('scontorno_tolerance')) || 35;
+}
+
+function setScontornoTolerance(val) {
+    localStorage.setItem('scontorno_tolerance', String(Math.max(5, Math.min(80, parseInt(val) || 35))));
+}
+
 function _colorDistance(r1, g1, b1, r2, g2, b2) {
     return Math.sqrt((r1 - r2) ** 2 + (g1 - g2) ** 2 + (b1 - b2) ** 2);
 }
@@ -85,7 +93,6 @@ function _featherEdges(data, w, h, radius) {
         for (let x = 0; x < w; x++) {
             const i = (y * w + x) * 4;
             if (copy[i + 3] === 0) continue;
-            // Check if any neighbor within radius is transparent
             let minDistSq = radius * radius + 1;
             for (let dy = -radius; dy <= radius; dy++) {
                 for (let dx = -radius; dx <= radius; dx++) {
@@ -108,7 +115,7 @@ function _featherEdges(data, w, h, radius) {
 }
 
 function removeBackground(imageUrl, tolerance, featherRadius) {
-    if (tolerance === undefined) tolerance = 35;
+    if (tolerance === undefined) tolerance = getScontornoTolerance();
     if (featherRadius === undefined) featherRadius = 1;
 
     return new Promise((resolve, reject) => {
@@ -135,7 +142,6 @@ function removeBackground(imageUrl, tolerance, featherRadius) {
                 const cornerSize = Math.max(3, Math.round(Math.min(w, h) * 0.03));
                 const corners = _sampleCornerColor(data, w, h, cornerSize);
 
-                // Check if corners are similar enough to each other (likely uniform background)
                 let maxDist = 0;
                 for (let i = 0; i < corners.length; i++) {
                     for (let j = i + 1; j < corners.length; j++) {
@@ -146,12 +152,10 @@ function removeBackground(imageUrl, tolerance, featherRadius) {
                 }
 
                 if (maxDist > 80) {
-                    // Corners too different — background is not uniform, skip
                     resolve(null);
                     return;
                 }
 
-                // Average corner color as background
                 const bgR = Math.round(corners.reduce((s, c) => s + c.r, 0) / corners.length);
                 const bgG = Math.round(corners.reduce((s, c) => s + c.g, 0) / corners.length);
                 const bgB = Math.round(corners.reduce((s, c) => s + c.b, 0) / corners.length);
@@ -169,6 +173,11 @@ function removeBackground(imageUrl, tolerance, featherRadius) {
         img.onerror = () => resolve(null);
         img.src = imageUrl;
     });
+}
+
+// Preview scontorno with a specific tolerance, returns data URL without saving
+async function previewScontorno(imageUrl, tolerance) {
+    return removeBackground(imageUrl, tolerance);
 }
 
 async function getScontornata(item) {
@@ -190,18 +199,17 @@ async function getOrCreateMaskedUrl(item) {
     return getScontornata(item);
 }
 
-// Batch scontorno: processes items, saves maskedUrl on each, persists sets
 async function batchScontorno(items, progressCallback) {
     let done = 0;
     const total = items.length;
     const modifiedSets = new Set();
+    const tolerance = getScontornoTolerance();
 
     for (const item of items) {
         if (item.maskedUrl) { done++; continue; }
-        const masked = await removeBackground(item.url);
+        const masked = await removeBackground(item.url, tolerance);
         if (masked) {
             item.maskedUrl = masked;
-            // Find which set this item belongs to and mark for save
             for (const set of state.savedSets) {
                 const match = set.items.find(si => si.url === item.url && si.label === item.label);
                 if (match && !match.maskedUrl) {
@@ -214,7 +222,6 @@ async function batchScontorno(items, progressCallback) {
         if (progressCallback) progressCallback(done, total);
     }
 
-    // Persist modified sets
     for (const setId of modifiedSets) {
         const set = state.savedSets.find(s => s.id === setId);
         if (set) await DB.saveSet(set);
