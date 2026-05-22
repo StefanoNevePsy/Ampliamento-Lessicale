@@ -427,13 +427,15 @@
                     <a href="https://api.together.xyz/settings/api-keys" target="_blank" style="color:var(--accent-color);">Ottieni chiave Together AI &rarr;</a>
                 </p>
 
-                <h4 style="margin:18px 0 10px; color:#4285f4;"><i class="fa-solid fa-sparkles"></i> Gemini Image Generation</h4>
-                <label class="modal-label">Modello per generazione immagini</label>
-                <select id="gemini-image-model" style="width:100%; padding:10px; border-radius:var(--radius-sm); background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.9rem;">
-                    <option value="gemini-3.1-flash-image-preview">Nano Banana 2 — Gemini 3.1 Flash (gratuito)</option>
-                    <option value="gemini-2.5-flash-image">Nano Banana — Gemini 2.5 Flash (gratuito)</option>
-                </select>
-                <p class="modal-hint">Usa la stessa API key Gemini configurata nel tab API. ~500 immagini/giorno nel free tier.</p>
+                <h4 style="margin:18px 0 10px; color:#f38020;"><i class="fa-solid fa-cloud"></i> Cloudflare Workers AI (FLUX.1)</h4>
+                <label class="modal-label">URL del Worker</label>
+                <input type="text" id="cloudflare-worker-url" placeholder="https://tuo-worker.tuoaccount.workers.dev">
+                <label class="modal-label" style="margin-top:10px;">Auth Token <span class="modal-label-sm">(opzionale, consigliato)</span></label>
+                <input type="password" id="cloudflare-auth-token" placeholder="Token per proteggere il Worker">
+                <p class="modal-hint">
+                    Genera immagini FLUX.1 Schnell gratis (~2000/giorno) tramite un piccolo Worker che fai partire tu su Cloudflare.
+                    <a href="#" onclick="showCloudflareInstructions(); return false;" style="color:var(--accent-color); display:block; margin-top:6px;"><i class="fa-solid fa-circle-info"></i> Come configurare il Worker (10 minuti)</a>
+                </p>
             </div>
 
             <!-- TAB: THEME -->

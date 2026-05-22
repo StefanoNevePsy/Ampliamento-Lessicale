@@ -1,4 +1,4 @@
-// === IMAGE GENERATION: POLLINATIONS.AI + PIXABAY + TOGETHER AI ===
+// === IMAGE GENERATION: POLLINATIONS.AI + PIXABAY + TOGETHER AI + CLOUDFLARE WORKERS AI ===
 
 const POLL_STYLES = [
     { id: 'realistic', label: 'Realistico', icon: 'fa-camera', prompt: 'realistic photograph, studio lighting, sharp focus', color: '#10b981' },
@@ -89,76 +89,56 @@ async function generateTogetherImage(prompt, style) {
     return `data:image/png;base64,${b64}`;
 }
 
-// --- GEMINI IMAGE GENERATION ---
-const GEMINI_IMG_MODELS = [
-    { id: 'gemini-3.1-flash-image-preview', name: 'Nano Banana 2 (3.1 Flash)', free: true },
-    { id: 'gemini-2.5-flash-image', name: 'Nano Banana (2.5 Flash)', free: true },
-];
-
-function getGeminiImageModel() {
-    const stored = localStorage.getItem('gemini_image_model');
-    if (stored && GEMINI_IMG_MODELS.some(m => m.id === stored)) return stored;
-    return 'gemini-3.1-flash-image-preview';
+// --- CLOUDFLARE WORKERS AI (FLUX.1 Schnell, ~2000 img/day free) ---
+// Requires the user to deploy a small Worker proxy — see CLOUDFLARE_WORKER.md
+function getCloudflareWorkerUrl() {
+    return localStorage.getItem('cloudflare_worker_url') || '';
 }
 
-function setGeminiImageModel(model) {
-    localStorage.setItem('gemini_image_model', model);
+function setCloudflareWorkerUrl(url) {
+    localStorage.setItem('cloudflare_worker_url', url.trim());
 }
 
-async function generateGeminiImage(prompt, style) {
-    const apiKey = typeof getGeminiApiKey === 'function' ? getGeminiApiKey() : '';
-    if (!apiKey) throw new Error('Gemini API key non configurata. Vai in Impostazioni > API.');
+function getCloudflareAuthToken() {
+    return localStorage.getItem('cloudflare_auth_token') || '';
+}
 
-    const parts = [prompt, 'on a clean white background, centered composition, single subject'];
+function setCloudflareAuthToken(token) {
+    localStorage.setItem('cloudflare_auth_token', token.trim());
+}
+
+async function generateCloudflareImage(prompt, style) {
+    const workerUrl = getCloudflareWorkerUrl();
+    if (!workerUrl) throw new Error('Cloudflare Worker URL non configurato. Vai in Impostazioni > Immagini.');
+
+    const parts = [prompt, 'isolated on pure white background, centered, studio lighting, no shadow, single subject'];
     if (style) {
         const s = POLL_STYLES.find(st => st.id === style);
         if (s) parts.push(s.prompt);
     }
-    const fullPrompt = `Generate an image of: ${parts.join(', ')}. No text or labels in the image.`;
+    const fullPrompt = parts.join(', ');
 
-    const model = getGeminiImageModel();
-    const MAX_RETRIES = 3;
-    const BACKOFF_MS = [4000, 10000, 20000];
+    const headers = { 'Content-Type': 'application/json' };
+    const token = getCloudflareAuthToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: fullPrompt }] }],
-                generationConfig: { responseModalities: ['IMAGE', 'TEXT'] }
-            })
-        });
+    const response = await fetch(workerUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ prompt: fullPrompt, width: 1024, height: 1024 })
+    });
 
-        if (response.ok) {
-            const data = await response.json();
-            const respParts = data.candidates?.[0]?.content?.parts || [];
-            const imagePart = respParts.find(p => p.inlineData);
-            if (!imagePart) throw new Error('Il modello non ha generato un\'immagine. Prova un altro modello nelle Impostazioni > Immagini.');
-            return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
-        }
-
-        const err = await response.json().catch(() => ({}));
-        const msg = err?.error?.message || '';
-
-        if (response.status === 429) {
-            if (/quota/i.test(msg) || /per day/i.test(msg) || /daily/i.test(msg)) {
-                throw new Error('Quota giornaliera Gemini esaurita. Riprova domani o usa un altro motore.');
-            }
-            if (attempt < MAX_RETRIES) {
-                await new Promise(r => setTimeout(r, BACKOFF_MS[attempt]));
-                continue;
-            }
-            throw new Error('Rate limit Gemini persistente. Attendi qualche minuto.');
-        }
-
-        if (response.status === 400 && (/responseModalities/i.test(msg) || /not supported/i.test(msg))) {
-            throw new Error(`Il modello "${model}" non supporta la generazione immagini. Cambia modello in Impostazioni > Immagini.`);
-        }
-
-        throw new Error(msg || `Errore Gemini API (${response.status})`);
+    if (!response.ok) {
+        const err = await response.text().catch(() => '');
+        if (response.status === 401) throw new Error('Token Cloudflare non valido. Controlla nelle Impostazioni.');
+        if (response.status === 429) throw new Error('Rate limit Cloudflare. Attendi o controlla i neuroni consumati nel dashboard.');
+        throw new Error(`Errore Cloudflare (${response.status}): ${err.slice(0, 200)}`);
     }
+
+    const data = await response.json();
+    if (!data.image) throw new Error('Nessuna immagine restituita dal Worker.');
+    // Worker returns base64-encoded JPEG (or PNG)
+    return `data:image/jpeg;base64,${data.image}`;
 }
 
 // --- POLLINATIONS (original, free) ---
@@ -211,7 +191,7 @@ window.openPollinationsGenerator = (itemIndex) => {
 
     const hasPixabay = !!getPixabayApiKey();
     const hasTogether = !!getTogetherApiKey();
-    const hasGemini = !!(typeof getGeminiApiKey === 'function' && getGeminiApiKey());
+    const hasCloudflare = !!getCloudflareWorkerUrl();
 
     modal.innerHTML = `
         <div style="width:100%; max-width:540px; background:#1e1e2f; border-radius:16px; border:1px solid var(--glass-border); padding:24px; max-height:90vh; overflow-y:auto;">
@@ -231,8 +211,8 @@ window.openPollinationsGenerator = (itemIndex) => {
                 <button class="img-src-tab" onclick="switchImgGenTab('together', ${itemIndex})" style="padding:6px 12px; border:none; border-radius:8px 8px 0 0; background:transparent; color:var(--text-secondary); cursor:pointer; font-size:0.8rem; font-weight:600;">
                     <i class="fa-solid fa-robot"></i> Together AI ${!hasTogether ? '<span style="font-size:0.6rem; opacity:0.5;">(no key)</span>' : ''}
                 </button>
-                <button class="img-src-tab" onclick="switchImgGenTab('gemini', ${itemIndex})" style="padding:6px 12px; border:none; border-radius:8px 8px 0 0; background:transparent; color:var(--text-secondary); cursor:pointer; font-size:0.8rem; font-weight:600;">
-                    <i class="fa-solid fa-sparkles"></i> Gemini ${!hasGemini ? '<span style="font-size:0.6rem; opacity:0.5;">(no key)</span>' : ''}
+                <button class="img-src-tab" onclick="switchImgGenTab('cloudflare', ${itemIndex})" style="padding:6px 12px; border:none; border-radius:8px 8px 0 0; background:transparent; color:var(--text-secondary); cursor:pointer; font-size:0.8rem; font-weight:600;">
+                    <i class="fa-solid fa-cloud"></i> Cloudflare ${!hasCloudflare ? '<span style="font-size:0.6rem; opacity:0.5;">(no url)</span>' : ''}
                 </button>
             </div>
 
@@ -285,17 +265,16 @@ window.openPollinationsGenerator = (itemIndex) => {
                 </div>
             </div>
 
-            <!-- Gemini tab -->
-            <div id="img-tab-gemini" style="display:none;">
-                <div style="background:rgba(66,133,244,0.1); border:1px solid rgba(66,133,244,0.3); border-radius:10px; padding:6px 10px; margin-bottom:10px; font-size:0.75rem; color:#93bbfc;">
-                    <i class="fa-solid fa-sparkles"></i> Gemini &mdash; usa la stessa API key delle impostazioni
-                    <span style="margin-left:6px; font-size:0.65rem; opacity:0.7;">(${getGeminiImageModel()})</span>
+            <!-- Cloudflare tab -->
+            <div id="img-tab-cloudflare" style="display:none;">
+                <div style="background:rgba(243,128,32,0.1); border:1px solid rgba(243,128,32,0.3); border-radius:10px; padding:6px 10px; margin-bottom:10px; font-size:0.75rem; color:#f9a160;">
+                    <i class="fa-solid fa-cloud"></i> Cloudflare Workers AI &mdash; FLUX.1 Schnell (~2000 img/giorno gratis)
                 </div>
                 <label style="font-size:0.8rem; color:#aaa;">Prompt</label>
-                <textarea id="gemini-img-prompt" rows="2" style="width:100%; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.95rem; resize:vertical; font-family:inherit; margin-bottom:10px;">${escapeHtml(item.label)}</textarea>
+                <textarea id="cloudflare-prompt" rows="2" style="width:100%; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.95rem; resize:vertical; font-family:inherit; margin-bottom:10px;">${escapeHtml(item.label)}</textarea>
 
                 <label style="font-size:0.8rem; color:#aaa;">Stile</label>
-                <div id="gemini-styles" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;">
+                <div id="cloudflare-styles" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;">
                     ${POLL_STYLES.map(s => `
                         <div class="poll-style-btn" data-style-id="${s.id}" onclick="selectPollStyle(this)"
                              style="border-color:${s.color}40;">
@@ -341,12 +320,12 @@ window.openPollinationsGenerator = (itemIndex) => {
 
 window.switchImgGenTab = (tab, itemIndex) => {
     _imgGenTab = tab;
-    ['pixabay', 'pollinations', 'together', 'gemini'].forEach(t => {
+    ['pixabay', 'pollinations', 'together', 'cloudflare'].forEach(t => {
         const el = document.getElementById('img-tab-' + t);
         if (el) el.style.display = t === tab ? '' : 'none';
     });
     document.querySelectorAll('.img-src-tab').forEach(btn => {
-        const isActive = btn.textContent.toLowerCase().includes(tab === 'gemini' ? 'gemini' : tab);
+        const isActive = btn.textContent.toLowerCase().includes(tab);
         btn.style.background = isActive ? 'rgba(99,102,241,0.2)' : 'transparent';
         btn.style.color = isActive ? 'var(--accent-color)' : 'var(--text-secondary)';
     });
@@ -419,7 +398,7 @@ window.runImageGeneration = async (itemIndex) => {
     const tab = _imgGenTab;
     if (tab === 'pixabay') return;
 
-    const promptIds = { together: 'together-prompt', gemini: 'gemini-img-prompt', pollinations: 'poll-prompt' };
+    const promptIds = { together: 'together-prompt', cloudflare: 'cloudflare-prompt', pollinations: 'poll-prompt' };
     const promptEl = document.getElementById(promptIds[tab] || 'poll-prompt');
     const prompt = promptEl?.value?.trim();
     if (!prompt) { alert('Inserisci un prompt.'); return; }
@@ -435,15 +414,15 @@ window.runImageGeneration = async (itemIndex) => {
     preview.style.display = 'none';
     acceptActions.style.display = 'none';
 
-    const engineNames = { together: 'Together AI', gemini: 'Gemini', pollinations: 'Pollinations.ai' };
+    const engineNames = { together: 'Together AI', cloudflare: 'Cloudflare Flux', pollinations: 'Pollinations.ai' };
     document.getElementById('poll-status-text').textContent = `Generazione in corso (${engineNames[tab] || tab})...`;
 
     try {
         let imageUrl;
         if (tab === 'together') {
             imageUrl = await generateTogetherImage(prompt, _pollSelectedStyle);
-        } else if (tab === 'gemini') {
-            imageUrl = await generateGeminiImage(prompt, _pollSelectedStyle);
+        } else if (tab === 'cloudflare') {
+            imageUrl = await generateCloudflareImage(prompt, _pollSelectedStyle);
         } else {
             imageUrl = await fetchPollinationsImage(prompt, _pollSelectedStyle);
         }
@@ -512,7 +491,7 @@ window.openBulkPollinations = () => {
 
     const hasTogether = !!getTogetherApiKey();
     const hasPixabay = !!getPixabayApiKey();
-    const hasGemini = !!(typeof getGeminiApiKey === 'function' && getGeminiApiKey());
+    const hasCloudflare = !!getCloudflareWorkerUrl();
 
     modal.innerHTML = `
         <div style="width:100%; max-width:500px; background:#1e1e2f; border-radius:16px; border:1px solid var(--glass-border); padding:24px; max-height:90vh; overflow-y:auto;">
@@ -523,10 +502,10 @@ window.openBulkPollinations = () => {
 
             <label style="font-size:0.8rem; color:#aaa;">Sorgente immagini</label>
             <div style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">
-                ${hasPixabay ? `<button class="btn btn-ghost bulk-engine-btn selected" data-engine="pixabay" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-search"></i> Pixabay</button>` : ''}
-                <button class="btn btn-ghost bulk-engine-btn ${!hasPixabay && !hasGemini ? 'selected' : ''}" data-engine="pollinations" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-wand-magic-sparkles"></i> Pollinations</button>
+                ${hasCloudflare ? `<button class="btn btn-ghost bulk-engine-btn selected" data-engine="cloudflare" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-cloud"></i> Cloudflare Flux</button>` : ''}
+                ${hasPixabay ? `<button class="btn btn-ghost bulk-engine-btn ${!hasCloudflare ? 'selected' : ''}" data-engine="pixabay" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-search"></i> Pixabay</button>` : ''}
+                <button class="btn btn-ghost bulk-engine-btn ${!hasCloudflare && !hasPixabay ? 'selected' : ''}" data-engine="pollinations" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-wand-magic-sparkles"></i> Pollinations</button>
                 ${hasTogether ? `<button class="btn btn-ghost bulk-engine-btn" data-engine="together" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-robot"></i> Together AI</button>` : ''}
-                ${hasGemini ? `<button class="btn btn-ghost bulk-engine-btn ${!hasPixabay ? 'selected' : ''}" data-engine="gemini" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-sparkles"></i> Gemini</button>` : ''}
             </div>
 
             <label style="font-size:0.8rem; color:#aaa;">Quali item?</label>
@@ -653,8 +632,8 @@ window.runBulkPollGeneration = async () => {
                 }
             } else if (engine === 'together') {
                 imageUrl = await generateTogetherImage(item.label, randomStyle);
-            } else if (engine === 'gemini') {
-                imageUrl = await generateGeminiImage(item.label, randomStyle);
+            } else if (engine === 'cloudflare') {
+                imageUrl = await generateCloudflareImage(item.label, randomStyle);
             } else {
                 imageUrl = await fetchPollinationsImage(item.label, randomStyle);
             }
@@ -669,7 +648,7 @@ window.runBulkPollGeneration = async () => {
         log.scrollTop = log.scrollHeight;
 
         if (_bulkPollGenerating && completed < items.length) {
-            const delay = engine === 'pixabay' ? 500 : engine === 'gemini' ? 4000 : 1500;
+            const delay = engine === 'pixabay' ? 500 : engine === 'cloudflare' ? 800 : 1500;
             await new Promise(r => setTimeout(r, delay));
         }
     }
@@ -680,4 +659,96 @@ window.runBulkPollGeneration = async () => {
     document.getElementById('bulk-poll-done').style.display = 'block';
 
     renderEditorList();
+};
+
+// --- CLOUDFLARE WORKER SETUP INSTRUCTIONS ---
+const CLOUDFLARE_WORKER_CODE = `export default {
+  async fetch(request, env) {
+    const cors = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    };
+    if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
+    if (request.method !== 'POST') return new Response('Method not allowed', { status: 405, headers: cors });
+
+    // Optional auth: set AUTH_TOKEN as a secret in the Worker
+    if (env.AUTH_TOKEN) {
+      const got = request.headers.get('Authorization')?.replace('Bearer ', '');
+      if (got !== env.AUTH_TOKEN) return new Response('Unauthorized', { status: 401, headers: cors });
+    }
+
+    const { prompt, width = 1024, height = 1024 } = await request.json();
+    const result = await env.AI.run('@cf/black-forest-labs/flux-1-schnell', {
+      prompt, steps: 4, width, height
+    });
+
+    return new Response(JSON.stringify({ image: result.image }), {
+      headers: { 'Content-Type': 'application/json', ...cors }
+    });
+  }
+};`;
+
+window.showCloudflareInstructions = () => {
+    const existing = document.getElementById('modal-cf-instructions');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'modal-cf-instructions';
+    modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:25000; display:flex; align-items:center; justify-content:center; padding:20px; overflow-y:auto;';
+
+    modal.innerHTML = `
+        <div style="width:100%; max-width:680px; background:#1e1e2f; border-radius:16px; border:1px solid var(--glass-border); padding:24px; max-height:90vh; overflow-y:auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <h3 style="margin:0; color:white;"><i class="fa-solid fa-cloud" style="color:#f38020;"></i> Setup Cloudflare Worker (gratis, 10 min)</h3>
+                <button class="btn btn-ghost" onclick="document.getElementById('modal-cf-instructions').remove()" style="padding:6px 10px;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div style="background:rgba(243,128,32,0.08); border:1px solid rgba(243,128,32,0.25); border-radius:10px; padding:12px; margin-bottom:16px; font-size:0.85rem; color:#ddd;">
+                <b style="color:#f9a160;">Perché serve un Worker?</b><br>
+                I browser bloccano le chiamate dirette all'API Cloudflare (CORS). Un piccolo Worker (gratis) fa da ponte tra l'app e l'API.
+                Cloudflare regala 10.000 "neuroni"/giorno = circa <b>2000 immagini FLUX</b>, senza carta di credito.
+            </div>
+
+            <h4 style="margin:0 0 8px; color:var(--accent-color);">Step 1 — Crea account Cloudflare</h4>
+            <p style="margin:0 0 10px; font-size:0.85rem; color:#ccc;">Vai su <a href="https://dash.cloudflare.com/sign-up" target="_blank" style="color:var(--accent-color);">dash.cloudflare.com/sign-up</a> e crea un account gratuito (no carta).</p>
+
+            <h4 style="margin:14px 0 8px; color:var(--accent-color);">Step 2 — Crea un Worker</h4>
+            <ol style="margin:0; padding-left:20px; font-size:0.85rem; color:#ccc; line-height:1.6;">
+                <li>Dal dashboard: <b>Workers &amp; Pages</b> → <b>Create</b> → <b>Start with Hello World</b></li>
+                <li>Dai un nome (es. <code style="background:rgba(0,0,0,0.4); padding:1px 5px; border-radius:3px;">stimoli-flux</code>) → <b>Deploy</b></li>
+                <li>Clicca <b>Edit code</b> (in alto a destra)</li>
+                <li>Cancella tutto il contenuto e incolla il codice qui sotto, poi <b>Save and Deploy</b></li>
+            </ol>
+
+            <div style="position:relative; margin-top:10px;">
+                <button onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent); this.textContent='Copiato!'; setTimeout(()=>this.textContent='Copia',1500);"
+                    style="position:absolute; top:6px; right:6px; padding:4px 10px; font-size:0.75rem; background:var(--accent-color); color:white; border:none; border-radius:6px; cursor:pointer;">Copia</button>
+                <pre style="background:rgba(0,0,0,0.5); padding:12px; border-radius:8px; font-size:0.75rem; color:#a5d6ff; overflow-x:auto; max-height:240px; margin:0; line-height:1.4;">${escapeHtml(CLOUDFLARE_WORKER_CODE)}</pre>
+            </div>
+
+            <h4 style="margin:14px 0 8px; color:var(--accent-color);">Step 3 — Abilita Workers AI</h4>
+            <p style="margin:0 0 10px; font-size:0.85rem; color:#ccc;">Nel Worker, vai su <b>Settings</b> → <b>Bindings</b> → <b>Add binding</b> → seleziona <b>AI</b> → variabile <code style="background:rgba(0,0,0,0.4); padding:1px 5px; border-radius:3px;">AI</code> → <b>Deploy</b>.</p>
+
+            <h4 style="margin:14px 0 8px; color:var(--accent-color);">Step 4 — (Consigliato) Token di sicurezza</h4>
+            <p style="margin:0 0 10px; font-size:0.85rem; color:#ccc;">
+                Senza protezione il tuo Worker è pubblico e chiunque può consumare la tua quota.
+                Vai su <b>Settings</b> → <b>Variables and Secrets</b> → <b>Add</b> → tipo <b>Secret</b> → nome <code style="background:rgba(0,0,0,0.4); padding:1px 5px; border-radius:3px;">AUTH_TOKEN</code> → valore: una stringa lunga a tua scelta (es. genera su <a href="https://www.uuidgenerator.net/" target="_blank" style="color:var(--accent-color);">uuidgenerator.net</a>). Salva.
+            </p>
+
+            <h4 style="margin:14px 0 8px; color:var(--accent-color);">Step 5 — Configura qui</h4>
+            <ul style="margin:0; padding-left:20px; font-size:0.85rem; color:#ccc; line-height:1.6;">
+                <li>Copia l'URL del Worker (es. <code style="background:rgba(0,0,0,0.4); padding:1px 5px; border-radius:3px;">https://stimoli-flux.tuoaccount.workers.dev</code>) nel campo <b>URL del Worker</b></li>
+                <li>Incolla l'AUTH_TOKEN (se l'hai impostato) nel campo <b>Auth Token</b></li>
+                <li><b>Salva</b> le impostazioni</li>
+            </ul>
+
+            <div style="background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); border-radius:10px; padding:10px; margin-top:14px; font-size:0.8rem; color:#6ee7b7;">
+                <i class="fa-solid fa-check-circle"></i> Fatto! Ora puoi generare immagini FLUX Schnell di alta qualità direttamente dall'editor.
+            </div>
+
+            <button class="btn btn-primary" style="width:100%; padding:12px; margin-top:14px;" onclick="document.getElementById('modal-cf-instructions').remove()">Ho capito</button>
+        </div>
+    `;
+    document.body.appendChild(modal);
 };

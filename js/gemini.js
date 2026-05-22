@@ -199,10 +199,10 @@ window.openSettings = () => {
     const togetherInput = document.getElementById('together-api-key');
     if (pixabayInput) pixabayInput.value = getPixabayApiKey();
     if (togetherInput) togetherInput.value = getTogetherApiKey();
-    const geminiImgModelSelect = document.getElementById('gemini-image-model');
-    if (geminiImgModelSelect && typeof getGeminiImageModel === 'function') {
-        geminiImgModelSelect.value = getGeminiImageModel();
-    }
+    const cfUrlInput = document.getElementById('cloudflare-worker-url');
+    const cfTokenInput = document.getElementById('cloudflare-auth-token');
+    if (cfUrlInput && typeof getCloudflareWorkerUrl === 'function') cfUrlInput.value = getCloudflareWorkerUrl();
+    if (cfTokenInput && typeof getCloudflareAuthToken === 'function') cfTokenInput.value = getCloudflareAuthToken();
 
     // Session tab
     const tdTimerCb = document.getElementById('setting-td-timer');
@@ -231,8 +231,10 @@ window.saveAllSettings = () => {
     const togetherKey = document.getElementById('together-api-key')?.value?.trim();
     if (togetherKey !== undefined) saveTogetherApiKey(togetherKey);
 
-    const geminiImgModel = document.getElementById('gemini-image-model')?.value;
-    if (geminiImgModel && typeof setGeminiImageModel === 'function') setGeminiImageModel(geminiImgModel);
+    const cfUrl = document.getElementById('cloudflare-worker-url')?.value?.trim();
+    if (cfUrl !== undefined && typeof setCloudflareWorkerUrl === 'function') setCloudflareWorkerUrl(cfUrl);
+    const cfToken = document.getElementById('cloudflare-auth-token')?.value?.trim();
+    if (cfToken !== undefined && typeof setCloudflareAuthToken === 'function') setCloudflareAuthToken(cfToken);
 
     // Theme is saved live on selection
 
