@@ -91,12 +91,14 @@ async function generateTogetherImage(prompt, style) {
 
 // --- GEMINI IMAGE GENERATION ---
 const GEMINI_IMG_MODELS = [
-    { id: 'gemini-2.0-flash-preview-image-generation', name: 'Gemini 2.0 Flash Image Gen', free: true },
-    { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash Exp', free: true },
+    { id: 'gemini-3.1-flash-image-preview', name: 'Nano Banana 2 (3.1 Flash)', free: true },
+    { id: 'gemini-2.5-flash-image', name: 'Nano Banana (2.5 Flash)', free: true },
 ];
 
 function getGeminiImageModel() {
-    return localStorage.getItem('gemini_image_model') || 'gemini-2.0-flash-preview-image-generation';
+    const stored = localStorage.getItem('gemini_image_model');
+    if (stored && GEMINI_IMG_MODELS.some(m => m.id === stored)) return stored;
+    return 'gemini-3.1-flash-image-preview';
 }
 
 function setGeminiImageModel(model) {
