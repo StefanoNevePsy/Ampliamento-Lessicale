@@ -89,6 +89,76 @@ async function generateTogetherImage(prompt, style) {
     return `data:image/png;base64,${b64}`;
 }
 
+// --- GEMINI IMAGE GENERATION ---
+const GEMINI_IMG_MODELS = [
+    { id: 'gemini-2.0-flash-preview-image-generation', name: 'Gemini 2.0 Flash Image Gen', free: true },
+    { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash Exp', free: true },
+];
+
+function getGeminiImageModel() {
+    return localStorage.getItem('gemini_image_model') || 'gemini-2.0-flash-preview-image-generation';
+}
+
+function setGeminiImageModel(model) {
+    localStorage.setItem('gemini_image_model', model);
+}
+
+async function generateGeminiImage(prompt, style) {
+    const apiKey = typeof getGeminiApiKey === 'function' ? getGeminiApiKey() : '';
+    if (!apiKey) throw new Error('Gemini API key non configurata. Vai in Impostazioni > API.');
+
+    const parts = [prompt, 'on a clean white background, centered composition, single subject'];
+    if (style) {
+        const s = POLL_STYLES.find(st => st.id === style);
+        if (s) parts.push(s.prompt);
+    }
+    const fullPrompt = `Generate an image of: ${parts.join(', ')}. No text or labels in the image.`;
+
+    const model = getGeminiImageModel();
+    const MAX_RETRIES = 3;
+    const BACKOFF_MS = [4000, 10000, 20000];
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: fullPrompt }] }],
+                generationConfig: { responseModalities: ['IMAGE', 'TEXT'] }
+            })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            const respParts = data.candidates?.[0]?.content?.parts || [];
+            const imagePart = respParts.find(p => p.inlineData);
+            if (!imagePart) throw new Error('Il modello non ha generato un\'immagine. Prova un altro modello nelle Impostazioni > Immagini.');
+            return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+        }
+
+        const err = await response.json().catch(() => ({}));
+        const msg = err?.error?.message || '';
+
+        if (response.status === 429) {
+            if (/quota/i.test(msg) || /per day/i.test(msg) || /daily/i.test(msg)) {
+                throw new Error('Quota giornaliera Gemini esaurita. Riprova domani o usa un altro motore.');
+            }
+            if (attempt < MAX_RETRIES) {
+                await new Promise(r => setTimeout(r, BACKOFF_MS[attempt]));
+                continue;
+            }
+            throw new Error('Rate limit Gemini persistente. Attendi qualche minuto.');
+        }
+
+        if (response.status === 400 && (/responseModalities/i.test(msg) || /not supported/i.test(msg))) {
+            throw new Error(`Il modello "${model}" non supporta la generazione immagini. Cambia modello in Impostazioni > Immagini.`);
+        }
+
+        throw new Error(msg || `Errore Gemini API (${response.status})`);
+    }
+}
+
 // --- POLLINATIONS (original, free) ---
 function buildPollinationsUrl(prompt, width = 512, height = 512, seed) {
     const params = new URLSearchParams({ width, height, nologo: 'true', enhance: 'true' });
@@ -139,6 +209,7 @@ window.openPollinationsGenerator = (itemIndex) => {
 
     const hasPixabay = !!getPixabayApiKey();
     const hasTogether = !!getTogetherApiKey();
+    const hasGemini = !!(typeof getGeminiApiKey === 'function' && getGeminiApiKey());
 
     modal.innerHTML = `
         <div style="width:100%; max-width:540px; background:#1e1e2f; border-radius:16px; border:1px solid var(--glass-border); padding:24px; max-height:90vh; overflow-y:auto;">
@@ -148,7 +219,7 @@ window.openPollinationsGenerator = (itemIndex) => {
             </div>
 
             <!-- Source tabs -->
-            <div style="display:flex; gap:4px; margin-bottom:12px; border-bottom:1px solid var(--glass-border); padding-bottom:8px;">
+            <div style="display:flex; gap:4px; margin-bottom:12px; border-bottom:1px solid var(--glass-border); padding-bottom:8px; flex-wrap:wrap;">
                 <button class="img-src-tab ${_imgGenTab === 'pixabay' ? 'active' : ''}" onclick="switchImgGenTab('pixabay', ${itemIndex})" style="padding:6px 12px; border:none; border-radius:8px 8px 0 0; background:${_imgGenTab === 'pixabay' ? 'rgba(99,102,241,0.2)' : 'transparent'}; color:${_imgGenTab === 'pixabay' ? 'var(--accent-color)' : 'var(--text-secondary)'}; cursor:pointer; font-size:0.8rem; font-weight:600;">
                     <i class="fa-solid fa-magnifying-glass"></i> Pixabay ${!hasPixabay ? '<span style="font-size:0.6rem; opacity:0.5;">(no key)</span>' : ''}
                 </button>
@@ -157,6 +228,9 @@ window.openPollinationsGenerator = (itemIndex) => {
                 </button>
                 <button class="img-src-tab" onclick="switchImgGenTab('together', ${itemIndex})" style="padding:6px 12px; border:none; border-radius:8px 8px 0 0; background:transparent; color:var(--text-secondary); cursor:pointer; font-size:0.8rem; font-weight:600;">
                     <i class="fa-solid fa-robot"></i> Together AI ${!hasTogether ? '<span style="font-size:0.6rem; opacity:0.5;">(no key)</span>' : ''}
+                </button>
+                <button class="img-src-tab" onclick="switchImgGenTab('gemini', ${itemIndex})" style="padding:6px 12px; border:none; border-radius:8px 8px 0 0; background:transparent; color:var(--text-secondary); cursor:pointer; font-size:0.8rem; font-weight:600;">
+                    <i class="fa-solid fa-sparkles"></i> Gemini ${!hasGemini ? '<span style="font-size:0.6rem; opacity:0.5;">(no key)</span>' : ''}
                 </button>
             </div>
 
@@ -209,6 +283,26 @@ window.openPollinationsGenerator = (itemIndex) => {
                 </div>
             </div>
 
+            <!-- Gemini tab -->
+            <div id="img-tab-gemini" style="display:none;">
+                <div style="background:rgba(66,133,244,0.1); border:1px solid rgba(66,133,244,0.3); border-radius:10px; padding:6px 10px; margin-bottom:10px; font-size:0.75rem; color:#93bbfc;">
+                    <i class="fa-solid fa-sparkles"></i> Gemini &mdash; usa la stessa API key delle impostazioni
+                    <span style="margin-left:6px; font-size:0.65rem; opacity:0.7;">(${getGeminiImageModel()})</span>
+                </div>
+                <label style="font-size:0.8rem; color:#aaa;">Prompt</label>
+                <textarea id="gemini-img-prompt" rows="2" style="width:100%; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.95rem; resize:vertical; font-family:inherit; margin-bottom:10px;">${escapeHtml(item.label)}</textarea>
+
+                <label style="font-size:0.8rem; color:#aaa;">Stile</label>
+                <div id="gemini-styles" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;">
+                    ${POLL_STYLES.map(s => `
+                        <div class="poll-style-btn" data-style-id="${s.id}" onclick="selectPollStyle(this)"
+                             style="border-color:${s.color}40;">
+                            <i class="fa-solid ${s.icon}" style="color:${s.color};"></i> ${s.label}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+
             <!-- Shared preview/status -->
             <div id="poll-preview" style="display:none; text-align:center; margin-bottom:12px;">
                 <img id="poll-preview-img" src="" style="max-width:100%; max-height:250px; border-radius:10px; border:2px solid var(--glass-border);">
@@ -245,24 +339,18 @@ window.openPollinationsGenerator = (itemIndex) => {
 
 window.switchImgGenTab = (tab, itemIndex) => {
     _imgGenTab = tab;
-    ['pixabay', 'pollinations', 'together'].forEach(t => {
+    ['pixabay', 'pollinations', 'together', 'gemini'].forEach(t => {
         const el = document.getElementById('img-tab-' + t);
         if (el) el.style.display = t === tab ? '' : 'none';
     });
-    // Update tab buttons
     document.querySelectorAll('.img-src-tab').forEach(btn => {
-        const isActive = btn.textContent.toLowerCase().includes(tab);
+        const isActive = btn.textContent.toLowerCase().includes(tab === 'gemini' ? 'gemini' : tab);
         btn.style.background = isActive ? 'rgba(99,102,241,0.2)' : 'transparent';
         btn.style.color = isActive ? 'var(--accent-color)' : 'var(--text-secondary)';
     });
-    // Show/hide generate button text based on tab
     const genBtn = document.getElementById('poll-generate-btn');
     if (genBtn) {
-        if (tab === 'pixabay') {
-            genBtn.style.display = 'none';
-        } else {
-            genBtn.style.display = '';
-        }
+        genBtn.style.display = tab === 'pixabay' ? 'none' : '';
     }
 };
 
@@ -327,9 +415,10 @@ window.selectPixabayImage = async (itemIndex, resultIndex) => {
 
 window.runImageGeneration = async (itemIndex) => {
     const tab = _imgGenTab;
-    if (tab === 'pixabay') return; // pixabay uses search, not generate
+    if (tab === 'pixabay') return;
 
-    const promptEl = tab === 'together' ? document.getElementById('together-prompt') : document.getElementById('poll-prompt');
+    const promptIds = { together: 'together-prompt', gemini: 'gemini-img-prompt', pollinations: 'poll-prompt' };
+    const promptEl = document.getElementById(promptIds[tab] || 'poll-prompt');
     const prompt = promptEl?.value?.trim();
     if (!prompt) { alert('Inserisci un prompt.'); return; }
 
@@ -344,13 +433,15 @@ window.runImageGeneration = async (itemIndex) => {
     preview.style.display = 'none';
     acceptActions.style.display = 'none';
 
-    const engine = tab === 'together' ? 'Together AI' : 'Pollinations.ai';
-    document.getElementById('poll-status-text').textContent = `Generazione in corso (${engine})...`;
+    const engineNames = { together: 'Together AI', gemini: 'Gemini', pollinations: 'Pollinations.ai' };
+    document.getElementById('poll-status-text').textContent = `Generazione in corso (${engineNames[tab] || tab})...`;
 
     try {
         let imageUrl;
         if (tab === 'together') {
             imageUrl = await generateTogetherImage(prompt, _pollSelectedStyle);
+        } else if (tab === 'gemini') {
+            imageUrl = await generateGeminiImage(prompt, _pollSelectedStyle);
         } else {
             imageUrl = await fetchPollinationsImage(prompt, _pollSelectedStyle);
         }
@@ -419,6 +510,7 @@ window.openBulkPollinations = () => {
 
     const hasTogether = !!getTogetherApiKey();
     const hasPixabay = !!getPixabayApiKey();
+    const hasGemini = !!(typeof getGeminiApiKey === 'function' && getGeminiApiKey());
 
     modal.innerHTML = `
         <div style="width:100%; max-width:500px; background:#1e1e2f; border-radius:16px; border:1px solid var(--glass-border); padding:24px; max-height:90vh; overflow-y:auto;">
@@ -428,10 +520,11 @@ window.openBulkPollinations = () => {
             </div>
 
             <label style="font-size:0.8rem; color:#aaa;">Sorgente immagini</label>
-            <div style="display:flex; gap:6px; margin-bottom:12px;">
+            <div style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">
                 ${hasPixabay ? `<button class="btn btn-ghost bulk-engine-btn selected" data-engine="pixabay" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-search"></i> Pixabay</button>` : ''}
-                <button class="btn btn-ghost bulk-engine-btn ${!hasPixabay ? 'selected' : ''}" data-engine="pollinations" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-wand-magic-sparkles"></i> Pollinations</button>
+                <button class="btn btn-ghost bulk-engine-btn ${!hasPixabay && !hasGemini ? 'selected' : ''}" data-engine="pollinations" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-wand-magic-sparkles"></i> Pollinations</button>
                 ${hasTogether ? `<button class="btn btn-ghost bulk-engine-btn" data-engine="together" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-robot"></i> Together AI</button>` : ''}
+                ${hasGemini ? `<button class="btn btn-ghost bulk-engine-btn ${!hasPixabay ? 'selected' : ''}" data-engine="gemini" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-sparkles"></i> Gemini</button>` : ''}
             </div>
 
             <label style="font-size:0.8rem; color:#aaa;">Quali item?</label>
@@ -558,6 +651,8 @@ window.runBulkPollGeneration = async () => {
                 }
             } else if (engine === 'together') {
                 imageUrl = await generateTogetherImage(item.label, randomStyle);
+            } else if (engine === 'gemini') {
+                imageUrl = await generateGeminiImage(item.label, randomStyle);
             } else {
                 imageUrl = await fetchPollinationsImage(item.label, randomStyle);
             }
@@ -572,7 +667,8 @@ window.runBulkPollGeneration = async () => {
         log.scrollTop = log.scrollHeight;
 
         if (_bulkPollGenerating && completed < items.length) {
-            await new Promise(r => setTimeout(r, engine === 'pixabay' ? 500 : 1500));
+            const delay = engine === 'pixabay' ? 500 : engine === 'gemini' ? 4000 : 1500;
+            await new Promise(r => setTimeout(r, delay));
         }
     }
 

@@ -199,6 +199,10 @@ window.openSettings = () => {
     const togetherInput = document.getElementById('together-api-key');
     if (pixabayInput) pixabayInput.value = getPixabayApiKey();
     if (togetherInput) togetherInput.value = getTogetherApiKey();
+    const geminiImgModelSelect = document.getElementById('gemini-image-model');
+    if (geminiImgModelSelect && typeof getGeminiImageModel === 'function') {
+        geminiImgModelSelect.value = getGeminiImageModel();
+    }
 
     // Session tab
     const tdTimerCb = document.getElementById('setting-td-timer');
@@ -226,6 +230,9 @@ window.saveAllSettings = () => {
     if (pixabayKey !== undefined) savePixabayApiKey(pixabayKey);
     const togetherKey = document.getElementById('together-api-key')?.value?.trim();
     if (togetherKey !== undefined) saveTogetherApiKey(togetherKey);
+
+    const geminiImgModel = document.getElementById('gemini-image-model')?.value;
+    if (geminiImgModel && typeof setGeminiImageModel === 'function') setGeminiImageModel(geminiImgModel);
 
     // Theme is saved live on selection
 
