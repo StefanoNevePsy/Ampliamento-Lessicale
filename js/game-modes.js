@@ -3439,7 +3439,8 @@ function renderTopologiaComp(items, stage) {
         currentChar: null,
         currentRef: null,
         showAnswer: showAnswer,
-        scontornoReady: {}
+        scontornoReady: {},
+        positionStats: {}
     };
 
     // Pre-process scontorno for first few items in background
@@ -3620,9 +3621,17 @@ function _topoCompAdvance() {
 window._topoCompHandleScore = (result) => {
     const tc = state._topoCompState;
     if (!tc) return;
-    const resultKey = `topocomp_${tc.round}_${tc.currentPosition}_${Date.now()}`;
+    const pos = tc.currentPosition;
+    const resultKey = `topocomp_${tc.round}_${pos}_${Date.now()}`;
     state.session.itemResults[resultKey] = result;
     state.session.scoreHistory.push(resultKey);
+
+    if (!tc.positionStats[pos]) tc.positionStats[pos] = { correct: 0, prompts: 0, incorrect: 0, total: 0 };
+    const ps = tc.positionStats[pos];
+    ps.total++;
+    if (result === true) ps.correct++;
+    else if (result === 'prompt') ps.prompts++;
+    else ps.incorrect++;
 
     setTimeout(() => {
         _topoCompAdvance();

@@ -960,6 +960,33 @@ window.toggleDaySessionDetail = (header, patientId, sessionIdx, activityKeyEncod
                 html += `</div></div>`;
             }
 
+            // Topologia Compositiva breakdown
+            if (s.topoBreakdown && s.topoBreakdown.length > 0) {
+                html += `<div style="margin-bottom:8px;">`;
+                html += `<div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-layer-group"></i> Dettaglio per Topologia (${s.topoBreakdown.length}):</div>`;
+                if (s.topoPersonaggio) {
+                    html += `<div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:4px;"><i class="fa-solid fa-child"></i> Personaggio: <b style="color:var(--accent-color);">${s.topoPersonaggio}</b> &middot; Modalit&agrave;: ${s.topoSubMode === 'template' ? 'Template' : 'Random'}</div>`;
+                }
+                html += `<div style="display:flex; flex-direction:column; gap:2px;">`;
+                s.topoBreakdown.forEach(tb => {
+                    const pct = tb.percentage;
+                    const pctColor = pct >= 90 ? 'var(--success-color)' : pct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
+                    let bg = 'rgba(255,255,255,0.05)', border = 'rgba(255,255,255,0.1)';
+                    if (pct >= 90) { bg = 'rgba(16,185,129,0.1)'; border = 'rgba(16,185,129,0.3)'; }
+                    else if (pct >= 70) { bg = 'rgba(245,158,11,0.1)'; border = 'rgba(245,158,11,0.3)'; }
+                    else { bg = 'rgba(239,68,68,0.1)'; border = 'rgba(239,68,68,0.3)'; }
+                    let parts = [];
+                    if (tb.correct > 0) parts.push(`<span style="color:var(--success-color)">${tb.correct}V</span>`);
+                    if (tb.incorrect > 0) parts.push(`<span style="color:var(--danger-color)">${tb.incorrect}X</span>`);
+                    if (tb.prompts > 0) parts.push(`<span style="color:var(--warning-color)">${tb.prompts}P</span>`);
+                    html += `<div style="padding:4px 8px; border-radius:6px; font-size:0.75rem; background:${bg}; border:1px solid ${border}; display:flex; justify-content:space-between; align-items:center;">
+                        <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px;"><b>${tb.label}</b></span>
+                        <span style="font-weight:bold; flex-shrink:0; display:flex; align-items:center; gap:4px;">${parts.join(' ')} <span style="font-size:0.7rem; color:${pctColor}; font-weight:bold; margin-left:6px;">${pct}%</span></span>
+                    </div>`;
+                });
+                html += `</div></div>`;
+            }
+
             // Session note (collapsible + editable)
             {
                 const _escapedDate = (s.date || '').replace(/'/g, "\\'");
@@ -1109,6 +1136,43 @@ function renderSetBreakdownCollapsible(s, patientId, sessionIdx, isTD) {
         </tr>`;
 }
 
+// --- Topologia breakdown collapsible row ---
+function renderTopoBreakdownCollapsible(s, patientId, sessionIdx, isTD) {
+    if (!s.topoBreakdown || s.topoBreakdown.length === 0) return '';
+    const colSpan = isTD ? 6 : 5;
+
+    let header = '';
+    if (s.topoPersonaggio) {
+        header += `<div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:4px;"><i class="fa-solid fa-child"></i> Personaggio: <b style="color:var(--accent-color);">${s.topoPersonaggio}</b> &middot; ${s.topoSubMode === 'template' ? 'Template' : 'Random'}</div>`;
+    }
+
+    const chips = s.topoBreakdown.map(tb => {
+        const pct = tb.percentage;
+        const pctColor = pct >= 90 ? 'var(--success-color)' : pct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
+        let bg = 'rgba(255,255,255,0.05)', border = 'rgba(255,255,255,0.1)';
+        if (pct >= 90) { bg = 'rgba(16,185,129,0.1)'; border = 'rgba(16,185,129,0.3)'; }
+        else if (pct >= 70) { bg = 'rgba(245,158,11,0.1)'; border = 'rgba(245,158,11,0.3)'; }
+        else { bg = 'rgba(239,68,68,0.1)'; border = 'rgba(239,68,68,0.3)'; }
+        let parts = [];
+        if (tb.correct > 0) parts.push(`<span style="color:var(--success-color)">${tb.correct}V</span>`);
+        if (tb.incorrect > 0) parts.push(`<span style="color:var(--danger-color)">${tb.incorrect}X</span>`);
+        if (tb.prompts > 0) parts.push(`<span style="color:var(--warning-color)">${tb.prompts}P</span>`);
+        return `<div style="padding:4px 8px; margin:2px 0; border-radius:6px; font-size:0.75rem; background:${bg}; border:1px solid ${border}; display:flex; justify-content:space-between; align-items:center;">
+            <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px;"><b>${tb.label}</b></span>
+            <span style="font-weight:bold; flex-shrink:0; display:flex; align-items:center; gap:4px;">${parts.join(' ')} <span style="font-size:0.7rem; color:${pctColor}; font-weight:bold; margin-left:4px;">${pct}%</span></span>
+        </div>`;
+    }).join('');
+
+    return `
+        <tr class="item-details-row" style="display:table-row;">
+            <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(0,0,0,0.15);">
+                <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-layer-group"></i> Dettaglio Topologie (${s.topoBreakdown.length}):</div>
+                ${header}
+                <div style="display:flex; flex-direction:column; gap:2px;">${chips}</div>
+            </td>
+        </tr>`;
+}
+
 // ============================================================
 // TAB 3: ATTIVITA - Per-activity charts separated by session type
 // ============================================================
@@ -1209,6 +1273,11 @@ function renderActivitiesTab(patient, sortBy) {
         const setBreakdownAnalysisHtml = sessionsWithBreakdown.length > 0
             ? renderSetBreakdownAnalysis(sessionsWithBreakdown) : '';
 
+        // Check if this has topology breakdown data
+        const sessionsWithTopo = sessions.filter(s => s.topoBreakdown && s.topoBreakdown.length > 0);
+        const topoAnalysisHtml = sessionsWithTopo.length > 0
+            ? renderTopoAnalysis(sessionsWithTopo) : '';
+
         // Fluenza obiettivo
         const isFluenza = modeCode === 'fluenza';
         let fluenzaObiettivoHtml = '';
@@ -1253,6 +1322,7 @@ function renderActivitiesTab(patient, sortBy) {
             <div class="activity-details-panel" style="display:none; margin-top:10px; border-top:1px solid rgba(255,255,255,0.05); padding-top:8px;">
                 ${taskStepsAnalysisHtml}
                 ${setBreakdownAnalysisHtml}
+                ${topoAnalysisHtml}
                 <table style="width:100%; font-size:0.85rem; color:#ccc; border-collapse:collapse;">
                     <tr style="border-bottom:1px solid #444; text-align:left; color:#888; font-size:0.75rem;">
                         <th style="padding:5px;">Data</th><th>Score</th><th>%</th>${typeGroup === 'timedelay' ? '<th>TD</th>' : ''}<th style="text-align:right;">Azioni</th>
@@ -1265,18 +1335,21 @@ function renderActivitiesTab(patient, sortBy) {
                 : (nonCorrect > 0 ? ` <span style="color:var(--danger-color); font-size:0.75rem;">${nonCorrect}X</span>` : '');
             const isTaskAnalysisSession = s.mode === 'quaderno_task' && s.taskSteps && s.taskSteps.length > 0;
             const hasSetBreakdown = s.setBreakdown && s.setBreakdown.length > 0;
+            const hasTopoBreakdown = s.topoBreakdown && s.topoBreakdown.length > 0;
             const hasDetails = s.itemDetails && s.itemDetails.length > 0 && s.itemDetails.some(d => d.result !== true);
             let itemDetailsHtml = '';
             if (hasDetails) {
                 itemDetailsHtml = renderItemDetailsCollapsible(s, patient.id, s.originalIndex, isTD);
             } else if (isTaskAnalysisSession) {
                 itemDetailsHtml = renderTaskStepDetailsCollapsible(s, patient.id, s.originalIndex, isTD);
+            } else if (hasTopoBreakdown) {
+                itemDetailsHtml = renderTopoBreakdownCollapsible(s, patient.id, s.originalIndex, isTD);
             } else if (hasSetBreakdown) {
                 itemDetailsHtml = renderSetBreakdownCollapsible(s, patient.id, s.originalIndex, isTD);
             }
-            const hasExpandable = hasDetails || isTaskAnalysisSession || hasSetBreakdown;
-            const expandColor = isTD ? 'var(--warning-color)' : (isTaskAnalysisSession ? 'var(--accent-color)' : (hasSetBreakdown ? 'var(--accent-color)' : 'var(--danger-color)'));
-            const expandRgba = isTD ? '245,158,11' : (isTaskAnalysisSession ? '99,102,241' : (hasSetBreakdown ? '99,102,241' : '239,68,68'));
+            const hasExpandable = hasDetails || isTaskAnalysisSession || hasSetBreakdown || hasTopoBreakdown;
+            const expandColor = isTD ? 'var(--warning-color)' : ((isTaskAnalysisSession || hasSetBreakdown || hasTopoBreakdown) ? 'var(--accent-color)' : 'var(--danger-color)');
+            const expandRgba = isTD ? '245,158,11' : ((isTaskAnalysisSession || hasSetBreakdown || hasTopoBreakdown) ? '99,102,241' : '239,68,68');
             const detailsBtn = hasExpandable
                 ? `<button class="btn-icon item-details-toggle" style="width:26px; height:26px; font-size:0.6rem; display:inline-flex; color:${expandColor}; border-color:rgba(${expandRgba},0.3);" title="Dettagli"><i class="fa-solid fa-chevron-down" style="transition:transform 0.2s; transform:rotate(180deg);"></i></button>`
                 : '';
@@ -2312,6 +2385,83 @@ function renderSetBreakdownTable(setAggregates, title) {
     });
 
     html += `</table>`;
+    return html;
+}
+
+// --- Topologia aggregate analysis across sessions ---
+function renderTopoAnalysis(sessions) {
+    const sessionsWithTopo = sessions.filter(s => s.topoBreakdown && s.topoBreakdown.length > 0);
+    if (sessionsWithTopo.length === 0) return '';
+
+    const posMap = {};
+    sessionsWithTopo.forEach(session => {
+        (session.topoBreakdown || []).forEach(tb => {
+            if (!posMap[tb.position]) posMap[tb.position] = { position: tb.position, label: tb.label, totalV: 0, totalX: 0, totalP: 0, totalScored: 0 };
+            posMap[tb.position].totalV += tb.correct || 0;
+            posMap[tb.position].totalX += tb.incorrect || 0;
+            posMap[tb.position].totalP += tb.prompts || 0;
+            posMap[tb.position].totalScored += tb.total || 0;
+        });
+    });
+
+    const posAggregates = Object.values(posMap).map(p => ({
+        ...p,
+        pctCorrect: p.totalScored > 0 ? Math.round((p.totalV / p.totalScored) * 100) : 0
+    }));
+
+    if (posAggregates.length === 0) return '';
+
+    const sorted = [...posAggregates].filter(p => p.totalScored > 0).sort((a, b) => a.pctCorrect - b.pctCorrect);
+    const worstPos = sorted.filter(p => p.pctCorrect < 90).slice(0, 3);
+
+    let html = `
+    <div style="margin-top:10px; padding:10px; background:rgba(99,102,241,0.05); border:1px solid rgba(99,102,241,0.15); border-radius:12px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+            <i class="fa-solid fa-layer-group" style="color:var(--accent-color);"></i>
+            <span style="font-weight:bold; font-size:0.9rem; color:var(--accent-color);">Analisi per Topologia</span>
+            <span style="font-size:0.7rem; color:var(--text-secondary);">(su ${sessionsWithTopo.length} sessioni)</span>
+        </div>`;
+
+    if (worstPos.length > 0) {
+        html += `<div style="margin-bottom:10px; padding:8px; background:rgba(239,68,68,0.08); border-radius:8px; border:1px solid rgba(239,68,68,0.15);">
+            <div style="font-size:0.75rem; color:var(--danger-color); font-weight:bold; margin-bottom:4px;">
+                <i class="fa-solid fa-triangle-exclamation"></i> Topologie critiche:
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:4px;">
+                ${worstPos.map(p => `<span style="display:inline-block; padding:2px 8px; border-radius:6px; font-size:0.75rem; background:rgba(239,68,68,0.12); color:var(--danger-color); border:1px solid rgba(239,68,68,0.2);">${p.label} <b>${p.pctCorrect}%</b></span>`).join('')}
+            </div>
+        </div>`;
+    }
+
+    // Aggregate table
+    html += `<table style="width:100%; font-size:0.8rem; color:#ccc; border-collapse:collapse;">
+        <tr style="border-bottom:1px solid #444; color:#888; font-size:0.7rem;">
+            <th style="padding:4px; text-align:left;">Topologia</th>
+            <th style="text-align:center;">V</th>
+            <th style="text-align:center;">X/P</th>
+            <th style="text-align:center;">Tot</th>
+            <th style="text-align:right;">%</th>
+        </tr>`;
+    posAggregates.sort((a, b) => a.pctCorrect - b.pctCorrect).forEach(p => {
+        const barColor = p.pctCorrect >= 90 ? 'var(--success-color)' : p.pctCorrect >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
+        html += `
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
+            <td style="padding:5px 4px; font-weight:600;">${p.label}</td>
+            <td style="text-align:center; color:var(--success-color);">${p.totalV}</td>
+            <td style="text-align:center; color:var(--danger-color);">${p.totalX + p.totalP}</td>
+            <td style="text-align:center;">${p.totalScored}</td>
+            <td style="text-align:right; width:90px;">
+                <div style="display:flex; align-items:center; gap:4px; justify-content:flex-end;">
+                    <div style="width:50px; height:6px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden;">
+                        <div style="width:${p.pctCorrect}%; height:100%; background:${barColor}; border-radius:3px;"></div>
+                    </div>
+                    <span style="font-weight:bold; color:${barColor}; min-width:30px; text-align:right;">${p.pctCorrect}%</span>
+                </div>
+            </td>
+        </tr>`;
+    });
+    html += `</table>`;
+    html += `</div>`;
     return html;
 }
 

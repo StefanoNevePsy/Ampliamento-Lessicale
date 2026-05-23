@@ -1993,6 +1993,31 @@ async function _doSaveSession(p, noteText) {
         };
     }
 
+    // Topologia Compositiva: personaggio, positions, per-position breakdown
+    if (engine === 'topologia_comp' && state._topoCompState) {
+        const tc = state._topoCompState;
+        sessionData.topoSubMode = tc.subMode;
+        if (tc.personaggio) {
+            sessionData.topoPersonaggio = tc.personaggio.label || null;
+        }
+        sessionData.topoEnabledPositions = [...tc.enabledPositions];
+        const breakdown = [];
+        for (const pos of tc.enabledPositions) {
+            const ps = tc.positionStats[pos];
+            if (!ps || ps.total === 0) continue;
+            breakdown.push({
+                position: pos,
+                label: (typeof TOPO_POSITIONS !== 'undefined' && TOPO_POSITIONS[pos]) ? TOPO_POSITIONS[pos].label : pos,
+                correct: ps.correct,
+                prompts: ps.prompts,
+                incorrect: ps.incorrect,
+                total: ps.total,
+                percentage: Math.round((ps.correct / ps.total) * 100)
+            });
+        }
+        if (breakdown.length > 0) sessionData.topoBreakdown = breakdown;
+    }
+
     // Save per-item details for modes with labeled items
     if (engine === 'memory' && state.memory) {
         sessionData.itemDetails = Object.entries(state.memory.pairDetails).map(([label, d]) => ({
