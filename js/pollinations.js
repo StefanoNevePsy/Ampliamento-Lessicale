@@ -1,5 +1,48 @@
 // === IMAGE GENERATION: POLLINATIONS.AI + PIXABAY + TOGETHER AI + CLOUDFLARE WORKERS AI ===
 
+// --- AUTO-TRANSLATION (Italian labels → English prompts via Gemini) ---
+const _translationCache = {};
+
+async function translateLabelsForImageGen(labels) {
+    const apiKey = typeof getGeminiApiKey === 'function' ? getGeminiApiKey() : '';
+    if (!apiKey) return {};
+
+    const toTranslate = labels.filter(l => l && !_translationCache[l.toLowerCase().trim()]);
+    if (toTranslate.length === 0) {
+        const result = {};
+        labels.forEach(l => { if (l) result[l] = _translationCache[l.toLowerCase().trim()] || l; });
+        return result;
+    }
+
+    const prompt = `Translate each Italian word/phrase to English for image generation.
+Return ONLY a JSON object mapping each Italian input to its English translation.
+Keep it simple and concrete (e.g. "gatto" → "cat", "macchina della polizia" → "police car").
+If already English, keep as-is.
+
+Input: ${JSON.stringify(toTranslate)}`;
+
+    try {
+        const map = await callGemini(prompt, apiKey);
+        for (const [it, en] of Object.entries(map)) {
+            _translationCache[it.toLowerCase().trim()] = en;
+        }
+    } catch (e) {
+        console.warn('Translation failed, using original labels:', e.message);
+    }
+
+    const result = {};
+    labels.forEach(l => { if (l) result[l] = _translationCache[l.toLowerCase().trim()] || l; });
+    return result;
+}
+
+async function translateSingleLabel(label) {
+    if (!label) return label;
+    const key = label.toLowerCase().trim();
+    if (_translationCache[key]) return _translationCache[key];
+    const map = await translateLabelsForImageGen([label]);
+    return map[label] || label;
+}
+
 const POLL_STYLES = [
     { id: 'realistic', label: 'Realistico', icon: 'fa-camera', prompt: 'realistic photograph, studio lighting, sharp focus', color: '#10b981' },
     { id: 'drawing', label: 'Disegno', icon: 'fa-pencil', prompt: 'hand-drawn illustration, clean black outlines, colored pencil style', color: '#f59e0b' },
@@ -415,16 +458,19 @@ window.runImageGeneration = async (itemIndex) => {
     acceptActions.style.display = 'none';
 
     const engineNames = { together: 'Together AI', cloudflare: 'Cloudflare Flux', pollinations: 'Pollinations.ai' };
-    document.getElementById('poll-status-text').textContent = `Generazione in corso (${engineNames[tab] || tab})...`;
+    document.getElementById('poll-status-text').textContent = `Traduzione prompt...`;
 
     try {
+        const translatedPrompt = await translateSingleLabel(prompt);
+        document.getElementById('poll-status-text').textContent = `Generazione in corso (${engineNames[tab] || tab})...`;
+
         let imageUrl;
         if (tab === 'together') {
-            imageUrl = await generateTogetherImage(prompt, _pollSelectedStyle);
+            imageUrl = await generateTogetherImage(translatedPrompt, _pollSelectedStyle);
         } else if (tab === 'cloudflare') {
-            imageUrl = await generateCloudflareImage(prompt, _pollSelectedStyle);
+            imageUrl = await generateCloudflareImage(translatedPrompt, _pollSelectedStyle);
         } else {
-            imageUrl = await fetchPollinationsImage(prompt, _pollSelectedStyle);
+            imageUrl = await fetchPollinationsImage(translatedPrompt, _pollSelectedStyle);
         }
         _pollLastImageUrl = imageUrl;
 
@@ -611,13 +657,27 @@ window.runBulkPollGeneration = async () => {
     let errors = 0;
     const log = document.getElementById('bulk-poll-log');
 
+    // Batch-translate all labels upfront (one Gemini call)
+    let translations = {};
+    if (engine !== 'pixabay') {
+        document.getElementById('bulk-poll-progress-text').textContent = 'Traduzione etichette...';
+        try {
+            const allLabels = items.map(({ item }) => item.label).filter(Boolean);
+            translations = await translateLabelsForImageGen(allLabels);
+            log.innerHTML += `<div style="color:var(--accent-color);"><i class="fa-solid fa-language"></i> ${Object.keys(translations).length} etichette tradotte</div>`;
+        } catch (e) {
+            log.innerHTML += `<div style="color:var(--warning-color);"><i class="fa-solid fa-triangle-exclamation"></i> Traduzione fallita, uso etichette originali</div>`;
+        }
+    }
+
     for (const { item, idx } of items) {
         if (!_bulkPollGenerating) break;
 
         const randomStyle = selectedStyles.length > 0 ? selectedStyles[Math.floor(Math.random() * selectedStyles.length)] : null;
         const styleName = randomStyle ? (POLL_STYLES.find(s => s.id === randomStyle)?.label || randomStyle) : engine;
+        const translatedLabel = translations[item.label] || item.label;
 
-        document.getElementById('bulk-poll-progress-text').textContent = `${item.label} (${styleName})...`;
+        document.getElementById('bulk-poll-progress-text').textContent = `${item.label} → ${translatedLabel} (${styleName})...`;
         document.getElementById('bulk-poll-progress-count').textContent = `${completed}/${items.length}`;
         document.getElementById('bulk-poll-progress-bar').style.width = `${(completed / items.length) * 100}%`;
 
@@ -631,14 +691,14 @@ window.runBulkPollGeneration = async () => {
                     throw new Error('Nessun risultato');
                 }
             } else if (engine === 'together') {
-                imageUrl = await generateTogetherImage(item.label, randomStyle);
+                imageUrl = await generateTogetherImage(translatedLabel, randomStyle);
             } else if (engine === 'cloudflare') {
-                imageUrl = await generateCloudflareImage(item.label, randomStyle);
+                imageUrl = await generateCloudflareImage(translatedLabel, randomStyle);
             } else {
-                imageUrl = await fetchPollinationsImage(item.label, randomStyle);
+                imageUrl = await fetchPollinationsImage(translatedLabel, randomStyle);
             }
             state.editingItems[idx].url = await compressDataUrl(imageUrl, getEditingImageQuality());
-            log.innerHTML += `<div style="color:var(--success-color);"><i class="fa-solid fa-check"></i> ${escapeHtml(item.label)} (${styleName})</div>`;
+            log.innerHTML += `<div style="color:var(--success-color);"><i class="fa-solid fa-check"></i> ${escapeHtml(item.label)} → ${escapeHtml(translatedLabel)} (${styleName})</div>`;
         } catch (err) {
             errors++;
             log.innerHTML += `<div style="color:var(--danger-color);"><i class="fa-solid fa-xmark"></i> ${escapeHtml(item.label)}: ${err.message}</div>`;
