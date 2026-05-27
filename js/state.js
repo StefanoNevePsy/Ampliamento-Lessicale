@@ -25,7 +25,8 @@ const BUILTIN_MODES = {
     'stroop_numerico': { label: 'Stroop Numerico', engine: 'stroop_numerico' },
     'go_nogo': { label: 'Go/No-Go', engine: 'go_nogo' },
     'stroop_etichetta': { label: 'Stroop Etichetta', engine: 'stroop_etichetta' },
-    'topologia_comp': { label: 'Topologia Compositiva', engine: 'topologia_comp' }
+    'topologia_comp': { label: 'Topologia Compositiva', engine: 'topologia_comp' },
+    'memoria_lavoro': { label: 'Memoria di Lavoro', engine: 'memoria_lavoro' }
 };
 
 // MODES_CONFIG: dynamic map of all modes (built-in + custom)
@@ -55,7 +56,8 @@ function getDefaultActivityLayout() {
             { name: 'Avanzate', modes: ['topologia', 'sequenze', 'quaderno_task'] },
             { name: 'Pool da Tag', modes: ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione', 'ricorda', 'singolare_plurale'] },
             { name: 'Inibizione', modes: ['stroop_numerico', 'go_nogo', 'stroop_etichetta'] },
-            { name: 'Composizione', modes: ['topologia_comp'] }
+            { name: 'Composizione', modes: ['topologia_comp'] },
+            { name: 'Memoria', modes: ['memoria_lavoro'] }
         ],
         modeEmojis: {},
         customModes: {} // key -> { label, engine (built-in mode key used for logic) }
@@ -106,6 +108,57 @@ function getModeLabel(modeKey) {
     if (layout.customModes && layout.customModes[modeKey]) return emoji + layout.customModes[modeKey].label;
     if (BUILTIN_MODES[modeKey]) return emoji + BUILTIN_MODES[modeKey].label;
     return emoji + (MODES_CONFIG[modeKey] || modeKey);
+}
+
+// --- CRITERION THRESHOLD SYSTEM ---
+const DEFAULT_CRITERION = 90;
+
+function getCriterionThreshold(patientId, mode, setName) {
+    const p = state.patients.find(x => x.id === patientId);
+    if (!p) return DEFAULT_CRITERION;
+    const ov = p.criterionOverrides || {};
+    if (setName && mode && ov[`${setName}::${mode}`] !== undefined) return ov[`${setName}::${mode}`];
+    if (mode && ov[`mode:${mode}`] !== undefined) return ov[`mode:${mode}`];
+    if (setName && ov[`set:${setName}`] !== undefined) return ov[`set:${setName}`];
+    return p.criterionThreshold || DEFAULT_CRITERION;
+}
+
+function setCriterionThreshold(patientId, value, mode, setName) {
+    const p = state.patients.find(x => x.id === patientId);
+    if (!p) return;
+    const val = Math.max(10, Math.min(100, parseInt(value) || DEFAULT_CRITERION));
+    if (!mode && !setName) {
+        p.criterionThreshold = val;
+    } else {
+        if (!p.criterionOverrides) p.criterionOverrides = {};
+        const key = setName && mode ? `${setName}::${mode}` : (mode ? `mode:${mode}` : `set:${setName}`);
+        if (val === (p.criterionThreshold || DEFAULT_CRITERION)) {
+            delete p.criterionOverrides[key];
+        } else {
+            p.criterionOverrides[key] = val;
+        }
+    }
+    DB.savePatient(p);
+}
+
+function pctColor(pct, threshold) {
+    if (threshold === undefined) threshold = DEFAULT_CRITERION;
+    const mid = Math.max(threshold - 20, 30);
+    return pct >= threshold ? 'var(--success-color)' : pct >= mid ? 'var(--warning-color)' : 'var(--danger-color)';
+}
+
+function pctColorHex(pct, threshold) {
+    if (threshold === undefined) threshold = DEFAULT_CRITERION;
+    const mid = Math.max(threshold - 20, 30);
+    return pct >= threshold ? '#10b981' : pct >= mid ? '#f59e0b' : '#ef4444';
+}
+
+function pctBg(pct, threshold) {
+    if (threshold === undefined) threshold = DEFAULT_CRITERION;
+    const mid = Math.max(threshold - 20, 30);
+    if (pct >= threshold) return { bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.3)' };
+    if (pct >= mid) return { bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.3)' };
+    return { bg: 'rgba(239,68,68,0.1)', border: 'rgba(239,68,68,0.3)' };
 }
 
 let state = {

@@ -365,13 +365,14 @@ function getSessionTypeLabel(typeGroup) {
 }
 
 // --- CRITERION CHECK ---
-function checkCriterion(sessions) {
+function checkCriterion(sessions, threshold) {
     if (sessions.length < 2) return false;
+    if (threshold === undefined) threshold = DEFAULT_CRITERION;
     const sorted = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
     let consecutive = 0, lastDateStr = null;
     for (const s of sorted) {
         const currentDateStr = getDateKey(s.date);
-        if (s.percentage >= 90) {
+        if (s.percentage >= threshold) {
             if (lastDateStr && currentDateStr !== lastDateStr) consecutive++;
             else if (!lastDateStr) consecutive = 1;
             lastDateStr = currentDateStr;
@@ -381,20 +382,115 @@ function checkCriterion(sessions) {
     return false;
 }
 
-// --- REPERTORIO CHECK (>= 90% on first session) ---
-function checkRepertorio(sessions) {
+function checkRepertorio(sessions, threshold) {
     if (sessions.length === 0) return false;
+    if (threshold === undefined) threshold = DEFAULT_CRITERION;
     const sorted = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
-    return sorted[0].percentage >= 90;
+    return sorted[0].percentage >= threshold;
 }
 
-// --- NEAR CRITERION CHECK (last session >= 90%) ---
-function isNearCriterion(sessions) {
+function isNearCriterion(sessions, threshold) {
     if (sessions.length === 0) return false;
+    if (threshold === undefined) threshold = DEFAULT_CRITERION;
     const sorted = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
     const last = sorted[sorted.length - 1];
-    return last.percentage >= 90;
+    return last.percentage >= threshold;
 }
+
+// --- THRESHOLD EDITOR ---
+window.openThresholdEditor = (pid) => {
+    const p = state.patients.find(x => x.id === pid);
+    if (!p) return;
+    const globalThreshold = p.criterionThreshold || DEFAULT_CRITERION;
+    const overrides = p.criterionOverrides || {};
+
+    const history = p.history || [];
+    const activities = {};
+    history.forEach(h => {
+        const typeGroup = getSessionTypeGroup(h);
+        const key = `${h.setName}::${h.mode}::${typeGroup}`;
+        if (!activities[key]) activities[key] = { setName: h.setName, mode: h.mode, typeGroup };
+    });
+
+    let overrideRows = '';
+    Object.entries(overrides).sort().forEach(([key, val]) => {
+        let label = key;
+        if (key.startsWith('mode:')) {
+            const m = key.slice(5);
+            label = `Modalità: ${MODES_CONFIG[m] || m}`;
+        } else if (key.startsWith('set:')) {
+            label = `Set: ${key.slice(4)}`;
+        } else if (key.includes('::')) {
+            const [sn, m] = key.split('::');
+            label = `${sn} (${MODES_CONFIG[m] || m})`;
+        }
+        overrideRows += `<div style="display:flex; align-items:center; gap:8px; padding:6px 8px; background:rgba(255,255,255,0.03); border-radius:6px; margin-bottom:4px;">
+            <span style="flex:1; font-size:0.85rem;">${label}</span>
+            <input type="number" min="10" max="100" value="${val}" style="width:60px; padding:4px; border-radius:4px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.3); color:white; text-align:center; font-size:0.85rem;" onchange="setCriterionThreshold('${pid}', this.value, ${key.startsWith('mode:') ? `'${key.slice(5)}'` : 'null'}, ${key.startsWith('set:') ? `'${key.slice(4)}'` : key.includes('::') ? `'${key.split('::')[0]}'` : 'null'}); if(${key.includes('::') ? 'true' : 'false'}) setCriterionThreshold('${pid}', this.value, '${key.split('::')[1] || ''}', '${key.split('::')[0] || ''}');">
+            <button class="btn-icon" style="width:24px; height:24px; color:var(--danger-color);" onclick="deleteCriterionOverride('${pid}', '${key}'); openThresholdEditor('${pid}');"><i class="fa-solid fa-xmark"></i></button>
+        </div>`;
+    });
+
+    const modeOptions = Object.entries(MODES_CONFIG).map(([k, v]) => `<option value="mode:${k}">${v}</option>`).join('');
+    const setNames = [...new Set(history.map(h => h.setName))].sort();
+    const setOptions = setNames.map(n => `<option value="set:${n}">${n}</option>`).join('');
+    const actOptions = Object.values(activities).map(a => `<option value="${a.setName}::${a.mode}">${a.setName} (${MODES_CONFIG[a.mode] || a.mode})</option>`).join('');
+
+    const html = `
+    <div style="max-width:450px; margin:0 auto;">
+        <h3 style="margin:0 0 12px; color:var(--accent-color);"><i class="fa-solid fa-sliders"></i> Soglie Criterio</h3>
+        <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:16px;">Imposta soglie personalizzate per il criterio di acquisizione. Default: ${DEFAULT_CRITERION}%.</p>
+        <div style="margin-bottom:16px; padding:12px; background:rgba(139,92,246,0.08); border:1px solid rgba(139,92,246,0.2); border-radius:10px;">
+            <div style="font-size:0.85rem; font-weight:bold; margin-bottom:8px; color:#8b5cf6;"><i class="fa-solid fa-user"></i> Soglia Globale Paziente</div>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <input type="range" min="10" max="100" step="5" value="${globalThreshold}" id="threshold-global-range" oninput="document.getElementById('threshold-global-val').value=this.value" style="flex:1;">
+                <input type="number" min="10" max="100" value="${globalThreshold}" id="threshold-global-val" style="width:55px; padding:4px; border-radius:4px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.3); color:white; text-align:center; font-size:0.9rem; font-weight:bold;" oninput="document.getElementById('threshold-global-range').value=this.value">
+                <span style="font-size:0.85rem; color:var(--text-secondary);">%</span>
+            </div>
+            <button class="btn btn-primary" style="margin-top:8px; padding:6px 16px; font-size:0.8rem;" onclick="setCriterionThreshold('${pid}', document.getElementById('threshold-global-val').value); showToast('Soglia globale aggiornata');">Salva</button>
+        </div>
+        ${overrideRows ? `<div style="margin-bottom:16px;"><div style="font-size:0.85rem; font-weight:bold; margin-bottom:8px; color:var(--text-secondary);"><i class="fa-solid fa-list"></i> Override Attivi</div>${overrideRows}</div>` : ''}
+        <div style="padding:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px;">
+            <div style="font-size:0.85rem; font-weight:bold; margin-bottom:8px; color:var(--text-secondary);"><i class="fa-solid fa-plus"></i> Aggiungi Override</div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:end;">
+                <div style="flex:1; min-width:150px;">
+                    <label style="font-size:0.7rem; color:var(--text-secondary);">Ambito</label>
+                    <select id="threshold-new-scope" style="width:100%; padding:6px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.3); color:white; font-size:0.8rem;">
+                        <optgroup label="Modalità">${modeOptions}</optgroup>
+                        <optgroup label="Set">${setOptions}</optgroup>
+                        <optgroup label="Set + Modalità">${actOptions}</optgroup>
+                    </select>
+                </div>
+                <div style="width:70px;">
+                    <label style="font-size:0.7rem; color:var(--text-secondary);">Soglia %</label>
+                    <input type="number" min="10" max="100" value="80" id="threshold-new-val" style="width:100%; padding:6px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.3); color:white; text-align:center; font-size:0.85rem;">
+                </div>
+                <button class="btn btn-primary" style="padding:6px 14px; font-size:0.8rem;" onclick="addCriterionOverride('${pid}')"><i class="fa-solid fa-plus"></i></button>
+            </div>
+        </div>
+    </div>`;
+
+    openModal('Soglie Criterio - ' + p.name, html);
+};
+
+window.addCriterionOverride = (pid) => {
+    const scope = document.getElementById('threshold-new-scope').value;
+    const val = parseInt(document.getElementById('threshold-new-val').value) || DEFAULT_CRITERION;
+    const p = state.patients.find(x => x.id === pid);
+    if (!p) return;
+    if (!p.criterionOverrides) p.criterionOverrides = {};
+    p.criterionOverrides[scope] = Math.max(10, Math.min(100, val));
+    DB.savePatient(p);
+    showToast('Override aggiunto');
+    openThresholdEditor(pid);
+};
+
+window.deleteCriterionOverride = (pid, key) => {
+    const p = state.patients.find(x => x.id === pid);
+    if (!p || !p.criterionOverrides) return;
+    delete p.criterionOverrides[key];
+    DB.savePatient(p);
+};
 
 // ============================================================
 // --- LOAD PATIENT DATA (New Dashboard) ---
@@ -448,6 +544,9 @@ window.loadPatientData = (pid) => {
                 </button>
                 <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(6,182,212,0.3); color:#06b6d4;" onclick="offlineSharePatient('${pid}')" title="Condividi Offline">
                     <i class="fa-solid fa-tower-broadcast"></i>
+                </button>
+                <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(139,92,246,0.3); color:#8b5cf6;" onclick="openThresholdEditor('${pid}')" title="Soglie Criterio">
+                    <i class="fa-solid fa-sliders"></i>
                 </button>
                 <button class="btn btn-danger" style="padding:6px 12px; font-size:0.85rem;" onclick="deletePatient('${pid}')">
                     <i class="fa-solid fa-user-minus"></i>
@@ -595,7 +694,7 @@ function renderOverviewTab(patient) {
                 <div><span style="color:var(--text-secondary);">Data:</span> <b>${formatDateEU(lastSession.date)}</b></div>
                 <div><span style="color:var(--text-secondary);">Attivit&agrave;:</span> <b><i class="fa-solid ${lastModeIcon}" style="font-size:0.8rem; margin-right:3px; opacity:0.7;"></i>${modeName}</b></div>
                 <div><span style="color:var(--text-secondary);">Set:</span> <b>${lastSession.setName}</b>${lastSession.setCat ? ` <span style="color:var(--text-secondary); font-size:0.8em;">(${lastSession.setCat})</span>` : ''}</div>
-                <div><span style="color:var(--text-secondary);">Score:</span> <b style="color:${lastSession.percentage >= 90 ? 'var(--success-color)' : 'white'}">${lastSession.correct}/${lastSession.total} (${lastSession.percentage}%)</b></div>
+                <div><span style="color:var(--text-secondary);">Score:</span> <b style="color:${pctColor(lastSession.percentage)}">${lastSession.correct}/${lastSession.total} (${lastSession.percentage}%)</b></div>
             </div>
         </div>`;
     }
@@ -784,7 +883,7 @@ function renderDatesTab(patient) {
                 </div>
                 <div style="display:flex; gap:12px; align-items:center;">
                     <span style="font-size:0.85rem; color:var(--success-color);">${correctLU}<span style="color:var(--text-secondary);">/${totalLU}</span></span>
-                    <span style="font-weight:bold; font-size:0.9rem; color:${pct >= 90 ? 'var(--success-color)' : pct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)'};">${pct}%</span>
+                    <span style="font-weight:bold; font-size:0.9rem; color:${pctColor(pct)};">${pct}%</span>
                 </div>
             </div>
             <div class="date-detail-panel" style="display:none; padding:0 15px 12px; border-top:1px solid rgba(255,255,255,0.05);">
@@ -827,7 +926,7 @@ function renderDatesTab(patient) {
                             </div>
                             <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
                                 <span style="font-size:0.85rem;">${s.correct}/${s.total}</span>
-                                <span style="font-weight:bold; font-size:0.85rem; color:${s.percentage >= 90 ? 'var(--success-color)' : 'white'};">${s.percentage}%</span>
+                                <span style="font-weight:bold; font-size:0.85rem; color:${pctColor(s.percentage)};">${s.percentage}%</span>
                                 <button class="btn-icon" style="width:24px; height:24px; font-size:0.65rem; display:inline-flex;" onclick="event.stopPropagation(); editSession('${patient.id}', ${s.originalIndex})"><i class="fa-solid fa-pen"></i></button>
                                 <button class="btn-icon" style="width:24px; height:24px; font-size:0.65rem; display:inline-flex; color:var(--danger-color); border-color:rgba(239,68,68,0.3);" onclick="event.stopPropagation(); deleteSession('${patient.id}', ${s.originalIndex})"><i class="fa-solid fa-trash"></i></button>
                             </div>
@@ -926,8 +1025,8 @@ window.toggleDaySessionDetail = (header, patientId, sessionIdx, activityKeyEncod
                     if (v > 0 && x === 0 && p === 0) { bg = 'rgba(16,185,129,0.1)'; border = 'rgba(16,185,129,0.3)'; }
                     else if (x > 0) { bg = 'rgba(239,68,68,0.1)'; border = 'rgba(239,68,68,0.3)'; }
                     else if (p > 0) { bg = 'rgba(245,158,11,0.1)'; border = 'rgba(245,158,11,0.3)'; }
-                    const pctColor = stepPct !== null ? (stepPct >= 90 ? 'var(--success-color)' : stepPct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)') : '#888';
-                    const pctHtml = stepPct !== null ? `<span style="font-size:0.7rem; color:${pctColor}; font-weight:bold; margin-left:6px;">${stepPct}%</span>` : '';
+                    const _stepClr = stepPct !== null ? pctColor(stepPct) : '#888';
+                    const pctHtml = stepPct !== null ? `<span style="font-size:0.7rem; color:${_stepClr}; font-weight:bold; margin-left:6px;">${stepPct}%</span>` : '';
                     html += `<div style="padding:4px 8px; border-radius:6px; font-size:0.75rem; background:${bg}; border:1px solid ${border}; display:flex; justify-content:space-between; align-items:center;">
                         <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px;"><b>${i + 1}.</b> ${step.name}</span>
                         <span style="font-weight:bold; flex-shrink:0; display:flex; align-items:center; gap:4px;">${parts.length > 0 ? parts.join(' ') : '<span style="color:#888">N/A</span>'}${pctHtml}</span>
@@ -943,18 +1042,15 @@ window.toggleDaySessionDetail = (header, patientId, sessionIdx, activityKeyEncod
                 html += `<div style="display:flex; flex-direction:column; gap:2px;">`;
                 s.setBreakdown.forEach((sb, i) => {
                     const pct = sb.percentage;
-                    const pctColor = pct >= 90 ? 'var(--success-color)' : pct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
-                    let bg = 'rgba(255,255,255,0.05)', border = 'rgba(255,255,255,0.1)';
-                    if (pct >= 90) { bg = 'rgba(16,185,129,0.1)'; border = 'rgba(16,185,129,0.3)'; }
-                    else if (pct >= 70) { bg = 'rgba(245,158,11,0.1)'; border = 'rgba(245,158,11,0.3)'; }
-                    else { bg = 'rgba(239,68,68,0.1)'; border = 'rgba(239,68,68,0.3)'; }
+                    const _clr = pctColor(pct);
+                    const { bg, border } = pctBg(pct);
                     let parts = [];
                     if (sb.correct > 0) parts.push(`<span style="color:var(--success-color)">${sb.correct}V</span>`);
                     if ((sb.incorrect || 0) > 0) parts.push(`<span style="color:var(--danger-color)">${sb.incorrect}X</span>`);
                     if ((sb.prompts || 0) > 0) parts.push(`<span style="color:var(--warning-color)">${sb.prompts}P</span>`);
                     html += `<div style="padding:4px 8px; border-radius:6px; font-size:0.75rem; background:${bg}; border:1px solid ${border}; display:flex; justify-content:space-between; align-items:center;">
                         <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px;"><b>${i + 1}.</b> ${sb.setName}${sb.setCat ? ` <span style="color:var(--text-secondary); font-size:0.65rem;">(${sb.setCat})</span>` : ''}</span>
-                        <span style="font-weight:bold; flex-shrink:0; display:flex; align-items:center; gap:4px;">${parts.join(' ')} <span style="font-size:0.7rem; color:${pctColor}; font-weight:bold; margin-left:6px;">${pct}%</span></span>
+                        <span style="font-weight:bold; flex-shrink:0; display:flex; align-items:center; gap:4px;">${parts.join(' ')} <span style="font-size:0.7rem; color:${_clr}; font-weight:bold; margin-left:6px;">${pct}%</span></span>
                     </div>`;
                 });
                 html += `</div></div>`;
@@ -970,18 +1066,15 @@ window.toggleDaySessionDetail = (header, patientId, sessionIdx, activityKeyEncod
                 html += `<div style="display:flex; flex-direction:column; gap:2px;">`;
                 s.topoBreakdown.forEach(tb => {
                     const pct = tb.percentage;
-                    const pctColor = pct >= 90 ? 'var(--success-color)' : pct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
-                    let bg = 'rgba(255,255,255,0.05)', border = 'rgba(255,255,255,0.1)';
-                    if (pct >= 90) { bg = 'rgba(16,185,129,0.1)'; border = 'rgba(16,185,129,0.3)'; }
-                    else if (pct >= 70) { bg = 'rgba(245,158,11,0.1)'; border = 'rgba(245,158,11,0.3)'; }
-                    else { bg = 'rgba(239,68,68,0.1)'; border = 'rgba(239,68,68,0.3)'; }
+                    const _clr = pctColor(pct);
+                    const { bg, border } = pctBg(pct);
                     let parts = [];
                     if (tb.correct > 0) parts.push(`<span style="color:var(--success-color)">${tb.correct}V</span>`);
                     if (tb.incorrect > 0) parts.push(`<span style="color:var(--danger-color)">${tb.incorrect}X</span>`);
                     if (tb.prompts > 0) parts.push(`<span style="color:var(--warning-color)">${tb.prompts}P</span>`);
                     html += `<div style="padding:4px 8px; border-radius:6px; font-size:0.75rem; background:${bg}; border:1px solid ${border}; display:flex; justify-content:space-between; align-items:center;">
                         <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px;"><b>${tb.label}</b></span>
-                        <span style="font-weight:bold; flex-shrink:0; display:flex; align-items:center; gap:4px;">${parts.join(' ')} <span style="font-size:0.7rem; color:${pctColor}; font-weight:bold; margin-left:6px;">${pct}%</span></span>
+                        <span style="font-weight:bold; flex-shrink:0; display:flex; align-items:center; gap:4px;">${parts.join(' ')} <span style="font-size:0.7rem; color:${_clr}; font-weight:bold; margin-left:6px;">${pct}%</span></span>
                     </div>`;
                 });
                 html += `</div></div>`;
@@ -1109,12 +1202,8 @@ function renderSetBreakdownCollapsible(s, patientId, sessionIdx, isTD) {
 
     const chips = s.setBreakdown.map((sb, i) => {
         const pct = sb.percentage;
-        const pctColor = pct >= 90 ? 'var(--success-color)' : pct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
-        let bg = 'rgba(255,255,255,0.05)';
-        let border = 'rgba(255,255,255,0.1)';
-        if (pct >= 90) { bg = 'rgba(16,185,129,0.1)'; border = 'rgba(16,185,129,0.3)'; }
-        else if (pct >= 70) { bg = 'rgba(245,158,11,0.1)'; border = 'rgba(245,158,11,0.3)'; }
-        else { bg = 'rgba(239,68,68,0.1)'; border = 'rgba(239,68,68,0.3)'; }
+        const _clr = pctColor(pct);
+        const { bg, border } = pctBg(pct);
 
         let parts = [];
         if (sb.correct > 0) parts.push(`<span style="color:var(--success-color)">${sb.correct}V</span>`);
@@ -1123,7 +1212,7 @@ function renderSetBreakdownCollapsible(s, patientId, sessionIdx, isTD) {
 
         return `<div style="padding:4px 8px; margin:2px 0; border-radius:6px; font-size:0.75rem; background:${bg}; border:1px solid ${border}; display:flex; justify-content:space-between; align-items:center;">
             <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px;"><b>${i + 1}.</b> ${sb.setName}${sb.setCat ? ` <span style="color:var(--text-secondary); font-size:0.65rem;">(${sb.setCat})</span>` : ''}</span>
-            <span style="font-weight:bold; flex-shrink:0; display:flex; align-items:center; gap:4px;">${parts.join(' ')} <span style="font-size:0.7rem; color:${pctColor}; font-weight:bold; margin-left:4px;">${pct}%</span></span>
+            <span style="font-weight:bold; flex-shrink:0; display:flex; align-items:center; gap:4px;">${parts.join(' ')} <span style="font-size:0.7rem; color:${_clr}; font-weight:bold; margin-left:4px;">${pct}%</span></span>
         </div>`;
     }).join('');
 
@@ -1148,18 +1237,15 @@ function renderTopoBreakdownCollapsible(s, patientId, sessionIdx, isTD) {
 
     const chips = s.topoBreakdown.map(tb => {
         const pct = tb.percentage;
-        const pctColor = pct >= 90 ? 'var(--success-color)' : pct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
-        let bg = 'rgba(255,255,255,0.05)', border = 'rgba(255,255,255,0.1)';
-        if (pct >= 90) { bg = 'rgba(16,185,129,0.1)'; border = 'rgba(16,185,129,0.3)'; }
-        else if (pct >= 70) { bg = 'rgba(245,158,11,0.1)'; border = 'rgba(245,158,11,0.3)'; }
-        else { bg = 'rgba(239,68,68,0.1)'; border = 'rgba(239,68,68,0.3)'; }
+        const _clr = pctColor(pct);
+        const { bg, border } = pctBg(pct);
         let parts = [];
         if (tb.correct > 0) parts.push(`<span style="color:var(--success-color)">${tb.correct}V</span>`);
         if (tb.incorrect > 0) parts.push(`<span style="color:var(--danger-color)">${tb.incorrect}X</span>`);
         if (tb.prompts > 0) parts.push(`<span style="color:var(--warning-color)">${tb.prompts}P</span>`);
         return `<div style="padding:4px 8px; margin:2px 0; border-radius:6px; font-size:0.75rem; background:${bg}; border:1px solid ${border}; display:flex; justify-content:space-between; align-items:center;">
             <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px;"><b>${tb.label}</b></span>
-            <span style="font-weight:bold; flex-shrink:0; display:flex; align-items:center; gap:4px;">${parts.join(' ')} <span style="font-size:0.7rem; color:${pctColor}; font-weight:bold; margin-left:4px;">${pct}%</span></span>
+            <span style="font-weight:bold; flex-shrink:0; display:flex; align-items:center; gap:4px;">${parts.join(' ')} <span style="font-size:0.7rem; color:${_clr}; font-weight:bold; margin-left:4px;">${pct}%</span></span>
         </div>`;
     }).join('');
 
@@ -1197,13 +1283,14 @@ function renderActivitiesTab(patient, sortBy) {
         const sortedSess = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
         const lastDate = Math.max(...sessions.map(s => new Date(s.date).getTime()));
         const setCat = sessions.find(s => s.setCat)?.setCat || '';
-        const isMastered = checkCriterion(sortedSess);
-        const isRepertorio = checkRepertorio(sortedSess);
+        const threshold = getCriterionThreshold(patient.id, modeCode, setName);
+        const isMastered = checkCriterion(sortedSess, threshold);
+        const isRepertorio = checkRepertorio(sortedSess, threshold);
         const lastSession = sortedSess[sortedSess.length - 1];
         const lastPct = lastSession ? lastSession.percentage : 0;
         const avgPct = sessions.length > 0 ? Math.round(sessions.reduce((a, s) => a + s.percentage, 0) / sessions.length) : 0;
         const criterionScore = isMastered ? 2 : isRepertorio ? 1 : 0;
-        return { key, sessions, setName, modeCode, typeGroup, lastDate, setCat, isMastered, isRepertorio, lastPct, avgPct, criterionScore };
+        return { key, sessions, setName, modeCode, typeGroup, lastDate, setCat, isMastered, isRepertorio, lastPct, avgPct, criterionScore, threshold };
     });
 
     // Sort
@@ -1235,7 +1322,7 @@ function renderActivitiesTab(patient, sortBy) {
         const modeName = MODES_CONFIG[modeCode] || modeCode;
         sessions.sort((a, b) => new Date(a.date) - new Date(b.date));
         const lastSession = sessions[sessions.length - 1];
-        const nearCrit = !isMastered && isNearCriterion(sessions);
+        const nearCrit = !isMastered && isNearCriterion(sessions, item.threshold);
 
         let badgeHtml = '';
         if (isMastered) badgeHtml += `<span class="criterion-badge"><i class="fa-solid fa-trophy"></i> CRITERIO</span>`;
@@ -1288,7 +1375,7 @@ function renderActivitiesTab(patient, sortBy) {
         }
 
         // Quick status: last session + near criterion
-        const lastPctColor = lastPct >= 90 ? 'var(--success-color)' : lastPct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
+        const lastPctColor = pctColor(lastPct, item.threshold);
         const nearCritHtml = nearCrit ? `<span style="font-size:0.65rem; background:rgba(16,185,129,0.15); color:var(--success-color); padding:1px 6px; border-radius:4px;"><i class="fa-solid fa-arrow-trend-up"></i> Vicino al criterio</span>` : '';
         const lastInfoHtml = lastSession ? `<span style="font-size:0.7rem; color:var(--text-secondary);">${formatDateEU(lastSession.date)}</span> <span style="font-size:0.75rem; font-weight:bold; color:${lastPctColor};">${lastPct}%</span>` : '';
 
@@ -1316,6 +1403,7 @@ function renderActivitiesTab(patient, sortBy) {
             </div>
             <div style="display:flex; gap:8px; align-items:center; margin-bottom:6px; flex-wrap:wrap;">
                 ${lastInfoHtml} ${nearCritHtml}
+                ${item.threshold !== DEFAULT_CRITERION ? `<span style="font-size:0.65rem; background:rgba(99,102,241,0.12); color:var(--accent-color); padding:1px 6px; border-radius:4px;"><i class="fa-solid fa-sliders"></i> Soglia: ${item.threshold}%</span>` : ''}
             </div>
             ${lastNoteContentHtml}
             <div id="${chartId}"></div>
@@ -1372,7 +1460,7 @@ function renderActivitiesTab(patient, sortBy) {
                         <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
                             <td style="padding:6px 5px;">${formatDateEU(s.date)}${noteIcon}</td>
                             <td>${s.correct}/${s.total}${scoreExtra}</td>
-                            <td style="font-weight:bold; color:${s.percentage >= 90 ? 'var(--success-color)' : 'white'}">${s.percentage}%</td>
+                            <td style="font-weight:bold; color:${pctColor(s.percentage, item.threshold)}">${s.percentage}%</td>
                             ${isTD ? `<td style="font-size:0.8rem; color:var(--warning-color);">${s.timeDelaySeconds || '?'}s</td>` : ''}
                             <td style="text-align:right;">
                                 ${s.note ? `<button class="btn-icon note-toggle-btn" style="width:26px; height:26px; font-size:0.6rem; display:inline-flex; color:#eab308; border-color:rgba(234,179,8,0.3);" title="Nota"><i class="fa-solid fa-sticky-note" style="transition:transform 0.2s;"></i></button>` : ''}
@@ -1441,12 +1529,13 @@ function renderActivitiesTab(patient, sortBy) {
     chartList.forEach(item => {
         const chartId = 'activity-chart-' + item.key.replace(/[^a-zA-Z0-9]/g, '_');
         const container = document.getElementById(chartId);
-        if (container) renderActivitySVGChart(container, item.sessions, item.typeGroup, item.modeCode);
+        if (container) renderActivitySVGChart(container, item.sessions, item.typeGroup, item.modeCode, item.threshold);
     });
 }
 
 // --- ACTIVITY SVG CHART with Time Delay vertical markers ---
-function renderActivitySVGChart(container, sessions, typeGroup, modeCode) {
+function renderActivitySVGChart(container, sessions, typeGroup, modeCode, threshold) {
+    if (threshold === undefined) threshold = DEFAULT_CRITERION;
     const svgNS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(svgNS, "svg");
     svg.setAttribute("class", "chart-svg");
@@ -1496,13 +1585,14 @@ function renderActivitySVGChart(container, sessions, typeGroup, modeCode) {
             gt.textContent = pct + '%';
             svg.appendChild(gt);
         });
-        // 90% label next to threshold
+        // Threshold label
+        const threshY = 130 - (130 * threshold / 100);
         const lbl90 = document.createElementNS(svgNS, "text");
-        lbl90.setAttribute("x", "17"); lbl90.setAttribute("y", "16");
+        lbl90.setAttribute("x", "17"); lbl90.setAttribute("y", String(threshY + 3));
         lbl90.setAttribute("text-anchor", "end");
         lbl90.setAttribute("fill", "var(--danger-color)");
         lbl90.setAttribute("font-size", "7"); lbl90.setAttribute("opacity", "0.7");
-        lbl90.textContent = '90%';
+        lbl90.textContent = threshold + '%';
         svg.appendChild(lbl90);
     } else if (fluenzaMax > 0) {
         const step = Math.max(1, Math.ceil(fluenzaMax / 5));
@@ -1544,10 +1634,11 @@ function renderActivitySVGChart(container, sessions, typeGroup, modeCode) {
         obLbl.textContent = fluenzaObiettivo;
         svg.appendChild(obLbl);
     } else {
-        // 90% threshold
+        // Custom threshold line
+        const threshLineY = 130 - (130 * threshold / 100);
         const line90 = document.createElementNS(svgNS, "line");
         line90.setAttribute("x1", "20"); line90.setAttribute("x2", "300");
-        line90.setAttribute("y1", "13"); line90.setAttribute("y2", "13");
+        line90.setAttribute("y1", String(threshLineY)); line90.setAttribute("y2", String(threshLineY));
         line90.setAttribute("class", "threshold-line");
         svg.appendChild(line90);
     }
@@ -2003,7 +2094,7 @@ function renderDiaryTab(patient) {
                         <span style="font-size:0.75rem; color:var(--accent-color); font-weight:600;">${modeName}</span>
                         <span style="font-size:0.75rem; color:var(--text-secondary);">- ${s.setName}</span>
                         <span style="font-size:0.65rem; color:#888;">${timeStr}</span>
-                        <span style="font-size:0.7rem; font-weight:bold; color:${s.percentage >= 90 ? 'var(--success-color)' : 'white'};">${s.percentage}%</span>
+                        <span style="font-size:0.7rem; font-weight:bold; color:${pctColor(s.percentage)};">${s.percentage}%</span>
                         <button class="btn-icon" style="width:22px; height:22px; font-size:0.6rem; color:#eab308; border-color:rgba(234,179,8,0.3); margin-left:auto;" onclick="openSessionNoteEditor('${patient.id}', '${escapedDate}', '${escapedMode}', '${escapedSetName}')" title="Modifica nota"><i class="fa-solid fa-pen"></i></button>
                     </div>
                     <div style="font-size:0.8rem; line-height:1.5; color:#ccc; padding-left:26px; border-left:2px solid rgba(99,102,241,0.2); cursor:pointer;" onclick="openSessionNoteEditor('${patient.id}', '${escapedDate}', '${escapedMode}', '${escapedSetName}')">${_renderNoteMarkup(s.note)}</div>
@@ -2094,7 +2185,8 @@ th { background: #4472c4; color: white; font-weight: bold; }
         const modeName = MODES_CONFIG[mode] || mode;
         const last = sessions[sessions.length - 1];
         const avgPct = Math.round(sessions.reduce((a, s) => a + s.percentage, 0) / sessions.length);
-        const hasCriterion = checkCriterion(sessions);
+        const _thr = getCriterionThreshold(p.id, mode, name);
+        const hasCriterion = checkCriterion(sessions, _thr);
         const lastD = new Date(last.date);
         const lastDateStr = `${String(lastD.getDate()).padStart(2, '0')}/${String(lastD.getMonth() + 1).padStart(2, '0')}/${lastD.getFullYear()}`;
         const aCat = sessions.find(s => s.setCat)?.setCat || '';
@@ -2182,7 +2274,7 @@ function renderTaskStepsAnalysis(sessions) {
             const sTotalScored = sessionStepData.reduce((s, x) => s + x.totalScored, 0);
             const sTotalV = sessionStepData.reduce((s, x) => s + x.totalV, 0);
             const sPct = sTotalScored > 0 ? Math.round((sTotalV / sTotalScored) * 100) : 0;
-            const pctColor = sPct >= 90 ? 'var(--success-color)' : sPct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
+            const _clr = pctColor(sPct);
 
             html += `
             <div style="border:1px solid rgba(255,255,255,0.05); border-radius:8px; margin-bottom:6px; overflow:hidden;">
@@ -2195,7 +2287,7 @@ function renderTaskStepsAnalysis(sessions) {
                     </div>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span style="font-size:0.8rem;">${sTotalV}/${sTotalScored}</span>
-                        <span style="font-weight:bold; font-size:0.8rem; color:${pctColor};">${sPct}%</span>
+                        <span style="font-weight:bold; font-size:0.8rem; color:${_clr};">${sPct}%</span>
                     </div>
                 </div>
                 <div style="display:none; padding:6px;">
@@ -2227,7 +2319,7 @@ function renderTaskStepTable(stepAggregates, title) {
 
     stepAggregates.forEach((step, i) => {
         const barWidth = step.pctCorrect;
-        const barColor = step.pctCorrect >= 90 ? 'var(--success-color)' : step.pctCorrect >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
+        const barColor = pctColor(step.pctCorrect);
         html += `
         <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
             <td style="padding:5px 4px; color:var(--text-secondary); font-weight:bold;">${i + 1}</td>
@@ -2312,7 +2404,7 @@ function renderSetBreakdownAnalysis(sessions) {
             const sTotalScored = breakdown.reduce((sum, sb) => sum + (sb.total || 0), 0);
             const sTotalV = breakdown.reduce((sum, sb) => sum + (sb.correct || 0), 0);
             const sPct = sTotalScored > 0 ? Math.round((sTotalV / sTotalScored) * 100) : 0;
-            const pctColor = sPct >= 90 ? 'var(--success-color)' : sPct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
+            const _clr = pctColor(sPct);
 
             const sessionSetData = breakdown.map(sb => ({
                 setName: sb.setName, setCat: sb.setCat || '',
@@ -2333,7 +2425,7 @@ function renderSetBreakdownAnalysis(sessions) {
                     </div>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span style="font-size:0.8rem;">${sTotalV}/${sTotalScored}</span>
-                        <span style="font-weight:bold; font-size:0.8rem; color:${pctColor};">${sPct}%</span>
+                        <span style="font-weight:bold; font-size:0.8rem; color:${_clr};">${sPct}%</span>
                     </div>
                 </div>
                 <div style="display:none; padding:6px;">
@@ -2365,7 +2457,7 @@ function renderSetBreakdownTable(setAggregates, title) {
 
     setAggregates.forEach((s, i) => {
         const barWidth = s.pctCorrect;
-        const barColor = s.pctCorrect >= 90 ? 'var(--success-color)' : s.pctCorrect >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
+        const barColor = pctColor(s.pctCorrect);
         html += `
         <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
             <td style="padding:5px 4px; color:var(--text-secondary); font-weight:bold;">${i + 1}</td>
@@ -2443,7 +2535,7 @@ function renderTopoAnalysis(sessions) {
             <th style="text-align:right;">%</th>
         </tr>`;
     posAggregates.sort((a, b) => a.pctCorrect - b.pctCorrect).forEach(p => {
-        const barColor = p.pctCorrect >= 90 ? 'var(--success-color)' : p.pctCorrect >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
+        const barColor = pctColor(p.pctCorrect);
         html += `
         <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
             <td style="padding:5px 4px; font-weight:600;">${p.label}</td>
@@ -2497,8 +2589,9 @@ function _buildPatientSummaryForAI(patient, fakeName) {
         const firstSess = sortedSess[0];
         const lastSess = sortedSess[sortedSess.length - 1];
         const avgPct = Math.round(sessions.reduce((a, s) => a + s.percentage, 0) / sessions.length);
-        const hasCriterion = checkCriterion(sessions);
-        const isRepert = checkRepertorio(sessions);
+        const _thr = getCriterionThreshold(patient.id, mode, setName);
+        const hasCriterion = checkCriterion(sessions, _thr);
+        const isRepert = checkRepertorio(sessions, _thr);
         const setCat = sessions.find(s => s.setCat)?.setCat || '';
 
         // Trend: compare first half avg vs second half avg

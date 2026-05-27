@@ -257,7 +257,7 @@ function _showImportToast(message) {
 }
 
 // --- SET FILTERING & DROPDOWN ---
-const POOL_ENGINES = ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione', 'ricorda', 'singolare_plurale', 'stroop_numerico', 'go_nogo', 'stroop_etichetta', 'topologia_comp'];
+const POOL_ENGINES = ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione', 'ricorda', 'singolare_plurale', 'stroop_numerico', 'go_nogo', 'stroop_etichetta', 'topologia_comp', 'memoria_lavoro'];
 // Keep POOL_MODES as alias for backward compat
 const POOL_MODES = POOL_ENGINES;
 
@@ -386,9 +386,10 @@ function getSetStatus(s, activePatient, currentMode) {
     info.sessions = sessions.length;
     if (sessions.length === 0 && engine !== 'ran_intensivo') return info;
     if (sessions.length > 0) {
-        info.isMastered = typeof checkCriterion === 'function' && checkCriterion(sessions);
-        info.isRepertorio = typeof checkRepertorio === 'function' && checkRepertorio(sessions);
-        info.isNear = !info.isMastered && typeof isNearCriterion === 'function' && isNearCriterion(sessions);
+        const threshold = typeof getCriterionThreshold === 'function' ? getCriterionThreshold(activePatient.id, currentMode, s.name) : DEFAULT_CRITERION;
+        info.isMastered = typeof checkCriterion === 'function' && checkCriterion(sessions, threshold);
+        info.isRepertorio = typeof checkRepertorio === 'function' && checkRepertorio(sessions, threshold);
+        info.isNear = !info.isMastered && typeof isNearCriterion === 'function' && isNearCriterion(sessions, threshold);
         const sorted = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
         const last = sorted[sorted.length - 1];
         if (last) {
@@ -523,8 +524,8 @@ function renderSetDropdownItem(s, status) {
         badges += '<span class="set-item-badge badge-near">\u2191 Vicino</span>';
     }
     if (status.lastPct != null) {
-        const pctColor = status.lastPct >= 90 ? '#10b981' : status.lastPct >= 70 ? '#f59e0b' : '#ef4444';
-        badges += `<span class="set-item-badge badge-pct" style="color:${pctColor}">${status.lastPct}%</span>`;
+        const _pctHex = typeof pctColorHex === 'function' ? pctColorHex(status.lastPct) : (status.lastPct >= 90 ? '#10b981' : status.lastPct >= 70 ? '#f59e0b' : '#ef4444');
+        badges += `<span class="set-item-badge badge-pct" style="color:${_pctHex}">${status.lastPct}%</span>`;
     }
     if (status.ranErrorCount != null) {
         if (status.ranErrorCount > 0) {
@@ -1195,6 +1196,9 @@ window.startGame = () => {
             poolItems.sort(() => Math.random() - 0.5);
             state.activeSetId = 'topocomp_' + state.selectedPoolTags.join('_');
             renderGameMode(mode, poolItems);
+        } else if (engine === 'memoria_lavoro') {
+            state.activeSetId = 'memlav_' + state.selectedPoolTags.join('_');
+            renderGameMode(mode, []);
         }
         window._startTDCountdown();
         return;
@@ -1529,6 +1533,11 @@ window.recordResponse = (result) => {
             updateScoreUI();
             document.getElementById('btn-save-session').classList.remove('hidden');
             if (typeof showSessionNameInput === 'function') showSessionNameInput();
+            return;
+        }
+    } else if (engine === 'memoria_lavoro') {
+        if (typeof window._memLavHandleScore === 'function') {
+            window._memLavHandleScore(result);
             return;
         }
     } else {
@@ -2018,6 +2027,21 @@ async function _doSaveSession(p, noteText) {
         if (breakdown.length > 0) sessionData.topoBreakdown = breakdown;
     }
 
+    // Memoria di Lavoro: theme, span, trial results
+    if (engine === 'memoria_lavoro' && state._memLavState) {
+        const ml = state._memLavState;
+        sessionData.memLavTheme = ml.theme;
+        sessionData.memLavSpan = ml.span;
+        if (ml.trials && ml.trials.length > 0) {
+            sessionData.memLavTrials = ml.trials.map(t => ({
+                sequence: t.sequence,
+                response: t.response,
+                result: t.result,
+                span: t.span
+            }));
+        }
+    }
+
     // Save per-item details for modes with labeled items
     if (engine === 'memory' && state.memory) {
         sessionData.itemDetails = Object.entries(state.memory.pairDetails).map(([label, d]) => ({
@@ -2397,7 +2421,8 @@ const MODE_ICONS = {
     zoom: 'fa-search-plus', quaderno: 'fa-book-open', quaderno_task: 'fa-list-check',
     ricorda: 'fa-brain', singolare_plurale: 'fa-1',
     stroop_numerico: 'fa-hashtag', go_nogo: 'fa-traffic-light', stroop_etichetta: 'fa-font',
-    topologia_comp: 'fa-layer-group'
+    topologia_comp: 'fa-layer-group',
+    memoria_lavoro: 'fa-cubes-stacked'
 };
 
 // Curated FA icon list for icon picker
