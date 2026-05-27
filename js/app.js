@@ -2027,7 +2027,7 @@ async function _doSaveSession(p, noteText) {
         if (breakdown.length > 0) sessionData.topoBreakdown = breakdown;
     }
 
-    // Memoria di Lavoro: theme, span, trial results
+    // Memoria di Lavoro: theme, span, trial results with per-position detail
     if (engine === 'memoria_lavoro' && state._memLavState) {
         const ml = state._memLavState;
         sessionData.memLavTheme = ml.theme;
@@ -2037,7 +2037,10 @@ async function _doSaveSession(p, noteText) {
                 sequence: t.sequence,
                 response: t.response,
                 result: t.result,
-                span: t.span
+                span: t.span,
+                positionAttempts: t.positionAttempts,
+                positionErrors: t.positionErrors,
+                totalErrors: t.totalErrors
             }));
         }
     }

@@ -4939,8 +4939,9 @@ window._memLavStartChildPhase = () => {
     const ml = state._memLavState;
     ml.phase = 'child';
     ml.childResponse = [];
-    ml._correctionUsed = false;
-    ml._correctionIndex = null;
+    ml.positionAttempts = new Array(ml.span).fill(0);
+    ml.positionErrors = new Array(ml.span).fill(0);
+    ml._waitingCorrection = false;
     const stage = document.getElementById('game-stage');
     _renderMemLavChildPhase(stage);
 };
@@ -4952,40 +4953,58 @@ function _renderMemLavChildPhase(stage) {
     const isTimeDelay = type === 'timedelay';
     const responded = ml.childResponse.length;
     const remaining = ml.span - responded;
-    const isCorrection = ml._correctionUsed;
+    const currentPos = responded;
 
-    const itemsHtml = theme.items.map(item =>
-        `<button class="memlav-child-btn" onclick="_memLavChildTap('${item.id}')"
+    const itemsHtml = theme.items.map(item => {
+        const isWrongHighlight = ml._lastWrongId === item.id;
+        const highlightStyle = isWrongHighlight ? (isTimeDelay ? 'border-color:#f59e0b; box-shadow:0 0 12px rgba(245,158,11,0.5);' : 'border-color:#ef4444; box-shadow:0 0 12px rgba(239,68,68,0.5);') : '';
+        return `<button class="memlav-child-btn" onclick="_memLavChildTap('${item.id}')"
                 style="width:80px; height:80px; border-radius:16px; border:2px solid ${item.color}50; background:${item.color}15;
-                       display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; transition:all 0.15s; font-size:2rem;">
+                       display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; transition:all 0.15s; font-size:2rem; ${highlightStyle}"
+                id="memlav-btn-${item.id}">
             <span>${item.emoji}</span>
             <span style="font-size:0.65rem; color:${item.color}; margin-top:2px;">${item.label}</span>
-        </button>`
-    ).join('');
+        </button>`;
+    }).join('');
 
     const visualContainer = `<div id="memlav-visual" style="min-height:100px; display:flex; align-items:center; justify-content:center;"></div>`;
 
     const responsePreview = ml.childResponse.map((item, i) => {
-        const expected = ml.clinicianSequence[i];
-        const isRight = expected && item.id === expected.id;
-        const borderColor = isRight ? 'rgba(16,185,129,0.5)' : 'rgba(239,68,68,0.5)';
-        return `<span style="display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:8px; background:${item.color}30; border:2px solid ${borderColor}; font-size:1rem;">${item.emoji}</span>`;
+        const errors = ml.positionErrors[i] || 0;
+        const borderColor = errors === 0 ? 'rgba(16,185,129,0.5)' : (isTimeDelay ? 'rgba(245,158,11,0.5)' : 'rgba(239,68,68,0.5)');
+        const errBadge = errors > 0 && !isTimeDelay ? `<span style="position:absolute; top:-4px; right:-4px; font-size:0.5rem; background:#ef4444; color:white; border-radius:50%; width:14px; height:14px; display:flex; align-items:center; justify-content:center;">${errors}</span>` : '';
+        return `<span style="position:relative; display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:8px; background:${item.color}30; border:2px solid ${borderColor}; font-size:1rem;">${item.emoji}${errBadge}</span>`;
     }).join('');
+
+    const posIndicators = [];
+    for (let i = 0; i < ml.span; i++) {
+        if (i < responded) {
+            posIndicators.push(`<span style="width:8px; height:8px; border-radius:50%; background:var(--success-color);"></span>`);
+        } else if (i === currentPos) {
+            posIndicators.push(`<span style="width:10px; height:10px; border-radius:50%; background:var(--accent-color); animation:memLavPulse 1s infinite;"></span>`);
+        } else {
+            posIndicators.push(`<span style="width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,0.15);"></span>`);
+        }
+    }
+
+    const attemptsInfo = currentPos < ml.span && ml.positionErrors[currentPos] > 0
+        ? `<span style="font-size:0.7rem; color:${isTimeDelay ? 'var(--warning-color)' : 'var(--danger-color)'}; margin-left:8px;">${ml.positionErrors[currentPos]} err</span>`
+        : '';
 
     stage.innerHTML = `
     <div style="height:100%; display:flex; flex-direction:column;">
         <div style="padding:10px; background:rgba(168,85,247,0.1); border-bottom:1px solid rgba(168,85,247,0.2); flex-shrink:0;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span style="font-size:0.85rem; font-weight:bold; color:#a855f7;">
-                    <i class="fa-solid fa-child"></i> Turno del bambino (${remaining} rimanent${remaining === 1 ? 'e' : 'i'})
-                    ${isCorrection ? '<span style="color:var(--warning-color); font-size:0.75rem;"> — Correzione</span>' : ''}
+                    <i class="fa-solid fa-child"></i> Posizione ${currentPos + 1}/${ml.span}${attemptsInfo}
                 </span>
                 <span style="font-size:0.75rem; color:var(--text-secondary);">
                     Trial ${ml.trials.length + 1} · Span ${ml.span}
                 </span>
             </div>
             <div style="display:flex; gap:4px; margin-top:8px; min-height:36px; align-items:center;">
-                ${responsePreview || '<span style="font-size:0.75rem; color:var(--text-secondary); opacity:0.5;">In attesa...</span>'}
+                ${responsePreview || `<div style="display:flex; gap:4px; align-items:center;">${posIndicators.join('')}</div>`}
+                ${responded > 0 ? `<span style="margin-left:6px; display:flex; gap:3px; align-items:center;">${posIndicators.slice(responded).join('')}</span>` : ''}
             </div>
         </div>
         <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; padding:15px; overflow-y:auto;">
@@ -5002,6 +5021,8 @@ function _renderMemLavChildPhase(stage) {
         .memlav-child-btn:active { transform:scale(0.9); }
     </style>`;
 
+    ml._lastWrongId = null;
+
     const vc = document.getElementById('memlav-visual');
     if (vc && ml.childResponse.length > 0) {
         theme.buildVisual(ml.childResponse, vc);
@@ -5011,6 +5032,7 @@ function _renderMemLavChildPhase(stage) {
 window._memLavChildTap = (itemId) => {
     const ml = state._memLavState;
     if (ml.phase !== 'child') return;
+    if (ml._animating) return;
     const theme = MEM_LAV_THEMES[ml.theme];
     const item = theme.items.find(i => i.id === itemId);
     if (!item) return;
@@ -5020,26 +5042,34 @@ window._memLavChildTap = (itemId) => {
     const idx = ml.childResponse.length;
     const expected = ml.clinicianSequence[idx];
 
+    ml.positionAttempts[idx] = (ml.positionAttempts[idx] || 0) + 1;
+
     if (item.id === expected.id) {
         ml.childResponse.push({ ...item });
         if (ml.childResponse.length === ml.span) {
-            _memLavCompleteTrial(ml._correctionUsed ? 'prompt' : true);
+            _memLavCompleteTrial();
         } else {
             const stage = document.getElementById('game-stage');
             _renderMemLavChildPhase(stage);
         }
     } else {
-        if (isTimeDelay && !ml._correctionUsed) {
-            ml._correctionUsed = true;
-            ml.childResponse = [];
-            const stage = document.getElementById('game-stage');
-            stage.querySelector('.memlav-child-btn:active, div')?.style && (stage.style.animation = 'memLavShake 0.4s');
-            setTimeout(() => { stage.style.animation = ''; }, 400);
-            _showMemLavFeedback(stage, 'warning', 'Riprova!');
-            setTimeout(() => { _renderMemLavChildPhase(stage); }, 800);
-        } else {
-            _memLavCompleteTrial(false);
+        ml.positionErrors[idx] = (ml.positionErrors[idx] || 0) + 1;
+        ml._lastWrongId = itemId;
+        ml._animating = true;
+
+        const btn = document.getElementById('memlav-btn-' + itemId);
+        if (btn) {
+            const color = isTimeDelay ? '#f59e0b' : '#ef4444';
+            btn.style.borderColor = color;
+            btn.style.boxShadow = `0 0 15px ${color}80`;
+            btn.style.animation = 'memLavShake 0.4s';
         }
+
+        setTimeout(() => {
+            ml._animating = false;
+            const stage = document.getElementById('game-stage');
+            _renderMemLavChildPhase(stage);
+        }, 500);
     }
 };
 
@@ -5054,16 +5084,34 @@ function _showMemLavFeedback(container, type, text) {
     setTimeout(() => overlay.remove(), 700);
 }
 
-function _memLavCompleteTrial(result) {
+function _memLavCompleteTrial() {
     const ml = state._memLavState;
     const stage = document.getElementById('game-stage');
+    const type = typeof getSelectedSessionType === 'function' ? getSelectedSessionType() : 'standard';
+    const isTimeDelay = type === 'timedelay';
 
-    ml.trials.push({
+    const totalErrors = ml.positionErrors.reduce((s, e) => s + e, 0);
+    const hasErrors = totalErrors > 0;
+
+    let result;
+    if (!hasErrors) {
+        result = true;
+    } else if (isTimeDelay) {
+        result = 'prompt';
+    } else {
+        result = false;
+    }
+
+    const trialData = {
         sequence: ml.clinicianSequence.map(i => i.id),
         response: ml.childResponse.map(i => i.id),
         result: result,
-        span: ml.span
-    });
+        span: ml.span,
+        positionAttempts: [...ml.positionAttempts],
+        positionErrors: [...ml.positionErrors],
+        totalErrors: totalErrors
+    };
+    ml.trials.push(trialData);
 
     const resultKey = 'memlav_trial_' + ml.trials.length + '_' + Date.now();
     state.session.itemResults[resultKey] = result;
@@ -5077,7 +5125,7 @@ function _memLavCompleteTrial(result) {
     if (typeof updateScoreUI === 'function') updateScoreUI();
 
     const feedbackType = result === true ? 'success' : result === 'prompt' ? 'warning' : 'danger';
-    const feedbackText = result === true ? 'Corretto!' : result === 'prompt' ? 'Corretto con aiuto' : 'Sbagliato';
+    const feedbackText = result === true ? 'Perfetto!' : result === 'prompt' ? `Completato con aiuto (${totalErrors} err)` : `Completato con ${totalErrors} error${totalErrors > 1 ? 'i' : 'e'}`;
     _showMemLavFeedback(stage, feedbackType, feedbackText);
 
     document.getElementById('btn-save-session').classList.remove('hidden');
@@ -5098,25 +5146,46 @@ function _renderMemLavTrialResult(stage) {
 
     const trialsSummary = ml.trials.map((t, i) => {
         const icon = t.result === true ? '✅' : t.result === 'prompt' ? '🟡' : '❌';
-        return `<span style="font-size:0.85rem;">${icon} T${i + 1} (span ${t.span})</span>`;
+        const errText = t.totalErrors > 0 ? ` (${t.totalErrors}err)` : '';
+        return `<span style="font-size:0.85rem;">${icon} T${i + 1} span${t.span}${errText}</span>`;
     }).join(' &middot; ');
 
     const seqHtml = ml.clinicianSequence.map(item =>
         `<span style="font-size:1.3rem;">${item.emoji}</span>`
     ).join(' → ');
 
+    const posDetailHtml = lastTrial.sequence.map((id, i) => {
+        const item = theme.items.find(it => it.id === id);
+        const errors = lastTrial.positionErrors[i] || 0;
+        const attempts = lastTrial.positionAttempts[i] || 1;
+        const bgColor = errors === 0 ? 'rgba(16,185,129,0.1)' : (lastTrial.result === 'prompt' ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)');
+        const borderClr = errors === 0 ? 'rgba(16,185,129,0.3)' : (lastTrial.result === 'prompt' ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)');
+        return `<div style="display:flex; align-items:center; gap:8px; padding:4px 8px; border-radius:6px; background:${bgColor}; border:1px solid ${borderClr};">
+            <span style="font-size:0.75rem; color:var(--text-secondary); font-weight:bold;">${i + 1}.</span>
+            <span style="font-size:1.1rem;">${item ? item.emoji : '?'}</span>
+            <span style="font-size:0.75rem; color:${errors === 0 ? 'var(--success-color)' : 'var(--danger-color)'}; font-weight:bold; margin-left:auto;">
+                ${errors === 0 ? '✓' : `${errors} err · ${attempts} tent.`}
+            </span>
+        </div>`;
+    }).join('');
+
     stage.innerHTML = `
     <div style="height:100%; display:flex; flex-direction:column; padding:20px; overflow-y:auto;">
-        <div style="text-align:center; margin-bottom:20px;">
+        <div style="text-align:center; margin-bottom:16px;">
             <div style="font-size:2rem; margin-bottom:8px;">${resultIcon}</div>
             <div style="font-size:1rem; font-weight:bold; color:white;">Trial ${ml.trials.length} completato</div>
-            <div style="margin-top:10px; font-size:0.85rem; color:var(--text-secondary);">Sequenza: ${seqHtml}</div>
+            <div style="margin-top:8px; font-size:0.85rem; color:var(--text-secondary);">Sequenza: ${seqHtml}</div>
+            ${lastTrial.totalErrors > 0 ? `<div style="margin-top:6px; font-size:0.8rem; color:var(--warning-color);">${lastTrial.totalErrors} errori totali</div>` : ''}
         </div>
-        <div style="text-align:center; margin-bottom:20px;">
-            <div style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:8px;">Riepilogo:</div>
-            <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">${trialsSummary}</div>
+        <div style="margin-bottom:16px;">
+            <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-list-ol"></i> Dettaglio per posizione:</div>
+            <div style="display:flex; flex-direction:column; gap:3px;">${posDetailHtml}</div>
         </div>
-        <div id="memlav-result-visual" style="display:flex; align-items:center; justify-content:center; margin-bottom:20px;"></div>
+        <div id="memlav-result-visual" style="display:flex; align-items:center; justify-content:center; margin-bottom:16px;"></div>
+        <div style="text-align:center; margin-bottom:16px;">
+            <div style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:6px;">Storico trial:</div>
+            <div style="display:flex; gap:6px; justify-content:center; flex-wrap:wrap;">${trialsSummary}</div>
+        </div>
         <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
             <button class="btn btn-primary" onclick="_memLavStartTrial()" style="padding:10px 24px; font-size:0.95rem; border-radius:10px;">
                 <i class="fa-solid fa-redo"></i> Nuovo Trial (Span ${ml.span})
@@ -5134,7 +5203,7 @@ function _renderMemLavTrialResult(stage) {
     </div>`;
 
     const vc = document.getElementById('memlav-result-visual');
-    if (vc && lastTrial.result !== false) {
+    if (vc) {
         const fullItems = lastTrial.sequence.map(id => theme.items.find(i => i.id === id));
         theme.buildVisual(fullItems, vc);
     }
