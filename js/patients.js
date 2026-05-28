@@ -398,6 +398,19 @@ function isNearCriterion(sessions, threshold) {
 }
 
 // --- THRESHOLD EDITOR ---
+function _criterionOverrideLabel(key) {
+    if (key.startsWith('mode:')) {
+        const m = key.slice(5);
+        return `Modalità: ${MODES_CONFIG[m] || m}`;
+    } else if (key.startsWith('set:')) {
+        return `Set: ${key.slice(4)}`;
+    } else if (key.includes('::')) {
+        const [sn, m] = key.split('::');
+        return `${sn} (${MODES_CONFIG[m] || m})`;
+    }
+    return key;
+}
+
 window.openThresholdEditor = (pid) => {
     const p = state.patients.find(x => x.id === pid);
     if (!p) return;
@@ -407,27 +420,18 @@ window.openThresholdEditor = (pid) => {
     const history = p.history || [];
     const activities = {};
     history.forEach(h => {
-        const typeGroup = getSessionTypeGroup(h);
-        const key = `${h.setName}::${h.mode}::${typeGroup}`;
-        if (!activities[key]) activities[key] = { setName: h.setName, mode: h.mode, typeGroup };
+        const key = `${h.setName}::${h.mode}`;
+        if (!activities[key]) activities[key] = { setName: h.setName, mode: h.mode };
     });
 
     let overrideRows = '';
     Object.entries(overrides).sort().forEach(([key, val]) => {
-        let label = key;
-        if (key.startsWith('mode:')) {
-            const m = key.slice(5);
-            label = `Modalità: ${MODES_CONFIG[m] || m}`;
-        } else if (key.startsWith('set:')) {
-            label = `Set: ${key.slice(4)}`;
-        } else if (key.includes('::')) {
-            const [sn, m] = key.split('::');
-            label = `${sn} (${MODES_CONFIG[m] || m})`;
-        }
+        const label = _criterionOverrideLabel(key);
         overrideRows += `<div style="display:flex; align-items:center; gap:8px; padding:6px 8px; background:rgba(255,255,255,0.03); border-radius:6px; margin-bottom:4px;">
-            <span style="flex:1; font-size:0.85rem;">${label}</span>
-            <input type="number" min="10" max="100" value="${val}" style="width:60px; padding:4px; border-radius:4px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.3); color:white; text-align:center; font-size:0.85rem;" onchange="setCriterionThreshold('${pid}', this.value, ${key.startsWith('mode:') ? `'${key.slice(5)}'` : 'null'}, ${key.startsWith('set:') ? `'${key.slice(4)}'` : key.includes('::') ? `'${key.split('::')[0]}'` : 'null'}); if(${key.includes('::') ? 'true' : 'false'}) setCriterionThreshold('${pid}', this.value, '${key.split('::')[1] || ''}', '${key.split('::')[0] || ''}');">
-            <button class="btn-icon" style="width:24px; height:24px; color:var(--danger-color);" onclick="deleteCriterionOverride('${pid}', '${key}'); openThresholdEditor('${pid}');"><i class="fa-solid fa-xmark"></i></button>
+            <span style="flex:1; font-size:0.85rem; overflow:hidden; text-overflow:ellipsis;">${label}</span>
+            <input type="number" min="10" max="100" value="${val}" style="width:60px; padding:4px; border-radius:4px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.3); color:white; text-align:center; font-size:0.85rem;" onchange="_setCriterionOverrideRaw('${pid}', '${key.replace(/'/g, "\\'")}', this.value)">
+            <span style="font-size:0.8rem; color:var(--text-secondary);">%</span>
+            <button class="btn-icon" style="width:24px; height:24px; color:var(--danger-color);" onclick="deleteCriterionOverride('${pid}', '${key.replace(/'/g, "\\'")}'); openThresholdEditor('${pid}');"><i class="fa-solid fa-xmark"></i></button>
         </div>`;
     });
 
@@ -436,41 +440,60 @@ window.openThresholdEditor = (pid) => {
     const setOptions = setNames.map(n => `<option value="set:${n}">${n}</option>`).join('');
     const actOptions = Object.values(activities).map(a => `<option value="${a.setName}::${a.mode}">${a.setName} (${MODES_CONFIG[a.mode] || a.mode})</option>`).join('');
 
-    const html = `
-    <div style="max-width:450px; margin:0 auto;">
-        <h3 style="margin:0 0 12px; color:var(--accent-color);"><i class="fa-solid fa-sliders"></i> Soglie Criterio</h3>
-        <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:16px;">Imposta soglie personalizzate per il criterio di acquisizione. Default: ${DEFAULT_CRITERION}%.</p>
-        <div style="margin-bottom:16px; padding:12px; background:rgba(139,92,246,0.08); border:1px solid rgba(139,92,246,0.2); border-radius:10px;">
-            <div style="font-size:0.85rem; font-weight:bold; margin-bottom:8px; color:#8b5cf6;"><i class="fa-solid fa-user"></i> Soglia Globale Paziente</div>
-            <div style="display:flex; align-items:center; gap:10px;">
-                <input type="range" min="10" max="100" step="5" value="${globalThreshold}" id="threshold-global-range" oninput="document.getElementById('threshold-global-val').value=this.value" style="flex:1;">
-                <input type="number" min="10" max="100" value="${globalThreshold}" id="threshold-global-val" style="width:55px; padding:4px; border-radius:4px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.3); color:white; text-align:center; font-size:0.9rem; font-weight:bold;" oninput="document.getElementById('threshold-global-range').value=this.value">
-                <span style="font-size:0.85rem; color:var(--text-secondary);">%</span>
-            </div>
-            <button class="btn btn-primary" style="margin-top:8px; padding:6px 16px; font-size:0.8rem;" onclick="setCriterionThreshold('${pid}', document.getElementById('threshold-global-val').value); showToast('Soglia globale aggiornata');">Salva</button>
-        </div>
-        ${overrideRows ? `<div style="margin-bottom:16px;"><div style="font-size:0.85rem; font-weight:bold; margin-bottom:8px; color:var(--text-secondary);"><i class="fa-solid fa-list"></i> Override Attivi</div>${overrideRows}</div>` : ''}
-        <div style="padding:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px;">
-            <div style="font-size:0.85rem; font-weight:bold; margin-bottom:8px; color:var(--text-secondary);"><i class="fa-solid fa-plus"></i> Aggiungi Override</div>
-            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:end;">
-                <div style="flex:1; min-width:150px;">
-                    <label style="font-size:0.7rem; color:var(--text-secondary);">Ambito</label>
-                    <select id="threshold-new-scope" style="width:100%; padding:6px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.3); color:white; font-size:0.8rem;">
-                        <optgroup label="Modalità">${modeOptions}</optgroup>
-                        <optgroup label="Set">${setOptions}</optgroup>
-                        <optgroup label="Set + Modalità">${actOptions}</optgroup>
-                    </select>
-                </div>
-                <div style="width:70px;">
-                    <label style="font-size:0.7rem; color:var(--text-secondary);">Soglia %</label>
-                    <input type="number" min="10" max="100" value="80" id="threshold-new-val" style="width:100%; padding:6px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.3); color:white; text-align:center; font-size:0.85rem;">
-                </div>
-                <button class="btn btn-primary" style="padding:6px 14px; font-size:0.8rem;" onclick="addCriterionOverride('${pid}')"><i class="fa-solid fa-plus"></i></button>
-            </div>
-        </div>
-    </div>`;
+    const existing = document.getElementById('modal-threshold-editor');
+    if (existing) existing.remove();
 
-    openModal('Soglie Criterio - ' + p.name, html);
+    const modal = document.createElement('div');
+    modal.id = 'modal-threshold-editor';
+    modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:25000; display:flex; align-items:center; justify-content:center; padding:20px; overflow-y:auto;';
+
+    modal.innerHTML = `
+        <div style="width:100%; max-width:480px; background:#1e1e2f; border-radius:16px; border:1px solid var(--glass-border); padding:22px; max-height:90vh; overflow-y:auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                <h3 style="margin:0; color:var(--accent-color);"><i class="fa-solid fa-sliders"></i> Soglie Criterio</h3>
+                <button class="btn btn-ghost" onclick="document.getElementById('modal-threshold-editor').remove()" style="padding:6px 10px;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <p style="font-size:0.8rem; color:var(--text-secondary); margin:0 0 16px;">Soglia % di risposte corrette per considerare il criterio raggiunto. Default: ${DEFAULT_CRITERION}%. Le soglie più specifiche (set+modalità) prevalgono su modalità e set.</p>
+            <div style="margin-bottom:16px; padding:12px; background:rgba(139,92,246,0.08); border:1px solid rgba(139,92,246,0.2); border-radius:10px;">
+                <div style="font-size:0.85rem; font-weight:bold; margin-bottom:8px; color:#8b5cf6;"><i class="fa-solid fa-user"></i> Soglia Globale Paziente</div>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <input type="range" min="10" max="100" step="5" value="${globalThreshold}" id="threshold-global-range" oninput="document.getElementById('threshold-global-val').value=this.value" style="flex:1;">
+                    <input type="number" min="10" max="100" value="${globalThreshold}" id="threshold-global-val" style="width:55px; padding:4px; border-radius:4px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.3); color:white; text-align:center; font-size:0.9rem; font-weight:bold;" oninput="document.getElementById('threshold-global-range').value=this.value">
+                    <span style="font-size:0.85rem; color:var(--text-secondary);">%</span>
+                </div>
+                <button class="btn btn-primary" style="margin-top:8px; padding:6px 16px; font-size:0.8rem;" onclick="setCriterionThreshold('${pid}', document.getElementById('threshold-global-val').value); this.textContent='Salvato ✓'; setTimeout(()=>{this.textContent='Salva';},1500);">Salva</button>
+            </div>
+            ${overrideRows ? `<div style="margin-bottom:16px;"><div style="font-size:0.85rem; font-weight:bold; margin-bottom:8px; color:var(--text-secondary);"><i class="fa-solid fa-list"></i> Override Attivi</div>${overrideRows}</div>` : ''}
+            <div style="padding:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px;">
+                <div style="font-size:0.85rem; font-weight:bold; margin-bottom:8px; color:var(--text-secondary);"><i class="fa-solid fa-plus"></i> Aggiungi Override</div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:end;">
+                    <div style="flex:1; min-width:150px;">
+                        <label style="font-size:0.7rem; color:var(--text-secondary);">Ambito</label>
+                        <select id="threshold-new-scope" style="width:100%; padding:6px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.3); color:white; font-size:0.8rem;">
+                            <optgroup label="Modalità">${modeOptions}</optgroup>
+                            ${setOptions ? `<optgroup label="Set">${setOptions}</optgroup>` : ''}
+                            ${actOptions ? `<optgroup label="Set + Modalità">${actOptions}</optgroup>` : ''}
+                        </select>
+                    </div>
+                    <div style="width:70px;">
+                        <label style="font-size:0.7rem; color:var(--text-secondary);">Soglia %</label>
+                        <input type="number" min="10" max="100" value="80" id="threshold-new-val" style="width:100%; padding:6px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.3); color:white; text-align:center; font-size:0.85rem;">
+                    </div>
+                    <button class="btn btn-primary" style="padding:6px 14px; font-size:0.8rem;" onclick="addCriterionOverride('${pid}')"><i class="fa-solid fa-plus"></i></button>
+                </div>
+            </div>
+        </div>`;
+
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    document.body.appendChild(modal);
+};
+
+window._setCriterionOverrideRaw = (pid, key, value) => {
+    const p = state.patients.find(x => x.id === pid);
+    if (!p) return;
+    if (!p.criterionOverrides) p.criterionOverrides = {};
+    p.criterionOverrides[key] = Math.max(10, Math.min(100, parseInt(value) || DEFAULT_CRITERION));
+    DB.savePatient(p);
 };
 
 window.addCriterionOverride = (pid) => {
@@ -481,7 +504,6 @@ window.addCriterionOverride = (pid) => {
     if (!p.criterionOverrides) p.criterionOverrides = {};
     p.criterionOverrides[scope] = Math.max(10, Math.min(100, val));
     DB.savePatient(p);
-    showToast('Override aggiunto');
     openThresholdEditor(pid);
 };
 
@@ -1080,6 +1102,40 @@ window.toggleDaySessionDetail = (header, patientId, sessionIdx, activityKeyEncod
                 html += `</div></div>`;
             }
 
+            // Go/No-Go breakdown
+            if (s.goNogoBreakdown && (s.goNogoBreakdown.go.total + s.goNogoBreakdown.nogo.total) > 0) {
+                const b = s.goNogoBreakdown;
+                html += `<div style="margin-bottom:8px;">`;
+                html += `<div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-traffic-light"></i> Breakdown Go / No-Go${s.goNogoTag ? ` <span style="opacity:0.7;">(No-Go: ${s.goNogoTag})</span>` : ''}:</div>`;
+                html += `<div style="display:flex; flex-direction:column; gap:2px;">`;
+                [['Go', b.go, 'fa-check'], ['No-Go', b.nogo, 'fa-hand']].forEach(([title, data, ic]) => {
+                    const { bg, border } = pctBg(data.percentage);
+                    let parts = [];
+                    if (data.correct > 0) parts.push(`<span style="color:var(--success-color)">${data.correct}V</span>`);
+                    if (data.incorrect > 0) parts.push(`<span style="color:var(--danger-color)">${data.incorrect}X</span>`);
+                    if (data.prompts > 0) parts.push(`<span style="color:var(--warning-color)">${data.prompts}P</span>`);
+                    html += `<div style="padding:4px 8px; border-radius:6px; font-size:0.75rem; background:${bg}; border:1px solid ${border}; display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-weight:bold;"><i class="fa-solid ${ic}"></i> ${title}</span>
+                        <span style="font-weight:bold; display:flex; align-items:center; gap:4px;">${parts.join(' ') || '<span style="color:#888">—</span>'} <span style="color:${pctColor(data.percentage)}; margin-left:4px;">${data.percentage}% (${data.total})</span></span>
+                    </div>`;
+                });
+                html += `</div></div>`;
+            }
+
+            // Memoria di Lavoro trials
+            if (s.memLavTrials && s.memLavTrials.length > 0) {
+                const themeLabel = { cubetti: 'Cubetti Colorati', panino: 'Panino', animali: 'Animali in Fila' }[s.memLavTheme] || s.memLavTheme || '?';
+                html += `<div style="margin-bottom:8px;">`;
+                html += `<div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-cubes-stacked"></i> ${themeLabel} · Span ${s.memLavSpan || '?'} · ${s.memLavTrials.length} trial:</div>`;
+                html += `<div style="display:flex; flex-wrap:wrap; gap:4px;">`;
+                s.memLavTrials.forEach((t, i) => {
+                    const icon = t.result === true ? '✅' : t.result === 'prompt' ? '🟡' : '❌';
+                    const errText = t.totalErrors > 0 ? ` ${t.totalErrors}err` : '';
+                    html += `<span style="display:inline-block; padding:2px 8px; border-radius:6px; font-size:0.75rem; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);">${icon} T${i + 1} (span ${t.span})${errText}</span>`;
+                });
+                html += `</div></div>`;
+            }
+
             // Session note (collapsible + editable)
             {
                 const _escapedDate = (s.date || '').replace(/'/g, "\\'");
@@ -1259,6 +1315,59 @@ function renderTopoBreakdownCollapsible(s, patientId, sessionIdx, isTD) {
         </tr>`;
 }
 
+// --- Go/No-Go breakdown collapsible row ---
+function renderGoNogoBreakdownCollapsible(s, patientId, sessionIdx, isTD) {
+    const b = s.goNogoBreakdown;
+    if (!b) return '';
+    const colSpan = isTD ? 6 : 5;
+
+    const row = (title, data, accent) => {
+        const parts = [];
+        if (data.correct > 0) parts.push(`<span style="color:var(--success-color)">${data.correct}V</span>`);
+        if (data.incorrect > 0) parts.push(`<span style="color:var(--danger-color)">${data.incorrect}X</span>`);
+        if (data.prompts > 0) parts.push(`<span style="color:var(--warning-color)">${data.prompts}P</span>`);
+        const { bg, border } = pctBg(data.percentage);
+        return `<div style="padding:6px 10px; margin:2px 0; border-radius:6px; font-size:0.8rem; background:${bg}; border:1px solid ${border}; display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-weight:bold; color:${accent};"><i class="fa-solid ${title === 'Go' ? 'fa-check' : 'fa-hand'}"></i> ${title}</span>
+            <span style="display:flex; align-items:center; gap:6px;">${parts.join(' ') || '<span style="color:#888">—</span>'} <span style="font-weight:bold; color:${pctColor(data.percentage)};">${data.percentage}% (${data.total})</span></span>
+        </div>`;
+    };
+
+    return `
+        <tr class="item-details-row" style="display:table-row;">
+            <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(0,0,0,0.15);">
+                <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-traffic-light"></i> Breakdown Go / No-Go${s.goNogoTag ? ` <span style="opacity:0.7;">(No-Go: ${s.goNogoTag})</span>` : ''}:</div>
+                ${row('Go', b.go, 'var(--success-color)')}
+                ${row('No-Go', b.nogo, 'var(--danger-color)')}
+            </td>
+        </tr>`;
+}
+
+// --- Memoria di Lavoro collapsible row ---
+function renderMemLavCollapsible(s, patientId, sessionIdx, isTD) {
+    if (!s.memLavTrials || s.memLavTrials.length === 0) return '';
+    const colSpan = isTD ? 6 : 5;
+    const themeLabel = { cubetti: 'Cubetti Colorati', panino: 'Panino', animali: 'Animali in Fila' }[s.memLavTheme] || s.memLavTheme || '?';
+
+    const trialChips = s.memLavTrials.map((t, i) => {
+        const icon = t.result === true ? '✅' : t.result === 'prompt' ? '🟡' : '❌';
+        const errText = t.totalErrors > 0 ? ` ${t.totalErrors}err` : '';
+        const { bg, border } = t.result === true ? pctBg(100) : (t.result === 'prompt' ? { bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.3)' } : pctBg(0));
+        return `<div style="padding:4px 8px; margin:2px 0; border-radius:6px; font-size:0.75rem; background:${bg}; border:1px solid ${border}; display:flex; justify-content:space-between; align-items:center;">
+            <span><b>Trial ${i + 1}</b> <span style="color:var(--text-secondary);">· span ${t.span}</span></span>
+            <span>${icon}${errText}</span>
+        </div>`;
+    }).join('');
+
+    return `
+        <tr class="item-details-row" style="display:table-row;">
+            <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(0,0,0,0.15);">
+                <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-cubes-stacked"></i> Memoria di Lavoro · <span style="color:var(--accent-color);">${themeLabel}</span> · Span ${s.memLavSpan || '?'} · ${s.memLavTrials.length} trial:</div>
+                <div style="display:flex; flex-direction:column; gap:2px;">${trialChips}</div>
+            </td>
+        </tr>`;
+}
+
 // ============================================================
 // TAB 3: ATTIVITA - Per-activity charts separated by session type
 // ============================================================
@@ -1424,9 +1533,15 @@ function renderActivitiesTab(patient, sortBy) {
             const isTaskAnalysisSession = s.mode === 'quaderno_task' && s.taskSteps && s.taskSteps.length > 0;
             const hasSetBreakdown = s.setBreakdown && s.setBreakdown.length > 0;
             const hasTopoBreakdown = s.topoBreakdown && s.topoBreakdown.length > 0;
+            const hasGoNogoBreakdown = s.goNogoBreakdown && (s.goNogoBreakdown.go.total + s.goNogoBreakdown.nogo.total) > 0;
+            const hasMemLav = s.memLavTrials && s.memLavTrials.length > 0;
             const hasDetails = s.itemDetails && s.itemDetails.length > 0 && s.itemDetails.some(d => d.result !== true);
             let itemDetailsHtml = '';
-            if (hasDetails) {
+            if (hasMemLav) {
+                itemDetailsHtml = renderMemLavCollapsible(s, patient.id, s.originalIndex, isTD);
+            } else if (hasGoNogoBreakdown) {
+                itemDetailsHtml = renderGoNogoBreakdownCollapsible(s, patient.id, s.originalIndex, isTD);
+            } else if (hasDetails) {
                 itemDetailsHtml = renderItemDetailsCollapsible(s, patient.id, s.originalIndex, isTD);
             } else if (isTaskAnalysisSession) {
                 itemDetailsHtml = renderTaskStepDetailsCollapsible(s, patient.id, s.originalIndex, isTD);
@@ -1435,9 +1550,10 @@ function renderActivitiesTab(patient, sortBy) {
             } else if (hasSetBreakdown) {
                 itemDetailsHtml = renderSetBreakdownCollapsible(s, patient.id, s.originalIndex, isTD);
             }
-            const hasExpandable = hasDetails || isTaskAnalysisSession || hasSetBreakdown || hasTopoBreakdown;
-            const expandColor = isTD ? 'var(--warning-color)' : ((isTaskAnalysisSession || hasSetBreakdown || hasTopoBreakdown) ? 'var(--accent-color)' : 'var(--danger-color)');
-            const expandRgba = isTD ? '245,158,11' : ((isTaskAnalysisSession || hasSetBreakdown || hasTopoBreakdown) ? '99,102,241' : '239,68,68');
+            const hasStructuredBreakdown = isTaskAnalysisSession || hasSetBreakdown || hasTopoBreakdown || hasGoNogoBreakdown || hasMemLav;
+            const hasExpandable = hasDetails || hasStructuredBreakdown;
+            const expandColor = isTD ? 'var(--warning-color)' : (hasStructuredBreakdown ? 'var(--accent-color)' : 'var(--danger-color)');
+            const expandRgba = isTD ? '245,158,11' : (hasStructuredBreakdown ? '99,102,241' : '239,68,68');
             const detailsBtn = hasExpandable
                 ? `<button class="btn-icon item-details-toggle" style="width:26px; height:26px; font-size:0.6rem; display:inline-flex; color:${expandColor}; border-color:rgba(${expandRgba},0.3);" title="Dettagli"><i class="fa-solid fa-chevron-down" style="transition:transform 0.2s; transform:rotate(180deg);"></i></button>`
                 : '';

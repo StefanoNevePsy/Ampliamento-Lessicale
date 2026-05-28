@@ -4735,24 +4735,26 @@ const MEM_LAV_THEMES = {
     panino: {
         label: 'Panino',
         icon: 'fa-burger',
+        useSvg: true,
         items: [
-            { id: 'bread_top', label: 'Pane sopra', color: '#d4a574', emoji: '🍞' },
-            { id: 'lettuce', label: 'Insalata', color: '#22c55e', emoji: '🥬' },
-            { id: 'tomato', label: 'Pomodoro', color: '#ef4444', emoji: '🍅' },
-            { id: 'cheese', label: 'Formaggio', color: '#eab308', emoji: '🧀' },
-            { id: 'ham', label: 'Prosciutto', color: '#f472b6', emoji: '🥓' },
-            { id: 'egg', label: 'Uovo', color: '#fde68a', emoji: '🍳' },
-            { id: 'bread_bottom', label: 'Pane sotto', color: '#c4955a', emoji: '🍞' },
-            { id: 'mayo', label: 'Maionese', color: '#fef3c7', emoji: '🫙' }
+            { id: 'bread_top', label: 'Pane sopra', color: '#d9a066', svg: '<svg viewBox="0 0 120 34" style="width:100%;height:100%;display:block;"><path d="M6,32 Q6,3 60,3 Q114,3 114,32 Z" fill="#d9a066" stroke="#b87d3f" stroke-width="2"/><ellipse cx="40" cy="16" rx="2" ry="1.4" fill="#fff4d6"/><ellipse cx="60" cy="11" rx="2" ry="1.4" fill="#fff4d6"/><ellipse cx="80" cy="16" rx="2" ry="1.4" fill="#fff4d6"/><ellipse cx="50" cy="22" rx="2" ry="1.4" fill="#fff4d6"/><ellipse cx="70" cy="22" rx="2" ry="1.4" fill="#fff4d6"/></svg>' },
+            { id: 'lettuce', label: 'Insalata', color: '#7cb342', svg: '<svg viewBox="0 0 120 34" style="width:100%;height:100%;display:block;"><path d="M3,18 Q12,3 21,15 Q30,1 39,15 Q48,3 57,15 Q66,1 75,15 Q84,3 93,15 Q102,1 117,18 L117,28 Q60,34 3,28 Z" fill="#8bc34a" stroke="#558b2f" stroke-width="1.5"/></svg>' },
+            { id: 'tomato', label: 'Pomodoro', color: '#e74c3c', svg: '<svg viewBox="0 0 120 34" style="width:100%;height:100%;display:block;"><rect x="6" y="8" width="108" height="18" rx="9" fill="#e74c3c" stroke="#c0392b" stroke-width="1.5"/><circle cx="35" cy="17" r="2.2" fill="#ffcabf"/><circle cx="60" cy="17" r="2.2" fill="#ffcabf"/><circle cx="85" cy="17" r="2.2" fill="#ffcabf"/></svg>' },
+            { id: 'cheese', label: 'Formaggio', color: '#f5c542', svg: '<svg viewBox="0 0 120 34" style="width:100%;height:100%;display:block;"><path d="M4,10 L116,10 L110,24 Q60,28 6,24 Z" fill="#f5c542" stroke="#d4a017" stroke-width="1.5"/><circle cx="30" cy="17" r="2.5" fill="#e0a800"/><circle cx="62" cy="16" r="3" fill="#e0a800"/><circle cx="90" cy="18" r="2" fill="#e0a800"/></svg>' },
+            { id: 'ham', label: 'Prosciutto', color: '#f48fb1', svg: '<svg viewBox="0 0 120 34" style="width:100%;height:100%;display:block;"><path d="M5,14 Q60,5 115,14 L115,24 Q60,32 5,24 Z" fill="#f48fb1" stroke="#e91e63" stroke-width="1.3"/><path d="M18,19 Q60,14 102,19" stroke="#fce4ec" stroke-width="2" fill="none"/></svg>' },
+            { id: 'egg', label: 'Uovo', color: '#fffaf0', svg: '<svg viewBox="0 0 120 34" style="width:100%;height:100%;display:block;"><path d="M14,18 Q8,8 22,9 Q30,2 44,9 Q60,4 78,9 Q96,5 104,12 Q116,16 104,24 Q60,30 16,24 Q8,22 14,18 Z" fill="#fffaf0" stroke="#f0e6d2" stroke-width="1"/><circle cx="62" cy="17" r="7" fill="#ffb300"/></svg>' },
+            { id: 'bread_bottom', label: 'Pane sotto', color: '#e0b070', svg: '<svg viewBox="0 0 120 34" style="width:100%;height:100%;display:block;"><path d="M6,6 L114,6 L114,20 Q114,30 60,30 Q6,30 6,20 Z" fill="#e0b070" stroke="#b87d3f" stroke-width="2"/></svg>' },
+            { id: 'mayo', label: 'Maionese', color: '#fff8e1', svg: '<svg viewBox="0 0 120 34" style="width:100%;height:100%;display:block;"><path d="M5,16 Q14,9 23,16 Q32,9 41,16 Q50,9 59,16 Q68,9 77,16 Q86,9 95,16 Q104,9 115,16 L115,23 Q60,27 5,23 Z" fill="#fff8e1" stroke="#ffe082" stroke-width="1.2"/></svg>' },
+            { id: 'cucumber', label: 'Cetriolo', color: '#aed581', svg: '<svg viewBox="0 0 120 34" style="width:100%;height:100%;display:block;"><circle cx="28" cy="17" r="9" fill="#c5e1a5" stroke="#7cb342" stroke-width="1.5"/><circle cx="60" cy="17" r="9" fill="#c5e1a5" stroke="#7cb342" stroke-width="1.5"/><circle cx="92" cy="17" r="9" fill="#c5e1a5" stroke="#7cb342" stroke-width="1.5"/><circle cx="28" cy="17" r="3" fill="#aed581"/><circle cx="60" cy="17" r="3" fill="#aed581"/><circle cx="92" cy="17" r="3" fill="#aed581"/></svg>' }
         ],
         buildVisual: (sequence, container) => {
             container.innerHTML = '';
             const stack = document.createElement('div');
-            stack.style.cssText = 'display:flex; flex-direction:column; align-items:center; gap:1px; transition:all 0.3s;';
+            stack.style.cssText = 'display:flex; flex-direction:column; align-items:center; transition:all 0.3s;';
             sequence.forEach((item, i) => {
                 const layer = document.createElement('div');
-                layer.style.cssText = `width:80px; height:22px; background:${item.color}; border-radius:${i === 0 ? '20px 20px 4px 4px' : i === sequence.length - 1 ? '4px 4px 20px 20px' : '4px'}; display:flex; align-items:center; justify-content:center; font-size:0.8rem; animation:memLavSlideIn 0.3s ease ${i * 0.1}s both;`;
-                layer.textContent = item.emoji;
+                layer.style.cssText = `width:130px; height:26px; margin-top:${i === 0 ? '0' : '-4px'}; filter:drop-shadow(0 1px 1px rgba(0,0,0,0.2)); animation:memLavSlideIn 0.3s ease ${i * 0.1}s both;`;
+                layer.innerHTML = item.svg || `<div style="width:100%;height:100%;background:${item.color};border-radius:4px;"></div>`;
                 stack.appendChild(layer);
             });
             container.appendChild(stack);
@@ -4785,6 +4787,23 @@ const MEM_LAV_THEMES = {
         }
     }
 };
+
+// Render an item's visual content (SVG for panino, emoji otherwise)
+function _memLavItemContent(item, sizePx) {
+    if (item.svg) {
+        return `<div style="width:${sizePx}px; height:${Math.round(sizePx * 0.34)}px; display:flex; align-items:center; justify-content:center;">${item.svg}</div>`;
+    }
+    return `<span style="font-size:${Math.round(sizePx * 0.5)}px; line-height:1;">${item.emoji}</span>`;
+}
+
+function _memLavShuffle(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+}
 
 function renderMemoriaLavoro(items, stage) {
     const savedTheme = state._memLavState?.theme || 'cubetti';
@@ -4874,15 +4893,15 @@ function _renderMemLavClinicianPhase(stage) {
 
     const itemsHtml = theme.items.map(item =>
         `<button class="memlav-item-btn" onclick="_memLavClinicianTap('${item.id}')"
-                style="width:70px; height:70px; border-radius:14px; border:2px solid ${item.color}40; background:${item.color}20;
-                       display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; transition:all 0.15s;">
-            <span style="font-size:1.8rem;">${item.emoji}</span>
-            <span style="font-size:0.6rem; color:${item.color}; margin-top:2px;">${item.label}</span>
+                style="width:78px; height:78px; border-radius:14px; border:2px solid ${item.color}40; background:${item.color}20;
+                       display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; transition:all 0.15s; padding:4px;">
+            ${_memLavItemContent(item, 62)}
+            <span style="font-size:0.6rem; color:${item.color}; margin-top:3px;">${item.label}</span>
         </button>`
     ).join('');
 
     const seqPreview = ml.clinicianSequence.map((item, i) =>
-        `<span style="display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:8px; background:${item.color}30; border:1px solid ${item.color}50; font-size:1rem;">${item.emoji}</span>`
+        `<span style="display:inline-flex; align-items:center; justify-content:center; width:38px; height:32px; border-radius:8px; background:${item.color}30; border:1px solid ${item.color}50; overflow:hidden;">${_memLavItemContent(item, 32)}</span>`
     ).join('');
 
     stage.innerHTML = `
@@ -4955,15 +4974,15 @@ function _renderMemLavChildPhase(stage) {
     const remaining = ml.span - responded;
     const currentPos = responded;
 
-    const itemsHtml = theme.items.map(item => {
-        const isWrongHighlight = ml._lastWrongId === item.id;
-        const highlightStyle = isWrongHighlight ? (isTimeDelay ? 'border-color:#f59e0b; box-shadow:0 0 12px rgba(245,158,11,0.5);' : 'border-color:#ef4444; box-shadow:0 0 12px rgba(239,68,68,0.5);') : '';
+    // Randomize button order every render so the child must serialize, not track position
+    const shuffledItems = _memLavShuffle(theme.items);
+    const itemsHtml = shuffledItems.map(item => {
         return `<button class="memlav-child-btn" onclick="_memLavChildTap('${item.id}')"
-                style="width:80px; height:80px; border-radius:16px; border:2px solid ${item.color}50; background:${item.color}15;
-                       display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; transition:all 0.15s; font-size:2rem; ${highlightStyle}"
+                style="width:84px; height:84px; border-radius:16px; border:2px solid ${item.color}50; background:${item.color}15;
+                       display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; transition:all 0.15s; padding:4px;"
                 id="memlav-btn-${item.id}">
-            <span>${item.emoji}</span>
-            <span style="font-size:0.65rem; color:${item.color}; margin-top:2px;">${item.label}</span>
+            ${_memLavItemContent(item, 66)}
+            <span style="font-size:0.65rem; color:${item.color}; margin-top:3px;">${item.label}</span>
         </button>`;
     }).join('');
 
@@ -4973,7 +4992,7 @@ function _renderMemLavChildPhase(stage) {
         const errors = ml.positionErrors[i] || 0;
         const borderColor = errors === 0 ? 'rgba(16,185,129,0.5)' : (isTimeDelay ? 'rgba(245,158,11,0.5)' : 'rgba(239,68,68,0.5)');
         const errBadge = errors > 0 && !isTimeDelay ? `<span style="position:absolute; top:-4px; right:-4px; font-size:0.5rem; background:#ef4444; color:white; border-radius:50%; width:14px; height:14px; display:flex; align-items:center; justify-content:center;">${errors}</span>` : '';
-        return `<span style="position:relative; display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:8px; background:${item.color}30; border:2px solid ${borderColor}; font-size:1rem;">${item.emoji}${errBadge}</span>`;
+        return `<span style="position:relative; display:inline-flex; align-items:center; justify-content:center; width:38px; height:32px; border-radius:8px; background:${item.color}30; border:2px solid ${borderColor}; overflow:hidden;">${_memLavItemContent(item, 32)}${errBadge}</span>`;
     }).join('');
 
     const posIndicators = [];
@@ -5091,16 +5110,25 @@ function _memLavCompleteTrial() {
     const isTimeDelay = type === 'timedelay';
 
     const totalErrors = ml.positionErrors.reduce((s, e) => s + e, 0);
-    const hasErrors = totalErrors > 0;
 
-    let result;
-    if (!hasErrors) {
-        result = true;
-    } else if (isTimeDelay) {
-        result = 'prompt';
-    } else {
-        result = false;
+    // Score one LUS per position: correct=V, with errors → P (time delay) or X (independent)
+    const trialNum = ml.trials.length + 1;
+    const positionResults = [];
+    for (let i = 0; i < ml.span; i++) {
+        const errs = ml.positionErrors[i] || 0;
+        let posResult;
+        if (errs === 0) posResult = true;
+        else if (isTimeDelay) posResult = 'prompt';
+        else posResult = false;
+        positionResults.push(posResult);
+        const resultKey = `memlav_t${trialNum}_p${i}_${Date.now()}`;
+        state.session.itemResults[resultKey] = posResult;
+        state.session.scoreHistory.push(resultKey);
     }
+
+    // Overall trial outcome for display
+    const result = positionResults.every(r => r === true) ? true
+                 : (isTimeDelay ? 'prompt' : false);
 
     const trialData = {
         sequence: ml.clinicianSequence.map(i => i.id),
@@ -5109,13 +5137,10 @@ function _memLavCompleteTrial() {
         span: ml.span,
         positionAttempts: [...ml.positionAttempts],
         positionErrors: [...ml.positionErrors],
+        positionResults: positionResults,
         totalErrors: totalErrors
     };
     ml.trials.push(trialData);
-
-    const resultKey = 'memlav_trial_' + ml.trials.length + '_' + Date.now();
-    state.session.itemResults[resultKey] = result;
-    state.session.scoreHistory.push(resultKey);
 
     const results = Object.values(state.session.itemResults);
     state.session.correct = results.filter(v => v === true).length;
@@ -5151,21 +5176,23 @@ function _renderMemLavTrialResult(stage) {
     }).join(' &middot; ');
 
     const seqHtml = ml.clinicianSequence.map(item =>
-        `<span style="font-size:1.3rem;">${item.emoji}</span>`
-    ).join(' → ');
+        `<span style="display:inline-flex; align-items:center; width:40px; height:18px; vertical-align:middle;">${_memLavItemContent(item, 38)}</span>`
+    ).join(' ');
 
     const posDetailHtml = lastTrial.sequence.map((id, i) => {
         const item = theme.items.find(it => it.id === id);
         const errors = lastTrial.positionErrors[i] || 0;
         const attempts = lastTrial.positionAttempts[i] || 1;
-        const bgColor = errors === 0 ? 'rgba(16,185,129,0.1)' : (lastTrial.result === 'prompt' ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)');
-        const borderClr = errors === 0 ? 'rgba(16,185,129,0.3)' : (lastTrial.result === 'prompt' ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)');
+        const posRes = lastTrial.positionResults ? lastTrial.positionResults[i] : (errors === 0);
+        const isP = posRes === 'prompt';
+        const bgColor = errors === 0 ? 'rgba(16,185,129,0.1)' : (isP ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)');
+        const borderClr = errors === 0 ? 'rgba(16,185,129,0.3)' : (isP ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)');
+        const tagClr = errors === 0 ? 'var(--success-color)' : (isP ? 'var(--warning-color)' : 'var(--danger-color)');
+        const tagTxt = errors === 0 ? '✓ V' : (isP ? `P · ${errors} err` : `X · ${errors} err`);
         return `<div style="display:flex; align-items:center; gap:8px; padding:4px 8px; border-radius:6px; background:${bgColor}; border:1px solid ${borderClr};">
             <span style="font-size:0.75rem; color:var(--text-secondary); font-weight:bold;">${i + 1}.</span>
-            <span style="font-size:1.1rem;">${item ? item.emoji : '?'}</span>
-            <span style="font-size:0.75rem; color:${errors === 0 ? 'var(--success-color)' : 'var(--danger-color)'}; font-weight:bold; margin-left:auto;">
-                ${errors === 0 ? '✓' : `${errors} err · ${attempts} tent.`}
-            </span>
+            <span style="display:inline-flex; align-items:center; width:44px; height:18px;">${item ? _memLavItemContent(item, 42) : '?'}</span>
+            <span style="font-size:0.75rem; color:${tagClr}; font-weight:bold; margin-left:auto;">${tagTxt} · ${attempts} tent.</span>
         </div>`;
     }).join('');
 

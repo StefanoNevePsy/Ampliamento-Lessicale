@@ -257,7 +257,7 @@ function _showImportToast(message) {
 }
 
 // --- SET FILTERING & DROPDOWN ---
-const POOL_ENGINES = ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione', 'ricorda', 'singolare_plurale', 'stroop_numerico', 'go_nogo', 'stroop_etichetta', 'topologia_comp', 'memoria_lavoro'];
+const POOL_ENGINES = ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione', 'ricorda', 'singolare_plurale', 'stroop_numerico', 'go_nogo', 'stroop_etichetta', 'topologia_comp'];
 // Keep POOL_MODES as alias for backward compat
 const POOL_MODES = POOL_ENGINES;
 
@@ -1196,9 +1196,6 @@ window.startGame = () => {
             poolItems.sort(() => Math.random() - 0.5);
             state.activeSetId = 'topocomp_' + state.selectedPoolTags.join('_');
             renderGameMode(mode, poolItems);
-        } else if (engine === 'memoria_lavoro') {
-            state.activeSetId = 'memlav_' + state.selectedPoolTags.join('_');
-            renderGameMode(mode, []);
         }
         window._startTDCountdown();
         return;
@@ -1210,6 +1207,19 @@ window.startGame = () => {
         document.getElementById('scoring-controls').classList.add('hidden');
         document.getElementById('btn-save-session').classList.add('hidden');
         document.getElementById('btn-undo-marker').classList.remove('hidden');
+        renderGameMode(mode, []);
+        return;
+    }
+
+    // Memoria di Lavoro: self-contained, no set or tags needed
+    if (engine === 'memoria_lavoro') {
+        state.session = { correct: 0, incorrect: 0, prompts: 0, total: 0, active: true, itemResults: {}, scoreHistory: [] };
+        state.activeSetId = 'memlav';
+        updateScoreUI();
+        document.getElementById('scoring-controls').classList.add('hidden');
+        document.getElementById('btn-save-session').classList.add('hidden');
+        const undoBtn = document.getElementById('btn-undo-marker');
+        if (undoBtn) undoBtn.classList.add('hidden');
         renderGameMode(mode, []);
         return;
     }
@@ -1918,6 +1928,10 @@ async function _doSaveSession(p, noteText) {
     let setCat = '';
     if (POOL_ENGINES.includes(engine)) {
         defaultName = 'Pool: ' + state.selectedPoolTags.join(', ');
+    } else if (engine === 'memoria_lavoro') {
+        const themeLabel = (state._memLavState && typeof MEM_LAV_THEMES !== 'undefined' && MEM_LAV_THEMES[state._memLavState.theme])
+            ? MEM_LAV_THEMES[state._memLavState.theme].label : 'Memoria';
+        defaultName = 'Memoria di Lavoro: ' + themeLabel;
     } else {
         const activeSet = state.savedSets.find(ss => ss.id === state.activeSetId);
         defaultName = activeSet?.name || "Set Rimosso";
@@ -2040,9 +2054,29 @@ async function _doSaveSession(p, noteText) {
                 span: t.span,
                 positionAttempts: t.positionAttempts,
                 positionErrors: t.positionErrors,
+                positionResults: t.positionResults,
                 totalErrors: t.totalErrors
             }));
         }
+    }
+
+    // Go/No-Go: breakdown of correct/incorrect/prompt split by Go vs No-Go stimuli
+    if (engine === 'go_nogo') {
+        const gn = { go: { correct: 0, incorrect: 0, prompts: 0 }, nogo: { correct: 0, incorrect: 0, prompts: 0 } };
+        Object.entries(state.session.itemResults).forEach(([key, res]) => {
+            const cat = key.includes('_nogo_') ? 'nogo' : (key.includes('_go_') ? 'go' : null);
+            if (!cat) return;
+            if (res === true) gn[cat].correct++;
+            else if (res === 'prompt') gn[cat].prompts++;
+            else if (res === false) gn[cat].incorrect++;
+        });
+        const goTotal = gn.go.correct + gn.go.incorrect + gn.go.prompts;
+        const nogoTotal = gn.nogo.correct + gn.nogo.incorrect + gn.nogo.prompts;
+        sessionData.goNogoBreakdown = {
+            go: { ...gn.go, total: goTotal, percentage: goTotal > 0 ? Math.round((gn.go.correct / goTotal) * 100) : 0 },
+            nogo: { ...gn.nogo, total: nogoTotal, percentage: nogoTotal > 0 ? Math.round((gn.nogo.correct / nogoTotal) * 100) : 0 }
+        };
+        if (state._goNogoState && state._goNogoState.noGoTag) sessionData.goNogoTag = state._goNogoState.noGoTag;
     }
 
     // Save per-item details for modes with labeled items
