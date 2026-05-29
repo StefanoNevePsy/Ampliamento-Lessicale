@@ -1932,7 +1932,139 @@ function _renderNoteMarkup(text) {
         .replace(/\n/g, '<br>');
 }
 
-// Open daily note editor (fullscreen modal with markup toolbar)
+// === WYSIWYG NOTE EDITOR HELPERS ===
+// Notes are stored as the same lightweight markdown that _renderNoteMarkup
+// understands. These helpers convert that markdown to editable HTML and back,
+// so the editor can format text live (like a word processor) while the stored
+// format stays compatible with everything that renders notes.
+window._markupToEditableHtml = (md) => {
+    if (!md) return '';
+    const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const inline = (line) => esc(line)
+        .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+        .replace(/\*(.+?)\*/g, '<i>$1</i>')
+        .replace(/~~(.+?)~~/g, '<s>$1</s>');
+    const lines = md.split('\n');
+    let html = '';
+    let listType = null, listItems = [];
+    const flushList = () => {
+        if (listType) {
+            html += `<${listType}>` + listItems.map(li => `<li>${li || '<br>'}</li>`).join('') + `</${listType}>`;
+            listType = null; listItems = [];
+        }
+    };
+    for (const line of lines) {
+        let m;
+        if ((m = line.match(/^- (.*)$/))) { if (listType && listType !== 'ul') flushList(); listType = 'ul'; listItems.push(inline(m[1])); continue; }
+        if ((m = line.match(/^\d+\. (.*)$/))) { if (listType && listType !== 'ol') flushList(); listType = 'ol'; listItems.push(inline(m[1])); continue; }
+        flushList();
+        if ((m = line.match(/^### (.*)$/))) { html += `<h5>${inline(m[1])}</h5>`; continue; }
+        if ((m = line.match(/^## (.*)$/)))  { html += `<h4>${inline(m[1])}</h4>`; continue; }
+        if ((m = line.match(/^# (.*)$/)))   { html += `<h3>${inline(m[1])}</h3>`; continue; }
+        if (line.trim() === '') { html += '<div><br></div>'; continue; }
+        html += `<div>${inline(line)}</div>`;
+    }
+    flushList();
+    return html;
+};
+
+window._editableHtmlToMarkup = (root) => {
+    if (!root) return '';
+    const serializeInlineNode = (ch) => {
+        if (ch.nodeType === 3) return ch.nodeValue;
+        if (ch.nodeType !== 1) return '';
+        const tag = ch.tagName.toLowerCase();
+        if (tag === 'br') return '\n';
+        const st = ch.style || {};
+        const fw = st.fontWeight || '';
+        const isBold = tag === 'b' || tag === 'strong' || fw === 'bold' || (fw && parseInt(fw) >= 600);
+        const isItalic = tag === 'i' || tag === 'em' || st.fontStyle === 'italic';
+        const isStrike = tag === 's' || tag === 'strike' || tag === 'del' || (st.textDecoration || '').includes('line-through');
+        let inner = inlineSerialize(ch);
+        if (isBold && inner.trim()) return `**${inner}**`;
+        if (isItalic && inner.trim()) return `*${inner}*`;
+        if (isStrike && inner.trim()) return `~~${inner}~~`;
+        return inner;
+    };
+    const inlineSerialize = (parent) => {
+        let out = '';
+        parent.childNodes.forEach(ch => { out += serializeInlineNode(ch); });
+        return out;
+    };
+    const BLOCK = ['div', 'p', 'ul', 'ol', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'];
+    const lines = [];
+    const handleBlock = (el) => {
+        const tag = el.tagName ? el.tagName.toLowerCase() : '';
+        if (tag === 'ul' || tag === 'ol') {
+            let i = 1;
+            el.querySelectorAll(':scope > li').forEach(li => {
+                lines.push((tag === 'ul' ? '- ' : `${i++}. `) + inlineSerialize(li).replace(/\n+$/, '').trim());
+            });
+            return;
+        }
+        if (tag === 'h1' || tag === 'h3') { lines.push('# ' + inlineSerialize(el).trim()); return; }
+        if (tag === 'h2' || tag === 'h4') { lines.push('## ' + inlineSerialize(el).trim()); return; }
+        if (tag === 'h5' || tag === 'h6') { lines.push('### ' + inlineSerialize(el).trim()); return; }
+        // div / p / other block
+        const hasBlockChild = Array.from(el.childNodes).some(n => n.nodeType === 1 && BLOCK.includes(n.tagName.toLowerCase()));
+        if (hasBlockChild) {
+            el.childNodes.forEach(n => {
+                if (n.nodeType === 3) { if (n.nodeValue.trim()) lines.push(n.nodeValue); }
+                else if (n.nodeType === 1) handleBlock(n);
+            });
+        } else {
+            lines.push(inlineSerialize(el).replace(/\n$/, ''));
+        }
+    };
+    let pending = '';
+    Array.from(root.childNodes).forEach(n => {
+        if (n.nodeType === 3) { pending += n.nodeValue; return; }
+        if (n.nodeType !== 1) return;
+        const tag = n.tagName.toLowerCase();
+        if (BLOCK.includes(tag)) {
+            if (pending !== '') { lines.push(pending); pending = ''; }
+            handleBlock(n);
+        } else if (tag === 'br') {
+            lines.push(pending); pending = '';
+        } else {
+            pending += serializeInlineNode(n);
+        }
+    });
+    if (pending !== '') lines.push(pending);
+    return lines.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '');
+};
+
+// Apply a formatting command to the currently open WYSIWYG note editor
+window._noteFormat = (cmd) => {
+    const ed = document.querySelector('.note-wysiwyg');
+    if (!ed) return;
+    if (document.activeElement !== ed) ed.focus();
+    const simple = { bold: 'bold', italic: 'italic', strike: 'strikeThrough', ul: 'insertUnorderedList', ol: 'insertOrderedList' };
+    if (simple[cmd]) { document.execCommand(simple[cmd]); return; }
+    if (cmd === 'h1') document.execCommand('formatBlock', false, 'h3');
+    else if (cmd === 'h2') document.execCommand('formatBlock', false, 'h4');
+    else if (cmd === 'h3') document.execCommand('formatBlock', false, 'h5');
+};
+
+// Build the WYSIWYG toolbar markup (buttons keep the editor selection via mousedown preventDefault)
+window._noteToolbarHtml = (opts) => {
+    opts = opts || {};
+    const btn = (cmd, title, content) => `<button type="button" onmousedown="event.preventDefault()" onclick="_noteFormat('${cmd}')" title="${title}">${content}</button>`;
+    let h = '';
+    h += btn('bold', 'Grassetto', '<i class="fa-solid fa-bold"></i>');
+    h += btn('italic', 'Corsivo', '<i class="fa-solid fa-italic"></i>');
+    h += btn('strike', 'Barrato', '<i class="fa-solid fa-strikethrough"></i>');
+    h += `<span style="width:1px; background:rgba(255,255,255,0.1); margin:0 4px;"></span>`;
+    h += btn('h1', 'Titolo', '<i class="fa-solid fa-heading"></i>');
+    h += btn('h2', 'Sottotitolo', 'H2');
+    h += btn('h3', 'Sottotitolo piccolo', 'H3');
+    h += `<span style="width:1px; background:rgba(255,255,255,0.1); margin:0 4px;"></span>`;
+    h += btn('ul', 'Lista puntata', '<i class="fa-solid fa-list-ul"></i>');
+    h += btn('ol', 'Lista numerata', '<i class="fa-solid fa-list-ol"></i>');
+    return h;
+};
+
+// Open daily note editor (fullscreen modal with WYSIWYG toolbar)
 window.openDailyNoteEditor = (patientId, dateKey) => {
     const p = state.patients.find(x => x.id === patientId);
     if (!p) return;
@@ -1964,58 +2096,20 @@ window.openDailyNoteEditor = (patientId, dateKey) => {
                     <button onclick="document.getElementById('daily-note-editor-overlay').remove()" style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:1.2rem;"><i class="fa-solid fa-xmark"></i></button>
                 </div>
             </div>
-            <div class="daily-note-toolbar">
-                <button onclick="_insertMarkup('**','**')" title="Grassetto"><i class="fa-solid fa-bold"></i></button>
-                <button onclick="_insertMarkup('*','*')" title="Corsivo"><i class="fa-solid fa-italic"></i></button>
-                <button onclick="_insertMarkup('~~','~~')" title="Barrato"><i class="fa-solid fa-strikethrough"></i></button>
-                <span style="width:1px; background:rgba(255,255,255,0.1); margin:0 4px;"></span>
-                <button onclick="_insertMarkup('# ','')" title="Titolo"><i class="fa-solid fa-heading"></i></button>
-                <button onclick="_insertMarkup('## ','')" title="Sottotitolo">H2</button>
-                <button onclick="_insertMarkup('### ','')" title="Sottotitolo piccolo">H3</button>
-                <span style="width:1px; background:rgba(255,255,255,0.1); margin:0 4px;"></span>
-                <button onclick="_insertMarkup('- ','')" title="Lista puntata"><i class="fa-solid fa-list-ul"></i></button>
-                <button onclick="_insertMarkup('1. ','')" title="Lista numerata"><i class="fa-solid fa-list-ol"></i></button>
-            </div>
-            <textarea id="daily-note-textarea" placeholder="Scrivi le note della giornata...\n\nPuoi usare:\n**grassetto**  *corsivo*  ~~barrato~~\n# Titolo  ## Sottotitolo\n- Lista puntata\n1. Lista numerata">${existingNote}</textarea>
-            <div class="daily-note-preview-toggle" style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px;">
-                <button onclick="_toggleNotePreview()" class="btn btn-ghost" style="padding:4px 12px; font-size:0.8rem;"><i class="fa-solid fa-eye"></i> Anteprima</button>
+            <div class="daily-note-toolbar">${_noteToolbarHtml()}</div>
+            <div id="daily-note-editable" class="note-wysiwyg" contenteditable="true" data-placeholder="Scrivi le note della giornata...">${_markupToEditableHtml(existingNote)}</div>
+            <div class="daily-note-preview-toggle" style="display:flex; justify-content:flex-end; align-items:center; padding:8px 12px;">
                 <div style="display:flex; gap:8px;">
                     <button onclick="document.getElementById('daily-note-editor-overlay').remove()" class="btn btn-ghost" style="padding:6px 16px; font-size:0.85rem;">Annulla</button>
                     <button onclick="_saveDailyNoteFromEditor('${patientId}')" class="btn btn-primary" style="padding:6px 16px; font-size:0.85rem;"><i class="fa-solid fa-floppy-disk"></i> Salva Nota</button>
                 </div>
             </div>
-            <div id="daily-note-preview" style="display:none; padding:12px 16px; border-top:1px solid rgba(255,255,255,0.05); max-height:200px; overflow-y:auto; font-size:0.85rem; line-height:1.5; color:#ddd;"></div>
         </div>
     `;
 
     document.body.appendChild(overlay);
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
-    document.getElementById('daily-note-textarea').focus();
-};
-
-// Insert markup at cursor position in the note textarea
-window._insertMarkup = (before, after, textareaId) => {
-    const ta = document.getElementById(textareaId || 'daily-note-textarea') || document.getElementById('session-note-textarea');
-    if (!ta) return;
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    const selected = ta.value.substring(start, end);
-    const replacement = before + (selected || 'testo') + after;
-    ta.setRangeText(replacement, start, end, 'select');
-    ta.focus();
-};
-
-// Toggle note preview
-window._toggleNotePreview = () => {
-    const preview = document.getElementById('daily-note-preview');
-    const ta = document.getElementById('daily-note-textarea');
-    if (!preview || !ta) return;
-    if (preview.style.display === 'none') {
-        preview.innerHTML = _renderNoteMarkup(ta.value);
-        preview.style.display = 'block';
-    } else {
-        preview.style.display = 'none';
-    }
+    document.getElementById('daily-note-editable').focus();
 };
 
 // Save daily note from editor
@@ -2023,11 +2117,11 @@ window._saveDailyNoteFromEditor = async (patientId) => {
     const p = state.patients.find(x => x.id === patientId);
     if (!p) return;
     const dateInput = document.getElementById('daily-note-date');
-    const ta = document.getElementById('daily-note-textarea');
-    if (!dateInput || !ta) return;
+    const ed = document.getElementById('daily-note-editable');
+    if (!dateInput || !ed) return;
 
     const dk = dateInput.value;
-    const text = ta.value.trim();
+    const text = _editableHtmlToMarkup(ed).trim();
 
     if (!p.dailyNotes) p.dailyNotes = {};
 
@@ -2091,39 +2185,30 @@ window.openSessionNoteEditor = (patientId, sessionDate, sessionMode, sessionSetN
                     <button onclick="document.getElementById('daily-note-editor-overlay').remove()" style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:1.2rem;"><i class="fa-solid fa-xmark"></i></button>
                 </div>
             </div>
-            <div class="daily-note-toolbar">
-                <button onclick="_insertMarkup('**','**')" title="Grassetto"><i class="fa-solid fa-bold"></i></button>
-                <button onclick="_insertMarkup('*','*')" title="Corsivo"><i class="fa-solid fa-italic"></i></button>
-                <button onclick="_insertMarkup('~~','~~')" title="Barrato"><i class="fa-solid fa-strikethrough"></i></button>
-                <span style="width:1px; background:rgba(255,255,255,0.1); margin:0 4px;"></span>
-                <button onclick="_insertMarkup('- ','')" title="Lista puntata"><i class="fa-solid fa-list-ul"></i></button>
-                <button onclick="_insertMarkup('1. ','')" title="Lista numerata"><i class="fa-solid fa-list-ol"></i></button>
-            </div>
-            <textarea id="daily-note-textarea" placeholder="Scrivi la nota per questa attività...">${existingNote}</textarea>
-            <div class="daily-note-preview-toggle" style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px;">
-                <button onclick="_toggleNotePreview()" class="btn btn-ghost" style="padding:4px 12px; font-size:0.8rem;"><i class="fa-solid fa-eye"></i> Anteprima</button>
+            <div class="daily-note-toolbar">${_noteToolbarHtml()}</div>
+            <div id="daily-note-editable" class="note-wysiwyg" contenteditable="true" data-placeholder="Scrivi la nota per questa attività...">${_markupToEditableHtml(existingNote)}</div>
+            <div class="daily-note-preview-toggle" style="display:flex; justify-content:flex-end; align-items:center; padding:8px 12px;">
                 <div style="display:flex; gap:8px;">
                     <button onclick="document.getElementById('daily-note-editor-overlay').remove()" class="btn btn-ghost" style="padding:6px 16px; font-size:0.85rem;">Annulla</button>
                     <button onclick="_saveSessionNoteFromEditor('${patientId}', ${sessionIdx})" class="btn btn-primary" style="padding:6px 16px; font-size:0.85rem;"><i class="fa-solid fa-floppy-disk"></i> Salva Nota</button>
                 </div>
             </div>
-            <div id="daily-note-preview" style="display:none; padding:12px 16px; border-top:1px solid rgba(255,255,255,0.05); max-height:200px; overflow-y:auto; font-size:0.85rem; line-height:1.5; color:#ddd;"></div>
         </div>
     `;
 
     document.body.appendChild(overlay);
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
-    document.getElementById('daily-note-textarea').focus();
+    document.getElementById('daily-note-editable').focus();
 };
 
 // Save session note from editor
 window._saveSessionNoteFromEditor = async (patientId, sessionIdx) => {
     const p = state.patients.find(x => x.id === patientId);
     if (!p || !p.history[sessionIdx]) return;
-    const ta = document.getElementById('daily-note-textarea');
-    if (!ta) return;
+    const ed = document.getElementById('daily-note-editable');
+    if (!ed) return;
 
-    const text = ta.value.trim();
+    const text = _editableHtmlToMarkup(ed).trim();
     if (text) {
         p.history[sessionIdx].note = text;
     } else {

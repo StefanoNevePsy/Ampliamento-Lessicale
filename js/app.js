@@ -52,6 +52,7 @@ window.onload = async () => {
         if (badge) badge.innerText = state.savedSets.length;
 
         rebuildModesConfig();
+        await _migrateAggregatePoolSessions();
         renderModeSelect();
         refreshAllTags();
         filterSetsByMode();
@@ -66,6 +67,36 @@ window.onload = async () => {
 
     } catch (e) { console.error("Init Error", e); }
 };
+
+// === MIGRATION: unify legacy executive/cognitive pool sessions ===
+// Older sessions for aggregate pool modes were saved as "Pool: tag1, tag2".
+// Re-name them to the mode label so they aggregate, preserving the tags used
+// in `poolTags`. Idempotent and only touches auto-named pool sessions, so it
+// never overwrites custom session names or other data.
+async function _migrateAggregatePoolSessions() {
+    try {
+        if (!state.patients || !state.patients.length) return;
+        const aggModes = (typeof AGGREGATE_POOL_MODES !== 'undefined') ? AGGREGATE_POOL_MODES : [];
+        if (!aggModes.length) return;
+        for (const p of state.patients) {
+            if (!p.history || !p.history.length) continue;
+            let changed = false;
+            for (const s of p.history) {
+                const engine = (typeof getModeEngine === 'function') ? getModeEngine(s.mode) : s.mode;
+                if (!aggModes.includes(engine)) continue;
+                if (typeof s.setName === 'string' && s.setName.startsWith('Pool: ')) {
+                    if (!s.poolTags || !s.poolTags.length) {
+                        const tagStr = s.setName.slice(6).trim();
+                        if (tagStr) s.poolTags = tagStr.split(',').map(t => t.trim()).filter(Boolean);
+                    }
+                    s.setName = (typeof MODES_CONFIG !== 'undefined' && MODES_CONFIG[s.mode]) ? MODES_CONFIG[s.mode] : s.mode;
+                    changed = true;
+                }
+            }
+            if (changed) await DB.savePatient(p);
+        }
+    } catch (e) { console.warn('Migration aggregate pool sessions failed:', e); }
+}
 
 // === SHARED FILE RECEIVER ===
 // Handles files received via Android intent (Nearby Share, file manager, etc.)
@@ -1783,15 +1814,8 @@ function _showSessionNotePrompt(onConfirm) {
                 <h4 style="margin:0; color:var(--accent-color); font-size:0.95rem;"><i class="fa-solid fa-sticky-note"></i> Nota sessione (opzionale)</h4>
                 <button onclick="this.closest('.session-note-overlay').remove()" style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:1.1rem;"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <div class="daily-note-toolbar" style="border-radius:8px 8px 0 0; margin-bottom:0;">
-                <button onclick="_insertMarkup('**','**','session-note-textarea')" title="Grassetto"><i class="fa-solid fa-bold"></i></button>
-                <button onclick="_insertMarkup('*','*','session-note-textarea')" title="Corsivo"><i class="fa-solid fa-italic"></i></button>
-                <button onclick="_insertMarkup('~~','~~','session-note-textarea')" title="Barrato"><i class="fa-solid fa-strikethrough"></i></button>
-                <span style="width:1px; background:rgba(255,255,255,0.1); margin:0 4px;"></span>
-                <button onclick="_insertMarkup('# ','','session-note-textarea')" title="Titolo"><i class="fa-solid fa-heading"></i></button>
-                <button onclick="_insertMarkup('- ','','session-note-textarea')" title="Lista puntata"><i class="fa-solid fa-list-ul"></i></button>
-            </div>
-            <textarea id="session-note-textarea" placeholder="Aggiungi una nota per questa sessione...\n\n**grassetto**  *corsivo*  # titolo" style="width:100%; height:80px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); border-radius:0 0 8px 8px; border-top:none; color:white; padding:8px; font-size:0.85rem; resize:vertical; font-family:inherit;"></textarea>
+            <div class="daily-note-toolbar" style="border-radius:8px 8px 0 0; margin-bottom:0;">${_noteToolbarHtml()}</div>
+            <div id="session-note-editable" class="note-wysiwyg note-wysiwyg-sm" contenteditable="true" data-placeholder="Aggiungi una nota per questa sessione..."></div>
             <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:10px;">
                 <button id="session-note-cancel" class="btn btn-ghost" style="padding:6px 16px; font-size:0.85rem;">Annulla</button>
                 <button id="session-note-save" class="btn btn-primary" style="padding:6px 16px; font-size:0.85rem;"><i class="fa-solid fa-floppy-disk"></i> Salva</button>
@@ -1800,18 +1824,18 @@ function _showSessionNotePrompt(onConfirm) {
     `;
     document.body.appendChild(overlay);
 
-    const textarea = document.getElementById('session-note-textarea');
+    const editable = document.getElementById('session-note-editable');
     const saveBtn = document.getElementById('session-note-save');
     const cancelBtn = document.getElementById('session-note-cancel');
 
     saveBtn.onclick = () => {
-        const note = textarea.value.trim();
+        const note = (typeof _editableHtmlToMarkup === 'function' ? _editableHtmlToMarkup(editable) : (editable.textContent || '')).trim();
         overlay.remove();
         onConfirm(note || '');
     };
     cancelBtn.onclick = () => overlay.remove();
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
-    textarea.focus();
+    editable.focus();
 }
 
 async function _doSaveSession(p, noteText) {
