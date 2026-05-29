@@ -1008,6 +1008,16 @@ window.toggleDaySessionDetail = (header, patientId, sessionIdx, activityKeyEncod
             if (isTD && s.timeDelaySeconds) html += `<span style="font-size:0.75rem; background:rgba(245,158,11,0.15); color:var(--warning-color); padding:2px 8px; border-radius:6px;">TD ${s.timeDelaySeconds}s</span>`;
             html += `</div>`;
 
+            // Tags used (pool modes)
+            if (s.poolTags && s.poolTags.length > 0) {
+                html += `<div style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:8px;">`;
+                html += `<span style="font-size:0.7rem; color:var(--text-secondary);"><i class="fa-solid fa-tags"></i> Tag:</span>`;
+                s.poolTags.forEach(t => {
+                    html += `<span style="font-size:0.7rem; background:rgba(99,102,241,0.12); color:var(--accent-color); padding:1px 8px; border-radius:6px;">${t}</span>`;
+                });
+                html += `</div>`;
+            }
+
             // Item details (wrong/prompted items)
             if (s.itemDetails && s.itemDetails.length > 0) {
                 const wrong = s.itemDetails.filter(d => d.result !== true);
@@ -1558,6 +1568,9 @@ function renderActivitiesTab(patient, sortBy) {
                 ? `<button class="btn-icon item-details-toggle" style="width:26px; height:26px; font-size:0.6rem; display:inline-flex; color:${expandColor}; border-color:rgba(${expandRgba},0.3);" title="Dettagli"><i class="fa-solid fa-chevron-down" style="transition:transform 0.2s; transform:rotate(180deg);"></i></button>`
                 : '';
             const noteIcon = s.note ? ' <i class="fa-solid fa-sticky-note" style="color:#eab308; font-size:0.55rem;" title="Nota"></i>' : '';
+            const tagsChip = (s.poolTags && s.poolTags.length > 0)
+                ? `<div style="margin-top:2px; display:flex; flex-wrap:wrap; gap:3px;">${s.poolTags.map(t => `<span style="font-size:0.6rem; background:rgba(99,102,241,0.12); color:var(--accent-color); padding:0 5px; border-radius:4px;"><i class="fa-solid fa-tag" style="font-size:0.5rem;"></i> ${t}</span>`).join('')}</div>`
+                : '';
             const colSpan = isTD ? 5 : 4;
             const _escDate = (s.date || '').replace(/'/g, "\\'");
             const _escMode = (s.mode || '').replace(/'/g, "\\'");
@@ -1574,7 +1587,7 @@ function renderActivitiesTab(patient, sortBy) {
                         </tr>` : '';
             return `
                         <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                            <td style="padding:6px 5px;">${formatDateEU(s.date)}${noteIcon}</td>
+                            <td style="padding:6px 5px;">${formatDateEU(s.date)}${noteIcon}${tagsChip}</td>
                             <td>${s.correct}/${s.total}${scoreExtra}</td>
                             <td style="font-weight:bold; color:${pctColor(s.percentage, item.threshold)}">${s.percentage}%</td>
                             ${isTD ? `<td style="font-size:0.8rem; color:var(--warning-color);">${s.timeDelaySeconds || '?'}s</td>` : ''}

@@ -150,6 +150,25 @@ function setCloudflareAuthToken(token) {
     localStorage.setItem('cloudflare_auth_token', token.trim());
 }
 
+const CLOUDFLARE_DEFAULT_MODEL = '@cf/black-forest-labs/flux-2-klein-4b';
+
+function getCloudflareModel() {
+    return localStorage.getItem('cloudflare_model') || CLOUDFLARE_DEFAULT_MODEL;
+}
+
+function setCloudflareModel(model) {
+    localStorage.setItem('cloudflare_model', (model || CLOUDFLARE_DEFAULT_MODEL).trim());
+}
+
+// Recommended inference steps per model (some have a fixed step count)
+function _cloudflareStepsForModel(model) {
+    if (model.includes('flux-1-schnell')) return 4;
+    if (model.includes('flux-2-klein-4b')) return 4;   // distilled, fixed 4-step
+    if (model.includes('flux-2-klein-9b')) return 25;
+    if (model.includes('leonardo')) return 25;
+    return undefined; // let the model default apply
+}
+
 async function generateCloudflareImage(prompt, style) {
     const workerUrl = getCloudflareWorkerUrl();
     if (!workerUrl) throw new Error('Cloudflare Worker URL non configurato. Vai in Impostazioni > Immagini.');
@@ -165,10 +184,15 @@ async function generateCloudflareImage(prompt, style) {
     const token = getCloudflareAuthToken();
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
+    const model = getCloudflareModel();
+    const body = { prompt: fullPrompt, width: 1024, height: 1024, model };
+    const steps = _cloudflareStepsForModel(model);
+    if (steps) body.steps = steps;
+
     const response = await fetch(workerUrl, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ prompt: fullPrompt, width: 1024, height: 1024 })
+        body: JSON.stringify(body)
     });
 
     if (!response.ok) {
@@ -180,8 +204,10 @@ async function generateCloudflareImage(prompt, style) {
 
     const data = await response.json();
     if (!data.image) throw new Error('Nessuna immagine restituita dal Worker.');
-    // Worker returns base64-encoded JPEG (or PNG)
-    return `data:image/jpeg;base64,${data.image}`;
+    // Worker returns base64 image; detect PNG vs JPEG from the magic bytes
+    const b64 = data.image;
+    const mime = b64.startsWith('iVBOR') ? 'image/png' : 'image/jpeg';
+    return `data:${mime};base64,${b64}`;
 }
 
 // --- POLLINATIONS (original, free) ---
@@ -311,7 +337,7 @@ window.openPollinationsGenerator = (itemIndex) => {
             <!-- Cloudflare tab -->
             <div id="img-tab-cloudflare" style="display:none;">
                 <div style="background:rgba(243,128,32,0.1); border:1px solid rgba(243,128,32,0.3); border-radius:10px; padding:6px 10px; margin-bottom:10px; font-size:0.75rem; color:#f9a160;">
-                    <i class="fa-solid fa-cloud"></i> Cloudflare Workers AI &mdash; FLUX.1 Schnell (~2000 img/giorno gratis)
+                    <i class="fa-solid fa-cloud"></i> Cloudflare Workers AI &mdash; modello scelto in Impostazioni (gratis)
                 </div>
                 <label style="font-size:0.8rem; color:#aaa;">Prompt</label>
                 <textarea id="cloudflare-prompt" rows="2" style="width:100%; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.95rem; resize:vertical; font-family:inherit; margin-bottom:10px;">${escapeHtml(item.label)}</textarea>
@@ -738,12 +764,28 @@ const CLOUDFLARE_WORKER_CODE = `export default {
       if (got !== env.AUTH_TOKEN) return new Response('Unauthorized', { status: 401, headers: cors });
     }
 
-    const { prompt, width = 1024, height = 1024 } = await request.json();
-    const result = await env.AI.run('@cf/black-forest-labs/flux-1-schnell', {
-      prompt, steps: 4, width, height
-    });
+    // The model is chosen in the app and sent here; fallback to FLUX.2 Klein 4B
+    const { prompt, width = 1024, height = 1024, steps, model } = await request.json();
+    const chosen = model || '@cf/black-forest-labs/flux-2-klein-4b';
+    const inputs = { prompt, width, height };
+    if (steps) inputs.steps = steps;
 
-    return new Response(JSON.stringify({ image: result.image }), {
+    const result = await env.AI.run(chosen, inputs);
+
+    // Most image models return { image: "<base64>" }. Some return a binary
+    // stream — convert that to base64 so the app always gets a string.
+    let image = result && result.image;
+    if (!image && result instanceof ReadableStream) {
+      const buf = await new Response(result).arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) {
+        bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      }
+      image = btoa(bin);
+    }
+
+    return new Response(JSON.stringify({ image }), {
       headers: { 'Content-Type': 'application/json', ...cors }
     });
   }
@@ -767,7 +809,7 @@ window.showCloudflareInstructions = () => {
             <div style="background:rgba(243,128,32,0.08); border:1px solid rgba(243,128,32,0.25); border-radius:10px; padding:12px; margin-bottom:16px; font-size:0.85rem; color:#ddd;">
                 <b style="color:#f9a160;">Perché serve un Worker?</b><br>
                 I browser bloccano le chiamate dirette all'API Cloudflare (CORS). Un piccolo Worker (gratis) fa da ponte tra l'app e l'API.
-                Cloudflare regala 10.000 "neuroni"/giorno = circa <b>2000 immagini FLUX</b>, senza carta di credito.
+                Cloudflare regala 10.000 "neuroni"/giorno (da ~320 immagini con FLUX.2 Klein 4B fino a ~2000 con FLUX.1 Schnell), senza carta di credito. Scegli il modello in Impostazioni.
             </div>
 
             <h4 style="margin:0 0 8px; color:var(--accent-color);">Step 1 — Crea account Cloudflare</h4>

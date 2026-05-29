@@ -427,13 +427,22 @@
                     <a href="https://api.together.xyz/settings/api-keys" target="_blank" style="color:var(--accent-color);">Ottieni chiave Together AI &rarr;</a>
                 </p>
 
-                <h4 style="margin:18px 0 10px; color:#f38020;"><i class="fa-solid fa-cloud"></i> Cloudflare Workers AI (FLUX.1)</h4>
+                <h4 style="margin:18px 0 10px; color:#f38020;"><i class="fa-solid fa-cloud"></i> Cloudflare Workers AI</h4>
                 <label class="modal-label">URL del Worker</label>
                 <input type="text" id="cloudflare-worker-url" placeholder="https://tuo-worker.tuoaccount.workers.dev">
                 <label class="modal-label" style="margin-top:10px;">Auth Token <span class="modal-label-sm">(opzionale, consigliato)</span></label>
                 <input type="password" id="cloudflare-auth-token" placeholder="Token per proteggere il Worker">
+                <label class="modal-label" style="margin-top:10px;">Modello immagine</label>
+                <select id="cloudflare-model">
+                    <option value="@cf/black-forest-labs/flux-2-klein-4b">FLUX.2 Klein 4B — qualità migliore (~320/giorno)</option>
+                    <option value="@cf/black-forest-labs/flux-1-schnell">FLUX.1 Schnell — base, volume alto (~2000/giorno)</option>
+                    <option value="@cf/black-forest-labs/flux-2-klein-9b">FLUX.2 Klein 9B — top klein (~7/giorno)</option>
+                    <option value="@cf/leonardo/lucid-origin">Leonardo Lucid Origin — ottimo testo/prompt (~15/giorno)</option>
+                    <option value="@cf/leonardo/phoenix-1.0">Leonardo Phoenix 1.0 — ottimo (~18/giorno)</option>
+                </select>
                 <p class="modal-hint">
-                    Genera immagini FLUX.1 Schnell gratis (~2000/giorno) tramite un piccolo Worker che fai partire tu su Cloudflare.
+                    Genera immagini gratis tramite un piccolo Worker che fai partire tu su Cloudflare (10.000 neuroni/giorno gratis).
+                    Cambiando modello dovrai aver fatto il re-deploy del Worker aggiornato.
                     <a href="#" onclick="showCloudflareInstructions(); return false;" style="color:var(--accent-color); display:block; margin-top:6px;"><i class="fa-solid fa-circle-info"></i> Come configurare il Worker (10 minuti)</a>
                 </p>
             </div>

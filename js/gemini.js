@@ -203,6 +203,8 @@ window.openSettings = () => {
     const cfTokenInput = document.getElementById('cloudflare-auth-token');
     if (cfUrlInput && typeof getCloudflareWorkerUrl === 'function') cfUrlInput.value = getCloudflareWorkerUrl();
     if (cfTokenInput && typeof getCloudflareAuthToken === 'function') cfTokenInput.value = getCloudflareAuthToken();
+    const cfModelInput = document.getElementById('cloudflare-model');
+    if (cfModelInput && typeof getCloudflareModel === 'function') cfModelInput.value = getCloudflareModel();
 
     // Session tab
     const tdTimerCb = document.getElementById('setting-td-timer');
@@ -235,6 +237,8 @@ window.saveAllSettings = () => {
     if (cfUrl !== undefined && typeof setCloudflareWorkerUrl === 'function') setCloudflareWorkerUrl(cfUrl);
     const cfToken = document.getElementById('cloudflare-auth-token')?.value?.trim();
     if (cfToken !== undefined && typeof setCloudflareAuthToken === 'function') setCloudflareAuthToken(cfToken);
+    const cfModel = document.getElementById('cloudflare-model')?.value;
+    if (cfModel && typeof setCloudflareModel === 'function') setCloudflareModel(cfModel);
 
     // Theme is saved live on selection
 

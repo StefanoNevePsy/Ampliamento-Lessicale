@@ -260,6 +260,9 @@ function _showImportToast(message) {
 const POOL_ENGINES = ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione', 'ricorda', 'singolare_plurale', 'stroop_numerico', 'go_nogo', 'stroop_etichetta', 'topologia_comp'];
 // Keep POOL_MODES as alias for backward compat
 const POOL_MODES = POOL_ENGINES;
+// Cognitive/executive pool modes: tags are interchangeable stimulus sources, so
+// data is aggregated per mode (stable setId) and the tags used are recorded per session.
+const AGGREGATE_POOL_MODES = ['ricorda', 'singolare_plurale', 'stroop_numerico', 'go_nogo', 'stroop_etichetta'];
 
 window.filterSetsByMode = function () {
     const currentMode = document.getElementById('mode-select').value;
@@ -1169,27 +1172,27 @@ window.startGame = () => {
         } else if (engine === 'ricorda') {
             let poolItems = getItemsByTags(state.selectedPoolTags);
             poolItems.sort(() => Math.random() - 0.5);
-            state.activeSetId = 'ricorda_' + state.selectedPoolTags.join('_');
+            state.activeSetId = 'ricorda';
             renderGameMode(mode, poolItems);
         } else if (engine === 'singolare_plurale') {
             let poolItems = getItemsByTags(state.selectedPoolTags);
             poolItems.sort(() => Math.random() - 0.5);
-            state.activeSetId = 'sp_' + state.selectedPoolTags.join('_');
+            state.activeSetId = 'sp';
             renderGameMode(mode, poolItems);
         } else if (engine === 'stroop_numerico') {
             let poolItems = getItemsByTags(state.selectedPoolTags);
             poolItems.sort(() => Math.random() - 0.5);
-            state.activeSetId = 'strnum_' + state.selectedPoolTags.join('_');
+            state.activeSetId = 'strnum';
             renderGameMode(mode, poolItems);
         } else if (engine === 'go_nogo') {
             let poolItems = getItemsByTags(state.selectedPoolTags);
             poolItems.sort(() => Math.random() - 0.5);
-            state.activeSetId = 'gonogo_' + state.selectedPoolTags.join('_');
+            state.activeSetId = 'gonogo';
             renderGameMode(mode, poolItems);
         } else if (engine === 'stroop_etichetta') {
             let poolItems = getItemsByTags(state.selectedPoolTags);
             poolItems.sort(() => Math.random() - 0.5);
-            state.activeSetId = 'stret_' + state.selectedPoolTags.join('_');
+            state.activeSetId = 'stret';
             renderGameMode(mode, poolItems);
         } else if (engine === 'topologia_comp') {
             let poolItems = getItemsByTags(state.selectedPoolTags);
@@ -1926,7 +1929,10 @@ async function _doSaveSession(p, noteText) {
 
     let defaultName;
     let setCat = '';
-    if (POOL_ENGINES.includes(engine)) {
+    if (AGGREGATE_POOL_MODES.includes(engine)) {
+        // Aggregate per mode regardless of tags; the tags used are recorded per session
+        defaultName = MODES_CONFIG[mode] || getModeLabel(mode);
+    } else if (POOL_ENGINES.includes(engine)) {
         defaultName = 'Pool: ' + state.selectedPoolTags.join(', ');
     } else if (engine === 'memoria_lavoro') {
         const themeLabel = (state._memLavState && typeof MEM_LAV_THEMES !== 'undefined' && MEM_LAV_THEMES[state._memLavState.theme])
@@ -1968,6 +1974,12 @@ async function _doSaveSession(p, noteText) {
     };
 
     if (noteText) sessionData.note = noteText;
+
+    // Record which tags were used (for pool modes), so aggregated activities still
+    // show the stimulus source per session.
+    if (POOL_ENGINES.includes(engine) && state.selectedPoolTags && state.selectedPoolTags.length > 0) {
+        sessionData.poolTags = [...state.selectedPoolTags];
+    }
 
     if (type === 'timedelay') {
         sessionData.timeDelaySeconds = getSelectedTDSeconds();
