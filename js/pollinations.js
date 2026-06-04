@@ -160,13 +160,12 @@ function setCloudflareModel(model) {
     localStorage.setItem('cloudflare_model', (model || CLOUDFLARE_DEFAULT_MODEL).trim());
 }
 
-// Recommended inference steps per model (some have a fixed step count)
 function _cloudflareStepsForModel(model) {
     if (model.includes('flux-1-schnell')) return 4;
-    if (model.includes('flux-2-klein-4b')) return 4;   // distilled, fixed 4-step
+    if (model.includes('flux-2-klein-4b')) return 4;
     if (model.includes('flux-2-klein-9b')) return 25;
     if (model.includes('leonardo')) return 25;
-    return undefined; // let the model default apply
+    return undefined;
 }
 
 async function generateCloudflareImage(prompt, style) {
@@ -189,22 +188,37 @@ async function generateCloudflareImage(prompt, style) {
     const steps = _cloudflareStepsForModel(model);
     if (steps) body.steps = steps;
 
-    const response = await fetch(workerUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body)
-    });
+    let response;
+    try {
+        response = await fetch(workerUrl, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(body)
+        });
+    } catch (e) {
+        throw new Error(
+            'Impossibile contattare il Worker Cloudflare. ' +
+            'Assicurati di aver fatto il deploy del codice aggiornato (vedi Istruzioni Setup) ' +
+            'e che il binding AI sia configurato.'
+        );
+    }
 
     if (!response.ok) {
-        const err = await response.text().catch(() => '');
         if (response.status === 401) throw new Error('Token Cloudflare non valido. Controlla nelle Impostazioni.');
         if (response.status === 429) throw new Error('Rate limit Cloudflare. Attendi o controlla i neuroni consumati nel dashboard.');
-        throw new Error(`Errore Cloudflare (${response.status}): ${err.slice(0, 200)}`);
+        let errMsg = '';
+        try {
+            const errData = await response.json();
+            errMsg = errData.error || JSON.stringify(errData);
+        } catch (_) {
+            errMsg = await response.text().catch(() => '');
+        }
+        throw new Error(`Errore Cloudflare (${response.status}): ${errMsg.slice(0, 300)}`);
     }
 
     const data = await response.json();
+    if (data.error) throw new Error(`Errore modello Cloudflare: ${data.error}`);
     if (!data.image) throw new Error('Nessuna immagine restituita dal Worker.');
-    // Worker returns base64 image; detect PNG vs JPEG from the magic bytes
     const b64 = data.image;
     const mime = b64.startsWith('iVBOR') ? 'image/png' : 'image/jpeg';
     return `data:${mime};base64,${b64}`;
@@ -758,36 +772,38 @@ const CLOUDFLARE_WORKER_CODE = `export default {
     if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
     if (request.method !== 'POST') return new Response('Method not allowed', { status: 405, headers: cors });
 
-    // Optional auth: set AUTH_TOKEN as a secret in the Worker
     if (env.AUTH_TOKEN) {
       const got = request.headers.get('Authorization')?.replace('Bearer ', '');
       if (got !== env.AUTH_TOKEN) return new Response('Unauthorized', { status: 401, headers: cors });
     }
 
-    // The model is chosen in the app and sent here; fallback to FLUX.2 Klein 4B
-    const { prompt, width = 1024, height = 1024, steps, model } = await request.json();
-    const chosen = model || '@cf/black-forest-labs/flux-2-klein-4b';
-    const inputs = { prompt, width, height };
-    if (steps) inputs.steps = steps;
+    try {
+      const { prompt, width = 1024, height = 1024, steps, model } = await request.json();
+      const chosen = model || '@cf/black-forest-labs/flux-2-klein-4b';
+      const inputs = { prompt, width, height };
+      if (steps) inputs.steps = steps;
 
-    const result = await env.AI.run(chosen, inputs);
+      const result = await env.AI.run(chosen, inputs);
 
-    // Most image models return { image: "<base64>" }. Some return a binary
-    // stream — convert that to base64 so the app always gets a string.
-    let image = result && result.image;
-    if (!image && result instanceof ReadableStream) {
-      const buf = await new Response(result).arrayBuffer();
-      const bytes = new Uint8Array(buf);
-      let bin = '';
-      for (let i = 0; i < bytes.length; i += 0x8000) {
-        bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      let image = result && result.image;
+      if (!image && result instanceof ReadableStream) {
+        const buf = await new Response(result).arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        let bin = '';
+        for (let i = 0; i < bytes.length; i += 0x8000) {
+          bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        }
+        image = btoa(bin);
       }
-      image = btoa(bin);
-    }
 
-    return new Response(JSON.stringify({ image }), {
-      headers: { 'Content-Type': 'application/json', ...cors }
-    });
+      return new Response(JSON.stringify({ image }), {
+        headers: { 'Content-Type': 'application/json', ...cors }
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: e.message || 'Unknown AI error' }), {
+        status: 500, headers: { 'Content-Type': 'application/json', ...cors }
+      });
+    }
   }
 };`;
 
@@ -845,8 +861,12 @@ window.showCloudflareInstructions = () => {
                 <li><b>Salva</b> le impostazioni</li>
             </ul>
 
-            <div style="background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); border-radius:10px; padding:10px; margin-top:14px; font-size:0.8rem; color:#6ee7b7;">
-                <i class="fa-solid fa-check-circle"></i> Fatto! Ora puoi generare immagini FLUX Schnell di alta qualità direttamente dall'editor.
+            <div style="background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:10px; padding:10px; margin-top:14px; font-size:0.8rem; color:#fcd34d;">
+                <i class="fa-solid fa-rotate"></i> <b>Se cambi modello</b> nelle Impostazioni, devi ri-fare il deploy con il codice qui sopra (basta sovrascrivere e cliccare Save and Deploy).
+            </div>
+
+            <div style="background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); border-radius:10px; padding:10px; margin-top:8px; font-size:0.8rem; color:#6ee7b7;">
+                <i class="fa-solid fa-check-circle"></i> Fatto! Ora puoi generare immagini di alta qualità direttamente dall'editor.
             </div>
 
             <button class="btn btn-primary" style="width:100%; padding:12px; margin-top:14px;" onclick="document.getElementById('modal-cf-instructions').remove()">Ho capito</button>
