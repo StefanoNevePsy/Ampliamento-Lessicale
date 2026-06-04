@@ -780,10 +780,28 @@ const CLOUDFLARE_WORKER_CODE = `export default {
     try {
       const { prompt, width = 1024, height = 1024, steps, model } = await request.json();
       const chosen = model || '@cf/black-forest-labs/flux-2-klein-4b';
-      const inputs = { prompt, width, height };
-      if (steps) inputs.steps = steps;
 
-      const result = await env.AI.run(chosen, inputs);
+      let result;
+      if (chosen.includes('flux-2')) {
+        // FLUX.2 family requires multipart/form-data input
+        const form = new FormData();
+        form.append('prompt', prompt);
+        form.append('width', String(width));
+        form.append('height', String(height));
+        if (steps) form.append('steps', String(steps));
+        const formResponse = new Response(form);
+        result = await env.AI.run(chosen, {
+          multipart: {
+            body: formResponse.body,
+            contentType: formResponse.headers.get('content-type')
+          }
+        });
+      } else {
+        // FLUX.1 Schnell / Leonardo use a plain JSON object input
+        const inputs = { prompt, width, height };
+        if (steps) inputs.steps = steps;
+        result = await env.AI.run(chosen, inputs);
+      }
 
       let image = result && result.image;
       if (!image && result instanceof ReadableStream) {
