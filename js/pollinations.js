@@ -152,6 +152,21 @@ function setCloudflareAuthToken(token) {
 
 const CLOUDFLARE_DEFAULT_MODEL = '@cf/black-forest-labs/flux-2-klein-4b';
 
+const CLOUDFLARE_MODELS = [
+    { value: '@cf/black-forest-labs/flux-2-klein-4b', label: 'FLUX.2 Klein 4B — qualità (~320/g)' },
+    { value: '@cf/black-forest-labs/flux-1-schnell', label: 'FLUX.1 Schnell — veloce (~2000/g)' },
+    { value: '@cf/black-forest-labs/flux-2-klein-9b', label: 'FLUX.2 Klein 9B — top (~7/g)' },
+    { value: '@cf/leonardo/lucid-origin', label: 'Leonardo Lucid Origin (~15/g)' },
+    { value: '@cf/leonardo/phoenix-1.0', label: 'Leonardo Phoenix 1.0 (~18/g)' },
+];
+
+function _cfModelSelectHtml(id) {
+    const cur = getCloudflareModel();
+    return `<select id="${id}" onchange="setCloudflareModel(this.value)" style="width:100%; padding:8px 10px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.82rem; margin-bottom:10px; cursor:pointer;">
+        ${CLOUDFLARE_MODELS.map(m => `<option value="${m.value}"${m.value === cur ? ' selected' : ''}>${m.label}</option>`).join('')}
+    </select>`;
+}
+
 function getCloudflareModel() {
     return localStorage.getItem('cloudflare_model') || CLOUDFLARE_DEFAULT_MODEL;
 }
@@ -351,8 +366,10 @@ window.openPollinationsGenerator = (itemIndex) => {
             <!-- Cloudflare tab -->
             <div id="img-tab-cloudflare" style="display:none;">
                 <div style="background:rgba(243,128,32,0.1); border:1px solid rgba(243,128,32,0.3); border-radius:10px; padding:6px 10px; margin-bottom:10px; font-size:0.75rem; color:#f9a160;">
-                    <i class="fa-solid fa-cloud"></i> Cloudflare Workers AI &mdash; modello scelto in Impostazioni (gratis)
+                    <i class="fa-solid fa-cloud"></i> Cloudflare Workers AI (gratis)
                 </div>
+                <label style="font-size:0.8rem; color:#aaa;">Modello</label>
+                ${_cfModelSelectHtml('cf-model-single')}
                 <label style="font-size:0.8rem; color:#aaa;">Prompt</label>
                 <textarea id="cloudflare-prompt" rows="2" style="width:100%; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.95rem; resize:vertical; font-family:inherit; margin-bottom:10px;">${escapeHtml(item.label)}</textarea>
 
@@ -594,6 +611,11 @@ window.openBulkPollinations = () => {
                 ${hasTogether ? `<button class="btn btn-ghost bulk-engine-btn" data-engine="together" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-robot"></i> Together AI</button>` : ''}
             </div>
 
+            <div id="bulk-cf-model-section" style="${hasCloudflare ? '' : 'display:none;'}">
+                <label style="font-size:0.8rem; color:#aaa;">Modello Cloudflare</label>
+                ${_cfModelSelectHtml('cf-model-bulk')}
+            </div>
+
             <label style="font-size:0.8rem; color:#aaa;">Quali item?</label>
             <div style="display:flex; gap:8px; margin-bottom:12px;">
                 <button class="btn btn-ghost bulk-poll-target selected" data-target="missing" onclick="selectBulkPollTarget(this)" style="flex:1; padding:8px; font-size:0.85rem;">
@@ -651,6 +673,8 @@ window.openBulkPollinations = () => {
 window.selectBulkEngine = (el) => {
     document.querySelectorAll('.bulk-engine-btn').forEach(b => b.classList.remove('selected'));
     el.classList.add('selected');
+    const cfSection = document.getElementById('bulk-cf-model-section');
+    if (cfSection) cfSection.style.display = el.dataset.engine === 'cloudflare' ? '' : 'none';
 };
 
 window.closeBulkPollinations = () => {
