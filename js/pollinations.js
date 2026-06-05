@@ -22,7 +22,8 @@ If already English, keep as-is.
 Input: ${JSON.stringify(toTranslate)}`;
 
     try {
-        const map = await callGemini(prompt, apiKey);
+        const transModel = typeof getEffectiveTranslationModel === 'function' ? getEffectiveTranslationModel() : undefined;
+        const map = await callGemini(prompt, apiKey, transModel);
         for (const [it, en] of Object.entries(map)) {
             _translationCache[it.toLowerCase().trim()] = en;
         }
@@ -60,10 +61,21 @@ function savePixabayApiKey(key) {
     localStorage.setItem('pixabay_api_key', key.trim());
 }
 
-async function searchPixabay(query, perPage = 12) {
+// Prefer subjects on a white/isolated background (good for clinical cards)
+function getPixabayWhiteBg() {
+    return localStorage.getItem('pixabay_white_bg') !== 'false'; // default true
+}
+function setPixabayWhiteBg(on) {
+    localStorage.setItem('pixabay_white_bg', on ? 'true' : 'false');
+}
+
+async function searchPixabay(query, perPage = 12, whiteBg) {
     const apiKey = getPixabayApiKey();
     if (!apiKey) throw new Error('Pixabay API key non configurata. Vai in Impostazioni > Immagini.');
-    const url = `https://pixabay.com/api/?key=${encodeURIComponent(apiKey)}&q=${encodeURIComponent(query)}&image_type=photo&per_page=${perPage}&safesearch=true`;
+    const useWhite = whiteBg === undefined ? getPixabayWhiteBg() : whiteBg;
+    let url = `https://pixabay.com/api/?key=${encodeURIComponent(apiKey)}&q=${encodeURIComponent(query)}&image_type=photo&per_page=${perPage}&safesearch=true`;
+    // colors=white biases results toward white-dominant (isolated) images
+    if (useWhite) url += '&colors=white';
     const resp = await fetch(url);
     if (!resp.ok) throw new Error(`Errore Pixabay (${resp.status})`);
     const data = await resp.json();
@@ -237,11 +249,15 @@ window.openPollinationsGenerator = (itemIndex) => {
             <!-- Pixabay tab -->
             <div id="img-tab-pixabay" style="${_imgGenTab !== 'pixabay' ? 'display:none;' : ''}">
                 <div style="display:flex; gap:6px; margin-bottom:8px;">
-                    <input type="text" id="pixabay-query" value="${escapeHtml(item.label)}" placeholder="Cerca immagine..." style="flex:1; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white;">
+                    <input type="text" id="pixabay-query" value="${escapeHtml(item.label)}" placeholder="Cerca immagine..." style="flex:1; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white;" onkeydown="if(event.key==='Enter')runPixabaySearch(${itemIndex})">
                     <button class="btn btn-primary" onclick="runPixabaySearch(${itemIndex})" style="padding:10px 16px;">
                         <i class="fa-solid fa-search"></i>
                     </button>
                 </div>
+                <label style="display:flex; align-items:center; gap:6px; font-size:0.78rem; color:#aaa; margin-bottom:8px; cursor:pointer;">
+                    <input type="checkbox" id="pixabay-white-bg-search" ${getPixabayWhiteBg() ? 'checked' : ''} onchange="onPixabayWhiteBgToggle(${itemIndex})" style="width:15px; height:15px; accent-color:var(--accent-color);">
+                    <i class="fa-solid fa-square" style="color:#fff; text-shadow:0 0 1px #888;"></i> Preferisci sfondo bianco
+                </label>
                 <div id="pixabay-results-container"></div>
             </div>
 
@@ -252,8 +268,17 @@ window.openPollinationsGenerator = (itemIndex) => {
                 </div>
                 <label style="font-size:0.8rem; color:#aaa;">Modello</label>
                 ${_cfModelSelectHtml('cf-model-single')}
-                <label style="font-size:0.8rem; color:#aaa;">Prompt</label>
-                <textarea id="cloudflare-prompt" rows="2" style="width:100%; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.95rem; resize:vertical; font-family:inherit; margin-bottom:10px;">${escapeHtml(item.label)}</textarea>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <label style="font-size:0.8rem; color:#aaa;">Prompt</label>
+                    <button onclick="cfPreviewTranslation()" title="Traduci il prompt in inglese per correggerlo" style="background:none; border:none; color:var(--accent-color); font-size:0.72rem; cursor:pointer; padding:2px 4px;">
+                        <i class="fa-solid fa-language"></i> Traduci/correggi
+                    </button>
+                </div>
+                <textarea id="cloudflare-prompt" rows="2" style="width:100%; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.95rem; resize:vertical; font-family:inherit; margin-bottom:6px;">${escapeHtml(item.label)}</textarea>
+                <label style="display:flex; align-items:center; gap:6px; font-size:0.78rem; color:#aaa; margin-bottom:10px; cursor:pointer;">
+                    <input type="checkbox" id="cf-autotranslate" checked style="width:15px; height:15px; accent-color:var(--accent-color);">
+                    Traduci automaticamente in inglese prima di generare
+                </label>
 
                 <label style="font-size:0.8rem; color:#aaa;">Stile</label>
                 <div id="cloudflare-styles" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;">
@@ -317,6 +342,15 @@ window.switchImgGenTab = (tab, itemIndex) => {
     }
 };
 
+window.onPixabayWhiteBgToggle = (itemIndex) => {
+    const cb = document.getElementById('pixabay-white-bg-search');
+    if (cb) setPixabayWhiteBg(cb.checked);
+    // Re-run the search with the new preference if a query is present
+    if (document.getElementById('pixabay-query')?.value?.trim()) {
+        runPixabaySearch(itemIndex);
+    }
+};
+
 window.runPixabaySearch = async (itemIndex) => {
     const query = document.getElementById('pixabay-query')?.value?.trim();
     if (!query) return;
@@ -324,12 +358,15 @@ window.runPixabaySearch = async (itemIndex) => {
     const container = document.getElementById('pixabay-results-container');
     if (!container) return;
 
+    const whiteBg = document.getElementById('pixabay-white-bg-search')?.checked;
+
     container.innerHTML = '<div style="text-align:center; padding:20px;"><div class="loading-spinner" style="margin:0 auto;"></div><p style="color:#a5b4fc; font-size:0.8rem; margin-top:8px;">Ricerca su Pixabay...</p></div>';
 
     try {
-        const results = await searchPixabay(query);
+        const results = await searchPixabay(query, 12, whiteBg);
         if (results.length === 0) {
-            container.innerHTML = '<div style="text-align:center; padding:15px; color:var(--text-secondary); font-size:0.85rem;"><i class="fa-solid fa-search"></i> Nessun risultato. Prova con termini diversi.</div>';
+            const hint = whiteBg ? ' Prova a disattivare "sfondo bianco" o usa termini diversi.' : ' Prova con termini diversi.';
+            container.innerHTML = `<div style="text-align:center; padding:15px; color:var(--text-secondary); font-size:0.85rem;"><i class="fa-solid fa-search"></i> Nessun risultato.${hint}</div>`;
             return;
         }
         container.innerHTML = `<div class="pixabay-results">
@@ -376,6 +413,26 @@ window.selectPixabayImage = async (itemIndex, resultIndex) => {
     }
 };
 
+// Translate the current prompt into English and put it back in the textarea
+// so the clinician can correct it before generating. Disables auto-translate.
+window.cfPreviewTranslation = async () => {
+    const promptEl = document.getElementById('cloudflare-prompt');
+    const prompt = promptEl?.value?.trim();
+    if (!prompt) { alert('Inserisci un prompt da tradurre.'); return; }
+    const btnSpinTarget = document.querySelector('#img-tab-cloudflare .fa-language');
+    if (btnSpinTarget) btnSpinTarget.classList.add('fa-spin');
+    try {
+        const translated = await translateSingleLabel(prompt);
+        promptEl.value = translated;
+        const cb = document.getElementById('cf-autotranslate');
+        if (cb) cb.checked = false; // what you see is now what gets sent
+    } catch (e) {
+        alert('Traduzione fallita: ' + e.message);
+    } finally {
+        if (btnSpinTarget) btnSpinTarget.classList.remove('fa-spin');
+    }
+};
+
 window.runImageGeneration = async (itemIndex) => {
     const tab = _imgGenTab;
     if (tab === 'pixabay') return;
@@ -383,6 +440,7 @@ window.runImageGeneration = async (itemIndex) => {
     const promptEl = document.getElementById('cloudflare-prompt');
     const prompt = promptEl?.value?.trim();
     if (!prompt) { alert('Inserisci un prompt.'); return; }
+    const autoTranslate = document.getElementById('cf-autotranslate')?.checked !== false;
 
     const genBtn = document.getElementById('poll-generate-btn');
     const status = document.getElementById('poll-status');
@@ -395,13 +453,13 @@ window.runImageGeneration = async (itemIndex) => {
     preview.style.display = 'none';
     acceptActions.style.display = 'none';
 
-    document.getElementById('poll-status-text').textContent = `Traduzione prompt...`;
+    document.getElementById('poll-status-text').textContent = autoTranslate ? `Traduzione prompt...` : `Generazione in corso...`;
 
     try {
-        const translatedPrompt = await translateSingleLabel(prompt);
+        const finalPrompt = autoTranslate ? await translateSingleLabel(prompt) : prompt;
         document.getElementById('poll-status-text').textContent = `Generazione in corso (Cloudflare Flux)...`;
 
-        const imageUrl = await generateCloudflareImage(translatedPrompt, _pollSelectedStyle);
+        const imageUrl = await generateCloudflareImage(finalPrompt, _pollSelectedStyle);
         _pollLastImageUrl = imageUrl;
 
         document.getElementById('poll-preview-img').src = imageUrl;

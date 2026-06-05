@@ -11,8 +11,22 @@ function saveGeminiModel(model) {
     localStorage.setItem('gemini_model', model);
 }
 
-function getGeminiApiUrl() {
-    return `${GEMINI_API_BASE}models/${getGeminiModel()}:generateContent`;
+// Optional separate, lighter model for translations. Empty = use main model.
+function getTranslationModel() {
+    return localStorage.getItem('gemini_translation_model') || '';
+}
+
+function saveTranslationModel(model) {
+    localStorage.setItem('gemini_translation_model', model || '');
+}
+
+// Effective model used for translation calls (falls back to main model)
+function getEffectiveTranslationModel() {
+    return getTranslationModel() || getGeminiModel();
+}
+
+function getGeminiApiUrl(model) {
+    return `${GEMINI_API_BASE}models/${model || getGeminiModel()}:generateContent`;
 }
 
 // --- DYNAMIC MODEL LISTING ---
@@ -73,6 +87,34 @@ function populateModelSelect(models) {
 
     const hint = document.getElementById('gemini-model-hint');
     if (hint) hint.textContent = `${models.length} modelli disponibili. I modelli "gratuito" non hanno costi.`;
+
+    populateTranslationModelSelect(models);
+}
+
+function populateTranslationModelSelect(models) {
+    const select = document.getElementById('translation-model');
+    if (!select) return;
+    const current = getTranslationModel();
+    select.innerHTML = '';
+
+    // First option: follow the main model
+    const mainOpt = document.createElement('option');
+    mainOpt.value = '';
+    mainOpt.textContent = 'Come modello principale';
+    select.appendChild(mainOpt);
+
+    for (const m of models) {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = m.name + (m.free ? ' (gratuito)' : ' (a pagamento)');
+        select.appendChild(opt);
+    }
+
+    if (current && models.some(m => m.id === current)) {
+        select.value = current;
+    } else {
+        select.value = '';
+    }
 }
 
 window.refreshGeminiModels = async () => {
@@ -204,6 +246,9 @@ window.openSettings = () => {
     const cfModelInput = document.getElementById('cloudflare-model');
     if (cfModelInput && typeof getCloudflareModel === 'function') cfModelInput.value = getCloudflareModel();
 
+    const whiteBgCb = document.getElementById('pixabay-white-bg');
+    if (whiteBgCb && typeof getPixabayWhiteBg === 'function') whiteBgCb.checked = getPixabayWhiteBg();
+
     // Session tab
     const tdTimerCb = document.getElementById('setting-td-timer');
     if (tdTimerCb) tdTimerCb.checked = localStorage.getItem('td_timer_visible') !== 'false';
@@ -224,10 +269,14 @@ window.saveAllSettings = () => {
     saveGeminiApiKey(key);
     const model = document.getElementById('gemini-model').value;
     saveGeminiModel(model);
+    const translationModel = document.getElementById('translation-model')?.value;
+    if (translationModel !== undefined) saveTranslationModel(translationModel);
 
     // Save image API keys
     const pixabayKey = document.getElementById('pixabay-api-key')?.value?.trim();
     if (pixabayKey !== undefined) savePixabayApiKey(pixabayKey);
+    const whiteBgCb = document.getElementById('pixabay-white-bg');
+    if (whiteBgCb && typeof setPixabayWhiteBg === 'function') setPixabayWhiteBg(whiteBgCb.checked);
 
     const cfUrl = document.getElementById('cloudflare-worker-url')?.value?.trim();
     if (cfUrl !== undefined && typeof setCloudflareWorkerUrl === 'function') setCloudflareWorkerUrl(cfUrl);
@@ -268,12 +317,13 @@ function _parse429Error(errBody) {
     return { retryable: true, message: msg || 'Limite richieste raggiunto.' };
 }
 
-async function callGemini(prompt, apiKey) {
+async function callGemini(prompt, apiKey, modelOverride) {
     const MAX_RETRIES = 3;
     const BACKOFF_MS = [3000, 8000, 15000]; // 3s, 8s, 15s
+    const model = modelOverride || getGeminiModel();
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        const response = await fetch(`${getGeminiApiUrl()}?key=${apiKey}`, {
+        const response = await fetch(`${getGeminiApiUrl(model)}?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -311,7 +361,7 @@ async function callGemini(prompt, apiKey) {
         if (response.status === 400) throw new Error('Chiave API non valida. Controlla nelle Impostazioni.');
         if (response.status === 404) {
             localStorage.removeItem('gemini_models_cache');
-            throw new Error(`Il modello "${getGeminiModel()}" non è più disponibile. Apri Impostazioni e scegline un altro.`);
+            throw new Error(`Il modello "${model}" non è più disponibile. Apri Impostazioni e scegline un altro.`);
         }
         throw new Error(err.error?.message || `Errore API (${response.status})`);
     }

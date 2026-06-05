@@ -420,6 +420,17 @@
                 <p class="modal-hint">
                     <a href="https://pixabay.com/api/docs/" target="_blank" style="color:var(--accent-color);">Ottieni chiave gratuita Pixabay &rarr;</a>
                 </p>
+                <label class="setting-option" style="margin-top:8px;">
+                    <input type="checkbox" id="pixabay-white-bg" style="width:18px; height:18px; accent-color:var(--accent-color);">
+                    <span>Preferisci immagini su sfondo bianco</span>
+                </label>
+
+                <h4 style="margin:18px 0 10px; color:var(--accent-color);"><i class="fa-solid fa-language"></i> Traduzione prompt</h4>
+                <p class="modal-hint" style="margin-bottom:6px;">Modello usato per tradurre le etichette italiane in inglese prima della ricerca/generazione immagini.</p>
+                <select id="translation-model">
+                    <option value="">Come modello principale</option>
+                </select>
+                <p class="modal-hint">Per le traduzioni un modello leggero (es. Flash-Lite) è più veloce ed economico.</p>
 
                 <h4 style="margin:18px 0 10px; color:#f38020;"><i class="fa-solid fa-cloud"></i> Cloudflare Workers AI</h4>
                 <label class="modal-label">URL del Worker</label>
