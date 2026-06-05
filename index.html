@@ -190,6 +190,21 @@
         </div>
     </div>
 
+    <!-- VISUAL PROMPT BAR (touchable buttons for children) -->
+    <div id="visual-prompt-bar" class="visual-prompt-bar hidden"></div>
+
+    <!-- NOTEBOOK SIDE PANEL (accessible during activities) -->
+    <div id="notebook-tab-handle" class="notebook-tab-handle hidden" onclick="toggleNotebookPanel()">
+        <i class="fa-solid fa-book-open" style="margin-bottom:4px;"></i>
+    </div>
+    <div id="notebook-side-panel" class="notebook-side-panel">
+        <div class="notebook-side-panel-header">
+            <h3 style="margin:0; font-size:0.95rem; color:var(--accent-color);"><i class="fa-solid fa-book-open"></i> Quaderno Appunti</h3>
+            <button class="btn btn-ghost" onclick="toggleNotebookPanel()" style="padding:4px 10px;"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="notebook-side-panel-body" id="notebook-panel-body"></div>
+    </div>
+
     <!-- FLOATING CONTROLS -->
     <div class="global-floating-controls">
         <!-- Scoring -->
@@ -244,6 +259,12 @@
                 </button>
                 <button class="btn-float" id="btn-global-lock" onclick="toggleGlobalScrollLock()" title="Blocca Schermo (Tasto L)">
                     <i class="fa-solid fa-lock-open"></i>
+                </button>
+                <button class="btn-float" id="btn-notebook-panel" onclick="toggleNotebookHandle()" title="Quaderno Appunti Laterale">
+                    <i class="fa-solid fa-book-open"></i>
+                </button>
+                <button class="btn-float" id="btn-visual-prompts" onclick="toggleVisualPromptBar()" title="Prompt Visivi Bambino" style="background:rgba(59,130,246,0.8);">
+                    <i class="fa-solid fa-hand-pointer"></i>
                 </button>
                 <button class="btn-float" id="btn-game-fullscreen" onclick="toggleGameFullscreen()" title="Area di Gioco a Schermo Intero (Tasto F)">
                     <i class="fa-solid fa-up-right-and-down-left-from-center" id="game-fs-icon"></i>

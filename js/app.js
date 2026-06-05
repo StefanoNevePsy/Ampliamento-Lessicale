@@ -544,8 +544,9 @@ function renderSetDropdownItem(s, status) {
     const missingCount = s.items.filter(i => !i.url).length;
 
     const firstImg = s.items.find(i => i.url);
-    const thumbHtml = firstImg
-        ? `<div class="set-item-thumb"><img src="${firstImg.url}" loading="lazy" alt=""></div>`
+    const thumbSrc = firstImg ? firstImg.url : (s.coverImage || null);
+    const thumbHtml = thumbSrc
+        ? `<div class="set-item-thumb"><img src="${thumbSrc}" loading="lazy" alt=""></div>`
         : `<div class="set-item-thumb"><i class="fa-solid fa-images"></i></div>`;
 
     let badges = '';
@@ -3101,5 +3102,327 @@ window.toggleFabMenu = () => {
     const icon = document.getElementById('fab-toggle-icon');
     if (icon) {
         icon.className = isCollapsed ? 'fa-solid fa-xmark' : 'fa-solid fa-wrench';
+    }
+};
+
+// ============================================================
+// VISUAL PROMPT BUTTONS (touchable by children during activities)
+// ============================================================
+
+const DEFAULT_VISUAL_PROMPTS = [
+    { id: 'aiuto', label: 'Aiuto', icon: 'fa-circle-question', image: null, color: '#3b82f6', enabled: true },
+    { id: 'stop', label: 'Stop', icon: 'fa-hand', image: null, color: '#ef4444', enabled: true },
+    { id: 'ancora', label: 'Ancora', icon: 'fa-rotate-right', image: null, color: '#10b981', enabled: true },
+    { id: 'si', label: 'Sì', icon: 'fa-thumbs-up', image: null, color: '#22c55e', enabled: true },
+    { id: 'no', label: 'No', icon: 'fa-thumbs-down', image: null, color: '#f97316', enabled: true }
+];
+
+function getVisualPrompts() {
+    try {
+        const saved = localStorage.getItem('visualPromptButtons');
+        if (saved) return JSON.parse(saved);
+    } catch {}
+    return DEFAULT_VISUAL_PROMPTS.map(p => ({ ...p }));
+}
+
+function saveVisualPrompts(prompts) {
+    localStorage.setItem('visualPromptButtons', JSON.stringify(prompts));
+}
+
+function isVisualPromptBarVisible() {
+    return localStorage.getItem('vpb_visible') === 'true';
+}
+
+function setVisualPromptBarVisible(visible) {
+    localStorage.setItem('vpb_visible', visible ? 'true' : 'false');
+}
+
+window.toggleVisualPromptBar = () => {
+    const bar = document.getElementById('visual-prompt-bar');
+    if (!bar) return;
+    const isVisible = !bar.classList.contains('hidden');
+    if (isVisible) {
+        bar.classList.add('hidden');
+        setVisualPromptBarVisible(false);
+        document.getElementById('btn-visual-prompts')?.classList.remove('pen-active');
+    } else {
+        renderVisualPromptBar();
+        bar.classList.remove('hidden');
+        setVisualPromptBarVisible(true);
+        document.getElementById('btn-visual-prompts')?.classList.add('pen-active');
+    }
+};
+
+function renderVisualPromptBar() {
+    const bar = document.getElementById('visual-prompt-bar');
+    if (!bar) return;
+    const prompts = getVisualPrompts().filter(p => p.enabled);
+
+    let html = '';
+    prompts.forEach(p => {
+        const content = p.image
+            ? `<img src="${p.image}" alt="${p.label}" draggable="false">`
+            : `<i class="fa-solid ${p.icon}"></i>`;
+        html += `<button class="vpb-btn" data-vpb-id="${p.id}" style="--vpb-color:${p.color};" ontouchstart="vpbTap(this)" onmousedown="vpbTap(this)">
+            <div class="vpb-content">${content}</div>
+            <span class="vpb-label">${p.label}</span>
+        </button>`;
+    });
+
+    html += `<button class="vpb-config-btn" onclick="openVisualPromptConfig()" title="Configura"><i class="fa-solid fa-gear"></i></button>`;
+    bar.innerHTML = html;
+}
+
+window.vpbTap = (btn) => {
+    btn.classList.remove('vpb-active');
+    void btn.offsetWidth;
+    btn.classList.add('vpb-active');
+    setTimeout(() => btn.classList.remove('vpb-active'), 2500);
+};
+
+window.openVisualPromptConfig = () => {
+    const prompts = getVisualPrompts();
+    const existing = document.getElementById('vpb-config-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'vpb-config-modal';
+    modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:25000; display:flex; align-items:center; justify-content:center; padding:20px;';
+
+    let itemsHtml = prompts.map((p, i) => {
+        const preview = p.image
+            ? `<img src="${p.image}" style="width:36px;height:36px;border-radius:8px;object-fit:cover;" alt="">`
+            : `<div style="width:36px;height:36px;border-radius:8px;background:${p.color}20;display:flex;align-items:center;justify-content:center;"><i class="fa-solid ${p.icon}" style="color:${p.color};font-size:1rem;"></i></div>`;
+        return `<div style="display:flex; align-items:center; gap:10px; padding:8px; background:rgba(255,255,255,0.03); border-radius:8px; margin-bottom:6px;">
+            <label style="display:flex; align-items:center;"><input type="checkbox" ${p.enabled ? 'checked' : ''} onchange="vpbToggleEnabled(${i}, this.checked)"></label>
+            ${preview}
+            <input type="text" value="${p.label}" onchange="vpbChangeLabel(${i}, this.value)" style="flex:1; padding:4px 8px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.3); color:white; font-size:0.85rem;">
+            <input type="color" value="${p.color}" onchange="vpbChangeColor(${i}, this.value)" style="width:30px; height:30px; border:none; border-radius:6px; cursor:pointer;">
+            <button class="btn-icon" style="width:28px; height:28px; font-size:0.7rem; color:var(--accent-color);" onclick="vpbUploadImage(${i})" title="Carica immagine"><i class="fa-solid fa-image"></i></button>
+            ${p.image ? `<button class="btn-icon" style="width:28px; height:28px; font-size:0.7rem; color:var(--danger-color);" onclick="vpbRemoveImage(${i})" title="Rimuovi immagine"><i class="fa-solid fa-xmark"></i></button>` : ''}
+        </div>`;
+    }).join('');
+
+    modal.innerHTML = `
+    <div style="width:100%; max-width:500px; background:#1e1e2f; border-radius:16px; border:1px solid var(--glass-border); padding:22px; max-height:90vh; overflow-y:auto;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+            <h3 style="margin:0; color:var(--accent-color);"><i class="fa-solid fa-hand-pointer"></i> Prompt Visivi</h3>
+            <button class="btn btn-ghost" onclick="document.getElementById('vpb-config-modal').remove()" style="padding:6px 10px;"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <p style="font-size:0.8rem; color:var(--text-secondary); margin:0 0 16px;">Tasti toccabili dal bambino durante le attività. Seleziona quali mostrare e personalizza immagini e colori.</p>
+        <div id="vpb-config-items">${itemsHtml}</div>
+        <div style="margin-top:12px; display:flex; gap:8px;">
+            <button class="btn btn-ghost" onclick="vpbAddPrompt()" style="padding:6px 14px; font-size:0.8rem;"><i class="fa-solid fa-plus"></i> Aggiungi</button>
+            <button class="btn btn-ghost" onclick="vpbResetDefaults()" style="padding:6px 14px; font-size:0.8rem; color:var(--warning-color); border-color:rgba(245,158,11,0.3);"><i class="fa-solid fa-rotate-left"></i> Ripristina</button>
+        </div>
+    </div>`;
+
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    document.body.appendChild(modal);
+};
+
+window.vpbToggleEnabled = (idx, enabled) => {
+    const prompts = getVisualPrompts();
+    if (prompts[idx]) { prompts[idx].enabled = enabled; saveVisualPrompts(prompts); renderVisualPromptBar(); }
+};
+
+window.vpbChangeLabel = (idx, label) => {
+    const prompts = getVisualPrompts();
+    if (prompts[idx]) { prompts[idx].label = label; saveVisualPrompts(prompts); renderVisualPromptBar(); }
+};
+
+window.vpbChangeColor = (idx, color) => {
+    const prompts = getVisualPrompts();
+    if (prompts[idx]) { prompts[idx].color = color; saveVisualPrompts(prompts); renderVisualPromptBar(); }
+};
+
+window.vpbUploadImage = (idx) => {
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = 'image/*';
+    input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const size = Math.min(img.width, img.height, 200);
+                canvas.width = size; canvas.height = size;
+                const ctx = canvas.getContext('2d');
+                const sx = (img.width - size) / 2, sy = (img.height - size) / 2;
+                ctx.drawImage(img, sx, sy, size, size, 0, 0, size, size);
+                const prompts = getVisualPrompts();
+                if (prompts[idx]) {
+                    prompts[idx].image = canvas.toDataURL('image/jpeg', 0.85);
+                    saveVisualPrompts(prompts);
+                    renderVisualPromptBar();
+                    openVisualPromptConfig();
+                }
+            };
+            img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+    };
+    input.click();
+};
+
+window.vpbRemoveImage = (idx) => {
+    const prompts = getVisualPrompts();
+    if (prompts[idx]) { prompts[idx].image = null; saveVisualPrompts(prompts); renderVisualPromptBar(); openVisualPromptConfig(); }
+};
+
+window.vpbAddPrompt = () => {
+    const prompts = getVisualPrompts();
+    prompts.push({ id: 'custom_' + Date.now(), label: 'Nuovo', icon: 'fa-star', image: null, color: '#a78bfa', enabled: true });
+    saveVisualPrompts(prompts);
+    openVisualPromptConfig();
+    renderVisualPromptBar();
+};
+
+window.vpbResetDefaults = () => {
+    saveVisualPrompts(DEFAULT_VISUAL_PROMPTS.map(p => ({ ...p })));
+    renderVisualPromptBar();
+    openVisualPromptConfig();
+};
+
+// Auto-show prompt bar if it was visible in previous session
+if (isVisualPromptBarVisible()) {
+    document.addEventListener('DOMContentLoaded', () => {
+        const bar = document.getElementById('visual-prompt-bar');
+        if (bar) { renderVisualPromptBar(); bar.classList.remove('hidden'); }
+        document.getElementById('btn-visual-prompts')?.classList.add('pen-active');
+    });
+}
+
+// ============================================================
+// NOTEBOOK SIDE PANEL (accessible during activities)
+// ============================================================
+
+let _notebookPanelOpen = false;
+let _notebookHandleVisible = false;
+let _notebookEntries = [];
+
+function _loadNotebookEntries() {
+    try {
+        const pid = state.activePatientId;
+        if (!pid) return [];
+        const key = `notebook_entries_${pid}`;
+        return JSON.parse(localStorage.getItem(key) || '[]');
+    } catch { return []; }
+}
+
+function _saveNotebookEntries(entries) {
+    const pid = state.activePatientId;
+    if (!pid) return;
+    localStorage.setItem(`notebook_entries_${pid}`, JSON.stringify(entries));
+}
+
+window.toggleNotebookHandle = () => {
+    const handle = document.getElementById('notebook-tab-handle');
+    const btn = document.getElementById('btn-notebook-panel');
+    if (!handle) return;
+    _notebookHandleVisible = !_notebookHandleVisible;
+    handle.classList.toggle('hidden', !_notebookHandleVisible);
+    if (btn) btn.classList.toggle('pen-active', _notebookHandleVisible);
+    if (!_notebookHandleVisible && _notebookPanelOpen) {
+        toggleNotebookPanel();
+    }
+};
+
+window.toggleNotebookPanel = () => {
+    const panel = document.getElementById('notebook-side-panel');
+    if (!panel) return;
+    _notebookPanelOpen = !_notebookPanelOpen;
+    panel.classList.toggle('open', _notebookPanelOpen);
+    if (_notebookPanelOpen) renderNotebookPanel();
+};
+
+function renderNotebookPanel() {
+    const body = document.getElementById('notebook-panel-body');
+    if (!body) return;
+    _notebookEntries = _loadNotebookEntries();
+
+    const patientName = state.activePatientId
+        ? (state.patients.find(p => p.id === state.activePatientId)?.name || 'Paziente')
+        : 'Ospite';
+    const today = new Date().toISOString().split('T')[0];
+    const todayEntries = _notebookEntries.filter(e => e.date === today);
+
+    let html = `
+    <div style="margin-bottom:12px; padding:8px 10px; background:rgba(99,102,241,0.08); border-radius:10px; font-size:0.8rem; color:var(--text-secondary);">
+        <i class="fa-solid fa-user" style="margin-right:4px;"></i> ${patientName}
+        <span style="float:right; font-size:0.7rem;">${new Date().toLocaleDateString('it-IT')}</span>
+    </div>
+    <div style="margin-bottom:12px;">
+        <textarea id="notebook-new-entry" placeholder="Annota osservazioni, richieste spontanee del bambino, comportamenti..." style="width:100%; min-height:80px; padding:10px; border-radius:10px; border:1px solid var(--glass-border); background:rgba(0,0,0,0.3); color:white; font-size:0.85rem; resize:vertical; font-family:inherit;"></textarea>
+        <button class="btn btn-primary" onclick="addNotebookEntry()" style="margin-top:6px; padding:6px 16px; font-size:0.8rem; width:100%;">
+            <i class="fa-solid fa-plus"></i> Aggiungi Nota
+        </button>
+    </div>`;
+
+    if (todayEntries.length > 0) {
+        html += `<div style="font-size:0.75rem; color:var(--text-secondary); font-weight:bold; margin-bottom:6px;"><i class="fa-solid fa-clock"></i> Note di oggi (${todayEntries.length})</div>`;
+        todayEntries.reverse().forEach((entry, i) => {
+            const realIdx = _notebookEntries.indexOf(entry);
+            const time = new Date(entry.timestamp).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+            html += `<div style="margin-bottom:8px; padding:10px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid rgba(255,255,255,0.06); position:relative;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                    <span style="font-size:0.7rem; color:var(--accent-color); font-weight:bold;">${time}</span>
+                    ${entry.mode ? `<span style="font-size:0.6rem; background:rgba(99,102,241,0.15); color:var(--accent-color); padding:1px 6px; border-radius:4px;">${entry.mode}</span>` : ''}
+                    <button class="btn-icon" style="width:20px; height:20px; font-size:0.55rem; color:var(--danger-color); border-color:rgba(239,68,68,0.3);" onclick="deleteNotebookEntry(${realIdx})" title="Elimina"><i class="fa-solid fa-trash"></i></button>
+                </div>
+                <div style="font-size:0.8rem; line-height:1.5; color:#ddd;">${entry.text.replace(/</g, '&lt;').replace(/\n/g, '<br>')}</div>
+            </div>`;
+        });
+    }
+
+    // Show older entries collapsed
+    const olderEntries = _notebookEntries.filter(e => e.date !== today);
+    if (olderEntries.length > 0) {
+        const groupedByDate = {};
+        olderEntries.forEach(e => {
+            if (!groupedByDate[e.date]) groupedByDate[e.date] = [];
+            groupedByDate[e.date].push(e);
+        });
+        html += `<div style="margin-top:12px; border-top:1px solid rgba(255,255,255,0.05); padding-top:8px;">
+            <div style="font-size:0.75rem; color:var(--text-secondary); font-weight:bold; margin-bottom:6px;"><i class="fa-solid fa-calendar-days"></i> Note precedenti</div>`;
+        Object.keys(groupedByDate).sort().reverse().slice(0, 5).forEach(dk => {
+            const entries = groupedByDate[dk];
+            const dateLabel = new Date(dk + 'T00:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
+            html += `<div style="margin-bottom:4px; padding:6px 8px; background:rgba(255,255,255,0.02); border-radius:6px; font-size:0.75rem; color:#aaa;">
+                <b>${dateLabel}</b> — ${entries.length} nota/e
+                <div style="margin-top:2px; font-size:0.7rem; color:#888;">${entries.map(e => e.text.substring(0, 50) + (e.text.length > 50 ? '...' : '')).join(' | ')}</div>
+            </div>`;
+        });
+        html += `</div>`;
+    }
+
+    body.innerHTML = html;
+}
+
+window.addNotebookEntry = () => {
+    const textarea = document.getElementById('notebook-new-entry');
+    if (!textarea || !textarea.value.trim()) return;
+    const entries = _loadNotebookEntries();
+    const mode = document.getElementById('mode-select')?.value;
+    const modeName = mode && MODES_CONFIG[mode] ? MODES_CONFIG[mode] : '';
+    entries.push({
+        text: textarea.value.trim(),
+        timestamp: new Date().toISOString(),
+        date: new Date().toISOString().split('T')[0],
+        mode: modeName
+    });
+    _saveNotebookEntries(entries);
+    textarea.value = '';
+    renderNotebookPanel();
+};
+
+window.deleteNotebookEntry = (idx) => {
+    const entries = _loadNotebookEntries();
+    if (idx >= 0 && idx < entries.length) {
+        entries.splice(idx, 1);
+        _saveNotebookEntries(entries);
+        renderNotebookPanel();
     }
 };

@@ -657,20 +657,76 @@ function renderOverviewTab(patient) {
         return { date: dk, totalLU, correctLU, incorrectLU: totalLU - correctLU, sessions: sessions.length, hasNote: hasDailyNote || hasActivityNotes };
     });
 
-    const lastSession = [...history].sort((a, b) => new Date(b.date) - new Date(a.date))[0];
-    const numDays = dates.length;
-    const totalSessions = history.length;
-    const totalLUAll = history.reduce((sum, s) => sum + s.total, 0);
-    const correctLUAll = history.reduce((sum, s) => sum + s.correct, 0);
+    // --- Time filtering & outliers ---
+    const timeFilter = state._overviewFilter || 'all';
+    const excludeOutliers = state._overviewExcludeOutliers || false;
+    const chartType = state._overviewChartType || 'bar';
+    const outlierDays = patient.outlierDays || {};
+    const outlierCount = Object.keys(outlierDays).length;
 
-    // Daily averages
+    let filteredDaily = [...dailyData];
+    const nowDate = new Date();
+    const todayStr = nowDate.toISOString().split('T')[0];
+
+    if (timeFilter === 'week') {
+        const from = new Date(nowDate.getTime() - 7 * 86400000).toISOString().split('T')[0];
+        filteredDaily = filteredDaily.filter(d => d.date >= from);
+    } else if (timeFilter === 'month') {
+        const from = new Date(nowDate.getTime() - 30 * 86400000).toISOString().split('T')[0];
+        filteredDaily = filteredDaily.filter(d => d.date >= from);
+    } else if (timeFilter === 'year') {
+        const from = new Date(nowDate.getTime() - 365 * 86400000).toISOString().split('T')[0];
+        filteredDaily = filteredDaily.filter(d => d.date >= from);
+    } else if (timeFilter === 'custom') {
+        const from = state._overviewFilterFrom || '';
+        const to = state._overviewFilterTo || todayStr;
+        if (from) filteredDaily = filteredDaily.filter(d => d.date >= from);
+        if (to) filteredDaily = filteredDaily.filter(d => d.date <= to);
+    }
+
+    const filteredDateSet = new Set(filteredDaily.map(d => d.date));
+    let metricsDaily = excludeOutliers ? filteredDaily.filter(d => !outlierDays[d.date]) : filteredDaily;
+
+    const filteredHistory = history.filter(h => {
+        const dk = getDateKey(h.date);
+        if (!filteredDateSet.has(dk)) return false;
+        if (excludeOutliers && outlierDays[dk]) return false;
+        return true;
+    });
+
+    const lastSession = [...history].sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+    const numDays = metricsDaily.length;
+    const totalSessions = filteredHistory.length;
+    const totalLUAll = filteredHistory.reduce((sum, s) => sum + s.total, 0);
+    const correctLUAll = filteredHistory.reduce((sum, s) => sum + s.correct, 0);
+
     const avgSessionsPerDay = numDays > 0 ? (totalSessions / numDays).toFixed(1) : 0;
     const avgCorrectPerDay = numDays > 0 ? Math.round(correctLUAll / numDays) : 0;
     const avgTotalPerDay = numDays > 0 ? Math.round(totalLUAll / numDays) : 0;
-    const dailyPcts = dailyData.map(d => d.totalLU > 0 ? (d.correctLU / d.totalLU) * 100 : 0);
+    const dailyPcts = metricsDaily.map(d => d.totalLU > 0 ? (d.correctLU / d.totalLU) * 100 : 0);
     const avgDailyPct = dailyPcts.length > 0 ? Math.round(dailyPcts.reduce((a, b) => a + b, 0) / dailyPcts.length) : 0;
 
+    const _fBtn = (val, label) => `<button onclick="changeOverviewFilter('${val}', '${patient.id}')" style="padding:4px 10px; border-radius:6px; font-size:0.7rem; border:1px solid ${timeFilter === val ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)'}; background:${timeFilter === val ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.03)'}; color:${timeFilter === val ? 'var(--accent-color)' : 'var(--text-secondary)'}; cursor:pointer; font-weight:${timeFilter === val ? 'bold' : 'normal'};">${label}</button>`;
+
     let html = `
+    <div style="display:flex; gap:6px; margin-bottom:12px; align-items:center; flex-wrap:wrap; background:rgba(0,0,0,0.2); padding:8px; border-radius:10px;">
+        <span style="font-size:0.75rem; color:var(--text-secondary); margin-right:2px;"><i class="fa-solid fa-filter"></i></span>
+        ${_fBtn('week', 'Sett.')}
+        ${_fBtn('month', 'Mese')}
+        ${_fBtn('year', 'Anno')}
+        ${_fBtn('custom', 'Da-A')}
+        ${_fBtn('all', 'Tutto')}
+        ${outlierCount > 0 ? `<label style="font-size:0.7rem; color:var(--text-secondary); display:flex; align-items:center; gap:4px; margin-left:auto; cursor:pointer;"><input type="checkbox" ${excludeOutliers ? 'checked' : ''} onchange="toggleOverviewOutliers('${patient.id}')"> <i class="fa-solid fa-triangle-exclamation" style="color:var(--warning-color); font-size:0.6rem;"></i> Escludi outlier (${outlierCount})</label>` : ''}
+        <button onclick="toggleOverviewChartType('${patient.id}')" style="padding:4px 8px; border-radius:6px; font-size:0.7rem; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.03); color:var(--text-secondary); cursor:pointer; margin-left:${outlierCount > 0 ? '0' : 'auto'};" title="Cambia visualizzazione"><i class="fa-solid ${chartType === 'bar' ? 'fa-chart-line' : 'fa-chart-bar'}"></i></button>
+    </div>
+    ${timeFilter === 'custom' ? `
+    <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
+        <label style="font-size:0.75rem; color:var(--text-secondary);">Da:</label>
+        <input type="date" value="${state._overviewFilterFrom || ''}" onchange="state._overviewFilterFrom=this.value; renderOverviewTab(state.patients.find(p=>p.id==='${patient.id}'))" style="padding:4px 8px; border-radius:6px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.8rem;">
+        <label style="font-size:0.75rem; color:var(--text-secondary);">A:</label>
+        <input type="date" value="${state._overviewFilterTo || todayStr}" onchange="state._overviewFilterTo=this.value; renderOverviewTab(state.patients.find(p=>p.id==='${patient.id}'))" style="padding:4px 8px; border-radius:6px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.8rem;">
+    </div>` : ''}
+
     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:10px; margin-bottom:20px;">
         <div style="background:rgba(99,102,241,0.15); padding:12px; border-radius:12px; text-align:center; border:1px solid rgba(99,102,241,0.3);">
             <div style="font-size:1.5rem; font-weight:800; color:var(--accent-color);">${avgSessionsPerDay}</div>
@@ -694,11 +750,12 @@ function renderOverviewTab(patient) {
         </div>
     </div>`;
 
-    if (dailyData.length > 0) {
+    if (filteredDaily.length > 0) {
         html += `
         <div class="chart-wrapper" style="margin-bottom:20px;">
             <h4 style="margin:0 0 10px 0; color:var(--accent-color); font-size:0.95rem;">
-                <i class="fa-solid fa-chart-bar"></i> Learn Unit Giornaliere
+                <i class="fa-solid ${chartType === 'bar' ? 'fa-chart-bar' : 'fa-chart-line'}"></i> Learn Unit Giornaliere
+                ${timeFilter !== 'all' ? `<span style="font-size:0.7rem; color:var(--text-secondary); font-weight:normal;">(${filteredDaily.length} giorni)</span>` : ''}
             </h4>
             <div id="daily-lu-chart" style="overflow-x:auto;"></div>
         </div>`;
@@ -722,116 +779,203 @@ function renderOverviewTab(patient) {
     }
 
     content.innerHTML = html;
-    if (dailyData.length > 0) renderDailyLUChart(dailyData);
+    if (filteredDaily.length > 0) renderDailyLUChart(filteredDaily, outlierDays, chartType);
 }
 
-// --- Daily LU Bar Chart (green correct, red incorrect) ---
-function renderDailyLUChart(dailyData) {
+// --- Daily LU Chart (bar or line, with outlier markers) ---
+function renderDailyLUChart(dailyData, outlierDays, chartType) {
     const chartContainer = document.getElementById('daily-lu-chart');
     if (!chartContainer) return;
+    if (!outlierDays) outlierDays = {};
+    if (!chartType) chartType = 'bar';
 
     const maxLU = Math.max(...dailyData.map(d => d.totalLU), 1);
-    const topPad = 18; // space for count labels above tallest bar
+    const topPad = 18;
     const chartHeight = 150;
+    const svgNS = "http://www.w3.org/2000/svg";
+
+    if (chartType === 'line') {
+        // --- LINE CHART MODE ---
+        const padding = { left: 35, right: 15, top: topPad, bottom: 35 };
+        const chartW = Math.max(300, dailyData.length * 28 + padding.left + padding.right);
+        const svgH = padding.top + chartHeight + padding.bottom;
+        const svg = document.createElementNS(svgNS, "svg");
+        svg.setAttribute("viewBox", `0 0 ${chartW} ${svgH}`);
+        svg.setAttribute("width", chartW); svg.setAttribute("height", svgH);
+        svg.style.minWidth = chartW + 'px';
+
+        // Grid
+        [25, 50, 75, 100].forEach(pct => {
+            const gy = padding.top + chartHeight - (chartHeight * pct / 100);
+            const gl = document.createElementNS(svgNS, "line");
+            gl.setAttribute("x1", padding.left); gl.setAttribute("x2", chartW - padding.right);
+            gl.setAttribute("y1", gy); gl.setAttribute("y2", gy);
+            gl.setAttribute("stroke", "rgba(255,255,255,0.06)"); gl.setAttribute("stroke-dasharray", "3,4");
+            svg.appendChild(gl);
+            const gt = document.createElementNS(svgNS, "text");
+            gt.setAttribute("x", padding.left - 4); gt.setAttribute("y", gy + 3);
+            gt.setAttribute("text-anchor", "end"); gt.setAttribute("fill", "rgba(255,255,255,0.25)"); gt.setAttribute("font-size", "7");
+            gt.textContent = pct + '%';
+            svg.appendChild(gt);
+        });
+
+        const stepX = dailyData.length > 1 ? (chartW - padding.left - padding.right) / (dailyData.length - 1) : 0;
+        let pathD = '', areaD = '';
+        dailyData.forEach((d, i) => {
+            const pct = d.totalLU > 0 ? (d.correctLU / d.totalLU) * 100 : 0;
+            const x = padding.left + (dailyData.length > 1 ? i * stepX : (chartW - padding.left - padding.right) / 2);
+            const y = padding.top + chartHeight - (chartHeight * pct / 100);
+            if (i === 0) { pathD += `M ${x} ${y}`; areaD += `M ${x} ${padding.top + chartHeight} L ${x} ${y}`; }
+            else { pathD += ` L ${x} ${y}`; areaD += ` L ${x} ${y}`; }
+        });
+        areaD += ` L ${padding.left + (dailyData.length > 1 ? (dailyData.length - 1) * stepX : (chartW - padding.left - padding.right) / 2)} ${padding.top + chartHeight} Z`;
+
+        // Area fill
+        const area = document.createElementNS(svgNS, "path");
+        area.setAttribute("d", areaD); area.setAttribute("fill", "var(--success-color)"); area.setAttribute("opacity", "0.1");
+        svg.appendChild(area);
+        // Line
+        if (dailyData.length > 1) {
+            const path = document.createElementNS(svgNS, "path");
+            path.setAttribute("d", pathD); path.setAttribute("fill", "none");
+            path.setAttribute("stroke", "var(--success-color)"); path.setAttribute("stroke-width", "2"); path.setAttribute("opacity", "0.8");
+            svg.appendChild(path);
+        }
+        // Dots + labels
+        dailyData.forEach((d, i) => {
+            const pct = d.totalLU > 0 ? Math.round((d.correctLU / d.totalLU) * 100) : 0;
+            const x = padding.left + (dailyData.length > 1 ? i * stepX : (chartW - padding.left - padding.right) / 2);
+            const y = padding.top + chartHeight - (chartHeight * pct / 100);
+            const isOutlier = !!outlierDays[d.date];
+            const tooltip = `${formatDateEU(d.date + 'T00:00:00')}${isOutlier ? ' \u26A0 OUTLIER' : ''}\n${pct}% (${d.correctLU}/${d.totalLU})\nSessioni: ${d.sessions}`;
+
+            const dot = document.createElementNS(svgNS, "circle");
+            dot.setAttribute("cx", x); dot.setAttribute("cy", y); dot.setAttribute("r", isOutlier ? "6" : "4");
+            dot.setAttribute("fill", isOutlier ? "var(--warning-color)" : "var(--success-color)");
+            dot.setAttribute("stroke", isOutlier ? "var(--warning-color)" : "white"); dot.setAttribute("stroke-width", isOutlier ? "2" : "1.5");
+            if (isOutlier) dot.setAttribute("stroke-dasharray", "2,2");
+            const t = document.createElementNS(svgNS, "title"); t.textContent = tooltip; dot.appendChild(t);
+            svg.appendChild(dot);
+
+            // Date label
+            if (dailyData.length <= 30 || i % Math.ceil(dailyData.length / 30) === 0) {
+                const dObj = new Date(d.date + 'T00:00:00');
+                const lbl = document.createElementNS(svgNS, "text");
+                lbl.setAttribute("x", x); lbl.setAttribute("y", padding.top + chartHeight + 14);
+                lbl.setAttribute("text-anchor", "middle"); lbl.setAttribute("fill", isOutlier ? "var(--warning-color)" : "#888"); lbl.setAttribute("font-size", "7");
+                lbl.textContent = `${dObj.getDate()}/${dObj.getMonth() + 1}`;
+                svg.appendChild(lbl);
+            }
+            if (isOutlier) {
+                const oLbl = document.createElementNS(svgNS, "text");
+                oLbl.setAttribute("x", x); oLbl.setAttribute("y", padding.top + chartHeight + 23);
+                oLbl.setAttribute("text-anchor", "middle"); oLbl.setAttribute("fill", "var(--warning-color)"); oLbl.setAttribute("font-size", "8");
+                oLbl.textContent = "\u26A0"; svg.appendChild(oLbl);
+            }
+        });
+        chartContainer.appendChild(svg);
+        return;
+    }
+
+    // --- BAR CHART MODE (default) ---
     const barWidth = Math.max(30, Math.min(50, 600 / dailyData.length));
     const chartWidth = Math.max(300, dailyData.length * (barWidth + 8) + 40);
     const hasAnyNote = dailyData.some(d => d.hasNote);
-    const svgH = topPad + chartHeight + (hasAnyNote ? 40 : 30);
+    const hasAnyOutlier = dailyData.some(d => outlierDays[d.date]);
+    const svgH = topPad + chartHeight + (hasAnyNote || hasAnyOutlier ? 40 : 30);
 
-    const svgNS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(svgNS, "svg");
     svg.setAttribute("viewBox", `0 0 ${chartWidth} ${svgH}`);
     svg.setAttribute("width", chartWidth);
     svg.setAttribute("height", svgH);
     svg.style.minWidth = chartWidth + 'px';
 
-    const bY = topPad; // base offset for all bar y-coords
+    // Outlier hatch pattern
+    if (hasAnyOutlier) {
+        const defs = document.createElementNS(svgNS, "defs");
+        const pattern = document.createElementNS(svgNS, "pattern");
+        pattern.setAttribute("id", "outlier-hatch"); pattern.setAttribute("patternUnits", "userSpaceOnUse");
+        pattern.setAttribute("width", "6"); pattern.setAttribute("height", "6");
+        const line1 = document.createElementNS(svgNS, "line");
+        line1.setAttribute("x1", "0"); line1.setAttribute("y1", "6"); line1.setAttribute("x2", "6"); line1.setAttribute("y2", "0");
+        line1.setAttribute("stroke", "var(--warning-color)"); line1.setAttribute("stroke-width", "1.5"); line1.setAttribute("opacity", "0.5");
+        pattern.appendChild(line1); defs.appendChild(pattern); svg.appendChild(defs);
+    }
+
+    const bY = topPad;
 
     dailyData.forEach((d, i) => {
         const x = 20 + i * (barWidth + 8);
         const totalH = (d.totalLU / maxLU) * chartHeight;
         const correctH = (d.correctLU / maxLU) * chartHeight;
         const incorrectH = totalH - correctH;
-        const tooltip = `${formatDateEU(d.date + 'T00:00:00')}\nTotali: ${d.totalLU}\nCorrette: ${d.correctLU}\nErrate: ${d.incorrectLU}\nSessioni: ${d.sessions}`;
+        const isOutlier = !!outlierDays[d.date];
+        const tooltip = `${formatDateEU(d.date + 'T00:00:00')}${isOutlier ? ' \u26A0 OUTLIER' : ''}\nTotali: ${d.totalLU}\nCorrette: ${d.correctLU}\nErrate: ${d.incorrectLU}\nSessioni: ${d.sessions}`;
 
-        // Incorrect bar (red, top portion)
         if (incorrectH > 0) {
             const incorrectBar = document.createElementNS(svgNS, "rect");
-            incorrectBar.setAttribute("x", x);
-            incorrectBar.setAttribute("y", bY + chartHeight - totalH);
-            incorrectBar.setAttribute("width", barWidth);
-            incorrectBar.setAttribute("height", incorrectH);
-            incorrectBar.setAttribute("fill", "var(--danger-color)");
-            incorrectBar.setAttribute("opacity", "0.6");
-            incorrectBar.setAttribute("rx", "4");
-            const t1 = document.createElementNS(svgNS, "title");
-            t1.textContent = tooltip;
-            incorrectBar.appendChild(t1);
+            incorrectBar.setAttribute("x", x); incorrectBar.setAttribute("y", bY + chartHeight - totalH);
+            incorrectBar.setAttribute("width", barWidth); incorrectBar.setAttribute("height", incorrectH);
+            incorrectBar.setAttribute("fill", "var(--danger-color)"); incorrectBar.setAttribute("opacity", isOutlier ? "0.3" : "0.6"); incorrectBar.setAttribute("rx", "4");
+            const t1 = document.createElementNS(svgNS, "title"); t1.textContent = tooltip; incorrectBar.appendChild(t1);
             svg.appendChild(incorrectBar);
         }
 
-        // Correct bar (green, bottom portion)
         if (correctH > 0) {
             const correctBar = document.createElementNS(svgNS, "rect");
-            correctBar.setAttribute("x", x);
-            correctBar.setAttribute("y", bY + chartHeight - correctH);
-            correctBar.setAttribute("width", barWidth);
-            correctBar.setAttribute("height", correctH);
-            correctBar.setAttribute("fill", "var(--success-color)");
-            correctBar.setAttribute("opacity", "0.7");
-            correctBar.setAttribute("rx", "4");
-            const t2 = document.createElementNS(svgNS, "title");
-            t2.textContent = tooltip;
-            correctBar.appendChild(t2);
+            correctBar.setAttribute("x", x); correctBar.setAttribute("y", bY + chartHeight - correctH);
+            correctBar.setAttribute("width", barWidth); correctBar.setAttribute("height", correctH);
+            correctBar.setAttribute("fill", "var(--success-color)"); correctBar.setAttribute("opacity", isOutlier ? "0.3" : "0.7"); correctBar.setAttribute("rx", "4");
+            const t2 = document.createElementNS(svgNS, "title"); t2.textContent = tooltip; correctBar.appendChild(t2);
             svg.appendChild(correctBar);
         }
 
-        // Date label
+        // Outlier hatch overlay
+        if (isOutlier && totalH > 0) {
+            const hatch = document.createElementNS(svgNS, "rect");
+            hatch.setAttribute("x", x); hatch.setAttribute("y", bY + chartHeight - totalH);
+            hatch.setAttribute("width", barWidth); hatch.setAttribute("height", totalH);
+            hatch.setAttribute("fill", "url(#outlier-hatch)"); hatch.setAttribute("rx", "4");
+            svg.appendChild(hatch);
+        }
+
         const lbl = document.createElementNS(svgNS, "text");
-        lbl.setAttribute("x", x + barWidth / 2);
-        lbl.setAttribute("y", bY + chartHeight + 15);
-        lbl.setAttribute("text-anchor", "middle");
-        lbl.setAttribute("fill", "#888");
-        lbl.setAttribute("font-size", "8");
+        lbl.setAttribute("x", x + barWidth / 2); lbl.setAttribute("y", bY + chartHeight + 15);
+        lbl.setAttribute("text-anchor", "middle"); lbl.setAttribute("fill", isOutlier ? "var(--warning-color)" : "#888"); lbl.setAttribute("font-size", "8");
+        if (isOutlier) lbl.setAttribute("font-weight", "bold");
         const dObj = new Date(d.date + 'T00:00:00');
         lbl.textContent = `${dObj.getDate()}/${dObj.getMonth() + 1}`;
         svg.appendChild(lbl);
 
-        // Note icon if day has notes
         if (d.hasNote) {
             const noteIcon = document.createElementNS(svgNS, "text");
-            noteIcon.setAttribute("x", x + barWidth / 2);
-            noteIcon.setAttribute("y", bY + chartHeight + 24);
-            noteIcon.setAttribute("text-anchor", "middle");
-            noteIcon.setAttribute("fill", "#eab308");
-            noteIcon.setAttribute("font-size", "8");
+            noteIcon.setAttribute("x", x + barWidth / 2); noteIcon.setAttribute("y", bY + chartHeight + 24);
+            noteIcon.setAttribute("text-anchor", "middle"); noteIcon.setAttribute("fill", "#eab308"); noteIcon.setAttribute("font-size", "8");
             noteIcon.textContent = "\u270E";
-            const noteTitle = document.createElementNS(svgNS, "title");
-            noteTitle.textContent = "Giornata con note";
-            noteIcon.appendChild(noteTitle);
             svg.appendChild(noteIcon);
         }
 
-        // Count label on top (total LU)
+        if (isOutlier) {
+            const oIcon = document.createElementNS(svgNS, "text");
+            oIcon.setAttribute("x", x + barWidth / 2); oIcon.setAttribute("y", bY + chartHeight + (d.hasNote ? 33 : 24));
+            oIcon.setAttribute("text-anchor", "middle"); oIcon.setAttribute("fill", "var(--warning-color)"); oIcon.setAttribute("font-size", "8");
+            oIcon.textContent = "\u26A0";
+            const oTitle = document.createElementNS(svgNS, "title"); oTitle.textContent = "Giornata outlier"; oIcon.appendChild(oTitle);
+            svg.appendChild(oIcon);
+        }
+
         const countLbl = document.createElementNS(svgNS, "text");
-        countLbl.setAttribute("x", x + barWidth / 2);
-        countLbl.setAttribute("y", bY + chartHeight - totalH - 4);
-        countLbl.setAttribute("text-anchor", "middle");
-        countLbl.setAttribute("fill", "#aaa");
-        countLbl.setAttribute("font-size", "9");
-        countLbl.setAttribute("font-weight", "bold");
+        countLbl.setAttribute("x", x + barWidth / 2); countLbl.setAttribute("y", bY + chartHeight - totalH - 4);
+        countLbl.setAttribute("text-anchor", "middle"); countLbl.setAttribute("fill", isOutlier ? "var(--warning-color)" : "#aaa");
+        countLbl.setAttribute("font-size", "9"); countLbl.setAttribute("font-weight", "bold");
         countLbl.textContent = d.totalLU;
         svg.appendChild(countLbl);
 
-        // Percentage label at green/red boundary
         const pct = d.totalLU > 0 ? Math.round((d.correctLU / d.totalLU) * 100) : 0;
         const pctLbl = document.createElementNS(svgNS, "text");
-        pctLbl.setAttribute("x", x + barWidth + 3);
-        pctLbl.setAttribute("y", bY + chartHeight - correctH + 3);
-        pctLbl.setAttribute("text-anchor", "start");
-        pctLbl.setAttribute("fill", "var(--success-color)");
-        pctLbl.setAttribute("font-size", "7");
-        pctLbl.setAttribute("font-weight", "bold");
+        pctLbl.setAttribute("x", x + barWidth + 3); pctLbl.setAttribute("y", bY + chartHeight - correctH + 3);
+        pctLbl.setAttribute("text-anchor", "start"); pctLbl.setAttribute("fill", "var(--success-color)");
+        pctLbl.setAttribute("font-size", "7"); pctLbl.setAttribute("font-weight", "bold");
         pctLbl.textContent = pct + '%';
         svg.appendChild(pctLbl);
     });
@@ -858,6 +1002,13 @@ function renderDailyLUChart(dailyData) {
     legIText.setAttribute("fill", "#888"); legIText.setAttribute("font-size", "8");
     legIText.textContent = "Errate";
     svg.appendChild(legIText);
+    if (hasAnyOutlier) {
+        const legOutlier = document.createElementNS(svgNS, "text");
+        legOutlier.setAttribute("x", "140"); legOutlier.setAttribute("y", legendY + 6);
+        legOutlier.setAttribute("fill", "var(--warning-color)"); legOutlier.setAttribute("font-size", "8");
+        legOutlier.textContent = "\u26A0 Outlier";
+        svg.appendChild(legOutlier);
+    }
 
     chartContainer.appendChild(svg);
 }
@@ -883,6 +1034,7 @@ function renderDatesTab(patient) {
         if (!byDate[dk]) byDate[dk] = [];
     });
 
+    const outlierDays = patient.outlierDays || {};
     const dates = Object.keys(byDate).sort().reverse();
 
     let html = '';
@@ -892,18 +1044,22 @@ function renderDatesTab(patient) {
         const correctLU = sessions.reduce((sum, s) => sum + s.correct, 0);
         const pct = totalLU > 0 ? Math.round((correctLU / totalLU) * 100) : 0;
         const hasDailyNote = !!dailyNotes[dk];
+        const isOutlier = !!outlierDays[dk];
         const noteIndicator = hasDailyNote ? '<i class="fa-solid fa-book-medical" style="color:#eab308; font-size:0.7rem;" title="Nota giornata"></i>' : '';
+        const outlierIndicator = isOutlier ? '<span style="font-size:0.6rem; background:rgba(245,158,11,0.2); color:var(--warning-color); padding:1px 6px; border-radius:4px; font-weight:bold;">⚠ OUTLIER</span>' : '';
 
         html += `
-        <div class="chart-wrapper" style="margin-bottom:10px; padding:0; overflow:hidden;">
+        <div class="chart-wrapper" style="margin-bottom:10px; padding:0; overflow:hidden;${isOutlier ? ' border-left:3px solid var(--warning-color); opacity:0.8;' : ''}">
             <div onclick="toggleDateExpand(this)" style="display:flex; justify-content:space-between; align-items:center; padding:12px 15px; cursor:pointer; transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background=''">
                 <div style="display:flex; align-items:center; gap:10px;">
                     <i class="fa-solid fa-chevron-right date-expand-icon" style="transition:transform 0.2s; font-size:0.7rem; color:var(--text-secondary);"></i>
                     <span style="font-weight:bold; font-size:1rem;">${formatDateEU(dk + 'T00:00:00')}</span>
                     ${noteIndicator}
+                    ${outlierIndicator}
                     <span style="color:var(--text-secondary); font-size:0.8rem;">${sessions.length} attivit&agrave;</span>
                 </div>
-                <div style="display:flex; gap:12px; align-items:center;">
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <button class="btn-icon" style="width:24px; height:24px; font-size:0.6rem; color:${isOutlier ? 'var(--warning-color)' : 'var(--text-secondary)'}; border-color:${isOutlier ? 'rgba(245,158,11,0.4)' : 'rgba(255,255,255,0.1)'}; ${isOutlier ? 'background:rgba(245,158,11,0.15);' : ''}" onclick="event.stopPropagation(); toggleOutlierDay('${patient.id}', '${dk}')" title="${isOutlier ? 'Rimuovi outlier' : 'Segna come outlier'}"><i class="fa-solid fa-triangle-exclamation"></i></button>
                     <span style="font-size:0.85rem; color:var(--success-color);">${correctLU}<span style="color:var(--text-secondary);">/${totalLU}</span></span>
                     <span style="font-weight:bold; font-size:0.9rem; color:${pctColor(pct)};">${pct}%</span>
                 </div>
@@ -932,9 +1088,10 @@ function renderDatesTab(patient) {
             let dayThumb = '';
             if (s.setId && state.savedSets) {
                 const daySet = state.savedSets.find(ss => ss.id === s.setId);
-                if (daySet && daySet.items && daySet.items.length > 0) {
-                    const fi = daySet.items.find(it => it.img || it.image);
-                    if (fi) dayThumb = `<img src="${fi.img || fi.image}" style="width:22px; height:22px; border-radius:4px; object-fit:cover; border:1px solid rgba(255,255,255,0.1); flex-shrink:0;" alt="">`;
+                if (daySet) {
+                    const fi = daySet.items && daySet.items.length > 0 ? daySet.items.find(it => it.img || it.image || it.url) : null;
+                    const dayThumbSrc = fi ? (fi.img || fi.image || fi.url) : (daySet.coverImage || null);
+                    if (dayThumbSrc) dayThumb = `<img src="${dayThumbSrc}" style="width:22px; height:22px; border-radius:4px; object-fit:cover; border:1px solid rgba(255,255,255,0.1); flex-shrink:0;" alt="">`;
                 }
             }
             return `
@@ -1459,10 +1616,10 @@ function renderActivitiesTab(patient, sortBy) {
         const setId = sessions.find(s => s.setId)?.setId;
         if (setId && state.savedSets) {
             const setObj = state.savedSets.find(ss => ss.id === setId);
-            if (setObj && setObj.items && setObj.items.length > 0) {
-                const firstImg = setObj.items.find(it => it.img || it.image);
-                if (firstImg) {
-                    const imgSrc = firstImg.img || firstImg.image;
+            if (setObj) {
+                const firstImg = setObj.items && setObj.items.length > 0 ? setObj.items.find(it => it.img || it.image || it.url) : null;
+                const imgSrc = firstImg ? (firstImg.img || firstImg.image || firstImg.url) : (setObj.coverImage || null);
+                if (imgSrc) {
                     setThumbHtml = `<img src="${imgSrc}" style="width:28px; height:28px; border-radius:6px; object-fit:cover; border:1px solid rgba(255,255,255,0.1); flex-shrink:0;" alt="">`;
                 }
             }
@@ -1892,6 +2049,39 @@ function renderActivitySVGChart(container, sessions, typeGroup, modeCode, thresh
 
     container.appendChild(svg);
 }
+
+// --- Overview filter handlers ---
+window.changeOverviewFilter = (filter, pid) => {
+    state._overviewFilter = filter;
+    const p = state.patients.find(x => x.id === pid);
+    if (p) renderOverviewTab(p);
+};
+
+window.toggleOverviewOutliers = (pid) => {
+    state._overviewExcludeOutliers = !state._overviewExcludeOutliers;
+    const p = state.patients.find(x => x.id === pid);
+    if (p) renderOverviewTab(p);
+};
+
+window.toggleOverviewChartType = (pid) => {
+    state._overviewChartType = (state._overviewChartType || 'bar') === 'bar' ? 'line' : 'bar';
+    const p = state.patients.find(x => x.id === pid);
+    if (p) renderOverviewTab(p);
+};
+
+// --- Outlier day management ---
+window.toggleOutlierDay = async (pid, dateKey) => {
+    const p = state.patients.find(x => x.id === pid);
+    if (!p) return;
+    if (!p.outlierDays) p.outlierDays = {};
+    if (p.outlierDays[dateKey]) {
+        delete p.outlierDays[dateKey];
+    } else {
+        p.outlierDays[dateKey] = true;
+    }
+    await DB.savePatient(p);
+    loadPatientData(pid);
+};
 
 window.toggleActivityDetails = (btn) => {
     const wrapper = btn.closest('.chart-wrapper');

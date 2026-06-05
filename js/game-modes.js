@@ -3885,12 +3885,16 @@ function _populateQuadernoDropdown(quadernoSets, isTaskMode) {
     if (generalSets.length > 0) {
         html += `<div class="set-dropdown-group-label" style="top:0;"><span><i class="fa-solid fa-clipboard-list"></i> Quaderno Generale</span><span style="opacity:0.5; font-size:0.6rem;">${generalSets.length}</span></div>`;
         generalSets.forEach(s => {
+            const coverThumb = s.coverImage
+                ? `<div class="set-item-thumb"><img src="${s.coverImage}" loading="lazy" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:6px;"></div>`
+                : `<div class="set-item-thumb" style="background:rgba(99,102,241,0.15);"><i class="fa-solid fa-clipboard-list" style="color:var(--accent-color);"></i></div>`;
             html += `<div class="set-dropdown-item" onclick="loadQuadernoSet('${s.id}')" style="cursor:pointer;">
-                <div class="set-item-thumb" style="background:rgba(99,102,241,0.15);"><i class="fa-solid fa-clipboard-list" style="color:var(--accent-color);"></i></div>
+                ${coverThumb}
                 <div class="set-item-info">
                     <div class="set-item-name">${s.name}</div>
                     <div class="set-item-meta"><span class="set-item-count">${s.items.length} attivit&agrave;</span></div>
                 </div>
+                <button class="set-item-data-btn" onclick="event.stopPropagation(); uploadSetCoverImage('${s.id}')" title="Immagine copertina" style="color:var(--accent-color);"><i class="fa-solid fa-image"></i></button>
             </div>`;
         });
     }
@@ -3898,17 +3902,70 @@ function _populateQuadernoDropdown(quadernoSets, isTaskMode) {
     if (taskSets.length > 0) {
         html += `<div class="set-dropdown-group-label" style="top:0; color:var(--warning-color); border-color:rgba(245,158,11,0.15);"><span><i class="fa-solid fa-list-check"></i> Task Analysis</span><span style="opacity:0.5; font-size:0.6rem;">${taskSets.length}</span></div>`;
         taskSets.forEach(s => {
+            const coverThumb = s.coverImage
+                ? `<div class="set-item-thumb"><img src="${s.coverImage}" loading="lazy" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:6px;"></div>`
+                : `<div class="set-item-thumb" style="background:rgba(245,158,11,0.15);"><i class="fa-solid fa-list-check" style="color:var(--warning-color);"></i></div>`;
             html += `<div class="set-dropdown-item" onclick="loadQuadernoSet('${s.id}')" style="cursor:pointer;">
-                <div class="set-item-thumb" style="background:rgba(245,158,11,0.15);"><i class="fa-solid fa-list-check" style="color:var(--warning-color);"></i></div>
+                ${coverThumb}
                 <div class="set-item-info">
                     <div class="set-item-name">${s.name}</div>
                     <div class="set-item-meta"><span class="set-item-count">${s.items.length} passaggi</span></div>
                 </div>
+                <button class="set-item-data-btn" onclick="event.stopPropagation(); uploadSetCoverImage('${s.id}')" title="Immagine copertina" style="color:var(--warning-color);"><i class="fa-solid fa-image"></i></button>
             </div>`;
         });
     }
 
     panel.innerHTML = html;
+}
+
+// --- Cover image upload for quaderni / task analysis / any set ---
+window.uploadSetCoverImage = (setId) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+            const dataUrl = ev.target.result;
+            const resized = await _resizeCoverImage(dataUrl, 300);
+            const s = state.savedSets.find(x => x.id === setId);
+            if (!s) return;
+            s.coverImage = resized;
+            await DB.saveSet(s);
+            state.savedSets = await DB.getAllSets();
+            if (typeof filterSetsByMode === 'function') filterSetsByMode();
+        };
+        reader.readAsDataURL(file);
+    };
+    input.click();
+};
+
+window.removeSetCoverImage = async (setId) => {
+    const s = state.savedSets.find(x => x.id === setId);
+    if (!s) return;
+    delete s.coverImage;
+    await DB.saveSet(s);
+    state.savedSets = await DB.getAllSets();
+    if (typeof filterSetsByMode === 'function') filterSetsByMode();
+};
+
+function _resizeCoverImage(dataUrl, maxSize) {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let w = img.width, h = img.height;
+            if (w > h) { if (w > maxSize) { h = h * maxSize / w; w = maxSize; } }
+            else { if (h > maxSize) { w = w * maxSize / h; h = maxSize; } }
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', 0.8));
+        };
+        img.src = dataUrl;
+    });
 }
 
 // --- Open a new Quaderno sheet ---
