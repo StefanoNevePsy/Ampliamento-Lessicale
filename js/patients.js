@@ -92,6 +92,10 @@ window.selectPatientFromDropdown = (pid) => {
 
 window.setGlobalPatient = (pid) => {
     state.activePatientId = pid || null;
+    // Side quaderno is per-patient: drop the cached copy so it reloads for the new patient
+    state._sideQuaderno = null;
+    const nbPanel = document.getElementById('notebook-side-panel');
+    if (nbPanel && nbPanel.classList.contains('open') && typeof renderNotebookPanel === 'function') renderNotebookPanel();
     if (typeof filterSetsByMode === 'function') filterSetsByMode();
 };
 

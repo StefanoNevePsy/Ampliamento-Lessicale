@@ -116,6 +116,39 @@ async function searchOpenverse(query, perPage = 12) {
     }));
 }
 
+// --- ARASAAC API (pittogrammi AAC, gratuito, CORS, nessuna chiave) ---
+// Ideal for clean symbol images on white background and visual prompt buttons.
+function getArasaacLang() {
+    return localStorage.getItem('arasaac_lang') || 'it';
+}
+function setArasaacLang(lang) {
+    localStorage.setItem('arasaac_lang', (lang || 'it').trim());
+}
+
+function arasaacImageUrl(id, size = 500) {
+    return `https://static.arasaac.org/pictograms/${id}/${id}_${size}.png`;
+}
+
+async function searchArasaac(query, perPage = 16, lang) {
+    const language = lang || getArasaacLang();
+    const url = `https://api.arasaac.org/api/pictograms/${encodeURIComponent(language)}/search/${encodeURIComponent(query)}`;
+    const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (resp.status === 404) return []; // ARASAAC returns 404 when no matches
+    if (!resp.ok) throw new Error(`Errore ARASAAC (${resp.status})`);
+    const data = await resp.json();
+    if (!Array.isArray(data)) return [];
+    return data.slice(0, perPage).map(h => {
+        const kw = (h.keywords || []).map(k => k.keyword).filter(Boolean).join(', ');
+        return {
+            preview: arasaacImageUrl(h._id, 300),
+            web: arasaacImageUrl(h._id, 500),
+            large: arasaacImageUrl(h._id, 500),
+            tags: kw,
+            arasaacId: h._id
+        };
+    });
+}
+
 // --- CLOUDFLARE WORKERS AI (FLUX.1 Schnell, ~2000 img/day free) ---
 // Requires the user to deploy a small Worker proxy — see CLOUDFLARE_WORKER.md
 function getCloudflareWorkerUrl() {
@@ -258,6 +291,9 @@ window.openPollinationsGenerator = (itemIndex) => {
                 <button class="img-src-tab ${_imgGenTab === 'pixabay' ? 'active' : ''}" onclick="switchImgGenTab('pixabay', ${itemIndex})" style="padding:6px 12px; border:none; border-radius:8px 8px 0 0; background:${_imgGenTab === 'pixabay' ? 'rgba(99,102,241,0.2)' : 'transparent'}; color:${_imgGenTab === 'pixabay' ? 'var(--accent-color)' : 'var(--text-secondary)'}; cursor:pointer; font-size:0.8rem; font-weight:600;">
                     <i class="fa-solid fa-magnifying-glass"></i> Pixabay ${!hasPixabay ? '<span style="font-size:0.6rem; opacity:0.5;">(no key)</span>' : ''}
                 </button>
+                <button class="img-src-tab ${_imgGenTab === 'arasaac' ? 'active' : ''}" onclick="switchImgGenTab('arasaac', ${itemIndex})" style="padding:6px 12px; border:none; border-radius:8px 8px 0 0; background:${_imgGenTab === 'arasaac' ? 'rgba(99,102,241,0.2)' : 'transparent'}; color:${_imgGenTab === 'arasaac' ? 'var(--accent-color)' : 'var(--text-secondary)'}; cursor:pointer; font-size:0.8rem; font-weight:600;">
+                    <i class="fa-solid fa-icons"></i> ARASAAC
+                </button>
                 <button class="img-src-tab ${_imgGenTab === 'openverse' ? 'active' : ''}" onclick="switchImgGenTab('openverse', ${itemIndex})" style="padding:6px 12px; border:none; border-radius:8px 8px 0 0; background:${_imgGenTab === 'openverse' ? 'rgba(99,102,241,0.2)' : 'transparent'}; color:${_imgGenTab === 'openverse' ? 'var(--accent-color)' : 'var(--text-secondary)'}; cursor:pointer; font-size:0.8rem; font-weight:600;">
                     <i class="fa-solid fa-images"></i> Openverse
                 </button>
@@ -291,6 +327,21 @@ window.openPollinationsGenerator = (itemIndex) => {
                 </div>
                 <p style="font-size:0.7rem; color:#888; margin:0 0 8px;"><i class="fa-solid fa-creative-commons"></i> Immagini Creative Commons da Openverse &mdash; nessuna chiave richiesta. Verifica la licenza per usi pubblici.</p>
                 <div id="openverse-results-container"></div>
+            </div>
+
+            <!-- ARASAAC tab -->
+            <div id="img-tab-arasaac" style="${_imgGenTab !== 'arasaac' ? 'display:none;' : ''}">
+                <div style="display:flex; gap:6px; margin-bottom:8px;">
+                    <input type="text" id="arasaac-query" value="${escapeHtml(item.label)}" placeholder="Cerca pittogramma..." style="flex:1; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white;" onkeydown="if(event.key==='Enter')runArasaacSearch(${itemIndex})">
+                    <select id="arasaac-lang" onchange="setArasaacLang(this.value); runArasaacSearch(${itemIndex})" style="padding:10px; border-radius:10px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.85rem;">
+                        ${['it', 'en', 'es', 'fr', 'de'].map(l => `<option value="${l}"${getArasaacLang() === l ? ' selected' : ''}>${l.toUpperCase()}</option>`).join('')}
+                    </select>
+                    <button class="btn btn-primary" onclick="runArasaacSearch(${itemIndex})" style="padding:10px 16px;">
+                        <i class="fa-solid fa-search"></i>
+                    </button>
+                </div>
+                <p style="font-size:0.7rem; color:#888; margin:0 0 8px;"><i class="fa-solid fa-icons"></i> Pittogrammi ARASAAC &mdash; simboli AAC su sfondo bianco, gratuiti (licenza CC BY-NC-SA). Ideali per carte e prompt visivi.</p>
+                <div id="arasaac-results-container"></div>
             </div>
 
             <!-- Cloudflare tab -->
@@ -356,12 +407,14 @@ window.openPollinationsGenerator = (itemIndex) => {
         setTimeout(() => runPixabaySearch(itemIndex), 200);
     } else if (_imgGenTab === 'openverse') {
         setTimeout(() => runOpenverseSearch(itemIndex), 200);
+    } else if (_imgGenTab === 'arasaac') {
+        setTimeout(() => runArasaacSearch(itemIndex), 200);
     }
 };
 
 window.switchImgGenTab = (tab, itemIndex) => {
     _imgGenTab = tab;
-    ['pixabay', 'openverse', 'cloudflare'].forEach(t => {
+    ['pixabay', 'arasaac', 'openverse', 'cloudflare'].forEach(t => {
         const el = document.getElementById('img-tab-' + t);
         if (el) el.style.display = t === tab ? '' : 'none';
     });
@@ -370,13 +423,16 @@ window.switchImgGenTab = (tab, itemIndex) => {
         btn.style.background = isActive ? 'rgba(99,102,241,0.2)' : 'transparent';
         btn.style.color = isActive ? 'var(--accent-color)' : 'var(--text-secondary)';
     });
-    // Auto-search Openverse when its tab is opened and empty
+    // Auto-search when a search tab is opened and empty
     if (tab === 'openverse' && !document.getElementById('openverse-results-container')?.innerHTML.trim()) {
         runOpenverseSearch(itemIndex);
     }
+    if (tab === 'arasaac' && !document.getElementById('arasaac-results-container')?.innerHTML.trim()) {
+        runArasaacSearch(itemIndex);
+    }
     const genBtn = document.getElementById('poll-generate-btn');
     if (genBtn) {
-        genBtn.style.display = (tab === 'pixabay' || tab === 'openverse') ? 'none' : '';
+        genBtn.style.display = (tab === 'pixabay' || tab === 'openverse' || tab === 'arasaac') ? 'none' : '';
     }
 };
 
@@ -494,6 +550,64 @@ window.selectOpenverseImage = async (itemIndex, resultIndex) => {
 
     status.style.display = 'block';
     document.getElementById('poll-status-text').textContent = 'Download immagine...';
+
+    try {
+        const dataUrl = await fetchPixabayAsDataUrl(results[resultIndex].web);
+        _pollLastImageUrl = dataUrl;
+        document.getElementById('poll-preview-img').src = dataUrl;
+        preview.style.display = 'block';
+        status.style.display = 'none';
+        actions.style.display = 'none';
+        acceptActions.style.display = 'flex';
+    } catch (err) {
+        status.style.display = 'none';
+        alert('Errore download: ' + err.message);
+    }
+};
+
+window.runArasaacSearch = async (itemIndex) => {
+    const query = document.getElementById('arasaac-query')?.value?.trim();
+    if (!query) return;
+
+    const container = document.getElementById('arasaac-results-container');
+    if (!container) return;
+
+    container.innerHTML = '<div style="text-align:center; padding:20px;"><div class="loading-spinner" style="margin:0 auto;"></div><p style="color:#a5b4fc; font-size:0.8rem; margin-top:8px;">Ricerca su ARASAAC...</p></div>';
+
+    try {
+        const results = await searchArasaac(query, 16);
+        if (results.length === 0) {
+            container.innerHTML = '<div style="text-align:center; padding:15px; color:var(--text-secondary); font-size:0.85rem;"><i class="fa-solid fa-search"></i> Nessun pittogramma trovato. Prova con un sinonimo o cambia lingua.</div>';
+            return;
+        }
+        container.innerHTML = `<div class="pixabay-results">
+            ${results.map((r, i) => `
+                <div class="pixabay-result-item arasaac-result-item" onclick="selectArasaacImage(${itemIndex}, ${i})" data-url="${r.web}" title="${escapeHtml(r.tags)}">
+                    <img src="${r.preview}" loading="lazy" alt="${escapeHtml(r.tags)}" style="object-fit:contain; background:#fff;">
+                </div>
+            `).join('')}
+        </div>
+        <p style="font-size:0.65rem; color:#666; text-align:center; margin-top:6px;"><i class="fa-solid fa-icons"></i> Pittogrammi ARASAAC &mdash; CC BY-NC-SA</p>`;
+        window._arasaacResults = results;
+    } catch (err) {
+        container.innerHTML = `<div style="text-align:center; padding:15px; color:var(--danger-color); font-size:0.85rem;"><i class="fa-solid fa-triangle-exclamation"></i> ${err.message}</div>`;
+    }
+};
+
+window.selectArasaacImage = async (itemIndex, resultIndex) => {
+    const results = window._arasaacResults;
+    if (!results || !results[resultIndex]) return;
+
+    document.querySelectorAll('#arasaac-results-container .pixabay-result-item').forEach(el => el.classList.remove('selected'));
+    document.querySelectorAll('#arasaac-results-container .pixabay-result-item')[resultIndex]?.classList.add('selected');
+
+    const status = document.getElementById('poll-status');
+    const preview = document.getElementById('poll-preview');
+    const acceptActions = document.getElementById('poll-accept-actions');
+    const actions = document.getElementById('poll-actions');
+
+    status.style.display = 'block';
+    document.getElementById('poll-status-text').textContent = 'Download pittogramma...';
 
     try {
         const dataUrl = await fetchPixabayAsDataUrl(results[resultIndex].web);
@@ -633,7 +747,8 @@ window.openBulkPollinations = () => {
             <div style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">
                 ${hasCloudflare ? `<button class="btn btn-ghost bulk-engine-btn selected" data-engine="cloudflare" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-cloud"></i> Cloudflare Flux</button>` : ''}
                 ${hasPixabay ? `<button class="btn btn-ghost bulk-engine-btn ${!hasCloudflare ? 'selected' : ''}" data-engine="pixabay" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-search"></i> Pixabay</button>` : ''}
-                <button class="btn btn-ghost bulk-engine-btn ${!hasCloudflare && !hasPixabay ? 'selected' : ''}" data-engine="openverse" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-images"></i> Openverse</button>
+                <button class="btn btn-ghost bulk-engine-btn ${!hasCloudflare && !hasPixabay ? 'selected' : ''}" data-engine="arasaac" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-icons"></i> ARASAAC</button>
+                <button class="btn btn-ghost bulk-engine-btn" data-engine="openverse" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-images"></i> Openverse</button>
             </div>
 
             <div id="bulk-cf-model-section" style="${hasCloudflare ? '' : 'display:none;'}">
@@ -749,9 +864,10 @@ window.runBulkPollGeneration = async () => {
     let errors = 0;
     const log = document.getElementById('bulk-poll-log');
 
-    // Batch-translate all labels upfront (one Gemini call)
+    // Batch-translate all labels upfront (one Gemini call).
+    // Pixabay and ARASAAC search natively in Italian, so skip translation for them.
     let translations = {};
-    if (engine !== 'pixabay') {
+    if (engine !== 'pixabay' && engine !== 'arasaac') {
         document.getElementById('bulk-poll-progress-text').textContent = 'Traduzione etichette...';
         try {
             const allLabels = items.map(({ item }) => item.label).filter(Boolean);
@@ -788,6 +904,13 @@ window.runBulkPollGeneration = async () => {
                     imageUrl = await fetchPixabayAsDataUrl(results[0].web);
                 } else {
                     throw new Error('Nessun risultato');
+                }
+            } else if (engine === 'arasaac') {
+                const results = await searchArasaac(item.label, 3);
+                if (results.length > 0) {
+                    imageUrl = await fetchPixabayAsDataUrl(results[0].web);
+                } else {
+                    throw new Error('Nessun pittogramma');
                 }
             } else {
                 imageUrl = await generateCloudflareImage(translatedLabel, randomStyle);

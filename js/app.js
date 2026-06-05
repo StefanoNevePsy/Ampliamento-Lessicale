@@ -3198,6 +3198,7 @@ window.openVisualPromptConfig = () => {
             ${preview}
             <input type="text" value="${p.label}" onchange="vpbChangeLabel(${i}, this.value)" style="flex:1; padding:4px 8px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.3); color:white; font-size:0.85rem;">
             <input type="color" value="${p.color}" onchange="vpbChangeColor(${i}, this.value)" style="width:30px; height:30px; border:none; border-radius:6px; cursor:pointer;">
+            <button class="btn-icon" style="width:28px; height:28px; font-size:0.7rem; color:#10b981;" onclick="vpbSearchArasaac(${i})" title="Cerca pittogramma ARASAAC"><i class="fa-solid fa-icons"></i></button>
             <button class="btn-icon" style="width:28px; height:28px; font-size:0.7rem; color:var(--accent-color);" onclick="vpbUploadImage(${i})" title="Carica immagine"><i class="fa-solid fa-image"></i></button>
             ${p.image ? `<button class="btn-icon" style="width:28px; height:28px; font-size:0.7rem; color:var(--danger-color);" onclick="vpbRemoveImage(${i})" title="Rimuovi immagine"><i class="fa-solid fa-xmark"></i></button>` : ''}
         </div>`;
@@ -3272,6 +3273,77 @@ window.vpbRemoveImage = (idx) => {
     if (prompts[idx]) { prompts[idx].image = null; saveVisualPrompts(prompts); renderVisualPromptBar(); openVisualPromptConfig(); }
 };
 
+// Search ARASAAC pictograms for a visual prompt button
+window.vpbSearchArasaac = (idx) => {
+    if (typeof searchArasaac !== 'function') { alert('Ricerca ARASAAC non disponibile.'); return; }
+    const prompts = getVisualPrompts();
+    const defaultQuery = prompts[idx]?.label || '';
+
+    const existing = document.getElementById('vpb-arasaac-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'vpb-arasaac-modal';
+    modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:26000; display:flex; align-items:center; justify-content:center; padding:20px;';
+    modal.innerHTML = `
+    <div style="width:100%; max-width:460px; background:#1e1e2f; border-radius:16px; border:1px solid var(--glass-border); padding:20px; max-height:85vh; overflow-y:auto;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <h3 style="margin:0; color:#10b981; font-size:1rem;"><i class="fa-solid fa-icons"></i> Pittogramma ARASAAC</h3>
+            <button class="btn btn-ghost" onclick="document.getElementById('vpb-arasaac-modal').remove()" style="padding:6px 10px;"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div style="display:flex; gap:6px; margin-bottom:10px;">
+            <input type="text" id="vpb-arasaac-query" value="${(defaultQuery || '').replace(/"/g, '&quot;')}" placeholder="Cerca..." onkeydown="if(event.key==='Enter')vpbRunArasaacSearch(${idx})" style="flex:1; padding:9px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white;">
+            <button class="btn btn-primary" onclick="vpbRunArasaacSearch(${idx})" style="padding:9px 14px;"><i class="fa-solid fa-search"></i></button>
+        </div>
+        <div id="vpb-arasaac-results"></div>
+    </div>`;
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    document.body.appendChild(modal);
+    if (defaultQuery) vpbRunArasaacSearch(idx);
+};
+
+window.vpbRunArasaacSearch = async (idx) => {
+    const query = document.getElementById('vpb-arasaac-query')?.value?.trim();
+    const container = document.getElementById('vpb-arasaac-results');
+    if (!query || !container) return;
+    container.innerHTML = '<div style="text-align:center; padding:20px;"><div class="loading-spinner" style="margin:0 auto;"></div></div>';
+    try {
+        const results = await searchArasaac(query, 16);
+        if (results.length === 0) {
+            container.innerHTML = '<div style="text-align:center; padding:15px; color:var(--text-secondary); font-size:0.85rem;">Nessun pittogramma trovato.</div>';
+            return;
+        }
+        window._vpbArasaacResults = results;
+        container.innerHTML = `<div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px;">
+            ${results.map((r, i) => `<div onclick="vpbPickArasaac(${idx}, ${i})" style="cursor:pointer; background:#fff; border-radius:8px; padding:4px; border:2px solid transparent;" onmouseover="this.style.borderColor='#10b981'" onmouseout="this.style.borderColor='transparent'">
+                <img src="${r.preview}" loading="lazy" alt="${(r.tags || '').replace(/"/g, '&quot;')}" style="width:100%; aspect-ratio:1; object-fit:contain;">
+            </div>`).join('')}
+        </div>`;
+    } catch (err) {
+        container.innerHTML = `<div style="text-align:center; padding:15px; color:var(--danger-color); font-size:0.85rem;">${err.message}</div>`;
+    }
+};
+
+window.vpbPickArasaac = async (idx, resultIndex) => {
+    const results = window._vpbArasaacResults;
+    if (!results || !results[resultIndex]) return;
+    const container = document.getElementById('vpb-arasaac-results');
+    if (container) container.innerHTML = '<div style="text-align:center; padding:20px;"><div class="loading-spinner" style="margin:0 auto;"></div><p style="color:#a5b4fc; font-size:0.8rem;">Download...</p></div>';
+    try {
+        const dataUrl = await fetchPixabayAsDataUrl(results[resultIndex].web);
+        const prompts = getVisualPrompts();
+        if (prompts[idx]) {
+            prompts[idx].image = dataUrl;
+            saveVisualPrompts(prompts);
+            renderVisualPromptBar();
+        }
+        document.getElementById('vpb-arasaac-modal')?.remove();
+        openVisualPromptConfig();
+    } catch (err) {
+        alert('Errore download: ' + err.message);
+    }
+};
+
 window.vpbAddPrompt = () => {
     const prompts = getVisualPrompts();
     prompts.push({ id: 'custom_' + Date.now(), label: 'Nuovo', icon: 'fa-star', image: null, color: '#a78bfa', enabled: true });
@@ -3299,23 +3371,38 @@ if (isVisualPromptBarVisible()) {
 // NOTEBOOK SIDE PANEL (accessible during activities)
 // ============================================================
 
+// The side panel hosts an independent "Quaderno" (scorable item lists). It is
+// fully isolated from the main activity: it uses its own state object
+// (_sideQuaderno) and its own save routine, so it never touches state.session
+// or state._quaderno*. On save it appends 'quaderno' sessions to the active
+// patient's history — operating on the same in-memory patient object the main
+// save uses — so its LUs count in the day's totals with no data conflict.
+
 let _notebookPanelOpen = false;
 let _notebookHandleVisible = false;
-let _notebookEntries = [];
 
-function _loadNotebookEntries() {
-    try {
-        const pid = state.activePatientId;
-        if (!pid) return [];
-        const key = `notebook_entries_${pid}`;
-        return JSON.parse(localStorage.getItem(key) || '[]');
-    } catch { return []; }
+function _sideQuadernoStorageKey() {
+    const pid = state.activePatientId || 'guest';
+    return `side_quaderno_${pid}`;
 }
 
-function _saveNotebookEntries(entries) {
-    const pid = state.activePatientId;
-    if (!pid) return;
-    localStorage.setItem(`notebook_entries_${pid}`, JSON.stringify(entries));
+function _loadSideQuaderno() {
+    try {
+        const raw = localStorage.getItem(_sideQuadernoStorageKey());
+        if (raw) {
+            const data = JSON.parse(raw);
+            // Stale data from a previous day is discarded (LUs are per-day)
+            if (data.date === new Date().toISOString().split('T')[0]) {
+                return data;
+            }
+        }
+    } catch {}
+    return { date: new Date().toISOString().split('T')[0], rows: [], sessionType: 'independent', tdSeconds: 5 };
+}
+
+function _saveSideQuaderno() {
+    if (!state._sideQuaderno) return;
+    try { localStorage.setItem(_sideQuadernoStorageKey(), JSON.stringify(state._sideQuaderno)); } catch {}
 }
 
 window.toggleNotebookHandle = () => {
@@ -3341,88 +3428,200 @@ window.toggleNotebookPanel = () => {
 function renderNotebookPanel() {
     const body = document.getElementById('notebook-panel-body');
     if (!body) return;
-    _notebookEntries = _loadNotebookEntries();
+
+    // (Re)load isolated side-quaderno state
+    if (!state._sideQuaderno) state._sideQuaderno = _loadSideQuaderno();
+    const sq = state._sideQuaderno;
 
     const patientName = state.activePatientId
         ? (state.patients.find(p => p.id === state.activePatientId)?.name || 'Paziente')
-        : 'Ospite';
-    const today = new Date().toISOString().split('T')[0];
-    const todayEntries = _notebookEntries.filter(e => e.date === today);
+        : null;
+
+    const isTD = sq.sessionType === 'timedelay';
+    const totalLU = sq.rows.reduce((sum, r) => sum + (r.results ? r.results.length : 0), 0);
+
+    // Activity name suggestions (reuse the same source as the main quaderno)
+    const activityNames = (typeof getUsedActivityNames === 'function') ? getUsedActivityNames() : [];
+    const datalistOpts = activityNames.map(n => `<option value="${n.replace(/"/g, '&quot;')}">`).join('');
 
     let html = `
-    <div style="margin-bottom:12px; padding:8px 10px; background:rgba(99,102,241,0.08); border-radius:10px; font-size:0.8rem; color:var(--text-secondary);">
-        <i class="fa-solid fa-user" style="margin-right:4px;"></i> ${patientName}
-        <span style="float:right; font-size:0.7rem;">${new Date().toLocaleDateString('it-IT')}</span>
+    <div style="margin-bottom:10px; padding:8px 10px; background:rgba(99,102,241,0.08); border-radius:10px; font-size:0.78rem; color:var(--text-secondary); display:flex; justify-content:space-between; align-items:center;">
+        <span><i class="fa-solid fa-user" style="margin-right:4px;"></i> ${patientName || '<span style="color:var(--warning-color);">Nessun paziente</span>'}</span>
+        ${totalLU > 0 ? `<span style="background:rgba(99,102,241,0.2); color:var(--accent-color); padding:2px 8px; border-radius:6px; font-weight:bold; font-size:0.7rem;">${totalLU} LU</span>` : ''}
     </div>
-    <div style="margin-bottom:12px;">
-        <textarea id="notebook-new-entry" placeholder="Annota osservazioni, richieste spontanee del bambino, comportamenti..." style="width:100%; min-height:80px; padding:10px; border-radius:10px; border:1px solid var(--glass-border); background:rgba(0,0,0,0.3); color:white; font-size:0.85rem; resize:vertical; font-family:inherit;"></textarea>
-        <button class="btn btn-primary" onclick="addNotebookEntry()" style="margin-top:6px; padding:6px 16px; font-size:0.8rem; width:100%;">
-            <i class="fa-solid fa-plus"></i> Aggiungi Nota
+
+    <div style="font-size:0.72rem; color:var(--text-secondary); margin-bottom:10px; line-height:1.4;">
+        Registra item extra che esulano dall'attività corrente. I LU vengono salvati come sessioni "Quaderno" e rientrano nei totali del giorno.
+    </div>
+
+    <datalist id="side-q-names">${datalistOpts}</datalist>
+
+    <div id="side-q-rows">
+        ${sq.rows.length === 0
+            ? `<div style="text-align:center; padding:20px; color:var(--text-secondary); font-size:0.8rem; opacity:0.6;"><i class="fa-solid fa-clipboard-list fa-2x" style="margin-bottom:8px; display:block;"></i>Aggiungi un item da punteggiare</div>`
+            : sq.rows.map((row, i) => _renderSideQuadernoRow(row, i, isTD)).join('')}
+    </div>
+
+    <div style="display:flex; gap:6px; margin-top:10px; align-items:center; flex-wrap:wrap;">
+        <input list="side-q-names" type="text" id="side-q-new" placeholder="Nome item..." onkeydown="if(event.key==='Enter')addSideQuadernoRow()" autocomplete="off" style="flex:1; min-width:100px; padding:9px 10px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.85rem;">
+        <button class="btn btn-primary" onclick="addSideQuadernoRow()" style="padding:9px 14px;"><i class="fa-solid fa-plus"></i></button>
+    </div>
+
+    <div style="display:flex; gap:6px; margin-top:8px; align-items:center; flex-wrap:wrap;">
+        <select id="side-q-type" onchange="setSideQuadernoType(this.value)" style="flex:1; padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.8rem;">
+            <option value="independent" ${!isTD ? 'selected' : ''}>Indipendente</option>
+            <option value="timedelay" ${isTD ? 'selected' : ''}>Time Delay</option>
+        </select>
+        ${isTD ? `<input type="number" id="side-q-td" value="${sq.tdSeconds || 5}" min="1" max="30" onchange="state._sideQuaderno.tdSeconds=parseInt(this.value)||5; _saveSideQuaderno();" style="width:55px; padding:8px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.8rem; text-align:center;">` : ''}
+    </div>
+
+    <div style="display:flex; gap:6px; margin-top:14px;">
+        <button class="btn btn-success" onclick="saveSideQuadernoSession()" style="flex:1; padding:10px;" ${totalLU === 0 ? 'disabled style="flex:1; padding:10px; opacity:0.4;"' : ''}>
+            <i class="fa-solid fa-floppy-disk"></i> Salva nei dati
         </button>
+        ${sq.rows.length > 0 ? `<button class="btn btn-ghost" onclick="clearSideQuaderno()" style="padding:10px 12px; color:var(--danger-color); border-color:rgba(239,68,68,0.3);" title="Svuota"><i class="fa-solid fa-eraser"></i></button>` : ''}
     </div>`;
-
-    if (todayEntries.length > 0) {
-        html += `<div style="font-size:0.75rem; color:var(--text-secondary); font-weight:bold; margin-bottom:6px;"><i class="fa-solid fa-clock"></i> Note di oggi (${todayEntries.length})</div>`;
-        todayEntries.reverse().forEach((entry, i) => {
-            const realIdx = _notebookEntries.indexOf(entry);
-            const time = new Date(entry.timestamp).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-            html += `<div style="margin-bottom:8px; padding:10px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px solid rgba(255,255,255,0.06); position:relative;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-                    <span style="font-size:0.7rem; color:var(--accent-color); font-weight:bold;">${time}</span>
-                    ${entry.mode ? `<span style="font-size:0.6rem; background:rgba(99,102,241,0.15); color:var(--accent-color); padding:1px 6px; border-radius:4px;">${entry.mode}</span>` : ''}
-                    <button class="btn-icon" style="width:20px; height:20px; font-size:0.55rem; color:var(--danger-color); border-color:rgba(239,68,68,0.3);" onclick="deleteNotebookEntry(${realIdx})" title="Elimina"><i class="fa-solid fa-trash"></i></button>
-                </div>
-                <div style="font-size:0.8rem; line-height:1.5; color:#ddd;">${entry.text.replace(/</g, '&lt;').replace(/\n/g, '<br>')}</div>
-            </div>`;
-        });
-    }
-
-    // Show older entries collapsed
-    const olderEntries = _notebookEntries.filter(e => e.date !== today);
-    if (olderEntries.length > 0) {
-        const groupedByDate = {};
-        olderEntries.forEach(e => {
-            if (!groupedByDate[e.date]) groupedByDate[e.date] = [];
-            groupedByDate[e.date].push(e);
-        });
-        html += `<div style="margin-top:12px; border-top:1px solid rgba(255,255,255,0.05); padding-top:8px;">
-            <div style="font-size:0.75rem; color:var(--text-secondary); font-weight:bold; margin-bottom:6px;"><i class="fa-solid fa-calendar-days"></i> Note precedenti</div>`;
-        Object.keys(groupedByDate).sort().reverse().slice(0, 5).forEach(dk => {
-            const entries = groupedByDate[dk];
-            const dateLabel = new Date(dk + 'T00:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
-            html += `<div style="margin-bottom:4px; padding:6px 8px; background:rgba(255,255,255,0.02); border-radius:6px; font-size:0.75rem; color:#aaa;">
-                <b>${dateLabel}</b> — ${entries.length} nota/e
-                <div style="margin-top:2px; font-size:0.7rem; color:#888;">${entries.map(e => e.text.substring(0, 50) + (e.text.length > 50 ? '...' : '')).join(' | ')}</div>
-            </div>`;
-        });
-        html += `</div>`;
-    }
 
     body.innerHTML = html;
 }
 
-window.addNotebookEntry = () => {
-    const textarea = document.getElementById('notebook-new-entry');
-    if (!textarea || !textarea.value.trim()) return;
-    const entries = _loadNotebookEntries();
-    const mode = document.getElementById('mode-select')?.value;
-    const modeName = mode && MODES_CONFIG[mode] ? MODES_CONFIG[mode] : '';
-    entries.push({
-        text: textarea.value.trim(),
-        timestamp: new Date().toISOString(),
-        date: new Date().toISOString().split('T')[0],
-        mode: modeName
-    });
-    _saveNotebookEntries(entries);
-    textarea.value = '';
+function _renderSideQuadernoRow(row, idx, isTD) {
+    const res = row.results || [];
+    const vCount = res.filter(r => r === true).length;
+    const pCount = res.filter(r => r === 'prompt').length;
+    const xCount = res.filter(r => r === false).length;
+    const total = res.length;
+
+    const leftBtn = isTD
+        ? `<div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
+                <span style="font-size:0.65rem; font-weight:bold; color:var(--warning-color);">${pCount}</span>
+                <button onclick="sideQuadernoAddLU(${idx}, 'prompt')" style="width:40px; height:40px; border-radius:50%; border:2px solid var(--warning-color); background:rgba(245,158,11,0.15); color:var(--warning-color); cursor:pointer; font-size:0.9rem; font-weight:800; display:flex; align-items:center; justify-content:center;">P</button>
+            </div>`
+        : `<div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
+                <span style="font-size:0.65rem; font-weight:bold; color:var(--danger-color);">${xCount}</span>
+                <button onclick="sideQuadernoAddLU(${idx}, false)" style="width:40px; height:40px; border-radius:50%; border:2px solid var(--danger-color); background:rgba(239,68,68,0.15); color:var(--danger-color); cursor:pointer; font-size:1rem; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-xmark"></i></button>
+            </div>`;
+
+    return `
+    <div style="display:flex; flex-direction:column; gap:6px; padding:10px; margin-bottom:7px; background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); border-radius:12px;">
+        <div style="display:flex; align-items:center; gap:6px;">
+            <span style="flex:1; font-size:0.9rem; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${row.name}</span>
+            <span style="background:rgba(99,102,241,0.2); color:var(--accent-color); padding:2px 8px; border-radius:6px; font-size:0.75rem; font-weight:bold;" title="Totale LU">${total}</span>
+            <button onclick="sideQuadernoUndo(${idx})" style="width:28px; height:28px; border-radius:8px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.05); color:var(--text-secondary); cursor:pointer; font-size:0.7rem;" title="Annulla ultimo" ${total === 0 ? 'disabled' : ''}><i class="fa-solid fa-rotate-left"></i></button>
+            <button onclick="sideQuadernoRemoveRow(${idx})" style="width:28px; height:28px; border-radius:8px; border:none; background:transparent; color:#666; cursor:pointer; font-size:0.75rem;" title="Rimuovi"><i class="fa-solid fa-trash"></i></button>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:center;">
+            ${leftBtn}
+            <div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
+                <span style="font-size:0.65rem; font-weight:bold; color:var(--success-color);">${vCount}</span>
+                <button onclick="sideQuadernoAddLU(${idx}, true)" style="width:40px; height:40px; border-radius:50%; border:2px solid var(--success-color); background:rgba(16,185,129,0.15); color:var(--success-color); cursor:pointer; font-size:1rem; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-check"></i></button>
+            </div>
+        </div>
+    </div>`;
+}
+
+window.addSideQuadernoRow = () => {
+    if (!state._sideQuaderno) state._sideQuaderno = _loadSideQuaderno();
+    const input = document.getElementById('side-q-new');
+    const name = input ? input.value.trim() : '';
+    if (!name) return;
+    state._sideQuaderno.rows.push({ name, results: [] });
+    _saveSideQuaderno();
+    renderNotebookPanel();
+    setTimeout(() => { const el = document.getElementById('side-q-new'); if (el) el.focus(); }, 0);
+};
+
+window.sideQuadernoAddLU = (idx, result) => {
+    if (!state._sideQuaderno || !state._sideQuaderno.rows[idx]) return;
+    if (!state._sideQuaderno.rows[idx].results) state._sideQuaderno.rows[idx].results = [];
+    state._sideQuaderno.rows[idx].results.push(result);
+    _saveSideQuaderno();
     renderNotebookPanel();
 };
 
-window.deleteNotebookEntry = (idx) => {
-    const entries = _loadNotebookEntries();
-    if (idx >= 0 && idx < entries.length) {
-        entries.splice(idx, 1);
-        _saveNotebookEntries(entries);
-        renderNotebookPanel();
+window.sideQuadernoUndo = (idx) => {
+    if (!state._sideQuaderno || !state._sideQuaderno.rows[idx]) return;
+    const res = state._sideQuaderno.rows[idx].results;
+    if (res && res.length > 0) { res.pop(); _saveSideQuaderno(); renderNotebookPanel(); }
+};
+
+window.sideQuadernoRemoveRow = (idx) => {
+    if (!state._sideQuaderno) return;
+    state._sideQuaderno.rows.splice(idx, 1);
+    _saveSideQuaderno();
+    renderNotebookPanel();
+};
+
+window.setSideQuadernoType = (type) => {
+    if (!state._sideQuaderno) return;
+    state._sideQuaderno.sessionType = type;
+    _saveSideQuaderno();
+    renderNotebookPanel();
+};
+
+window.clearSideQuaderno = async () => {
+    if (typeof themedConfirm === 'function' && !await themedConfirm("Svuotare il quaderno laterale? I dati non salvati andranno persi.")) return;
+    state._sideQuaderno = { date: new Date().toISOString().split('T')[0], rows: [], sessionType: 'independent', tdSeconds: 5 };
+    _saveSideQuaderno();
+    renderNotebookPanel();
+};
+
+window.saveSideQuadernoSession = async () => {
+    if (!state.activePatientId) return alert("Seleziona prima un paziente in alto.");
+    // Operate on the SAME in-memory patient object the main save uses to avoid conflicts
+    const p = state.patients.find(x => x.id === state.activePatientId);
+    if (!p) return;
+    if (!state._sideQuaderno) return;
+
+    const sq = state._sideQuaderno;
+    const type = sq.sessionType || 'independent';
+    const tdSeconds = sq.tdSeconds || 5;
+    const scoredRows = sq.rows.filter(r => r.results && r.results.length > 0);
+    if (scoredRows.length === 0) return alert("Nessun LU registrato.");
+
+    if (!p.history) p.history = [];
+    const now = new Date().toISOString();
+    let totalLU = 0, totalCorrect = 0;
+
+    scoredRows.forEach(row => {
+        const res = row.results;
+        const rawV = res.filter(v => v === true).length;
+        const rawP = res.filter(v => v === 'prompt').length;
+        const rawX = res.filter(v => v === false).length;
+        const total = rawV + rawP + rawX;
+        if (total === 0) return;
+        totalLU += total;
+        totalCorrect += rawV;
+
+        const sessionData = {
+            date: now,
+            setId: 'quaderno_' + row.name.replace(/\s+/g, '_').toLowerCase() + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+            setName: row.name,
+            mode: 'quaderno',
+            correct: rawV,
+            prompts: rawP,
+            total: total,
+            percentage: Math.round((rawV / total) * 100),
+            sessionType: type,
+            rawV, rawP, rawX
+        };
+        if (type === 'timedelay') sessionData.timeDelaySeconds = tdSeconds;
+        p.history.push(sessionData);
+    });
+
+    await DB.savePatient(p);
+
+    // Clear the side quaderno after a successful save
+    state._sideQuaderno = { date: new Date().toISOString().split('T')[0], rows: [], sessionType: type, tdSeconds };
+    _saveSideQuaderno();
+    renderNotebookPanel();
+    if (typeof filterSetsByMode === 'function') filterSetsByMode();
+
+    // Brief confirmation on the save button
+    const btn = document.querySelector('#notebook-panel-body .btn-success');
+    if (btn) {
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvato!';
+        setTimeout(() => { if (btn.isConnected) btn.innerHTML = orig; }, 1800);
     }
 };
