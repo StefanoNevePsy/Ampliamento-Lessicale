@@ -1,4 +1,4 @@
-// === IMAGE GENERATION: POLLINATIONS.AI + PIXABAY + TOGETHER AI + CLOUDFLARE WORKERS AI ===
+// === IMAGE SEARCH & GENERATION: PIXABAY + OPENVERSE + CLOUDFLARE WORKERS AI ===
 
 // --- AUTO-TRANSLATION (Italian labels → English prompts via Gemini) ---
 const _translationCache = {};
@@ -89,7 +89,7 @@ async function searchPixabay(query, perPage = 12, whiteBg) {
 
 async function fetchPixabayAsDataUrl(imageUrl) {
     const resp = await fetch(imageUrl);
-    if (!resp.ok) throw new Error('Errore download immagine Pixabay');
+    if (!resp.ok) throw new Error('Errore download immagine');
     const blob = await resp.blob();
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -97,6 +97,23 @@ async function fetchPixabayAsDataUrl(imageUrl) {
         reader.onerror = reject;
         reader.readAsDataURL(blob);
     });
+}
+
+// --- OPENVERSE API (Creative Commons aggregator, no key required) ---
+async function searchOpenverse(query, perPage = 12) {
+    const url = `https://api.openverse.org/v1/images/?q=${encodeURIComponent(query)}&page_size=${perPage}&mature=false`;
+    const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!resp.ok) throw new Error(`Errore Openverse (${resp.status})`);
+    const data = await resp.json();
+    return (data.results || []).map(h => ({
+        // The CORS-friendly Openverse thumbnail proxy is the reliable download
+        // path; original source URLs (Flickr, etc.) often block browser fetch.
+        preview: h.thumbnail,
+        web: h.thumbnail,
+        tags: (h.tags || []).map(t => t.name).join(', '),
+        license: (h.license || '').toUpperCase(),
+        attribution: h.attribution || ''
+    }));
 }
 
 // --- CLOUDFLARE WORKERS AI (FLUX.1 Schnell, ~2000 img/day free) ---
@@ -206,7 +223,7 @@ async function generateCloudflareImage(prompt, style) {
     return `data:${mime};base64,${b64}`;
 }
 
-// --- SINGLE ITEM IMAGE GENERATOR (with tabs: Pixabay / Cloudflare) ---
+// --- SINGLE ITEM IMAGE GENERATOR (with tabs: Pixabay / Openverse / Cloudflare) ---
 let _pollSelectedStyle = null;
 let _pollLastImageUrl = null;
 let _imgGenTab = 'pixabay';
@@ -217,7 +234,7 @@ window.openPollinationsGenerator = (itemIndex) => {
 
     _pollSelectedStyle = null;
     _pollLastImageUrl = null;
-    _imgGenTab = getPixabayApiKey() ? 'pixabay' : 'cloudflare';
+    _imgGenTab = getPixabayApiKey() ? 'pixabay' : 'openverse';
 
     const existing = document.getElementById('modal-pollinations');
     if (existing) existing.remove();
@@ -241,6 +258,9 @@ window.openPollinationsGenerator = (itemIndex) => {
                 <button class="img-src-tab ${_imgGenTab === 'pixabay' ? 'active' : ''}" onclick="switchImgGenTab('pixabay', ${itemIndex})" style="padding:6px 12px; border:none; border-radius:8px 8px 0 0; background:${_imgGenTab === 'pixabay' ? 'rgba(99,102,241,0.2)' : 'transparent'}; color:${_imgGenTab === 'pixabay' ? 'var(--accent-color)' : 'var(--text-secondary)'}; cursor:pointer; font-size:0.8rem; font-weight:600;">
                     <i class="fa-solid fa-magnifying-glass"></i> Pixabay ${!hasPixabay ? '<span style="font-size:0.6rem; opacity:0.5;">(no key)</span>' : ''}
                 </button>
+                <button class="img-src-tab ${_imgGenTab === 'openverse' ? 'active' : ''}" onclick="switchImgGenTab('openverse', ${itemIndex})" style="padding:6px 12px; border:none; border-radius:8px 8px 0 0; background:${_imgGenTab === 'openverse' ? 'rgba(99,102,241,0.2)' : 'transparent'}; color:${_imgGenTab === 'openverse' ? 'var(--accent-color)' : 'var(--text-secondary)'}; cursor:pointer; font-size:0.8rem; font-weight:600;">
+                    <i class="fa-solid fa-images"></i> Openverse
+                </button>
                 <button class="img-src-tab ${_imgGenTab === 'cloudflare' ? 'active' : ''}" onclick="switchImgGenTab('cloudflare', ${itemIndex})" style="padding:6px 12px; border:none; border-radius:8px 8px 0 0; background:${_imgGenTab === 'cloudflare' ? 'rgba(99,102,241,0.2)' : 'transparent'}; color:${_imgGenTab === 'cloudflare' ? 'var(--accent-color)' : 'var(--text-secondary)'}; cursor:pointer; font-size:0.8rem; font-weight:600;">
                     <i class="fa-solid fa-cloud"></i> Cloudflare ${!hasCloudflare ? '<span style="font-size:0.6rem; opacity:0.5;">(no url)</span>' : ''}
                 </button>
@@ -259,6 +279,18 @@ window.openPollinationsGenerator = (itemIndex) => {
                     <i class="fa-solid fa-square" style="color:#fff; text-shadow:0 0 1px #888;"></i> Preferisci sfondo bianco
                 </label>
                 <div id="pixabay-results-container"></div>
+            </div>
+
+            <!-- Openverse tab -->
+            <div id="img-tab-openverse" style="${_imgGenTab !== 'openverse' ? 'display:none;' : ''}">
+                <div style="display:flex; gap:6px; margin-bottom:8px;">
+                    <input type="text" id="openverse-query" value="${escapeHtml(item.label)}" placeholder="Cerca immagine..." style="flex:1; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white;" onkeydown="if(event.key==='Enter')runOpenverseSearch(${itemIndex})">
+                    <button class="btn btn-primary" onclick="runOpenverseSearch(${itemIndex})" style="padding:10px 16px;">
+                        <i class="fa-solid fa-search"></i>
+                    </button>
+                </div>
+                <p style="font-size:0.7rem; color:#888; margin:0 0 8px;"><i class="fa-solid fa-creative-commons"></i> Immagini Creative Commons da Openverse &mdash; nessuna chiave richiesta. Verifica la licenza per usi pubblici.</p>
+                <div id="openverse-results-container"></div>
             </div>
 
             <!-- Cloudflare tab -->
@@ -302,7 +334,7 @@ window.openPollinationsGenerator = (itemIndex) => {
             </div>
 
             <div id="poll-actions">
-                <button id="poll-generate-btn" class="btn btn-primary" style="width:100%; padding:12px; ${_imgGenTab === 'pixabay' ? 'display:none;' : ''}" onclick="runImageGeneration(${itemIndex})">
+                <button id="poll-generate-btn" class="btn btn-primary" style="width:100%; padding:12px; ${(_imgGenTab === 'pixabay' || _imgGenTab === 'openverse') ? 'display:none;' : ''}" onclick="runImageGeneration(${itemIndex})">
                     <i class="fa-solid fa-wand-magic-sparkles"></i> Genera
                 </button>
             </div>
@@ -319,15 +351,17 @@ window.openPollinationsGenerator = (itemIndex) => {
 
     document.body.appendChild(modal);
 
-    // Auto-search pixabay if key available
+    // Auto-search on open
     if (_imgGenTab === 'pixabay' && hasPixabay) {
         setTimeout(() => runPixabaySearch(itemIndex), 200);
+    } else if (_imgGenTab === 'openverse') {
+        setTimeout(() => runOpenverseSearch(itemIndex), 200);
     }
 };
 
 window.switchImgGenTab = (tab, itemIndex) => {
     _imgGenTab = tab;
-    ['pixabay', 'cloudflare'].forEach(t => {
+    ['pixabay', 'openverse', 'cloudflare'].forEach(t => {
         const el = document.getElementById('img-tab-' + t);
         if (el) el.style.display = t === tab ? '' : 'none';
     });
@@ -336,9 +370,13 @@ window.switchImgGenTab = (tab, itemIndex) => {
         btn.style.background = isActive ? 'rgba(99,102,241,0.2)' : 'transparent';
         btn.style.color = isActive ? 'var(--accent-color)' : 'var(--text-secondary)';
     });
+    // Auto-search Openverse when its tab is opened and empty
+    if (tab === 'openverse' && !document.getElementById('openverse-results-container')?.innerHTML.trim()) {
+        runOpenverseSearch(itemIndex);
+    }
     const genBtn = document.getElementById('poll-generate-btn');
     if (genBtn) {
-        genBtn.style.display = tab === 'pixabay' ? 'none' : '';
+        genBtn.style.display = (tab === 'pixabay' || tab === 'openverse') ? 'none' : '';
     }
 };
 
@@ -390,6 +428,64 @@ window.selectPixabayImage = async (itemIndex, resultIndex) => {
     // Highlight selected
     document.querySelectorAll('.pixabay-result-item').forEach(el => el.classList.remove('selected'));
     document.querySelectorAll('.pixabay-result-item')[resultIndex]?.classList.add('selected');
+
+    const status = document.getElementById('poll-status');
+    const preview = document.getElementById('poll-preview');
+    const acceptActions = document.getElementById('poll-accept-actions');
+    const actions = document.getElementById('poll-actions');
+
+    status.style.display = 'block';
+    document.getElementById('poll-status-text').textContent = 'Download immagine...';
+
+    try {
+        const dataUrl = await fetchPixabayAsDataUrl(results[resultIndex].web);
+        _pollLastImageUrl = dataUrl;
+        document.getElementById('poll-preview-img').src = dataUrl;
+        preview.style.display = 'block';
+        status.style.display = 'none';
+        actions.style.display = 'none';
+        acceptActions.style.display = 'flex';
+    } catch (err) {
+        status.style.display = 'none';
+        alert('Errore download: ' + err.message);
+    }
+};
+
+window.runOpenverseSearch = async (itemIndex) => {
+    const query = document.getElementById('openverse-query')?.value?.trim();
+    if (!query) return;
+
+    const container = document.getElementById('openverse-results-container');
+    if (!container) return;
+
+    container.innerHTML = '<div style="text-align:center; padding:20px;"><div class="loading-spinner" style="margin:0 auto;"></div><p style="color:#a5b4fc; font-size:0.8rem; margin-top:8px;">Ricerca su Openverse...</p></div>';
+
+    try {
+        const results = await searchOpenverse(query);
+        if (results.length === 0) {
+            container.innerHTML = '<div style="text-align:center; padding:15px; color:var(--text-secondary); font-size:0.85rem;"><i class="fa-solid fa-search"></i> Nessun risultato. Prova con termini diversi (anche in inglese).</div>';
+            return;
+        }
+        container.innerHTML = `<div class="pixabay-results">
+            ${results.map((r, i) => `
+                <div class="pixabay-result-item" onclick="selectOpenverseImage(${itemIndex}, ${i})" data-url="${r.web}" title="${escapeHtml(r.license ? 'Licenza ' + r.license : '')}">
+                    <img src="${r.preview}" loading="lazy" alt="${escapeHtml(r.tags)}">
+                </div>
+            `).join('')}
+        </div>
+        <p style="font-size:0.65rem; color:#666; text-align:center; margin-top:6px;"><i class="fa-solid fa-creative-commons"></i> Immagini Creative Commons da Openverse</p>`;
+        window._openverseResults = results;
+    } catch (err) {
+        container.innerHTML = `<div style="text-align:center; padding:15px; color:var(--danger-color); font-size:0.85rem;"><i class="fa-solid fa-triangle-exclamation"></i> ${err.message}</div>`;
+    }
+};
+
+window.selectOpenverseImage = async (itemIndex, resultIndex) => {
+    const results = window._openverseResults;
+    if (!results || !results[resultIndex]) return;
+
+    document.querySelectorAll('#openverse-results-container .pixabay-result-item').forEach(el => el.classList.remove('selected'));
+    document.querySelectorAll('#openverse-results-container .pixabay-result-item')[resultIndex]?.classList.add('selected');
 
     const status = document.getElementById('poll-status');
     const preview = document.getElementById('poll-preview');
@@ -537,6 +633,7 @@ window.openBulkPollinations = () => {
             <div style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">
                 ${hasCloudflare ? `<button class="btn btn-ghost bulk-engine-btn selected" data-engine="cloudflare" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-cloud"></i> Cloudflare Flux</button>` : ''}
                 ${hasPixabay ? `<button class="btn btn-ghost bulk-engine-btn ${!hasCloudflare ? 'selected' : ''}" data-engine="pixabay" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-search"></i> Pixabay</button>` : ''}
+                <button class="btn btn-ghost bulk-engine-btn ${!hasCloudflare && !hasPixabay ? 'selected' : ''}" data-engine="openverse" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-images"></i> Openverse</button>
             </div>
 
             <div id="bulk-cf-model-section" style="${hasCloudflare ? '' : 'display:none;'}">
@@ -554,7 +651,7 @@ window.openBulkPollinations = () => {
                 </button>
             </div>
 
-            <div id="bulk-styles-section">
+            <div id="bulk-styles-section" style="${hasCloudflare ? '' : 'display:none;'}">
                 <label style="font-size:0.8rem; color:#aaa;">Stili da randomizzare <span style="opacity:0.5;">(per generazione AI)</span></label>
                 <div id="bulk-poll-styles" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px;">
                     ${POLL_STYLES.map(s => {
@@ -601,8 +698,11 @@ window.openBulkPollinations = () => {
 window.selectBulkEngine = (el) => {
     document.querySelectorAll('.bulk-engine-btn').forEach(b => b.classList.remove('selected'));
     el.classList.add('selected');
+    const isCf = el.dataset.engine === 'cloudflare';
     const cfSection = document.getElementById('bulk-cf-model-section');
-    if (cfSection) cfSection.style.display = el.dataset.engine === 'cloudflare' ? '' : 'none';
+    if (cfSection) cfSection.style.display = isCf ? '' : 'none';
+    const stylesSection = document.getElementById('bulk-styles-section');
+    if (stylesSection) stylesSection.style.display = isCf ? '' : 'none';
 };
 
 window.closeBulkPollinations = () => {
@@ -620,7 +720,7 @@ window.runBulkPollGeneration = async () => {
     const engine = document.querySelector('.bulk-engine-btn.selected')?.dataset?.engine || (getCloudflareWorkerUrl() ? 'cloudflare' : 'pixabay');
 
     const selectedStyles = [];
-    if (engine !== 'pixabay') {
+    if (engine === 'cloudflare') {
         document.querySelectorAll('#bulk-poll-styles .poll-style-btn.selected').forEach(btn => {
             selectedStyles.push(btn.dataset.styleId);
         });
@@ -682,6 +782,13 @@ window.runBulkPollGeneration = async () => {
                 } else {
                     throw new Error('Nessun risultato');
                 }
+            } else if (engine === 'openverse') {
+                const results = await searchOpenverse(translatedLabel, 3);
+                if (results.length > 0) {
+                    imageUrl = await fetchPixabayAsDataUrl(results[0].web);
+                } else {
+                    throw new Error('Nessun risultato');
+                }
             } else {
                 imageUrl = await generateCloudflareImage(translatedLabel, randomStyle);
             }
@@ -696,7 +803,7 @@ window.runBulkPollGeneration = async () => {
         log.scrollTop = log.scrollHeight;
 
         if (_bulkPollGenerating && completed < items.length) {
-            const delay = engine === 'pixabay' ? 500 : 800;
+            const delay = engine === 'cloudflare' ? 800 : 500;
             await new Promise(r => setTimeout(r, delay));
         }
     }
