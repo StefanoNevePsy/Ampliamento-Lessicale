@@ -196,9 +196,7 @@ window.openSettings = () => {
 
     // Images tab
     const pixabayInput = document.getElementById('pixabay-api-key');
-    const togetherInput = document.getElementById('together-api-key');
     if (pixabayInput) pixabayInput.value = getPixabayApiKey();
-    if (togetherInput) togetherInput.value = getTogetherApiKey();
     const cfUrlInput = document.getElementById('cloudflare-worker-url');
     const cfTokenInput = document.getElementById('cloudflare-auth-token');
     if (cfUrlInput && typeof getCloudflareWorkerUrl === 'function') cfUrlInput.value = getCloudflareWorkerUrl();
@@ -230,8 +228,6 @@ window.saveAllSettings = () => {
     // Save image API keys
     const pixabayKey = document.getElementById('pixabay-api-key')?.value?.trim();
     if (pixabayKey !== undefined) savePixabayApiKey(pixabayKey);
-    const togetherKey = document.getElementById('together-api-key')?.value?.trim();
-    if (togetherKey !== undefined) saveTogetherApiKey(togetherKey);
 
     const cfUrl = document.getElementById('cloudflare-worker-url')?.value?.trim();
     if (cfUrl !== undefined && typeof setCloudflareWorkerUrl === 'function') setCloudflareWorkerUrl(cfUrl);

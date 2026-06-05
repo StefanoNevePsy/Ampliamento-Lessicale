@@ -87,51 +87,6 @@ async function fetchPixabayAsDataUrl(imageUrl) {
     });
 }
 
-// --- TOGETHER AI API ---
-function getTogetherApiKey() {
-    return localStorage.getItem('together_api_key') || '';
-}
-function saveTogetherApiKey(key) {
-    localStorage.setItem('together_api_key', key.trim());
-}
-
-async function generateTogetherImage(prompt, style) {
-    const apiKey = getTogetherApiKey();
-    if (!apiKey) throw new Error('Together AI API key non configurata. Vai in Impostazioni > Immagini.');
-    const parts = [prompt, 'on a clean white background, centered composition'];
-    if (style) {
-        const s = POLL_STYLES.find(st => st.id === style);
-        if (s) parts.push(s.prompt);
-    }
-    const fullPrompt = parts.join(', ');
-
-    const resp = await fetch('https://api.together.xyz/v1/images/generations', {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            model: 'black-forest-labs/FLUX.1-schnell-Free',
-            prompt: fullPrompt,
-            width: 512,
-            height: 512,
-            n: 1,
-            response_format: 'b64_json'
-        })
-    });
-
-    if (!resp.ok) {
-        const err = await resp.json().catch(() => ({}));
-        throw new Error(err.error?.message || `Errore Together AI (${resp.status})`);
-    }
-
-    const data = await resp.json();
-    const b64 = data.data?.[0]?.b64_json;
-    if (!b64) throw new Error('Nessuna immagine generata');
-    return `data:image/png;base64,${b64}`;
-}
-
 // --- CLOUDFLARE WORKERS AI (FLUX.1 Schnell, ~2000 img/day free) ---
 // Requires the user to deploy a small Worker proxy — see CLOUDFLARE_WORKER.md
 function getCloudflareWorkerUrl() {
@@ -239,35 +194,7 @@ async function generateCloudflareImage(prompt, style) {
     return `data:${mime};base64,${b64}`;
 }
 
-// --- POLLINATIONS (original, free) ---
-function buildPollinationsUrl(prompt, width = 512, height = 512, seed) {
-    const params = new URLSearchParams({ width, height, nologo: 'true', enhance: 'true' });
-    if (seed !== undefined) params.set('seed', seed);
-    return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?${params}`;
-}
-
-async function fetchPollinationsImage(prompt, style) {
-    const parts = [prompt, 'on a clean white background, centered composition'];
-    if (style) {
-        const s = POLL_STYLES.find(st => st.id === style);
-        if (s) parts.push(s.prompt);
-    }
-    const fullPrompt = parts.join(', ');
-    const url = buildPollinationsUrl(fullPrompt);
-
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Errore Pollinations (${response.status})`);
-
-    const blob = await response.blob();
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-    });
-}
-
-// --- SINGLE ITEM IMAGE GENERATOR (with tabs: Pixabay / Pollinations / Together AI) ---
+// --- SINGLE ITEM IMAGE GENERATOR (with tabs: Pixabay / Cloudflare) ---
 let _pollSelectedStyle = null;
 let _pollLastImageUrl = null;
 let _imgGenTab = 'pixabay';
@@ -278,7 +205,7 @@ window.openPollinationsGenerator = (itemIndex) => {
 
     _pollSelectedStyle = null;
     _pollLastImageUrl = null;
-    _imgGenTab = getPixabayApiKey() ? 'pixabay' : 'pollinations';
+    _imgGenTab = getPixabayApiKey() ? 'pixabay' : 'cloudflare';
 
     const existing = document.getElementById('modal-pollinations');
     if (existing) existing.remove();
@@ -288,7 +215,6 @@ window.openPollinationsGenerator = (itemIndex) => {
     modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:20000; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; overflow-y:auto;';
 
     const hasPixabay = !!getPixabayApiKey();
-    const hasTogether = !!getTogetherApiKey();
     const hasCloudflare = !!getCloudflareWorkerUrl();
 
     modal.innerHTML = `
@@ -303,13 +229,7 @@ window.openPollinationsGenerator = (itemIndex) => {
                 <button class="img-src-tab ${_imgGenTab === 'pixabay' ? 'active' : ''}" onclick="switchImgGenTab('pixabay', ${itemIndex})" style="padding:6px 12px; border:none; border-radius:8px 8px 0 0; background:${_imgGenTab === 'pixabay' ? 'rgba(99,102,241,0.2)' : 'transparent'}; color:${_imgGenTab === 'pixabay' ? 'var(--accent-color)' : 'var(--text-secondary)'}; cursor:pointer; font-size:0.8rem; font-weight:600;">
                     <i class="fa-solid fa-magnifying-glass"></i> Pixabay ${!hasPixabay ? '<span style="font-size:0.6rem; opacity:0.5;">(no key)</span>' : ''}
                 </button>
-                <button class="img-src-tab" onclick="switchImgGenTab('pollinations', ${itemIndex})" style="padding:6px 12px; border:none; border-radius:8px 8px 0 0; background:transparent; color:var(--text-secondary); cursor:pointer; font-size:0.8rem; font-weight:600;">
-                    <i class="fa-solid fa-wand-magic-sparkles"></i> Pollinations
-                </button>
-                <button class="img-src-tab" onclick="switchImgGenTab('together', ${itemIndex})" style="padding:6px 12px; border:none; border-radius:8px 8px 0 0; background:transparent; color:var(--text-secondary); cursor:pointer; font-size:0.8rem; font-weight:600;">
-                    <i class="fa-solid fa-robot"></i> Together AI ${!hasTogether ? '<span style="font-size:0.6rem; opacity:0.5;">(no key)</span>' : ''}
-                </button>
-                <button class="img-src-tab" onclick="switchImgGenTab('cloudflare', ${itemIndex})" style="padding:6px 12px; border:none; border-radius:8px 8px 0 0; background:transparent; color:var(--text-secondary); cursor:pointer; font-size:0.8rem; font-weight:600;">
+                <button class="img-src-tab ${_imgGenTab === 'cloudflare' ? 'active' : ''}" onclick="switchImgGenTab('cloudflare', ${itemIndex})" style="padding:6px 12px; border:none; border-radius:8px 8px 0 0; background:${_imgGenTab === 'cloudflare' ? 'rgba(99,102,241,0.2)' : 'transparent'}; color:${_imgGenTab === 'cloudflare' ? 'var(--accent-color)' : 'var(--text-secondary)'}; cursor:pointer; font-size:0.8rem; font-weight:600;">
                     <i class="fa-solid fa-cloud"></i> Cloudflare ${!hasCloudflare ? '<span style="font-size:0.6rem; opacity:0.5;">(no url)</span>' : ''}
                 </button>
             </div>
@@ -325,46 +245,8 @@ window.openPollinationsGenerator = (itemIndex) => {
                 <div id="pixabay-results-container"></div>
             </div>
 
-            <!-- Pollinations tab -->
-            <div id="img-tab-pollinations" style="${_imgGenTab !== 'pollinations' ? 'display:none;' : ''}">
-                <div style="background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); border-radius:10px; padding:6px 10px; margin-bottom:10px; font-size:0.75rem; color:#6ee7b7;">
-                    <i class="fa-solid fa-gift"></i> Gratuito &mdash; nessuna API key richiesta
-                </div>
-                <label style="font-size:0.8rem; color:#aaa;">Prompt</label>
-                <textarea id="poll-prompt" rows="2" style="width:100%; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.95rem; resize:vertical; font-family:inherit; margin-bottom:10px;">${escapeHtml(item.label)}</textarea>
-
-                <label style="font-size:0.8rem; color:#aaa;">Stile</label>
-                <div id="poll-styles" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;">
-                    ${POLL_STYLES.map(s => `
-                        <div class="poll-style-btn" data-style-id="${s.id}" onclick="selectPollStyle(this)"
-                             style="border-color:${s.color}40;">
-                            <i class="fa-solid ${s.icon}" style="color:${s.color};"></i> ${s.label}
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-
-            <!-- Together AI tab -->
-            <div id="img-tab-together" style="${_imgGenTab !== 'together' ? 'display:none;' : ''}">
-                <div style="background:rgba(139,92,246,0.1); border:1px solid rgba(139,92,246,0.3); border-radius:10px; padding:6px 10px; margin-bottom:10px; font-size:0.75rem; color:#a78bfa;">
-                    <i class="fa-solid fa-robot"></i> Together AI &mdash; FLUX.1 Schnell (richiede API key)
-                </div>
-                <label style="font-size:0.8rem; color:#aaa;">Prompt</label>
-                <textarea id="together-prompt" rows="2" style="width:100%; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.95rem; resize:vertical; font-family:inherit; margin-bottom:10px;">${escapeHtml(item.label)}</textarea>
-
-                <label style="font-size:0.8rem; color:#aaa;">Stile</label>
-                <div id="together-styles" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;">
-                    ${POLL_STYLES.map(s => `
-                        <div class="poll-style-btn" data-style-id="${s.id}" onclick="selectPollStyle(this)"
-                             style="border-color:${s.color}40;">
-                            <i class="fa-solid ${s.icon}" style="color:${s.color};"></i> ${s.label}
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-
             <!-- Cloudflare tab -->
-            <div id="img-tab-cloudflare" style="display:none;">
+            <div id="img-tab-cloudflare" style="${_imgGenTab !== 'cloudflare' ? 'display:none;' : ''}">
                 <div style="background:rgba(243,128,32,0.1); border:1px solid rgba(243,128,32,0.3); border-radius:10px; padding:6px 10px; margin-bottom:10px; font-size:0.75rem; color:#f9a160;">
                     <i class="fa-solid fa-cloud"></i> Cloudflare Workers AI (gratis)
                 </div>
@@ -395,7 +277,7 @@ window.openPollinationsGenerator = (itemIndex) => {
             </div>
 
             <div id="poll-actions">
-                <button id="poll-generate-btn" class="btn btn-primary" style="width:100%; padding:12px;" onclick="runImageGeneration(${itemIndex})">
+                <button id="poll-generate-btn" class="btn btn-primary" style="width:100%; padding:12px; ${_imgGenTab === 'pixabay' ? 'display:none;' : ''}" onclick="runImageGeneration(${itemIndex})">
                     <i class="fa-solid fa-wand-magic-sparkles"></i> Genera
                 </button>
             </div>
@@ -420,7 +302,7 @@ window.openPollinationsGenerator = (itemIndex) => {
 
 window.switchImgGenTab = (tab, itemIndex) => {
     _imgGenTab = tab;
-    ['pixabay', 'pollinations', 'together', 'cloudflare'].forEach(t => {
+    ['pixabay', 'cloudflare'].forEach(t => {
         const el = document.getElementById('img-tab-' + t);
         if (el) el.style.display = t === tab ? '' : 'none';
     });
@@ -498,8 +380,7 @@ window.runImageGeneration = async (itemIndex) => {
     const tab = _imgGenTab;
     if (tab === 'pixabay') return;
 
-    const promptIds = { together: 'together-prompt', cloudflare: 'cloudflare-prompt', pollinations: 'poll-prompt' };
-    const promptEl = document.getElementById(promptIds[tab] || 'poll-prompt');
+    const promptEl = document.getElementById('cloudflare-prompt');
     const prompt = promptEl?.value?.trim();
     if (!prompt) { alert('Inserisci un prompt.'); return; }
 
@@ -514,21 +395,13 @@ window.runImageGeneration = async (itemIndex) => {
     preview.style.display = 'none';
     acceptActions.style.display = 'none';
 
-    const engineNames = { together: 'Together AI', cloudflare: 'Cloudflare Flux', pollinations: 'Pollinations.ai' };
     document.getElementById('poll-status-text').textContent = `Traduzione prompt...`;
 
     try {
         const translatedPrompt = await translateSingleLabel(prompt);
-        document.getElementById('poll-status-text').textContent = `Generazione in corso (${engineNames[tab] || tab})...`;
+        document.getElementById('poll-status-text').textContent = `Generazione in corso (Cloudflare Flux)...`;
 
-        let imageUrl;
-        if (tab === 'together') {
-            imageUrl = await generateTogetherImage(translatedPrompt, _pollSelectedStyle);
-        } else if (tab === 'cloudflare') {
-            imageUrl = await generateCloudflareImage(translatedPrompt, _pollSelectedStyle);
-        } else {
-            imageUrl = await fetchPollinationsImage(translatedPrompt, _pollSelectedStyle);
-        }
+        const imageUrl = await generateCloudflareImage(translatedPrompt, _pollSelectedStyle);
         _pollLastImageUrl = imageUrl;
 
         document.getElementById('poll-preview-img').src = imageUrl;
@@ -592,7 +465,6 @@ window.openBulkPollinations = () => {
     modal.id = 'modal-poll-bulk';
     modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:20000; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; overflow-y:auto;';
 
-    const hasTogether = !!getTogetherApiKey();
     const hasPixabay = !!getPixabayApiKey();
     const hasCloudflare = !!getCloudflareWorkerUrl();
 
@@ -607,8 +479,6 @@ window.openBulkPollinations = () => {
             <div style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">
                 ${hasCloudflare ? `<button class="btn btn-ghost bulk-engine-btn selected" data-engine="cloudflare" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-cloud"></i> Cloudflare Flux</button>` : ''}
                 ${hasPixabay ? `<button class="btn btn-ghost bulk-engine-btn ${!hasCloudflare ? 'selected' : ''}" data-engine="pixabay" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-search"></i> Pixabay</button>` : ''}
-                <button class="btn btn-ghost bulk-engine-btn ${!hasCloudflare && !hasPixabay ? 'selected' : ''}" data-engine="pollinations" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-wand-magic-sparkles"></i> Pollinations</button>
-                ${hasTogether ? `<button class="btn btn-ghost bulk-engine-btn" data-engine="together" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-robot"></i> Together AI</button>` : ''}
             </div>
 
             <div id="bulk-cf-model-section" style="${hasCloudflare ? '' : 'display:none;'}">
@@ -689,7 +559,7 @@ window.selectBulkPollTarget = (el) => {
 };
 
 window.runBulkPollGeneration = async () => {
-    const engine = document.querySelector('.bulk-engine-btn.selected')?.dataset?.engine || 'pollinations';
+    const engine = document.querySelector('.bulk-engine-btn.selected')?.dataset?.engine || (getCloudflareWorkerUrl() ? 'cloudflare' : 'pixabay');
 
     const selectedStyles = [];
     if (engine !== 'pixabay') {
@@ -754,12 +624,8 @@ window.runBulkPollGeneration = async () => {
                 } else {
                     throw new Error('Nessun risultato');
                 }
-            } else if (engine === 'together') {
-                imageUrl = await generateTogetherImage(translatedLabel, randomStyle);
-            } else if (engine === 'cloudflare') {
-                imageUrl = await generateCloudflareImage(translatedLabel, randomStyle);
             } else {
-                imageUrl = await fetchPollinationsImage(translatedLabel, randomStyle);
+                imageUrl = await generateCloudflareImage(translatedLabel, randomStyle);
             }
             state.editingItems[idx].url = await compressDataUrl(imageUrl, getEditingImageQuality());
             log.innerHTML += `<div style="color:var(--success-color);"><i class="fa-solid fa-check"></i> ${escapeHtml(item.label)} → ${escapeHtml(translatedLabel)} (${styleName})</div>`;
@@ -772,7 +638,7 @@ window.runBulkPollGeneration = async () => {
         log.scrollTop = log.scrollHeight;
 
         if (_bulkPollGenerating && completed < items.length) {
-            const delay = engine === 'pixabay' ? 500 : engine === 'cloudflare' ? 800 : 1500;
+            const delay = engine === 'pixabay' ? 500 : 800;
             await new Promise(r => setTimeout(r, delay));
         }
     }
