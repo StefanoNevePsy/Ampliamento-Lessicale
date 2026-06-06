@@ -3466,6 +3466,12 @@ function renderNotebookPanel() {
     const activityNames = (typeof getUsedActivityNames === 'function') ? getUsedActivityNames() : [];
     const datalistOpts = activityNames.map(n => `<option value="${n.replace(/"/g, '&quot;')}">`).join('');
 
+    // Saved quaderno lists available to preload (general lists only)
+    const savedLists = _getSideQuadernoLists();
+    const loadOptsHtml = savedLists.map(l =>
+        `<option value="${l.key.replace(/"/g, '&quot;')}">${(l.name || '').replace(/</g, '&lt;')} (${l.count})</option>`
+    ).join('');
+
     let html = `
     <div style="margin-bottom:10px; padding:8px 10px; background:rgba(99,102,241,0.08); border-radius:10px; font-size:0.78rem; color:var(--text-secondary); display:flex; justify-content:space-between; align-items:center;">
         <span><i class="fa-solid fa-user" style="margin-right:4px;"></i> ${patientName || '<span style="color:var(--warning-color);">Nessun paziente</span>'}</span>
@@ -3475,6 +3481,15 @@ function renderNotebookPanel() {
     <div style="font-size:0.72rem; color:var(--text-secondary); margin-bottom:10px; line-height:1.4;">
         Registra item extra che esulano dall'attività corrente. I LU vengono salvati come sessioni "Quaderno" e rientrano nei totali del giorno.
     </div>
+
+    ${savedLists.length > 0 ? `
+    <div style="display:flex; gap:6px; margin-bottom:10px; align-items:center;">
+        <i class="fa-solid fa-folder-open" style="color:var(--accent-color); font-size:0.8rem;"></i>
+        <select id="side-q-load" onchange="loadSideQuadernoList(this.value); this.value='';" style="flex:1; padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.8rem;" title="Carica gli item di una lista salvata (i duplicati vengono saltati)">
+            <option value="">Carica lista salvata...</option>
+            ${loadOptsHtml}
+        </select>
+    </div>` : ''}
 
     <datalist id="side-q-names">${datalistOpts}</datalist>
 
@@ -3554,6 +3569,73 @@ window.addSideQuadernoRow = () => {
     _saveSideQuaderno();
     renderNotebookPanel();
     setTimeout(() => { const el = document.getElementById('side-q-new'); if (el) el.focus(); }, 0);
+};
+
+// Collect saved general quaderno lists (IndexedDB sets + localStorage lists),
+// deduped by name. Task Analysis lists are excluded (the side quaderno is general).
+function _getSideQuadernoLists() {
+    const out = [];
+    const seen = new Set();
+    (state.savedSets || []).forEach(s => {
+        if (!s.modes) return;
+        if (s.modes.includes('quaderno') && !s.modes.includes('quaderno_task')) {
+            out.push({ key: 'set:' + s.id, name: s.name, count: (s.items || []).length });
+            seen.add((s.name || '').toLowerCase().trim());
+        }
+    });
+    if (typeof getSavedQuadernoLists === 'function') {
+        getSavedQuadernoLists().filter(l => l.type !== 'task').forEach(l => {
+            const nm = (l.name || '').toLowerCase().trim();
+            if (seen.has(nm)) return;
+            out.push({ key: 'local:' + l.name, name: l.name, count: (l.items || []).length });
+            seen.add(nm);
+        });
+    }
+    return out;
+}
+
+// Preload the items of a saved list as side-quaderno rows. Items whose name
+// already exists are skipped, so live (already-scored) rows keep their data —
+// the clinician only needs to add the items not yet present.
+window.loadSideQuadernoList = (key) => {
+    if (!key) return;
+    if (!state._sideQuaderno) state._sideQuaderno = _loadSideQuaderno();
+
+    let items = [];
+    if (key.startsWith('set:')) {
+        const id = key.slice(4);
+        const s = (state.savedSets || []).find(x => String(x.id) === id);
+        items = s ? (s.items || []).map(it => it.name || it.label || it.l || '') : [];
+    } else if (key.startsWith('local:')) {
+        const name = key.slice(6);
+        const list = (typeof getSavedQuadernoLists === 'function' ? getSavedQuadernoLists() : []).find(l => l.name === name);
+        items = list ? (list.items || []).map(it => it.name || it.label || '') : [];
+    }
+    items = items.filter(Boolean);
+    if (items.length === 0) return;
+
+    const defType = state._sideQuaderno.sessionType || 'independent';
+    const existing = new Set(state._sideQuaderno.rows.map(r => (r.name || '').toLowerCase().trim()));
+    let added = 0;
+    items.forEach(name => {
+        const nm = name.toLowerCase().trim();
+        if (existing.has(nm)) return;
+        state._sideQuaderno.rows.push({ name, results: [], sessionType: defType });
+        existing.add(nm);
+        added++;
+    });
+
+    _saveSideQuaderno();
+    renderNotebookPanel();
+
+    if (added === 0) {
+        const sel = document.getElementById('side-q-load');
+        if (sel) {
+            const orig = sel.style.borderColor;
+            sel.style.borderColor = 'var(--warning-color)';
+            setTimeout(() => { if (sel.isConnected) sel.style.borderColor = orig; }, 1200);
+        }
+    }
 };
 
 window.sideQuadernoAddLU = (idx, result) => {
