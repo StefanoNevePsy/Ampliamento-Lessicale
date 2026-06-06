@@ -4091,7 +4091,7 @@ function renderQuadernoGeneral(container) {
                 onkeydown: "if(event.key==='Enter')addQuadernoRow()",
                 style: 'min-width:120px; padding:10px; border-radius:8px; font-size:0.9rem;'
             })}
-            <select id="quaderno-session-type" onchange="onQuadernoTypeChange()" style="padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.85rem;">
+            <select id="quaderno-session-type" onchange="onQuadernoTypeChange()" title="Tipo predefinito per nuovi item" style="padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.85rem;">
                 <option value="independent" ${qType === 'independent' ? 'selected' : ''}>Indipendente</option>
                 <option value="timedelay" ${qType === 'timedelay' ? 'selected' : ''}>Time Delay</option>
             </select>
@@ -4124,7 +4124,8 @@ function renderQuadernoRow(row, idx, sessionType) {
     const pCount = res.filter(r => r === 'prompt').length;
     const vCount = res.filter(r => r === true).length;
     const total = res.length;
-    const isTD = sessionType === 'timedelay';
+    const rowType = row.sessionType || sessionType;
+    const isTD = rowType === 'timedelay';
 
     // Independent: X + V, Time Delay: P + V
     const leftBtn = isTD ? `
@@ -4154,6 +4155,7 @@ function renderQuadernoRow(row, idx, sessionType) {
                 </button>
             </div>
             <span onclick="renameQuadernoRow(${idx})" style="flex:1; font-size:1.05rem; font-weight:700; cursor:pointer;" title="Rinomina">${row.name}</span>
+            <button onclick="toggleQuadernoRowType(${idx})" style="padding:2px 8px; border-radius:6px; border:1px solid ${isTD ? 'var(--warning-color)' : 'rgba(99,102,241,0.5)'}; background:${isTD ? 'rgba(245,158,11,0.15)' : 'rgba(99,102,241,0.1)'}; color:${isTD ? 'var(--warning-color)' : 'var(--accent-color)'}; font-size:0.65rem; font-weight:bold; cursor:pointer; white-space:nowrap;" title="Cambia tipo sessione">${isTD ? 'TD' : 'IND'}</button>
             <span style="background:rgba(99,102,241,0.2); color:var(--accent-color); padding:3px 10px; border-radius:8px; font-size:0.85rem; font-weight:bold; min-width:35px; text-align:center;" title="Totale LU">${total}</span>
             <button onclick="undoQuadernoResult(${idx})" style="width:34px; height:34px; border-radius:10px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.05); color:var(--text-secondary); cursor:pointer; font-size:0.85rem; display:flex; align-items:center; justify-content:center;" title="Annulla ultimo" ${total === 0 ? 'disabled style="opacity:0.3; width:34px; height:34px; border-radius:10px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.05); color:var(--text-secondary); cursor:default; font-size:0.85rem; display:flex; align-items:center; justify-content:center;"' : ''}>
                 <i class="fa-solid fa-rotate-left"></i>
@@ -4217,9 +4219,19 @@ window.addQuadernoRow = () => {
     const input = document.getElementById('quaderno-new-activity');
     const name = input.value.trim();
     if (!name) return;
-    state._quadernoRows.push({ name, results: [] });
+    state._quadernoRows.push({ name, results: [], sessionType: getQuadernoSessionType() });
     input.value = '';
     renderQuadernoGeneral(document.getElementById('quaderno-content'));
+};
+
+window.toggleQuadernoRowType = (idx) => {
+    _syncQuadernoName();
+    const rows = state._quadernoType === 'general' ? state._quadernoRows : state._quadernoSteps;
+    if (!rows || !rows[idx]) return;
+    rows[idx].sessionType = (rows[idx].sessionType || 'independent') === 'independent' ? 'timedelay' : 'independent';
+    const content = document.getElementById('quaderno-content');
+    if (state._quadernoType === 'general') renderQuadernoGeneral(content);
+    else renderQuadernoTask(content);
 };
 
 window.removeQuadernoRow = (idx) => {
@@ -4313,13 +4325,17 @@ window.saveQuadernoSession = async () => {
             totalCorrect += vCount;
             totalP += pCount;
             totalX += xCount;
-            taskSteps.push({ name: step.name, results: [...res], v: vCount, p: pCount, x: xCount, na: naCount, scored });
+            taskSteps.push({ name: step.name, results: [...res], v: vCount, p: pCount, x: xCount, na: naCount, scored, sessionType: step.sessionType || type });
         });
 
         if (totalScored === 0) return alert("Nessun LU registrato (esclusi N/A).");
 
         const nameInput = document.getElementById('quaderno-name-input');
         const taskName = (nameInput ? nameInput.value.trim() : '') || 'Task Analysis';
+
+        // Determine overall session type from per-step types
+        const stepTypes = new Set(taskSteps.map(s => s.sessionType));
+        const overallType = stepTypes.size === 1 ? [...stepTypes][0] : 'mixed';
 
         const sessionData = {
             date: now,
@@ -4330,13 +4346,13 @@ window.saveQuadernoSession = async () => {
             prompts: totalP,
             total: totalScored,
             percentage: Math.round((totalCorrect / totalScored) * 100),
-            sessionType: type,
+            sessionType: overallType,
             rawV: totalCorrect,
             rawP: totalP,
             rawX: totalX,
             taskSteps: taskSteps // Per-step detail for dashboard analysis
         };
-        if (type === 'timedelay') {
+        if (overallType === 'timedelay' || overallType === 'mixed') {
             sessionData.timeDelaySeconds = tdSeconds;
         }
 
@@ -4403,6 +4419,7 @@ window.saveQuadernoSession = async () => {
             totalLU += total;
             totalCorrect += rawV;
 
+            const rowType = row.sessionType || type;
             const sessionData = {
                 date: now,
                 setId: 'quaderno_' + row.name.replace(/\s+/g, '_').toLowerCase() + '_' + Date.now(),
@@ -4412,12 +4429,12 @@ window.saveQuadernoSession = async () => {
                 prompts: rawP,
                 total: total,
                 percentage: Math.round((rawV / total) * 100),
-                sessionType: type,
+                sessionType: rowType,
                 rawV: rawV,
                 rawP: rawP,
                 rawX: rawX
             };
-            if (type === 'timedelay') {
+            if (rowType === 'timedelay') {
                 sessionData.timeDelaySeconds = tdSeconds;
             }
             p.history.push(sessionData);
@@ -4585,7 +4602,8 @@ function renderQuadernoTaskStep(step, idx, sessionType, isActive) {
     const naCount = res.filter(r => r === 'na').length;
     const scoredCount = res.filter(r => r !== 'na').length;
     const total = res.length;
-    const isTD = sessionType === 'timedelay';
+    const stepType = step.sessionType || sessionType;
+    const isTD = stepType === 'timedelay';
 
     // Show last result icon for completed steps
     const lastResult = res.length > 0 ? res[res.length - 1] : null;
@@ -4645,6 +4663,7 @@ function renderQuadernoTaskStep(step, idx, sessionType, isActive) {
                 </button>
             </div>
             <span onclick="renameQuadernoRow(${idx})" style="flex:1; font-size:1.05rem; font-weight:700; cursor:pointer;" title="Rinomina">${step.name}</span>
+            <button onclick="toggleQuadernoRowType(${idx})" style="padding:2px 8px; border-radius:6px; border:1px solid ${isTD ? 'var(--warning-color)' : 'rgba(99,102,241,0.5)'}; background:${isTD ? 'rgba(245,158,11,0.15)' : 'rgba(99,102,241,0.1)'}; color:${isTD ? 'var(--warning-color)' : 'var(--accent-color)'}; font-size:0.65rem; font-weight:bold; cursor:pointer; white-space:nowrap;" title="Cambia tipo sessione">${isTD ? 'TD' : 'IND'}</button>
             ${lastIcon ? `<span style="font-size:1rem;">${lastIcon}</span>` : ''}
             ${scoredCount > 0 ? `<span style="background:rgba(99,102,241,0.2); color:var(--accent-color); padding:2px 8px; border-radius:8px; font-size:0.75rem; font-weight:bold;">${scoredCount}</span>` : ''}
             <button onclick="removeQuadernoRow(${idx})" style="width:28px; height:28px; border-radius:8px; border:none; background:transparent; color:#555; cursor:pointer; font-size:0.75rem; display:flex; align-items:center; justify-content:center;" title="Rimuovi">
@@ -4712,7 +4731,7 @@ window.addQuadernoStep = () => {
     const name = input.value.trim();
     if (!name) return;
     if (!state._quadernoSteps) state._quadernoSteps = [];
-    state._quadernoSteps.push({ name, results: [] });
+    state._quadernoSteps.push({ name, results: [], sessionType: getQuadernoSessionType() });
     input.value = '';
     renderQuadernoTask(document.getElementById('quaderno-content'));
 };

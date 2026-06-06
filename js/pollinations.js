@@ -149,6 +149,62 @@ async function searchArasaac(query, perPage = 16, lang) {
     });
 }
 
+// --- AI-powered ARASAAC query normalization via Gemini ---
+async function aiNormalizeArasaacQuery(query) {
+    const apiKey = typeof getGeminiApiKey === 'function' ? getGeminiApiKey() : '';
+    if (!apiKey) throw new Error('Chiave API Gemini non configurata. Vai in Impostazioni.');
+
+    const lang = getArasaacLang();
+    const langName = {it:'italiano', en:'inglese', es:'spagnolo', fr:'francese', de:'tedesco'}[lang] || 'italiano';
+
+    const prompt = `Sei un assistente per la ricerca nel database di pittogrammi ARASAAC.
+Il database usa tag specifici: verbi all'infinito, nomi al singolare nella forma base, senza articoli/preposizioni.
+
+L'utente cerca: "${query}" (lingua: ${langName})
+
+Restituisci SOLO un JSON con questo formato:
+{"query": "termine ottimizzato per la ricerca", "alternatives": ["alternativa1", "alternativa2"]}
+
+Regole:
+- Converti i verbi alla forma infinita (es. "mangia" → "mangiare", "corre" → "correre")
+- Usa il nome al singolare e forma base (es. "le macchine" → "macchina", "dei gatti" → "gatto")
+- Rimuovi articoli, preposizioni, aggettivi superflui
+- Se il termine è composto, semplifica (es. "macchina della polizia" → "polizia")
+- Suggerisci 2-3 alternative che ARASAAC potrebbe avere come tag
+- Mantieni la lingua ${langName}`;
+
+    const transModel = typeof getEffectiveTranslationModel === 'function' ? getEffectiveTranslationModel() : undefined;
+    return await callGemini(prompt, apiKey, transModel);
+}
+
+window.aiArasaacSearch = async (itemIndex) => {
+    const input = document.getElementById('arasaac-query');
+    const query = input?.value?.trim();
+    if (!query) return;
+
+    const btn = document.querySelector('#img-tab-arasaac .ai-arasaac-btn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles fa-spin"></i>'; }
+
+    try {
+        const result = await aiNormalizeArasaacQuery(query);
+        if (result && result.query) {
+            input.value = result.query;
+            // Show alternatives as small clickable chips below the search
+            const altContainer = document.getElementById('arasaac-ai-alternatives');
+            if (altContainer && result.alternatives && result.alternatives.length > 0) {
+                altContainer.innerHTML = result.alternatives.map(alt =>
+                    `<button onclick="document.getElementById('arasaac-query').value='${alt.replace(/'/g, "\\'")}'; runArasaacSearch(${itemIndex})" style="padding:3px 10px; border-radius:12px; border:1px solid rgba(168,85,247,0.3); background:rgba(168,85,247,0.1); color:#a855f7; font-size:0.75rem; cursor:pointer;">${typeof escapeHtml === 'function' ? escapeHtml(alt) : alt}</button>`
+                ).join('');
+            }
+            runArasaacSearch(itemIndex);
+        }
+    } catch (err) {
+        alert('Errore AI: ' + err.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i>'; }
+    }
+};
+
 // --- CLOUDFLARE WORKERS AI (FLUX.1 Schnell, ~2000 img/day free) ---
 // Requires the user to deploy a small Worker proxy — see CLOUDFLARE_WORKER.md
 function getCloudflareWorkerUrl() {
@@ -336,11 +392,15 @@ window.openPollinationsGenerator = (itemIndex) => {
                     <select id="arasaac-lang" onchange="setArasaacLang(this.value); runArasaacSearch(${itemIndex})" style="padding:10px; border-radius:10px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.85rem;">
                         ${['it', 'en', 'es', 'fr', 'de'].map(l => `<option value="${l}"${getArasaacLang() === l ? ' selected' : ''}>${l.toUpperCase()}</option>`).join('')}
                     </select>
+                    <button class="btn ai-arasaac-btn" onclick="aiArasaacSearch(${itemIndex})" style="padding:10px 14px; background:rgba(168,85,247,0.15); border:1px solid rgba(168,85,247,0.4); border-radius:10px; color:#a855f7; cursor:pointer;" title="Ottimizza ricerca con AI">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    </button>
                     <button class="btn btn-primary" onclick="runArasaacSearch(${itemIndex})" style="padding:10px 16px;">
                         <i class="fa-solid fa-search"></i>
                     </button>
                 </div>
                 <p style="font-size:0.7rem; color:#888; margin:0 0 8px;"><i class="fa-solid fa-icons"></i> Pittogrammi ARASAAC &mdash; simboli AAC su sfondo bianco, gratuiti (licenza CC BY-NC-SA). Ideali per carte e prompt visivi.</p>
+                <div id="arasaac-ai-alternatives" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;"></div>
                 <div id="arasaac-results-container"></div>
             </div>
 

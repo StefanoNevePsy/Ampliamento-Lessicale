@@ -3293,6 +3293,7 @@ window.vpbSearchArasaac = (idx) => {
         </div>
         <div style="display:flex; gap:6px; margin-bottom:10px;">
             <input type="text" id="vpb-arasaac-query" value="${(defaultQuery || '').replace(/"/g, '&quot;')}" placeholder="Cerca..." onkeydown="if(event.key==='Enter')vpbRunArasaacSearch(${idx})" style="flex:1; padding:9px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white;">
+            <button class="btn ai-arasaac-btn" onclick="vpbAiArasaacSearch(${idx})" style="padding:9px 12px; background:rgba(168,85,247,0.15); border:1px solid rgba(168,85,247,0.4); border-radius:8px; color:#a855f7; cursor:pointer;" title="Ottimizza con AI"><i class="fa-solid fa-wand-magic-sparkles"></i></button>
             <button class="btn btn-primary" onclick="vpbRunArasaacSearch(${idx})" style="padding:9px 14px;"><i class="fa-solid fa-search"></i></button>
         </div>
         <div id="vpb-arasaac-results"></div>
@@ -3321,6 +3322,27 @@ window.vpbRunArasaacSearch = async (idx) => {
         </div>`;
     } catch (err) {
         container.innerHTML = `<div style="text-align:center; padding:15px; color:var(--danger-color); font-size:0.85rem;">${err.message}</div>`;
+    }
+};
+
+window.vpbAiArasaacSearch = async (idx) => {
+    const input = document.getElementById('vpb-arasaac-query');
+    const query = input?.value?.trim();
+    if (!query) return;
+
+    const btn = document.querySelector('#vpb-arasaac-modal .ai-arasaac-btn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles fa-spin"></i>'; }
+
+    try {
+        const result = await aiNormalizeArasaacQuery(query);
+        if (result && result.query) {
+            input.value = result.query;
+            vpbRunArasaacSearch(idx);
+        }
+    } catch (err) {
+        alert('Errore AI: ' + err.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i>'; }
     }
 };
 
@@ -3468,7 +3490,8 @@ function renderNotebookPanel() {
     </div>
 
     <div style="display:flex; gap:6px; margin-top:8px; align-items:center; flex-wrap:wrap;">
-        <select id="side-q-type" onchange="setSideQuadernoType(this.value)" style="flex:1; padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.8rem;">
+        <span style="font-size:0.7rem; color:var(--text-secondary);">Tipo predefinito:</span>
+        <select id="side-q-type" onchange="setSideQuadernoType(this.value)" style="flex:1; padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.8rem;" title="Tipo predefinito per nuovi item">
             <option value="independent" ${!isTD ? 'selected' : ''}>Indipendente</option>
             <option value="timedelay" ${isTD ? 'selected' : ''}>Time Delay</option>
         </select>
@@ -3491,8 +3514,9 @@ function _renderSideQuadernoRow(row, idx, isTD) {
     const pCount = res.filter(r => r === 'prompt').length;
     const xCount = res.filter(r => r === false).length;
     const total = res.length;
+    const rowIsTD = (row.sessionType || (isTD ? 'timedelay' : 'independent')) === 'timedelay';
 
-    const leftBtn = isTD
+    const leftBtn = rowIsTD
         ? `<div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
                 <span style="font-size:0.65rem; font-weight:bold; color:var(--warning-color);">${pCount}</span>
                 <button onclick="sideQuadernoAddLU(${idx}, 'prompt')" style="width:40px; height:40px; border-radius:50%; border:2px solid var(--warning-color); background:rgba(245,158,11,0.15); color:var(--warning-color); cursor:pointer; font-size:0.9rem; font-weight:800; display:flex; align-items:center; justify-content:center;">P</button>
@@ -3506,6 +3530,7 @@ function _renderSideQuadernoRow(row, idx, isTD) {
     <div style="display:flex; flex-direction:column; gap:6px; padding:10px; margin-bottom:7px; background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); border-radius:12px;">
         <div style="display:flex; align-items:center; gap:6px;">
             <span style="flex:1; font-size:0.9rem; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${row.name}</span>
+            <button onclick="toggleSideQuadernoRowType(${idx})" style="padding:2px 8px; border-radius:6px; border:1px solid ${rowIsTD ? 'var(--warning-color)' : 'rgba(99,102,241,0.5)'}; background:${rowIsTD ? 'rgba(245,158,11,0.15)' : 'rgba(99,102,241,0.1)'}; color:${rowIsTD ? 'var(--warning-color)' : 'var(--accent-color)'}; font-size:0.65rem; font-weight:bold; cursor:pointer; white-space:nowrap;" title="Cambia tipo sessione">${rowIsTD ? 'TD' : 'IND'}</button>
             <span style="background:rgba(99,102,241,0.2); color:var(--accent-color); padding:2px 8px; border-radius:6px; font-size:0.75rem; font-weight:bold;" title="Totale LU">${total}</span>
             <button onclick="sideQuadernoUndo(${idx})" style="width:28px; height:28px; border-radius:8px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.05); color:var(--text-secondary); cursor:pointer; font-size:0.7rem;" title="Annulla ultimo" ${total === 0 ? 'disabled' : ''}><i class="fa-solid fa-rotate-left"></i></button>
             <button onclick="sideQuadernoRemoveRow(${idx})" style="width:28px; height:28px; border-radius:8px; border:none; background:transparent; color:#666; cursor:pointer; font-size:0.75rem;" title="Rimuovi"><i class="fa-solid fa-trash"></i></button>
@@ -3525,7 +3550,7 @@ window.addSideQuadernoRow = () => {
     const input = document.getElementById('side-q-new');
     const name = input ? input.value.trim() : '';
     if (!name) return;
-    state._sideQuaderno.rows.push({ name, results: [] });
+    state._sideQuaderno.rows.push({ name, results: [], sessionType: state._sideQuaderno.sessionType || 'independent' });
     _saveSideQuaderno();
     renderNotebookPanel();
     setTimeout(() => { const el = document.getElementById('side-q-new'); if (el) el.focus(); }, 0);
@@ -3548,6 +3573,14 @@ window.sideQuadernoUndo = (idx) => {
 window.sideQuadernoRemoveRow = (idx) => {
     if (!state._sideQuaderno) return;
     state._sideQuaderno.rows.splice(idx, 1);
+    _saveSideQuaderno();
+    renderNotebookPanel();
+};
+
+window.toggleSideQuadernoRowType = (idx) => {
+    if (!state._sideQuaderno || !state._sideQuaderno.rows[idx]) return;
+    const row = state._sideQuaderno.rows[idx];
+    row.sessionType = (row.sessionType || 'independent') === 'independent' ? 'timedelay' : 'independent';
     _saveSideQuaderno();
     renderNotebookPanel();
 };
@@ -3593,6 +3626,7 @@ window.saveSideQuadernoSession = async () => {
         totalLU += total;
         totalCorrect += rawV;
 
+        const rowType = row.sessionType || type;
         const sessionData = {
             date: now,
             setId: 'quaderno_' + row.name.replace(/\s+/g, '_').toLowerCase() + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
@@ -3602,10 +3636,10 @@ window.saveSideQuadernoSession = async () => {
             prompts: rawP,
             total: total,
             percentage: Math.round((rawV / total) * 100),
-            sessionType: type,
+            sessionType: rowType,
             rawV, rawP, rawX
         };
-        if (type === 'timedelay') sessionData.timeDelaySeconds = tdSeconds;
+        if (rowType === 'timedelay') sessionData.timeDelaySeconds = tdSeconds;
         p.history.push(sessionData);
     });
 
