@@ -3571,27 +3571,10 @@ window.addSideQuadernoRow = () => {
     setTimeout(() => { const el = document.getElementById('side-q-new'); if (el) el.focus(); }, 0);
 };
 
-// Collect saved general quaderno lists (IndexedDB sets + localStorage lists),
-// deduped by name. Task Analysis lists are excluded (the side quaderno is general).
+// Saved general quaderno lists for the side panel: same sources and dedup
+// rules as the main quaderno's in-sheet loader (Task Analysis excluded).
 function _getSideQuadernoLists() {
-    const out = [];
-    const seen = new Set();
-    (state.savedSets || []).forEach(s => {
-        if (!s.modes) return;
-        if (s.modes.includes('quaderno') && !s.modes.includes('quaderno_task')) {
-            out.push({ key: 'set:' + s.id, name: s.name, count: (s.items || []).length });
-            seen.add((s.name || '').toLowerCase().trim());
-        }
-    });
-    if (typeof getSavedQuadernoLists === 'function') {
-        getSavedQuadernoLists().filter(l => l.type !== 'task').forEach(l => {
-            const nm = (l.name || '').toLowerCase().trim();
-            if (seen.has(nm)) return;
-            out.push({ key: 'local:' + l.name, name: l.name, count: (l.items || []).length });
-            seen.add(nm);
-        });
-    }
-    return out;
+    return (typeof getQuadernoListChoices === 'function') ? getQuadernoListChoices(false) : [];
 }
 
 // Preload the items of a saved list as side-quaderno rows. Items whose name
@@ -3605,22 +3588,24 @@ window.loadSideQuadernoList = (key) => {
     if (key.startsWith('set:')) {
         const id = key.slice(4);
         const s = (state.savedSets || []).find(x => String(x.id) === id);
-        items = s ? (s.items || []).map(it => it.name || it.label || it.l || '') : [];
+        items = s ? (s.items || []) : [];
     } else if (key.startsWith('local:')) {
         const name = key.slice(6);
         const list = (typeof getSavedQuadernoLists === 'function' ? getSavedQuadernoLists() : []).find(l => l.name === name);
-        items = list ? (list.items || []).map(it => it.name || it.label || '') : [];
+        items = list ? (list.items || []) : [];
     }
-    items = items.filter(Boolean);
+    items = items
+        .map(it => ({ name: it.name || it.label || it.l || '', sessionType: it.sessionType }))
+        .filter(it => it.name);
     if (items.length === 0) return;
 
     const defType = state._sideQuaderno.sessionType || 'independent';
     const existing = new Set(state._sideQuaderno.rows.map(r => (r.name || '').toLowerCase().trim()));
     let added = 0;
-    items.forEach(name => {
-        const nm = name.toLowerCase().trim();
+    items.forEach(item => {
+        const nm = item.name.toLowerCase().trim();
         if (existing.has(nm)) return;
-        state._sideQuaderno.rows.push({ name, results: [], sessionType: defType });
+        state._sideQuaderno.rows.push({ name: item.name, results: [], sessionType: item.sessionType || defType });
         existing.add(nm);
         added++;
     });

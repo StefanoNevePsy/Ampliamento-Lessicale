@@ -3800,62 +3800,43 @@ function _clearQuadernoState() {
 // ============================================================
 function renderQuaderno(stage, engine) {
     const isTaskMode = engine === 'quaderno_task';
-    // Filter saved sets based on current engine
-    const quadernoSets = state.savedSets.filter(s => {
-        if (!s.modes) return false;
-        if (isTaskMode) return s.modes.includes('quaderno_task');
-        if (engine === 'quaderno') return s.modes.includes('quaderno') && !s.modes.includes('quaderno_task');
-        return s.modes.includes('quaderno') || s.modes.includes('quaderno_task');
-    });
-
-    // Populate the set dropdown with filtered lists
-    _populateQuadernoDropdown(quadernoSets, isTaskMode);
-
-    // Try to restore previous quaderno state (e.g. after keyboard attach reload)
-    if (_restoreQuadernoState() && (state._quadernoRows.length > 0 || state._quadernoSteps.length > 0)) {
-        stage.innerHTML = `
-        <div style="height:100%; display:flex; flex-direction:column; overflow:hidden;">
-            <div id="quaderno-content" style="flex:1; overflow-y:auto; padding:15px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--text-secondary);">
-            </div>
-        </div>`;
-        const content = document.getElementById('quaderno-content');
-        if (state._quadernoType === 'task') renderQuadernoTask(content);
-        else renderQuadernoGeneral(content);
-        return;
-    }
-
-    // If entering directly via Task Analysis mode, open task sheet immediately
-    if (isTaskMode) {
-        stage.innerHTML = `
-        <div style="height:100%; display:flex; flex-direction:column; overflow:hidden;">
-            <div id="quaderno-content" style="flex:1; overflow-y:auto; padding:15px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--text-secondary);">
-            </div>
-        </div>`;
-        openQuadernoSheet('task');
-        return;
-    }
+    // Populate the top set dropdown with the lists for this engine
+    _refreshQuadernoDropdown(isTaskMode);
 
     stage.innerHTML = `
     <div style="height:100%; display:flex; flex-direction:column; overflow:hidden;">
-        <!-- Quaderno Header -->
-        <div style="padding:12px; background:rgba(0,0,0,0.2); border-bottom:1px solid #ffffff10; flex-shrink:0;">
-            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                <button class="btn btn-primary" onclick="openQuadernoSheet('general')" style="padding:8px 16px; font-size:0.9rem;">
-                    <i class="fa-solid fa-clipboard-list"></i> Quaderno Generale
-                </button>
-                <button class="btn btn-ghost" onclick="openQuadernoSheet('task')" style="padding:8px 16px; font-size:0.9rem; border-color:var(--warning-color); color:var(--warning-color);">
-                    <i class="fa-solid fa-list-check"></i> Task Analysis
-                </button>
-            </div>
-        </div>
-        <!-- Content area -->
         <div id="quaderno-content" style="flex:1; overflow-y:auto; padding:15px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--text-secondary);">
-            <i class="fa-solid fa-book-open fa-3x" style="margin-bottom:15px; opacity:0.3;"></i>
-            <p style="text-align:center;">Scegli <b>Quaderno Generale</b> per registrare attivit&agrave; manuali<br>
-            o <b>Task Analysis</b> per sequenze operazionalizzate.</p>
-            ${quadernoSets.length > 0 ? '<p style="font-size:0.8rem; opacity:0.6;">Oppure carica una lista salvata dal dropdown Set in alto.</p>' : ''}
         </div>
     </div>`;
+    const content = document.getElementById('quaderno-content');
+
+    // Restore previous quaderno state (e.g. after keyboard attach reload).
+    // Rows and steps survive independently, so a sheet in progress in the
+    // other quaderno mode is not lost when switching engines.
+    const restored = _restoreQuadernoState();
+    if (isTaskMode) {
+        // The stored name/setId belong to the other mode's sheet: start clean
+        if (restored && state._quadernoType !== 'task') { state._quadernoName = ''; state._quadernoSetId = null; }
+        state._quadernoType = 'task';
+        if ((state._quadernoSteps || []).length > 0) { renderQuadernoTask(content); return; }
+        openQuadernoSheet('task');
+    } else {
+        if (restored && state._quadernoType !== 'general') { state._quadernoName = ''; state._quadernoSetId = null; }
+        state._quadernoType = 'general';
+        if ((state._quadernoRows || []).length > 0) { renderQuadernoGeneral(content); return; }
+        openQuadernoSheet('general');
+    }
+}
+
+// (Re)populate the top set dropdown for the given quaderno kind
+function _refreshQuadernoDropdown(isTaskMode) {
+    const sets = state.savedSets.filter(s => {
+        if (!s.modes) return false;
+        return isTaskMode
+            ? s.modes.includes('quaderno_task')
+            : s.modes.includes('quaderno') && !s.modes.includes('quaderno_task');
+    });
+    _populateQuadernoDropdown(sets, isTaskMode);
 }
 
 // Show quaderno/task analysis lists in the set dropdown
@@ -3990,6 +3971,46 @@ window.openQuadernoSheet = (type) => {
     }
 };
 
+// Collect the saved quaderno lists of the given kind from IndexedDB sets and
+// legacy localStorage lists, deduped by name (sets win). Used by the in-sheet
+// loader and by the side quaderno panel.
+function getQuadernoListChoices(isTask) {
+    const out = [];
+    const seen = new Set();
+    (state.savedSets || []).forEach(s => {
+        if (!s.modes) return;
+        const matches = isTask
+            ? s.modes.includes('quaderno_task')
+            : s.modes.includes('quaderno') && !s.modes.includes('quaderno_task');
+        if (!matches) return;
+        out.push({ key: 'set:' + s.id, name: s.name, count: (s.items || []).length });
+        seen.add((s.name || '').toLowerCase().trim());
+    });
+    getSavedQuadernoLists().forEach(l => {
+        if ((l.type === 'task') !== isTask) return;
+        const nm = (l.name || '').toLowerCase().trim();
+        if (seen.has(nm)) return;
+        out.push({ key: 'local:' + l.name, name: l.name, count: (l.items || []).length });
+        seen.add(nm);
+    });
+    return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Load a list picked from the in-sheet selector. Replaces the current sheet,
+// so ask first if it holds unsaved scored LUs.
+window.loadQuadernoListChoice = async (key) => {
+    if (!key) return;
+    const rows = state._quadernoType === 'task' ? (state._quadernoSteps || []) : (state._quadernoRows || []);
+    const hasData = rows.some(r => r.results && r.results.length > 0);
+    if (hasData) {
+        const msg = 'Caricare la lista? I punteggi non salvati della scheda corrente andranno persi.';
+        const ok = typeof themedConfirm === 'function' ? await themedConfirm(msg) : confirm(msg);
+        if (!ok) return;
+    }
+    if (key.startsWith('set:')) loadQuadernoSet(key.slice(4));
+    else if (key.startsWith('local:')) loadQuadernoList(key.slice(6));
+};
+
 // --- Load saved list (legacy localStorage) ---
 window.loadQuadernoList = (name) => {
     if (!name) return;
@@ -4016,7 +4037,7 @@ window.loadQuadernoList = (name) => {
 
 // --- Load quaderno from IndexedDB set ---
 window.loadQuadernoSet = (setId) => {
-    const s = state.savedSets.find(x => x.id === setId);
+    const s = state.savedSets.find(x => String(x.id) === String(setId));
     if (!s) return;
 
     const content = document.getElementById('quaderno-content');
@@ -4025,15 +4046,21 @@ window.loadQuadernoSet = (setId) => {
     state._quadernoName = s.name;
     state._quadernoSetId = s.id;
 
+    const mapItem = item => ({
+        name: item.name || item.label || item.l || '',
+        results: [],
+        ...(item.sessionType ? { sessionType: item.sessionType } : {})
+    });
+
     if (isTask) {
         state._quadernoType = 'task';
-        state._quadernoSteps = s.items.map(item => ({ name: item.name || item.label || item.l || '', results: [] }));
+        state._quadernoSteps = s.items.map(mapItem);
         state._taskCurrentStep = 0;
         state._taskCycleCount = 0;
         renderQuadernoTask(content);
     } else {
         state._quadernoType = 'general';
-        state._quadernoRows = s.items.map(item => ({ name: item.name || item.label || item.l || '', results: [] }));
+        state._quadernoRows = s.items.map(mapItem);
         renderQuadernoGeneral(content);
     }
 };
@@ -4070,6 +4097,7 @@ function renderQuadernoGeneral(container) {
     const savedNames = getSavedQuadernoLists().filter(l => l.type !== 'task').map(l => l.name);
     const qType = getQuadernoSessionType();
     const activityNames = getUsedActivityNames();
+    const listChoices = getQuadernoListChoices(false);
 
     container.innerHTML = `
     <div style="width:100%; max-width:700px; margin:0 auto;">
@@ -4079,6 +4107,11 @@ function renderQuadernoGeneral(container) {
                 placeholder: 'Nome lista (es. Seduta 15 Feb)',
                 style: 'min-width:150px; padding:8px 12px; border-radius:8px; font-size:0.9rem;'
             })}
+            ${listChoices.length > 0 ? `
+            <select onchange="loadQuadernoListChoice(this.value); this.value='';" title="Carica una lista salvata" style="padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.85rem; max-width:180px;">
+                <option value="">&#128194; Carica lista...</option>
+                ${listChoices.map(c => `<option value="${c.key.replace(/"/g, '&quot;')}">${c.name} (${c.count})</option>`).join('')}
+            </select>` : ''}
         </div>
 
         <div id="quaderno-rows-list">
@@ -4463,26 +4496,38 @@ window.saveQuadernoTemplate = async () => {
 
     const modeTag = state._quadernoType === 'task' ? 'quaderno_task' : 'quaderno';
 
-    // Check if we're editing an existing set (matched by _quadernoSetId)
+    // A loaded set is updated ONLY if its name is unchanged: renaming the
+    // sheet saves it as a brand-new list, preserving the original template.
     let setId = state._quadernoSetId || null;
-    let existingSet = setId ? state.savedSets.find(s => s.id === setId) : null;
+    let existingSet = setId ? state.savedSets.find(s => String(s.id) === String(setId)) : null;
+    if (existingSet && existingSet.name !== name) {
+        existingSet = null;
+        setId = null;
+    }
 
     if (!existingSet) {
-        // Also check by name + mode for backward compatibility
-        existingSet = state.savedSets.find(s => s.name === name && s.modes && s.modes.includes(modeTag));
-        if (existingSet) setId = existingSet.id;
+        // Same name as another list of this kind → confirm before overwriting
+        const sameName = state.savedSets.find(s => s.name === name && s.modes && s.modes.includes(modeTag));
+        if (sameName) {
+            const msg = `Esiste già una lista "${name}". Sovrascriverla?`;
+            const ok = typeof themedConfirm === 'function' ? await themedConfirm(msg) : confirm(msg);
+            if (!ok) return;
+            existingSet = sameName;
+            setId = sameName.id;
+        }
     }
 
     const setData = {
         id: setId || Date.now().toString(),
         name: name,
         category: state._quadernoType === 'task' ? 'Task Analysis' : 'Quaderno',
-        items: rows.map(r => ({ label: r.name, name: r.name })),
+        items: rows.map(r => ({ label: r.name, name: r.name, ...(r.sessionType ? { sessionType: r.sessionType } : {}) })),
         modes: [modeTag],
-        tags: [],
+        tags: (existingSet && existingSet.tags) || [],
         date: new Date().toLocaleDateString(),
         isClinical: false
     };
+    if (existingSet && existingSet.coverImage) setData.coverImage = existingSet.coverImage;
 
     await DB.saveSet(setData);
     state.savedSets = await DB.getAllSets();
@@ -4490,8 +4535,11 @@ window.saveQuadernoTemplate = async () => {
     state._quadernoName = name;
 
     // Also save to localStorage for backward compat
-    const list = { name, type: state._quadernoType, items: rows.map(r => ({ name: r.name })) };
+    const list = { name, type: state._quadernoType, items: rows.map(r => ({ name: r.name, ...(r.sessionType ? { sessionType: r.sessionType } : {}) })) };
     saveQuadernoList(list);
+
+    // Refresh the top dropdown so the saved list is immediately loadable
+    _refreshQuadernoDropdown(state._quadernoType === 'task');
 
     alert(`Lista "${name}" salvata!`);
 
@@ -4526,6 +4574,7 @@ function renderQuadernoTask(container) {
     const pct = totalScored > 0 ? Math.round((totalCorrect / totalScored) * 100) : 0;
 
     const stepNames = getUsedActivityNames();
+    const listChoices = getQuadernoListChoices(true);
 
     container.innerHTML = `
     <div style="width:100%; max-width:700px; margin:0 auto;">
@@ -4535,6 +4584,11 @@ function renderQuadernoTask(container) {
                 placeholder: 'Nome Task Analysis (es. Memory - Procedura)',
                 style: 'min-width:150px; padding:8px 12px; border-radius:8px; font-size:0.9rem;'
             })}
+            ${listChoices.length > 0 ? `
+            <select onchange="loadQuadernoListChoice(this.value); this.value='';" title="Carica un task salvato" style="padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.85rem; max-width:180px;">
+                <option value="">&#128194; Carica task...</option>
+                ${listChoices.map(c => `<option value="${c.key.replace(/"/g, '&quot;')}">${c.name} (${c.count})</option>`).join('')}
+            </select>` : ''}
         </div>
 
         <!-- Legend + Cycle counter -->
