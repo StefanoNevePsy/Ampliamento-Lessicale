@@ -41,6 +41,20 @@ class DB {
             tx.onsuccess = () => r(true);
         });
     }
+    static async getSet(id) {
+        const db = await DB.open();
+        return new Promise(r => {
+            const tx = db.transaction(STORE_SETS, 'readonly').objectStore(STORE_SETS).get(id);
+            tx.onsuccess = () => r(tx.result || null);
+        });
+    }
+    static async getAllSetIds() {
+        const db = await DB.open();
+        return new Promise(r => {
+            const tx = db.transaction(STORE_SETS, 'readonly').objectStore(STORE_SETS).getAllKeys();
+            tx.onsuccess = () => r(tx.result || []);
+        });
+    }
     // Patients
     static async getAllPatients() {
         const db = await DB.open();

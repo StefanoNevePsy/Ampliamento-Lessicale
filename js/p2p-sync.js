@@ -78,9 +78,16 @@ window.openP2PSendSelect = async () => {
     document.getElementById('p2p-role-select').style.display = 'none';
     document.getElementById('p2p-select-panel').style.display = '';
 
-    const sets = await DB.getAllSets();
-    const patients = await DB.getAllPatients();
-    _p2pSelectData = { sets, patients };
+    // Reuse in-memory state when available to avoid materializing a second
+    // full copy of the (image-heavy) library from IndexedDB.
+    const sets = (state.savedSets && state.savedSets.length) ? state.savedSets : await DB.getAllSets();
+    const patients = (state.patients && state.patients.length) ? state.patients : await DB.getAllPatients();
+    // Pre-compute item sizes once so the estimate doesn't re-stringify the
+    // whole (potentially huge) selection on every checkbox toggle.
+    const sizes = {};
+    sets.forEach(s => { sizes['set:' + s.id] = JSON.stringify(s).length; });
+    patients.forEach(p => { sizes['pat:' + p.id] = JSON.stringify(p).length; });
+    _p2pSelectData = { sets, patients, sizes };
 
     // Group sets by category
     const catMap = {};
@@ -110,7 +117,7 @@ window.openP2PSendSelect = async () => {
             </label>
             <div style="padding-left:14px;">`;
         catSets.forEach(s => {
-            const sizeEst = formatBytes(JSON.stringify(s).length);
+            const sizeEst = formatBytes(sizes['set:' + s.id]);
             html += `<label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:0.75rem; padding:1px 0;">
                 <input type="checkbox" class="p2p-set-item" data-id="${s.id}" checked onchange="updateP2PSizeEstimate()" style="width:13px; height:13px;">
                 ${s.name} <span style="opacity:0.4;">(${sizeEst})</span>
@@ -130,7 +137,7 @@ window.openP2PSendSelect = async () => {
         <div id="p2p-patients-list" style="padding-left:16px; max-height:120px; overflow-y:auto;">`;
     patients.forEach(p => {
         const sessions = (p.history || []).length;
-        const sizeEst = formatBytes(JSON.stringify(p).length);
+        const sizeEst = formatBytes(sizes['pat:' + p.id]);
         html += `<label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:0.75rem; padding:1px 0;">
             <input type="checkbox" class="p2p-patient-item" data-id="${p.id}" checked onchange="updateP2PSizeEstimate()" style="width:13px; height:13px;">
             ${p.name || 'Senza nome'} <span style="opacity:0.4;">(${sessions} sess., ${sizeEst})</span>
@@ -169,46 +176,23 @@ window.toggleP2PCat = (cat, checked) => {
 window.updateP2PSizeEstimate = () => {
     if (!_p2pSelectData) return;
 
-    const selectedSetIds = new Set();
-    document.querySelectorAll('.p2p-set-item:checked').forEach(cb => selectedSetIds.add(cb.dataset.id));
-    const selectedPatientIds = new Set();
-    document.querySelectorAll('.p2p-patient-item:checked').forEach(cb => selectedPatientIds.add(cb.dataset.id));
-    const includeConfig = document.getElementById('p2p-config').checked;
-
-    // Calculate size
+    const sizes = _p2pSelectData.sizes || {};
     let totalSize = 0;
-    const selectedSets = _p2pSelectData.sets.filter(s => selectedSetIds.has(s.id));
-    const selectedPatients = _p2pSelectData.patients.filter(p => selectedPatientIds.has(p.id));
-    totalSize += JSON.stringify(selectedSets).length;
-    totalSize += JSON.stringify(selectedPatients).length;
-    if (includeConfig) {
-        totalSize += JSON.stringify(getAllTagImages()).length;
-        totalSize += JSON.stringify(getSavedQuadernoLists()).length;
-        totalSize += JSON.stringify(getRecentSessionNames()).length;
-    }
+    document.querySelectorAll('.p2p-set-item:checked').forEach(cb => { totalSize += sizes['set:' + cb.dataset.id] || 0; });
+    document.querySelectorAll('.p2p-patient-item:checked').forEach(cb => { totalSize += sizes['pat:' + cb.dataset.id] || 0; });
 
     const sizeStr = formatBytes(totalSize);
     const infoEl = document.getElementById('p2p-size-info');
 
-    // Estimate compressed size (~20-30% of original for JSON with base64 images)
-    const compressCheckbox = document.getElementById('p2p-compress');
-    const willCompress = compressCheckbox ? compressCheckbox.checked : false;
-    const estCompressedSize = Math.round(totalSize * 0.25); // conservative estimate
-    const effectiveSize = willCompress ? estCompressedSize : totalSize;
+    // Estimate compressed size (~25% of original for JSON with base64 images)
+    const estCompressedSize = Math.round(totalSize * 0.25);
 
     let speedNote = '';
-    if (effectiveSize > 50 * 1024 * 1024) {
-        speedNote = `<div style="margin-top:6px; color:var(--warning-color);"><i class="fa-solid fa-triangle-exclamation"></i> Dati molto grandi. Per trasferimenti &gt;50 MB consigliamo l'esportazione file (Backup) e condivisione manuale.</div>`;
-    } else if (effectiveSize > 10 * 1024 * 1024) {
-        speedNote = `<div style="margin-top:6px; color:#f59e0b;"><i class="fa-solid fa-info-circle"></i> Trasferimento di ~${formatBytes(effectiveSize)}: potrebbe richiedere qualche minuto via P2P.</div>`;
+    if (estCompressedSize > 20 * 1024 * 1024) {
+        speedNote = `<div style="margin-top:6px; color:#f59e0b;"><i class="fa-solid fa-info-circle"></i> Trasferimento di ~${formatBytes(estCompressedSize)}: potrebbe richiedere qualche minuto. Tieni entrambi i dispositivi attivi e con lo schermo acceso.</div>`;
     }
 
-    let compressNote = '';
-    if (willCompress) {
-        compressNote = ` <span style="color:var(--success-color); font-size:0.75rem;">(<i class="fa-solid fa-compress"></i> ~${formatBytes(estCompressedSize)} compressi)</span>`;
-    }
-
-    infoEl.innerHTML = `<i class="fa-solid fa-weight-hanging"></i> Dimensione stimata: <b>${sizeStr}</b>${compressNote}${speedNote}`;
+    infoEl.innerHTML = `<i class="fa-solid fa-weight-hanging"></i> Dimensione stimata: <b>${sizeStr}</b> <span style="color:var(--success-color); font-size:0.75rem;">(<i class="fa-solid fa-compress"></i> ~${formatBytes(estCompressedSize)} compressi)</span>${speedNote}`;
 };
 
 // ===============================
@@ -254,8 +238,8 @@ window.startP2PSend = async (mode) => {
     let payload;
     if (mode === 'all') {
         // This path is kept for backward compatibility but normally goes through checklist
-        const sets = await DB.getAllSets();
-        const patients = await DB.getAllPatients();
+        const sets = (state.savedSets && state.savedSets.length) ? state.savedSets : await DB.getAllSets();
+        const patients = (state.patients && state.patients.length) ? state.patients : await DB.getAllPatients();
         payload = {
             type: 'sync',
             version: 5,
@@ -288,7 +272,76 @@ window.startP2PSend = async (mode) => {
     startP2PSendWithPayload(payload);
 };
 
-function startP2PSendWithPayload(payload, forceCompress) {
+// Wait until the WebRTC data channel buffer drains below `max` bytes.
+// Without this, sending many chunks in a tight loop overflows the SCTP
+// buffer and kills the connection (the main cause of crashes on large data).
+function _p2pWaitForBuffer(conn, max) {
+    return new Promise((resolve, reject) => {
+        const dc = conn.dataChannel;
+        if (!dc) return resolve();
+        const check = () => {
+            if (!conn.open) return reject(new Error('Connessione interrotta durante l\'invio.'));
+            if (dc.bufferedAmount <= max) return resolve();
+            setTimeout(check, 50);
+        };
+        check();
+    });
+}
+
+// Split a payload into independent items so each one can be compressed and
+// transferred on its own: peak memory is bounded by the largest single
+// set/patient instead of the entire dataset.
+function _p2pPayloadToItems(payload) {
+    const items = [];
+    (payload.sets || []).forEach(s => items.push({ kind: 'set', data: s }));
+    (payload.patients || []).forEach(p => items.push({ kind: 'patient', data: p }));
+    const config = {};
+    ['tagImages', 'quadernoLists', 'sessionNames', 'activityLayout'].forEach(k => {
+        if (payload[k] !== undefined) config[k] = payload[k];
+    });
+    if (Object.keys(config).length > 0) items.push({ kind: 'config', data: config });
+    return items;
+}
+
+async function _p2pSendItems(conn, items) {
+    const statusEl = document.getElementById('p2p-sender-status');
+    const CHUNK = 64 * 1024;          // 64KB binary chunks
+    const MAX_BUFFERED = 1024 * 1024; // pause when >1MB queued on the channel
+
+    conn.send({ type: 'meta6', totalItems: items.length });
+
+    let sentBytes = 0;
+    for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        const json = JSON.stringify(it.data);
+        let bytes, compressed = false;
+        if (typeof pako !== 'undefined') {
+            bytes = pako.deflate(json);
+            compressed = true;
+        } else {
+            bytes = new TextEncoder().encode(json);
+        }
+
+        const totalChunks = Math.ceil(bytes.length / CHUNK);
+        conn.send({ type: 'item-meta', index: i, kind: it.kind, compressed, totalChunks, size: bytes.length });
+
+        for (let c = 0; c < totalChunks; c++) {
+            await _p2pWaitForBuffer(conn, MAX_BUFFERED);
+            // .slice() copies, so each chunk's buffer is exactly chunk-sized
+            conn.send({ type: 'item-chunk', index: i, chunk: c, data: bytes.slice(c * CHUNK, (c + 1) * CHUNK).buffer });
+        }
+
+        sentBytes += bytes.length;
+        if (statusEl) statusEl.textContent = `Invio: ${i + 1}/${items.length} elementi (${formatBytes(sentBytes)})...`;
+    }
+
+    // Drain completely before 'done' so it isn't lost if the user closes early
+    await _p2pWaitForBuffer(conn, 0);
+    conn.send({ type: 'done6' });
+    if (statusEl) statusEl.innerHTML = `<i class="fa-solid fa-check" style="color:var(--success-color);"></i> Dati inviati con successo! (${items.length} elementi, ${formatBytes(sentBytes)})`;
+}
+
+function startP2PSendWithPayload(payload) {
     document.getElementById('p2p-role-select').style.display = 'none';
     document.getElementById('p2p-select-panel').style.display = 'none';
     document.getElementById('p2p-sender-panel').style.display = '';
@@ -296,29 +349,7 @@ function startP2PSendWithPayload(payload, forceCompress) {
     document.getElementById('p2p-qr-container').innerHTML = '';
     document.getElementById('p2p-sender-code').textContent = '';
 
-    // Check compression preference
-    const compressCheckbox = document.getElementById('p2p-compress');
-    const useCompression = forceCompress !== undefined ? forceCompress : (compressCheckbox ? compressCheckbox.checked : false);
-
-    const json = JSON.stringify(payload);
-    const originalSize = json.length;
-    let sendData, compressed = false, compressedSize = 0;
-
-    if (useCompression && typeof pako !== 'undefined') {
-        try {
-            const uint8 = pako.deflate(json);
-            compressedSize = uint8.length;
-            // Convert to base64 for safe transfer over WebRTC data channel
-            const binStr = Array.from(uint8, b => String.fromCharCode(b)).join('');
-            sendData = btoa(binStr);
-            compressed = true;
-        } catch (e) {
-            console.warn('Compression failed, sending uncompressed:', e);
-            sendData = json;
-        }
-    } else {
-        sendData = json;
-    }
+    const items = _p2pPayloadToItems(payload);
 
     const syncId = generateSyncId();
 
@@ -330,12 +361,7 @@ function startP2PSendWithPayload(payload, forceCompress) {
     }
 
     _p2pPeer.on('open', (id) => {
-        let sizeInfo = formatBytes(originalSize);
-        if (compressed) {
-            const ratio = Math.round((1 - compressedSize / originalSize) * 100);
-            sizeInfo = `${formatBytes(compressedSize)} (compressi da ${formatBytes(originalSize)}, -${ratio}%)`;
-        }
-        document.getElementById('p2p-sender-status').innerHTML = `In attesa di connessione... (${sizeInfo})<br><span style="font-size:0.75rem; opacity:0.6;">L'altro dispositivo deve scansionare il QR o inserire il codice.</span>`;
+        document.getElementById('p2p-sender-status').innerHTML = `In attesa di connessione... (${items.length} elementi)<br><span style="font-size:0.75rem; opacity:0.6;">L'altro dispositivo deve scansionare il QR o inserire il codice.</span>`;
         document.getElementById('p2p-sender-code').textContent = id;
 
         // Generate QR code
@@ -356,22 +382,9 @@ function startP2PSendWithPayload(payload, forceCompress) {
         document.getElementById('p2p-sender-status').textContent = 'Dispositivo connesso! Invio dati...';
 
         conn.on('open', () => {
-            const chunkSize = 64 * 1024; // 64KB chunks
-            const totalChunks = Math.ceil(sendData.length / chunkSize);
-
-            conn.send({ type: 'meta', totalChunks: totalChunks, totalSize: sendData.length, compressed: compressed });
-
-            for (let i = 0; i < totalChunks; i++) {
-                conn.send({ type: 'chunk', index: i, data: sendData.substring(i * chunkSize, (i + 1) * chunkSize) });
-            }
-
-            conn.send({ type: 'done' });
-            let doneMsg = '<i class="fa-solid fa-check" style="color:var(--success-color);"></i> Dati inviati con successo!';
-            if (compressed) {
-                const ratio = Math.round((1 - compressedSize / originalSize) * 100);
-                doneMsg += ` <span style="font-size:0.75rem; opacity:0.6;">(compressi -${ratio}%)</span>`;
-            }
-            document.getElementById('p2p-sender-status').innerHTML = doneMsg;
+            _p2pSendItems(conn, items).catch(err => {
+                document.getElementById('p2p-sender-status').textContent = 'Errore invio: ' + err.message;
+            });
         });
 
         conn.on('error', (err) => {
@@ -470,36 +483,115 @@ function performReceive(senderId) {
     _p2pPeer.on('open', () => {
         _p2pConn = _p2pPeer.connect(senderId, { reliable: true });
 
+        // Legacy protocol (v5) state
         let chunks = [];
         let totalChunks = 0;
         let totalSize = 0;
+        let isCompressed = false;
+
+        // Item protocol (v6) state: only one item buffered at a time
+        let v6 = null;
 
         _p2pConn.on('open', () => {
             document.getElementById('p2p-progress-text').textContent = 'Connesso! Ricezione dati...';
         });
 
-        let isCompressed = false;
-
         _p2pConn.on('data', async (msg) => {
-            if (msg.type === 'meta') {
+            const progressText = document.getElementById('p2p-progress-text');
+            const progressBar = document.getElementById('p2p-progress-bar-fill');
+
+            // === Item-based protocol (v6) ===
+            if (msg.type === 'meta6') {
+                // v6 must be assigned synchronously: the first item-meta can
+                // arrive while the merge context is still loading from the DB.
+                v6 = {
+                    totalItems: msg.totalItems,
+                    doneItems: 0,
+                    current: null,
+                    mergeQueue: Promise.resolve(),
+                    mergeError: null,
+                    ctxPromise: _p2pCreateMergeContext()
+                };
+                progressText.textContent = `Ricezione: 0/${msg.totalItems} elementi`;
+            } else if (msg.type === 'item-meta' && v6) {
+                v6.current = {
+                    kind: msg.kind,
+                    compressed: msg.compressed,
+                    totalChunks: msg.totalChunks,
+                    size: msg.size,
+                    parts: new Array(msg.totalChunks).fill(null),
+                    got: 0
+                };
+            } else if (msg.type === 'item-chunk' && v6 && v6.current) {
+                const cur = v6.current;
+                if (cur.parts[msg.chunk] === null) cur.got++;
+                cur.parts[msg.chunk] = new Uint8Array(msg.data);
+
+                const pct = Math.round(((v6.doneItems + cur.got / cur.totalChunks) / v6.totalItems) * 100);
+                progressBar.style.width = pct + '%';
+                progressText.textContent = `Ricezione: ${v6.doneItems + 1}/${v6.totalItems} elementi (${pct}%)`;
+
+                if (cur.got >= cur.totalChunks) {
+                    // Item complete: reassemble now, then merge through a serial
+                    // queue. `current` is cleared synchronously so the next
+                    // item-meta (which can arrive while a merge is pending)
+                    // isn't clobbered.
+                    v6.doneItems++;
+                    v6.current = null;
+
+                    const assembled = new Uint8Array(cur.size);
+                    let offset = 0;
+                    for (const part of cur.parts) { assembled.set(part, offset); offset += part.length; }
+                    cur.parts = null;
+
+                    const state6 = v6;
+                    state6.mergeQueue = state6.mergeQueue.then(async () => {
+                        const jsonStr = cur.compressed
+                            ? pako.inflate(assembled, { to: 'string' })
+                            : new TextDecoder().decode(assembled);
+                        const obj = JSON.parse(jsonStr);
+                        await _p2pMergeItem(await state6.ctxPromise, cur.kind, obj);
+                    }).catch(err => {
+                        state6.mergeError = err;
+                        progressText.textContent = 'Errore elaborazione elemento: ' + err.message;
+                    });
+                }
+            } else if (msg.type === 'done6' && v6) {
+                progressText.textContent = 'Sincronizzazione in corso...';
+                progressBar.style.width = '100%';
+                const state6 = v6;
+                v6 = null;
+                try {
+                    await state6.mergeQueue;
+                    const result = await _p2pFinalizeMerge(await state6.ctxPromise);
+                    progressText.innerHTML = state6.mergeError
+                        ? `<i class="fa-solid fa-triangle-exclamation" style="color:var(--warning-color);"></i> ${result} (alcuni elementi non importati: ${state6.mergeError.message})`
+                        : `<i class="fa-solid fa-check" style="color:var(--success-color);"></i> ${result}`;
+                } catch (err) {
+                    progressText.textContent = 'Errore: ' + err.message;
+                }
+
+            // === Legacy protocol (v5 and earlier senders) ===
+            } else if (msg.type === 'meta') {
                 totalChunks = msg.totalChunks;
                 totalSize = msg.totalSize;
                 isCompressed = !!msg.compressed;
                 chunks = new Array(totalChunks).fill(null);
                 const compressLabel = isCompressed ? ' (compressi)' : '';
-                document.getElementById('p2p-progress-text').textContent = `Ricezione: 0/${totalChunks} (${formatBytes(totalSize)}${compressLabel})`;
+                progressText.textContent = `Ricezione: 0/${totalChunks} (${formatBytes(totalSize)}${compressLabel})`;
             } else if (msg.type === 'chunk') {
                 chunks[msg.index] = msg.data;
                 const received = chunks.filter(c => c !== null).length;
                 const pct = Math.round((received / totalChunks) * 100);
-                document.getElementById('p2p-progress-bar-fill').style.width = pct + '%';
-                document.getElementById('p2p-progress-text').textContent = `Ricezione: ${received}/${totalChunks} (${pct}%)`;
+                progressBar.style.width = pct + '%';
+                progressText.textContent = `Ricezione: ${received}/${totalChunks} (${pct}%)`;
             } else if (msg.type === 'done') {
-                document.getElementById('p2p-progress-text').textContent = isCompressed ? 'Decompressione e sincronizzazione...' : 'Sincronizzazione in corso...';
-                document.getElementById('p2p-progress-bar-fill').style.width = '100%';
+                progressText.textContent = isCompressed ? 'Decompressione e sincronizzazione...' : 'Sincronizzazione in corso...';
+                progressBar.style.width = '100%';
 
                 try {
                     const fullData = chunks.join('');
+                    chunks = [];
                     let jsonStr;
 
                     if (isCompressed && typeof pako !== 'undefined') {
@@ -513,10 +605,10 @@ function performReceive(senderId) {
 
                     const data = JSON.parse(jsonStr);
                     const result = await mergeReceivedData(data);
-                    document.getElementById('p2p-progress-text').innerHTML =
+                    progressText.innerHTML =
                         `<i class="fa-solid fa-check" style="color:var(--success-color);"></i> ${result}`;
                 } catch (err) {
-                    document.getElementById('p2p-progress-text').textContent = 'Errore: ' + err.message;
+                    progressText.textContent = 'Errore: ' + err.message;
                 }
             }
         });
@@ -537,45 +629,53 @@ function performReceive(senderId) {
     });
 }
 
-// Merge received data using existing merge helpers from backup.js
-async function mergeReceivedData(data) {
+// --- Incremental merge: items are merged one at a time as they arrive ---
+
+async function _p2pCreateMergeContext() {
     const localSets = await DB.getAllSets();
     const localPatients = await DB.getAllPatients();
     const localSetsMap = {};
     localSets.forEach(s => { localSetsMap[s.id] = s; });
     const localPatientsMap = {};
     localPatients.forEach(p => { localPatientsMap[p.id] = p; });
+    return {
+        localSetsMap, localPatientsMap,
+        setsAdded: 0, setsUpdated: 0,
+        patientsAdded: 0, patientsUpdated: 0
+    };
+}
 
-    let setsAdded = 0, setsUpdated = 0;
-    let patientsAdded = 0, patientsUpdated = 0;
-
-    const incomingSets = data.sets || [];
-    const incomingPatients = data.patients || [];
-
-    for (const incoming of incomingSets) {
-        if (!incoming.id) continue;
-        if (localSetsMap[incoming.id]) {
-            const merged = mergeSets(localSetsMap[incoming.id], incoming);
+async function _p2pMergeItem(ctx, kind, obj) {
+    if (kind === 'set') {
+        if (!obj.id) return;
+        if (ctx.localSetsMap[obj.id]) {
+            const merged = mergeSets(ctx.localSetsMap[obj.id], obj);
             await DB.saveSet(merged);
-            setsUpdated++;
+            ctx.localSetsMap[obj.id] = merged;
+            ctx.setsUpdated++;
         } else {
-            await DB.saveSet(incoming);
-            setsAdded++;
+            await DB.saveSet(obj);
+            ctx.localSetsMap[obj.id] = obj;
+            ctx.setsAdded++;
         }
-    }
-
-    for (const incoming of incomingPatients) {
-        if (!incoming.id) continue;
-        if (localPatientsMap[incoming.id]) {
-            const merged = mergePatients(localPatientsMap[incoming.id], incoming);
+    } else if (kind === 'patient') {
+        if (!obj.id) return;
+        if (ctx.localPatientsMap[obj.id]) {
+            const merged = mergePatients(ctx.localPatientsMap[obj.id], obj);
             await DB.savePatient(merged);
-            patientsUpdated++;
+            ctx.localPatientsMap[obj.id] = merged;
+            ctx.patientsUpdated++;
         } else {
-            await DB.savePatient(incoming);
-            patientsAdded++;
+            await DB.savePatient(obj);
+            ctx.localPatientsMap[obj.id] = obj;
+            ctx.patientsAdded++;
         }
+    } else if (kind === 'config') {
+        await _p2pMergeConfig(obj);
     }
+}
 
+async function _p2pMergeConfig(data) {
     if (data.tagImages && typeof data.tagImages === 'object') {
         const existing = getAllTagImages();
         const merged = { ...existing, ...data.tagImages };
@@ -595,7 +695,6 @@ async function mergeReceivedData(data) {
         const merged = [...new Set([...existing, ...data.sessionNames])].slice(0, 30);
         localStorage.setItem('sessionNames', JSON.stringify(merged));
     }
-    // Import activity layout (same logic as backup import)
     if (data.activityLayout) {
         const local = getActivityLayout();
         if (data.activityLayout.customModes) {
@@ -623,7 +722,9 @@ async function mergeReceivedData(data) {
         saveActivityLayout(local);
         renderModeSelect();
     }
+}
 
+async function _p2pFinalizeMerge(ctx) {
     // Reload state
     state.savedSets = await DB.getAllSets();
     state.patients = await DB.getAllPatients();
@@ -635,12 +736,21 @@ async function mergeReceivedData(data) {
     }
 
     const parts = [];
-    if (setsAdded > 0) parts.push(`${setsAdded} set aggiunti`);
-    if (setsUpdated > 0) parts.push(`${setsUpdated} set aggiornati`);
-    if (patientsAdded > 0) parts.push(`${patientsAdded} pazienti aggiunti`);
-    if (patientsUpdated > 0) parts.push(`${patientsUpdated} pazienti aggiornati`);
+    if (ctx.setsAdded > 0) parts.push(`${ctx.setsAdded} set aggiunti`);
+    if (ctx.setsUpdated > 0) parts.push(`${ctx.setsUpdated} set aggiornati`);
+    if (ctx.patientsAdded > 0) parts.push(`${ctx.patientsAdded} pazienti aggiunti`);
+    if (ctx.patientsUpdated > 0) parts.push(`${ctx.patientsUpdated} pazienti aggiornati`);
 
     return parts.length > 0 ? parts.join(', ') : 'Nessuna modifica necessaria';
+}
+
+// Merge a full payload at once (legacy v5 protocol support)
+async function mergeReceivedData(data) {
+    const ctx = await _p2pCreateMergeContext();
+    for (const s of (data.sets || [])) await _p2pMergeItem(ctx, 'set', s);
+    for (const p of (data.patients || [])) await _p2pMergeItem(ctx, 'patient', p);
+    await _p2pMergeConfig(data);
+    return _p2pFinalizeMerge(ctx);
 }
 
 // Send a single set via P2P (called from library card)
