@@ -14,10 +14,6 @@
 
 (function () {
     const MAX_DIM = 1100;                 // working resolution cap
-    // In-browser segmentation model (lazy-loaded from CDN, cached by the browser)
-    const AI_CDN = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.2.4';
-    const AI_MODEL = 'briaai/RMBG-1.4';
-    let _aiModel = null, _aiProcessor = null, _aiLib = null;
 
     function _colorDist(d, i, r, g, b) {
         const dr = d[i] - r, dg = d[i + 1] - g, db = d[i + 2] - b;
@@ -270,22 +266,23 @@
         overlay.querySelector('#me-reset').onclick = () => { mask.fill(mode === 'cutout' ? 1 : 0); scheduleRender(); };
         refreshToolButtons();
 
-        // --- AI auto-segmentation ---
+        // --- AI auto-segmentation (delegated to the shared GPU-accelerated engine) ---
         overlay.querySelector('#me-ai').onclick = async () => {
             const btn = overlay.querySelector('#me-ai');
+            if (!window.AIEngine) { setStatus('Motore AI non disponibile.'); return; }
             btn.disabled = true;
             try {
-                const aiMask = await runAiSegmentation(opts.imageUrl, w, h, setStatus);
+                const aiMask = await window.AIEngine.segmentSubject(opts.imageUrl, w, h, setStatus);
                 if (aiMask) {
                     for (let i = 0; i < w * h; i++) mask[i] = aiMask[i] > 127 ? 1 : 0;
                     scheduleRender();
-                    setStatus('Segmentazione AI applicata — rifinisci se serve.');
+                    setStatus('Segmentazione AI applicata — rifinisci con bacchetta/pennello se serve.');
                 } else {
                     setStatus('AI non disponibile. Usa bacchetta e pennello.');
                 }
             } catch (e) {
                 console.warn('AI segmentation failed:', e);
-                setStatus('AI non riuscita: ' + (e.message || e) + '. Usa gli strumenti manuali.');
+                setStatus('AI non riuscita: ' + (e.message || e) + '. Usa gli strumenti manuali o controlla Impostazioni › Immagini.');
             } finally {
                 btn.disabled = false;
             }
@@ -348,39 +345,4 @@
         }
     }
 
-    // Lazy-loaded in-browser segmentation (RMBG-1.4 via transformers.js).
-    // Returns a Uint8 grayscale mask (w*h) or null if unavailable.
-    async function runAiSegmentation(imageUrl, w, h, setStatus) {
-        if (!_aiLib) {
-            setStatus && setStatus('Caricamento motore AI (prima volta ~40MB)...');
-            _aiLib = await import(/* @vite-ignore */ AI_CDN + '/+esm');
-            _aiLib.env.allowLocalModels = false;
-        }
-        const { AutoModel, AutoProcessor, RawImage } = _aiLib;
-        if (!_aiModel) {
-            _aiModel = await AutoModel.from_pretrained(AI_MODEL, {
-                config: { model_type: 'custom' },
-                progress_callback: (p) => {
-                    if (p && p.status === 'progress' && p.progress != null) {
-                        setStatus && setStatus(`Download modello AI: ${Math.round(p.progress)}%`);
-                    }
-                }
-            });
-            _aiProcessor = await AutoProcessor.from_pretrained(AI_MODEL, {
-                config: {
-                    do_normalize: true, do_pad: false, do_rescale: true, do_resize: true,
-                    image_mean: [0.5, 0.5, 0.5], image_std: [1, 1, 1],
-                    feature_extractor_type: 'ImageFeatureExtractor',
-                    resample: 2, rescale_factor: 0.00392156862745098,
-                    size: { width: 1024, height: 1024 }
-                }
-            });
-        }
-        setStatus && setStatus('Analisi immagine...');
-        const image = await RawImage.fromURL(imageUrl);
-        const { pixel_values } = await _aiProcessor(image);
-        const { output } = await _aiModel({ input: pixel_values });
-        const maskImg = await RawImage.fromTensor(output[0].mul(255).to('uint8')).resize(w, h);
-        return maskImg.data; // grayscale, length w*h
-    }
 })();

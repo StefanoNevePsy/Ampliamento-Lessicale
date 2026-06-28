@@ -471,6 +471,30 @@
                     Cambiando modello dovrai aver fatto il re-deploy del Worker aggiornato.
                     <a href="#" onclick="showCloudflareInstructions(); return false;" style="color:var(--accent-color); display:block; margin-top:6px;"><i class="fa-solid fa-circle-info"></i> Come configurare il Worker (10 minuti)</a>
                 </p>
+
+                <h4 style="margin:18px 0 10px; color:#a78bfa;"><i class="fa-solid fa-robot"></i> Scontorno AI (in-browser)</h4>
+                <p class="modal-hint" id="ai-engine-caps" style="margin-bottom:8px;"></p>
+                <label class="modal-label">Accelerazione hardware</label>
+                <select id="ai-engine-device">
+                    <option value="auto">Automatica (GPU se disponibile)</option>
+                    <option value="gpu">GPU (WebGPU)</option>
+                    <option value="npu">NPU se disponibile (sperimentale) &rarr; GPU &rarr; CPU</option>
+                    <option value="cpu">Solo CPU (WASM)</option>
+                </select>
+                <label class="modal-label" style="margin-top:10px;">Modello <span class="modal-label-sm">(vuoto = RMBG-2.0, poi 1.4 di riserva)</span></label>
+                <input type="text" id="ai-engine-model" placeholder="briaai/RMBG-2.0">
+                <label class="modal-label" style="margin-top:10px;">Cartella modello locale <span class="modal-label-sm">(fallback se il download online fallisce)</span></label>
+                <input type="text" id="ai-engine-localpath" placeholder="./models/">
+                <label class="setting-option" style="margin-top:8px;">
+                    <input type="checkbox" id="ai-engine-localfirst" style="width:18px; height:18px; accent-color:var(--accent-color);">
+                    <span>Usa prima la cartella locale (offline)</span>
+                </label>
+                <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+                    <button class="btn btn-ghost" onclick="saveAiEngineSettings()" style="font-size:0.8rem;"><i class="fa-solid fa-floppy-disk"></i> Salva</button>
+                    <button class="btn btn-ghost" onclick="testAiEngine()" style="font-size:0.8rem; color:#a78bfa;"><i class="fa-solid fa-vial"></i> Carica/Test modello</button>
+                    <button class="btn btn-ghost" onclick="showAiModelInstructions()" style="font-size:0.8rem;"><i class="fa-solid fa-circle-info"></i> Download manuale</button>
+                </div>
+                <p class="modal-hint" id="ai-engine-status" style="margin-top:8px;"></p>
             </div>
 
             <!-- TAB: THEME -->
@@ -990,6 +1014,7 @@
     <script src="js/patients.js"></script>
     <script src="js/editor.js"></script>
     <script src="js/scontorno.js"></script>
+    <script src="js/ai-engine.js"></script>
     <script src="js/mask-editor.js"></script>
     <script src="js/game-modes.js"></script>
     <script src="js/backup.js"></script>

@@ -219,6 +219,7 @@ window.switchSettingsTab = (tab) => {
         btn.classList.toggle('active', btn.dataset.tab === tab);
     });
     if (tab === 'theme') renderThemePicker();
+    if (tab === 'images' && typeof populateAiEngineSettings === 'function') populateAiEngineSettings();
 };
 
 window.openSettings = () => {
