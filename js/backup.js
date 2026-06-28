@@ -260,6 +260,19 @@ function _addSetToZip(zip, set) {
             }
         }
 
+        // Extract derived images (scontorno result + highlight original) so they
+        // aren't carried as fat base64 inside the set JSON.
+        ['maskedUrl', 'originalUrl'].forEach(field => {
+            if (item[field] && item[field].startsWith('data:')) {
+                const parsed = parseDataUrl(item[field]);
+                if (parsed) {
+                    const name = `${setSlug}_${i}_${sanitizeFilename(item.label)}_${field}.${parsed.ext}`;
+                    itemImagesFolder.file(name, parsed.base64, { base64: true });
+                    item[field] = `images/items/${name}`;
+                }
+            }
+        });
+
         setClone.items.push(item);
     }
 
@@ -640,6 +653,12 @@ async function importFromZip(file) {
             }
             if (item.audio && !item.audio.startsWith('data:')) {
                 item.audio = (await zipEntryToDataUrl(zip, item.audio)) || item.audio;
+            }
+            // Rehydrate derived images
+            for (const field of ['maskedUrl', 'originalUrl']) {
+                if (item[field] && !item[field].startsWith('data:') && !item[field].startsWith('http')) {
+                    item[field] = (await zipEntryToDataUrl(zip, item[field])) || item[field];
+                }
             }
             // Rehydrate variant images
             if (item.variantUrls && typeof item.variantUrls === 'object') {

@@ -313,6 +313,9 @@ function renderEditorList() {
             <button class="btn btn-ghost" style="padding:6px;" onclick="scontornaEditorItem(${idx}); event.stopPropagation();" title="${item.maskedUrl ? 'Scontorno OK (clicca per rifare)' : 'Rimuovi sfondo'}">
                 <i class="fa-solid fa-eraser" style="font-size:0.8rem; ${item.maskedUrl ? 'color:var(--success-color)' : 'opacity:0.4'}"></i>
             </button>
+            <button class="btn btn-ghost" style="padding:6px;" onclick="highlightEditorItem(${idx}); event.stopPropagation();" title="Evidenzia soggetto (resto in bianco e nero)">
+                <i class="fa-solid fa-highlighter" style="font-size:0.8rem; ${item.originalUrl ? 'color:var(--warning-color)' : 'opacity:0.4'}"></i>
+            </button>
             <button class="btn btn-ghost" style="padding:6px;" onclick="openZoomEditor(${idx}); event.stopPropagation();" title="Imposta Area Zoom">
                 <i class="fa-solid fa-crop" style="font-size:0.8rem; ${item.zoomArea ? 'color:var(--warning-color)' : 'opacity:0.4'}"></i>
             </button>
@@ -336,6 +339,48 @@ window.scontornaEditorItem = async (idx) => {
 
     // Open preview overlay with tolerance slider
     _openScontornoPreview(item, () => renderEditorList());
+};
+
+// Manual/AI cutout editor (used by the "advanced" button in the scontorno preview)
+window.openManualCutout = (item, onDone) => {
+    if (typeof openMaskEditor !== 'function') { alert('Editor non disponibile.'); return; }
+    openMaskEditor({
+        imageUrl: item.url,
+        mode: 'cutout',
+        title: 'Scontorno — ' + (item.label || 'Item'),
+        initialMaskUrl: item.maskedUrl || null,
+        onApply: (result) => {
+            if (result === null) delete item.maskedUrl;
+            else item.maskedUrl = result;
+            if (onDone) onDone();
+        }
+    });
+};
+
+// Highlight subject (keep subject in colour, desaturate the rest).
+// The result replaces item.url; item.originalUrl preserves the source for restore.
+window.highlightEditorItem = (idx) => {
+    const item = state.editingItems[idx];
+    if (!item || !item.url) { alert('Nessuna immagine da evidenziare.'); return; }
+    if (typeof openMaskEditor !== 'function') { alert('Editor non disponibile.'); return; }
+    const source = item.originalUrl || item.url; // always edit from the clean image
+    openMaskEditor({
+        imageUrl: source,
+        mode: 'highlight',
+        title: 'Evidenzia — ' + (item.label || 'Item'),
+        onApply: (result) => {
+            if (result === null) {
+                // Remove effect: restore original
+                if (item.originalUrl) { item.url = item.originalUrl; delete item.originalUrl; }
+            } else {
+                if (!item.originalUrl) item.originalUrl = item.url;
+                item.url = result;
+                // Base image changed; any cached scontorno no longer matches
+                delete item.maskedUrl;
+            }
+            renderEditorList();
+        }
+    });
 };
 
 function _openScontornoPreview(item, onDone) {
@@ -365,9 +410,13 @@ function _openScontornoPreview(item, onDone) {
             <div style="font-size:0.65rem; color:var(--text-muted); margin-bottom:12px;">
                 Bassa = conservativo (mantiene più dettagli). Alta = aggressivo (rimuove più sfondo).
             </div>
+            <div style="font-size:0.65rem; color:var(--text-muted); margin-bottom:10px;">
+                Sfondo non uniforme? Usa <b>Manuale / AI</b> per cancellarlo a mano (bacchetta + pennello) o con il riconoscimento automatico del soggetto.
+            </div>
             <div class="themed-dialog-btns">
                 <button class="btn btn-ghost" id="sc-btn-cancel">Annulla</button>
                 <button class="btn btn-ghost" id="sc-btn-clear" style="${item.maskedUrl ? '' : 'display:none;'} color:var(--danger-color);">Rimuovi scontorno</button>
+                <button class="btn btn-ghost" id="sc-btn-manual" style="color:var(--accent-color);"><i class="fa-solid fa-hand-pointer"></i> Manuale / AI</button>
                 <button class="btn btn-primary" id="sc-btn-apply">Applica</button>
             </div>
         </div>`;
@@ -402,6 +451,10 @@ function _openScontornoPreview(item, onDone) {
     const close = () => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 200); };
 
     overlay.querySelector('#sc-btn-cancel').onclick = () => close();
+    overlay.querySelector('#sc-btn-manual').onclick = () => {
+        close();
+        window.openManualCutout(item, onDone);
+    };
     overlay.querySelector('#sc-btn-clear').onclick = () => {
         delete item.maskedUrl;
         close();
