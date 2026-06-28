@@ -783,18 +783,24 @@ function renderOverviewTab(patient) {
     }
 
     content.innerHTML = html;
-    if (filteredDaily.length > 0) renderDailyLUChart(filteredDaily, outlierDays, chartType);
+    if (filteredDaily.length > 0) renderDailyLUChart(filteredDaily, outlierDays, chartType, patient.dayTags || {});
 }
 
 // --- Daily LU Chart (bar or line, with outlier markers) ---
-function renderDailyLUChart(dailyData, outlierDays, chartType) {
+function renderDailyLUChart(dailyData, outlierDays, chartType, dayTags) {
     const chartContainer = document.getElementById('daily-lu-chart');
     if (!chartContainer) return;
     if (!outlierDays) outlierDays = {};
     if (!chartType) chartType = 'bar';
+    if (!dayTags) dayTags = {};
+    const _tagInfo = (date) => {
+        const k = dayTags[date];
+        return (k && DAY_TAGS[k]) ? { key: k, ...DAY_TAGS[k] } : null;
+    };
 
     const maxLU = Math.max(...dailyData.map(d => d.totalLU), 1);
-    const topPad = 18;
+    const hasAnyTag = dailyData.some(d => _tagInfo(d.date));
+    const topPad = hasAnyTag ? 30 : 18;
     const chartHeight = 150;
     const svgNS = "http://www.w3.org/2000/svg";
 
@@ -851,7 +857,17 @@ function renderDailyLUChart(dailyData, outlierDays, chartType) {
             const x = padding.left + (dailyData.length > 1 ? i * stepX : (chartW - padding.left - padding.right) / 2);
             const y = padding.top + chartHeight - (chartHeight * pct / 100);
             const isOutlier = !!outlierDays[d.date];
-            const tooltip = `${formatDateEU(d.date + 'T00:00:00')}${isOutlier ? ' \u26A0 OUTLIER' : ''}\n${pct}% (${d.correctLU}/${d.totalLU})\nSessioni: ${d.sessions}`;
+            const tag = _tagInfo(d.date);
+            const tooltip = `${formatDateEU(d.date + 'T00:00:00')}${tag ? ' ' + tag.symbol + ' Giornata ' + tag.label : ''}${isOutlier ? ' \u26A0 OUTLIER' : ''}\n${pct}% (${d.correctLU}/${d.totalLU})\nSessioni: ${d.sessions}`;
+
+            if (tag) {
+                const tagIcon = document.createElementNS(svgNS, "text");
+                tagIcon.setAttribute("x", x); tagIcon.setAttribute("y", padding.top - 6);
+                tagIcon.setAttribute("text-anchor", "middle"); tagIcon.setAttribute("font-size", "11");
+                tagIcon.textContent = tag.symbol;
+                const tt = document.createElementNS(svgNS, "title"); tt.textContent = 'Giornata ' + tag.label; tagIcon.appendChild(tt);
+                svg.appendChild(tagIcon);
+            }
 
             const dot = document.createElementNS(svgNS, "circle");
             dot.setAttribute("cx", x); dot.setAttribute("cy", y); dot.setAttribute("r", isOutlier ? "6" : "4");
@@ -914,7 +930,8 @@ function renderDailyLUChart(dailyData, outlierDays, chartType) {
         const correctH = (d.correctLU / maxLU) * chartHeight;
         const incorrectH = totalH - correctH;
         const isOutlier = !!outlierDays[d.date];
-        const tooltip = `${formatDateEU(d.date + 'T00:00:00')}${isOutlier ? ' \u26A0 OUTLIER' : ''}\nTotali: ${d.totalLU}\nCorrette: ${d.correctLU}\nErrate: ${d.incorrectLU}\nSessioni: ${d.sessions}`;
+        const tag = _tagInfo(d.date);
+        const tooltip = `${formatDateEU(d.date + 'T00:00:00')}${tag ? ' ' + tag.symbol + ' Giornata ' + tag.label : ''}${isOutlier ? ' \u26A0 OUTLIER' : ''}\nTotali: ${d.totalLU}\nCorrette: ${d.correctLU}\nErrate: ${d.incorrectLU}\nSessioni: ${d.sessions}`;
 
         if (incorrectH > 0) {
             const incorrectBar = document.createElementNS(svgNS, "rect");
@@ -982,6 +999,15 @@ function renderDailyLUChart(dailyData, outlierDays, chartType) {
         pctLbl.setAttribute("font-size", "7"); pctLbl.setAttribute("font-weight", "bold");
         pctLbl.textContent = pct + '%';
         svg.appendChild(pctLbl);
+
+        if (tag) {
+            const tagIcon = document.createElementNS(svgNS, "text");
+            tagIcon.setAttribute("x", x + barWidth / 2); tagIcon.setAttribute("y", 11);
+            tagIcon.setAttribute("text-anchor", "middle"); tagIcon.setAttribute("font-size", "11");
+            tagIcon.textContent = tag.symbol;
+            const tt = document.createElementNS(svgNS, "title"); tt.textContent = 'Giornata ' + tag.label; tagIcon.appendChild(tt);
+            svg.appendChild(tagIcon);
+        }
     });
 
     // Legend
@@ -1049,8 +1075,10 @@ function renderDatesTab(patient) {
         const pct = totalLU > 0 ? Math.round((correctLU / totalLU) * 100) : 0;
         const hasDailyNote = !!dailyNotes[dk];
         const isOutlier = !!outlierDays[dk];
+        const dayTag = getDayTagInfo(patient, dk);
         const noteIndicator = hasDailyNote ? '<i class="fa-solid fa-book-medical" style="color:#eab308; font-size:0.7rem;" title="Nota giornata"></i>' : '';
         const outlierIndicator = isOutlier ? '<span style="font-size:0.6rem; background:rgba(245,158,11,0.2); color:var(--warning-color); padding:1px 6px; border-radius:4px; font-weight:bold;">⚠ OUTLIER</span>' : '';
+        const tagIndicator = dayTag ? `<span style="font-size:0.6rem; background:${dayTag.color}22; color:${dayTag.color}; padding:1px 6px; border-radius:4px; font-weight:bold;">${dayTag.symbol} ${dayTag.label}</span>` : '';
 
         html += `
         <div class="chart-wrapper" style="margin-bottom:10px; padding:0; overflow:hidden;${isOutlier ? ' border-left:3px solid var(--warning-color); opacity:0.8;' : ''}">
@@ -1059,10 +1087,12 @@ function renderDatesTab(patient) {
                     <i class="fa-solid fa-chevron-right date-expand-icon" style="transition:transform 0.2s; font-size:0.7rem; color:var(--text-secondary);"></i>
                     <span style="font-weight:bold; font-size:1rem;">${formatDateEU(dk + 'T00:00:00')}</span>
                     ${noteIndicator}
+                    ${tagIndicator}
                     ${outlierIndicator}
                     <span style="color:var(--text-secondary); font-size:0.8rem;">${sessions.length} attivit&agrave;</span>
                 </div>
                 <div style="display:flex; gap:8px; align-items:center;">
+                    <button class="btn-icon" style="width:24px; height:24px; font-size:0.7rem; color:${dayTag ? dayTag.color : 'var(--text-secondary)'}; border-color:${dayTag ? dayTag.color + '66' : 'rgba(255,255,255,0.1)'}; ${dayTag ? 'background:' + dayTag.color + '22;' : ''}" onclick="event.stopPropagation(); openDayTagPicker('${patient.id}', '${dk}', this)" title="${dayTag ? 'Giornata ' + dayTag.label : 'Tagga giornata'}">${dayTag ? dayTag.symbol : '<i class="fa-solid fa-tag"></i>'}</button>
                     <button class="btn-icon" style="width:24px; height:24px; font-size:0.6rem; color:${isOutlier ? 'var(--warning-color)' : 'var(--text-secondary)'}; border-color:${isOutlier ? 'rgba(245,158,11,0.4)' : 'rgba(255,255,255,0.1)'}; ${isOutlier ? 'background:rgba(245,158,11,0.15);' : ''}" onclick="event.stopPropagation(); toggleOutlierDay('${patient.id}', '${dk}')" title="${isOutlier ? 'Rimuovi outlier' : 'Segna come outlier'}"><i class="fa-solid fa-triangle-exclamation"></i></button>
                     <span style="font-size:0.85rem; color:var(--success-color);">${correctLU}<span style="color:var(--text-secondary);">/${totalLU}</span></span>
                     <span style="font-weight:bold; font-size:0.9rem; color:${pctColor(pct)};">${pct}%</span>
@@ -2071,6 +2101,67 @@ window.toggleOverviewChartType = (pid) => {
     state._overviewChartType = (state._overviewChartType || 'bar') === 'bar' ? 'line' : 'bar';
     const p = state.patients.find(x => x.id === pid);
     if (p) renderOverviewTab(p);
+};
+
+// --- Day tags (sentiment markers, independent from outlier exclusion) ---
+const DAY_TAGS = {
+    great: { label: 'Ottima',  symbol: '⭐', color: '#fbbf24' }, // ⭐
+    good:  { label: 'Buona',   symbol: '🙂', color: '#34d399' }, // 🙂
+    bad:   { label: 'No',      symbol: '😟', color: '#f87171' }, // 😟
+    tired: { label: 'Stanco',  symbol: '😴', color: '#a78bfa' }  // 😴
+};
+window.DAY_TAGS = DAY_TAGS;
+
+function getDayTagInfo(patient, dateKey) {
+    const key = patient && patient.dayTags ? patient.dayTags[dateKey] : null;
+    return key && DAY_TAGS[key] ? { key, ...DAY_TAGS[key] } : null;
+}
+
+window.setDayTag = async (pid, dateKey, tagKey) => {
+    const p = state.patients.find(x => x.id === pid);
+    if (!p) return;
+    if (!p.dayTags) p.dayTags = {};
+    if (!tagKey || !DAY_TAGS[tagKey] || p.dayTags[dateKey] === tagKey) {
+        delete p.dayTags[dateKey]; // toggling the active tag (or empty) clears it
+    } else {
+        p.dayTags[dateKey] = tagKey;
+    }
+    await DB.savePatient(p);
+    document.querySelectorAll('.day-tag-popover').forEach(el => el.remove());
+    loadPatientData(pid);
+};
+
+window.openDayTagPicker = (pid, dateKey, anchorEl) => {
+    document.querySelectorAll('.day-tag-popover').forEach(el => el.remove());
+    const p = state.patients.find(x => x.id === pid);
+    const current = p && p.dayTags ? p.dayTags[dateKey] : null;
+
+    const pop = document.createElement('div');
+    pop.className = 'day-tag-popover';
+    pop.style.cssText = 'position:fixed; z-index:100000; background:var(--bg-elevated, #1e1e2e); border:1px solid rgba(255,255,255,0.12); border-radius:12px; padding:6px; box-shadow:0 8px 24px rgba(0,0,0,0.5); display:flex; flex-direction:column; gap:2px; min-width:150px;';
+    pop.innerHTML = Object.entries(DAY_TAGS).map(([key, t]) => `
+        <button onclick="event.stopPropagation(); setDayTag('${pid}', '${dateKey}', '${key}')" style="display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:8px; border:none; cursor:pointer; background:${current === key ? 'rgba(99,102,241,0.2)' : 'transparent'}; color:#eee; font-size:0.82rem; text-align:left;" onmouseover="this.style.background='rgba(255,255,255,0.07)'" onmouseout="this.style.background='${current === key ? 'rgba(99,102,241,0.2)' : 'transparent'}'">
+            <span style="font-size:1rem;">${t.symbol}</span> Giornata ${t.label}${current === key ? ' <i class="fa-solid fa-check" style="margin-left:auto; color:var(--success-color); font-size:0.7rem;"></i>' : ''}
+        </button>`).join('') +
+        `<button onclick="event.stopPropagation(); setDayTag('${pid}', '${dateKey}', null)" style="display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:8px; border:none; cursor:pointer; background:transparent; color:#888; font-size:0.82rem; text-align:left; border-top:1px solid rgba(255,255,255,0.06); margin-top:2px;" onmouseover="this.style.background='rgba(255,255,255,0.07)'" onmouseout="this.style.background='transparent'">
+            <i class="fa-solid fa-ban" style="width:16px; text-align:center;"></i> Nessun tag
+        </button>`;
+
+    document.body.appendChild(pop);
+    const r = anchorEl.getBoundingClientRect();
+    let top = r.bottom + 4, left = r.left;
+    const pr = pop.getBoundingClientRect();
+    if (left + pr.width > window.innerWidth - 8) left = window.innerWidth - pr.width - 8;
+    if (top + pr.height > window.innerHeight - 8) top = r.top - pr.height - 4;
+    pop.style.top = Math.max(8, top) + 'px';
+    pop.style.left = Math.max(8, left) + 'px';
+
+    setTimeout(() => {
+        const closer = (e) => {
+            if (!pop.contains(e.target)) { pop.remove(); document.removeEventListener('click', closer); }
+        };
+        document.addEventListener('click', closer);
+    }, 0);
 };
 
 // --- Outlier day management ---

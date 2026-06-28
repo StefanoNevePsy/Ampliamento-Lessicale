@@ -929,6 +929,14 @@ function mergePatients(local, incoming) {
     }
     if (incoming.name && !merged.name) merged.name = incoming.name;
     if (incoming.notes && !merged.notes) merged.notes = incoming.notes;
+
+    // Merge date-keyed maps (existing local entries win on conflict)
+    ['dailyNotes', 'outlierDays', 'dayTags', 'criterionOverrides'].forEach(field => {
+        if (incoming[field] && typeof incoming[field] === 'object') {
+            merged[field] = { ...incoming[field], ...(merged[field] || {}) };
+        }
+    });
+    if (!merged.photo && incoming.photo) merged.photo = incoming.photo;
     return merged;
 }
 
