@@ -25,9 +25,14 @@ sull'hardware del Tab S11, e qual è il percorso per arrivare fino alla **NPU**
 - `scripts/add-native-npu.js` — iniettore post‑sync: copia il plugin, lo registra
   in `MainActivity`, aggiunge la dipendenza **onnxruntime-android** al Gradle e
   copia i modelli da `native-models/` negli assets.
-- `js/ai-engine.js` — se il plugin nativo è presente lo usa **per primo**
-  (`segmentSubject` → `nativeSegment`), altrimenti ripiega su WebGPU e poi CPU.
-  Nessun cambiamento per l'utente.
+- `js/ai-engine.js` — gestisce **entrambi** i motori nello stesso APK: il
+  plugin nativo (NNAPI) e il motore web (WebGPU). Un **toggle** in
+  Impostazioni › Immagini › Scontorno AI › *Motore* sceglie quale usare:
+  - **Automatico**: nativo NPU se presente, altrimenti WebGPU → CPU.
+  - **Nativo NPU / NNAPI**: forza il plugin (se assente, avvisa e usa il web).
+  - **Web / WebGPU**: forza il motore in-browser anche se il plugin c'è.
+  I due motori **non** sono mutuamente esclusivi: una build nativa li contiene
+  entrambi e l'utente passa dall'uno all'altro dal toggle.
 - `build.bat` opzioni **8/9/10** e gli script npm `cap:npu:setup`,
   `cap:sync:native`, `cap:build:android:native`.
 

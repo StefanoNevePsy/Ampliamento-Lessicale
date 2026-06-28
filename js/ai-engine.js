@@ -30,7 +30,8 @@ window.AIEngine = (function () {
         let c = {};
         try { c = JSON.parse(localStorage.getItem(CFG_KEY) || '{}'); } catch (e) { c = {}; }
         return Object.assign({
-            device: 'auto',        // 'auto' | 'gpu' | 'npu' | 'cpu'
+            engine: 'auto',        // 'auto' (native if present, else web) | 'native' | 'web'
+            device: 'auto',        // web engine only: 'auto' | 'gpu' | 'npu' | 'cpu'
             dtype: '',             // '' = auto per device, or 'fp16'|'q8'|'q4'|'fp32'
             modelId: '',           // '' = use SEG_MODELS candidates
             localModelPath: '',    // e.g. './models/' (used if remote fails)
@@ -213,7 +214,8 @@ window.AIEngine = (function () {
     }
     function nativeAvailable() {
         const cfg = getConfig();
-        if (cfg.device === 'cpu') return false;          // user forced CPU/web path
+        if (cfg.engine === 'web') return false;          // user forced the web engine
+        // 'auto' and 'native' both use the plugin when it's actually present
         return !!nativePlugin();
     }
 
@@ -263,6 +265,8 @@ window.AIEngine = (function () {
             const nm = await nativeSegment(imageUrl, w, h, onStatus);
             if (nm) return nm;
             onStatus && onStatus('Motore nativo non disponibile, uso il motore web...');
+        } else if (getConfig().engine === 'native') {
+            onStatus && onStatus('Plugin nativo NPU assente (build/app non nativa): uso il motore web.');
         }
         const seg = await getSegmenter(onStatus);
         const { RawImage } = await loadTransformers(onStatus);
@@ -305,6 +309,7 @@ window.populateAiEngineSettings = function () {
     const caps = AIEngine.capabilities();
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
     const chk = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v; };
+    set('ai-engine-engine', cfg.engine);
     set('ai-engine-device', cfg.device);
     set('ai-engine-model', cfg.modelId);
     set('ai-engine-localpath', cfg.localModelPath);
@@ -312,9 +317,9 @@ window.populateAiEngineSettings = function () {
     const capsEl = document.getElementById('ai-engine-caps');
     if (capsEl) {
         const st = AIEngine.status();
-        const nativeBadge = caps.native
-            ? `Plugin nativo NPU: <b style="color:var(--success-color)">attivo</b> · `
-            : '';
+        const activeEngine = AIEngine.nativeAvailable() ? 'Nativo NPU (NNAPI)' : 'Web (WebGPU/CPU)';
+        const nativeBadge = `Motore attivo: <b style="color:var(--success-color)">${activeEngine}</b> · ` +
+            `Plugin nativo: <b style="color:${caps.native ? 'var(--success-color)' : 'var(--text-secondary)'}">${caps.native ? 'presente' : 'assente'}</b> · `;
         capsEl.innerHTML = `${nativeBadge}WebGPU (GPU): <b style="color:${caps.webgpu ? 'var(--success-color)' : 'var(--danger-color)'}">${caps.webgpu ? 'disponibile' : 'non disponibile'}</b> · WebNN (NPU): <b style="color:${caps.webnn ? 'var(--success-color)' : 'var(--text-secondary)'}">${caps.webnn ? 'sperimentale' : 'non disponibile'}</b>${st.loaded ? ` · <span style="color:var(--success-color);">Caricato: ${st.model} su ${st.device.toUpperCase()}</span>` : ''}`;
     }
 };
@@ -322,6 +327,7 @@ window.populateAiEngineSettings = function () {
 window.saveAiEngineSettings = function () {
     if (!window.AIEngine) return;
     AIEngine.setConfig({
+        engine: (document.getElementById('ai-engine-engine') || {}).value || 'auto',
         device: (document.getElementById('ai-engine-device') || {}).value || 'auto',
         modelId: ((document.getElementById('ai-engine-model') || {}).value || '').trim(),
         localModelPath: ((document.getElementById('ai-engine-localpath') || {}).value || '').trim(),

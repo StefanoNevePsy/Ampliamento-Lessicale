@@ -472,9 +472,15 @@
                     <a href="#" onclick="showCloudflareInstructions(); return false;" style="color:var(--accent-color); display:block; margin-top:6px;"><i class="fa-solid fa-circle-info"></i> Come configurare il Worker (10 minuti)</a>
                 </p>
 
-                <h4 style="margin:18px 0 10px; color:#a78bfa;"><i class="fa-solid fa-robot"></i> Scontorno AI (in-browser)</h4>
+                <h4 style="margin:18px 0 10px; color:#a78bfa;"><i class="fa-solid fa-robot"></i> Scontorno AI</h4>
                 <p class="modal-hint" id="ai-engine-caps" style="margin-bottom:8px;"></p>
-                <label class="modal-label">Accelerazione hardware</label>
+                <label class="modal-label">Motore</label>
+                <select id="ai-engine-engine">
+                    <option value="auto">Automatico (nativo NPU se presente, altrimenti web)</option>
+                    <option value="native">Nativo NPU / NNAPI (solo app Android col plugin)</option>
+                    <option value="web">Web / WebGPU (sempre disponibile)</option>
+                </select>
+                <label class="modal-label" style="margin-top:10px;">Accelerazione hardware <span class="modal-label-sm">(solo motore web)</span></label>
                 <select id="ai-engine-device">
                     <option value="auto">Automatica (GPU se disponibile)</option>
                     <option value="gpu">GPU (WebGPU)</option>
