@@ -47,9 +47,12 @@ window.AIEngine = (function () {
     }
 
     function capabilities() {
+        const hasNative = !!(typeof window !== 'undefined' && window.Capacitor
+            && window.Capacitor.Plugins && window.Capacitor.Plugins.NpuCutout);
         return {
             webgpu: typeof navigator !== 'undefined' && !!navigator.gpu,
             webnn: typeof navigator !== 'undefined' && !!(navigator.ml),
+            native: hasNative,
         };
     }
 
@@ -196,8 +199,71 @@ window.AIEngine = (function () {
         return out.output || out.logits || out.alphas || out.masks || Object.values(out)[0];
     }
 
+    // Map a model id to the native asset filename bundled in the APK
+    function _assetNameFor(id) {
+        if (/2\.?0/.test(id)) return 'rmbg-2.0.onnx';
+        if (/1\.?4/.test(id)) return 'rmbg-1.4.onnx';
+        return 'model.onnx';
+    }
+
+    function nativePlugin() {
+        const P = (typeof window !== 'undefined' && window.Capacitor && window.Capacitor.Plugins)
+            ? window.Capacitor.Plugins.NpuCutout : null;
+        return P || null;
+    }
+    function nativeAvailable() {
+        const cfg = getConfig();
+        if (cfg.device === 'cpu') return false;          // user forced CPU/web path
+        return !!nativePlugin();
+    }
+
+    // Native NPU/GPU segmentation via the Capacitor plugin (ONNX Runtime + NNAPI).
+    // Returns a Uint8 mask (w*h) or null if the native path isn't usable.
+    async function nativeSegment(imageUrl, w, h, onStatus) {
+        const P = nativePlugin();
+        if (!P) return null;
+        const cfg = getConfig();
+        const m = candidateList()[0]; // honour configured/default model
+        const id = cfg.modelId || m.id;
+        onStatus && onStatus('Scontorno nativo su NPU/GPU...');
+        let res;
+        try {
+            res = await P.removeBackground({
+                image: imageUrl, assetName: _assetNameFor(id),
+                width: w, height: h, size: m.size,
+                mean: m.mean, std: m.std, sigmoid: m.sigmoid
+            });
+        } catch (e) {
+            console.warn('native NPU segmentation failed, falling back:', e);
+            return null;
+        }
+        if (!res || !res.mask) return null;
+        // Decode the returned grayscale PNG mask into a Uint8 array
+        const img = await new Promise((resolve, reject) => {
+            const im = new Image();
+            im.onload = () => resolve(im);
+            im.onerror = () => reject(new Error('mask decode failed'));
+            im.src = res.mask;
+        });
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const cx = c.getContext('2d', { willReadFrequently: true });
+        cx.drawImage(img, 0, 0, w, h);
+        const d = cx.getImageData(0, 0, w, h).data;
+        const mask = new Uint8Array(w * h);
+        for (let i = 0; i < w * h; i++) mask[i] = d[i * 4]; // red channel = grayscale
+        onStatus && onStatus('Scontorno nativo completato (' + (res.accelerator || 'npu') + ').');
+        return mask;
+    }
+
     // Segment the subject. Returns a Uint8 grayscale mask (length w*h), 255=subject.
     async function segmentSubject(imageUrl, w, h, onStatus) {
+        // Prefer the native NPU/GPU plugin when running inside the Android app
+        if (nativeAvailable()) {
+            const nm = await nativeSegment(imageUrl, w, h, onStatus);
+            if (nm) return nm;
+            onStatus && onStatus('Motore nativo non disponibile, uso il motore web...');
+        }
         const seg = await getSegmenter(onStatus);
         const { RawImage } = await loadTransformers(onStatus);
         onStatus && onStatus('Analisi immagine sulla ' + (seg.device.startsWith('web') ? 'GPU' : 'CPU') + '...');
@@ -226,7 +292,7 @@ window.AIEngine = (function () {
     function unload() { _seg = null; _segLoading = null; }
 
     return {
-        getConfig, setConfig, capabilities, deviceChain,
+        getConfig, setConfig, capabilities, deviceChain, nativeAvailable,
         loadTransformers, getSegmenter, segmentSubject, preload, status, unload,
         SEG_MODELS
     };
@@ -246,7 +312,10 @@ window.populateAiEngineSettings = function () {
     const capsEl = document.getElementById('ai-engine-caps');
     if (capsEl) {
         const st = AIEngine.status();
-        capsEl.innerHTML = `WebGPU (GPU): <b style="color:${caps.webgpu ? 'var(--success-color)' : 'var(--danger-color)'}">${caps.webgpu ? 'disponibile' : 'non disponibile'}</b> · WebNN (NPU): <b style="color:${caps.webnn ? 'var(--success-color)' : 'var(--text-secondary)'}">${caps.webnn ? 'sperimentale' : 'non disponibile'}</b>${st.loaded ? ` · <span style="color:var(--success-color);">Caricato: ${st.model} su ${st.device.toUpperCase()}</span>` : ''}`;
+        const nativeBadge = caps.native
+            ? `Plugin nativo NPU: <b style="color:var(--success-color)">attivo</b> · `
+            : '';
+        capsEl.innerHTML = `${nativeBadge}WebGPU (GPU): <b style="color:${caps.webgpu ? 'var(--success-color)' : 'var(--danger-color)'}">${caps.webgpu ? 'disponibile' : 'non disponibile'}</b> · WebNN (NPU): <b style="color:${caps.webnn ? 'var(--success-color)' : 'var(--text-secondary)'}">${caps.webnn ? 'sperimentale' : 'non disponibile'}</b>${st.loaded ? ` · <span style="color:var(--success-color);">Caricato: ${st.model} su ${st.device.toUpperCase()}</span>` : ''}`;
     }
 };
 

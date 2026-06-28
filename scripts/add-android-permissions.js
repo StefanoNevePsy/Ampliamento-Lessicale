@@ -38,12 +38,14 @@ for (const perm of permissions) {
 // navigation — trackpad / pointing device on the cover
 const extraConfigFlags = ['keyboard', 'keyboardHidden', 'navigation'];
 
-// Flags that are no longer valid in newer compileSdk (35+)
-const deprecatedFlags = ['locale', 'navigationHidden'];
-const deprecatedReplacements = { locale: 'locales', navigationHidden: null };
+// Flags that are no longer valid in newer compileSdk (35+).
+// NOTE: 'locale' IS valid for configChanges — there is no 'locales' value, so it
+// must NOT be rewritten (doing so breaks the manifest/gradle build).
+const deprecatedFlags = ['navigationHidden'];
+const deprecatedReplacements = { navigationHidden: null };
 
 if (manifest.includes('android:configChanges=')) {
-    // First: fix deprecated flags (e.g. locale -> locales)
+    // First: fix deprecated flags (e.g. navigationHidden -> removed)
     manifest = manifest.replace(
         /android:configChanges="([^"]*)"/,
         (match, existing) => {

@@ -11,8 +11,11 @@
     "cap:init": "npx cap init 'Terapia Attiva' 'com.stimolatore.clinico' --web-dir www",
     "cap:add:android": "npm run build:web && npx cap add android && node scripts/add-android-permissions.js && node scripts/fix-adaptive-icons.js",
     "cap:sync": "npm run build:web && npx cap sync && node scripts/add-android-permissions.js && node scripts/fix-adaptive-icons.js",
+    "cap:sync:native": "npm run build:web && npx cap sync && node scripts/add-android-permissions.js && node scripts/add-native-npu.js && node scripts/fix-adaptive-icons.js",
+    "cap:npu:setup": "node scripts/add-native-npu.js",
     "cap:icons": "npx capacitor-assets generate --android && node scripts/fix-adaptive-icons.js",
-    "cap:build:android": "cd android && ./gradlew assembleRelease"
+    "cap:build:android": "cd android && ./gradlew assembleRelease",
+    "cap:build:android:native": "npm run cap:sync:native && cd android && ./gradlew assembleRelease"
   },
   "build": {
     "appId": "com.stimolatore.clinico",

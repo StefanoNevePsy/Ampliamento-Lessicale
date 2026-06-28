@@ -15,6 +15,11 @@ echo  4) Build APK Android (Release)
 echo  5) Build Electron Windows (.exe)
 echo  6) Avvia Electron (dev)
 echo  7) Installa dipendenze (npm install)
+echo.
+echo  --- Scontorno NPU nativo (Tab S11) ---
+echo  8) Setup/aggiorna plugin nativo NPU
+echo  9) Capacitor Sync + plugin NPU
+echo 10) Build APK Android + NPU nativo (Release)
 echo  0) Esci
 echo.
 echo ============================================
@@ -27,6 +32,9 @@ if "%scelta%"=="4" goto CAP_BUILD
 if "%scelta%"=="5" goto ELECTRON_BUILD
 if "%scelta%"=="6" goto ELECTRON_START
 if "%scelta%"=="7" goto NPM_INSTALL
+if "%scelta%"=="8" goto NPU_SETUP
+if "%scelta%"=="9" goto CAP_SYNC_NPU
+if "%scelta%"=="10" goto CAP_BUILD_NPU
 if "%scelta%"=="0" goto FINE
 
 echo Opzione non valida.
@@ -55,6 +63,26 @@ goto PAUSA
 echo.
 echo --- Build APK Android (Release) ---
 call npm run cap:build:android
+goto PAUSA
+
+:NPU_SETUP
+echo.
+echo --- Setup/aggiorna plugin nativo NPU ---
+echo (inietta il plugin, registra in MainActivity, aggiunge ONNX Runtime,
+echo  e copia i modelli da native-models\ negli assets Android)
+call npm run cap:npu:setup
+goto PAUSA
+
+:CAP_SYNC_NPU
+echo.
+echo --- Capacitor Sync + plugin NPU nativo ---
+call npm run cap:sync:native
+goto PAUSA
+
+:CAP_BUILD_NPU
+echo.
+echo --- Build APK Android + NPU nativo (Release) ---
+call npm run cap:build:android:native
 goto PAUSA
 
 :ELECTRON_BUILD
