@@ -89,8 +89,13 @@
         }
 
         // --- Tool state ---
-        let tool = 'wand';                                  // 'wand' | 'brush' | 'object'
+        let tool = 'wand';                                  // 'wand' | 'brush' | 'object' | 'pan'
         let effect = mode === 'cutout' ? 0 : 255;           // wand/brush sets mask to this (0 or 255)
+        let hardness = 100;                                 // brush hardness 0..100
+        let straightLine = false;                           // straight-line brush mode
+        let lastBrushPt = null;                             // anchor for straight lines / shift-click
+        let zoom = 1, panX = 0, panY = 0;                   // view transform
+        const undoStack = [];                               // mask snapshots
         // In highlight, the FIRST "keep" selection desaturates everything else,
         // so picking the subject leaves only it coloured.
         let firstKeep = (mode === 'highlight');
@@ -121,16 +126,25 @@
                     <button class="me-tool" data-tool="object" style="border:none; cursor:pointer; padding:7px 11px; border-radius:6px; font-size:0.78rem; color:#fff;" title="Clicca su un oggetto per selezionarlo (AI)"><i class="fa-solid fa-hand-pointer"></i> Oggetto AI</button>
                     <button class="me-tool" data-tool="wand" style="border:none; cursor:pointer; padding:7px 11px; border-radius:6px; font-size:0.78rem; color:#fff;"><i class="fa-solid fa-wand-magic-sparkles"></i> Bacchetta</button>
                     <button class="me-tool" data-tool="brush" style="border:none; cursor:pointer; padding:7px 11px; border-radius:6px; font-size:0.78rem; color:#fff;"><i class="fa-solid fa-paintbrush"></i> Pennello</button>
+                    <button class="me-tool" data-tool="pan" style="border:none; cursor:pointer; padding:7px 11px; border-radius:6px; font-size:0.78rem; color:#fff;" title="Sposta l'immagine (quando ingrandita)"><i class="fa-solid fa-up-down-left-right"></i></button>
                 </div>
                 <div style="display:flex; gap:4px; background:rgba(255,255,255,0.06); border-radius:8px; padding:3px;">
                     <button class="me-effect" data-effect="1" style="border:none; cursor:pointer; padding:7px 11px; border-radius:6px; font-size:0.78rem; color:#fff;">${effectAddLabel}</button>
                     <button class="me-effect" data-effect="0" style="border:none; cursor:pointer; padding:7px 11px; border-radius:6px; font-size:0.78rem; color:#fff;">${effectRemLabel}</button>
                 </div>
-                <label id="me-tol-wrap" style="display:flex; align-items:center; gap:6px; color:#ccc; font-size:0.72rem;">Tolleranza <input id="me-tol" type="range" min="5" max="90" value="${tolerance}" style="width:90px; accent-color:var(--accent-color);"></label>
-                <label id="me-brush-wrap" style="display:none; align-items:center; gap:6px; color:#ccc; font-size:0.72rem;">Pennello <input id="me-brush" type="range" min="3" max="${Math.round(Math.max(w, h) / 6)}" value="${brushSize}" style="width:90px; accent-color:var(--accent-color);"></label>
+                <label id="me-tol-wrap" style="display:flex; align-items:center; gap:6px; color:#ccc; font-size:0.72rem;">Tolleranza <input id="me-tol" type="range" min="5" max="90" value="${tolerance}" style="width:80px; accent-color:var(--accent-color);"></label>
+                <label id="me-brush-wrap" style="display:none; align-items:center; gap:6px; color:#ccc; font-size:0.72rem;">Dim. <input id="me-brush" type="range" min="3" max="${Math.round(Math.max(w, h) / 6)}" value="${brushSize}" style="width:80px; accent-color:var(--accent-color);"></label>
+                <label id="me-hard-wrap" style="display:none; align-items:center; gap:6px; color:#ccc; font-size:0.72rem;">Durezza <input id="me-hard" type="range" min="0" max="100" value="100" style="width:70px; accent-color:var(--accent-color);"></label>
+                <button id="me-line" class="btn btn-ghost me-toggle" style="display:none; padding:7px 9px; font-size:0.72rem;" title="Linea retta: tocca, poi tocca un altro punto"><i class="fa-solid fa-ruler"></i> Linea</button>
                 <button id="me-ai" class="btn btn-ghost" style="padding:7px 11px; font-size:0.78rem; color:#a78bfa; border-color:rgba(167,139,250,0.4);"><i class="fa-solid fa-robot"></i> AI auto</button>
-                <button id="me-invert" class="btn btn-ghost" style="padding:7px 11px; font-size:0.78rem;"><i class="fa-solid fa-circle-half-stroke"></i> Inverti</button>
-                <button id="me-reset" class="btn btn-ghost" style="padding:7px 11px; font-size:0.78rem;"><i class="fa-solid fa-rotate-left"></i> Reset</button>
+                <button id="me-undo" class="btn btn-ghost" style="padding:7px 9px; font-size:0.78rem;" title="Annulla ultima azione"><i class="fa-solid fa-rotate-left"></i></button>
+                <button id="me-invert" class="btn btn-ghost" style="padding:7px 9px; font-size:0.78rem;"><i class="fa-solid fa-circle-half-stroke"></i></button>
+                <button id="me-reset" class="btn btn-ghost" style="padding:7px 9px; font-size:0.78rem;">Reset</button>
+                <div style="display:flex; gap:2px; align-items:center; background:rgba(255,255,255,0.06); border-radius:8px; padding:3px;">
+                    <button id="me-zoom-out" style="border:none; cursor:pointer; padding:6px 9px; border-radius:6px; font-size:0.8rem; color:#fff; background:transparent;"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+                    <span id="me-zoom-lbl" style="font-size:0.7rem; color:#ccc; min-width:34px; text-align:center;">100%</span>
+                    <button id="me-zoom-in" style="border:none; cursor:pointer; padding:6px 9px; border-radius:6px; font-size:0.8rem; color:#fff; background:transparent;"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+                </div>
             </div>
 
             <div style="display:flex; gap:8px; justify-content:flex-end; align-items:center; flex-shrink:0;">
@@ -238,16 +252,25 @@
             scheduleRender();
         }
 
-        // --- Brush (paint circle into mask) ---
+        // --- Brush (paint circle into mask, with hardness falloff) ---
         function paintAt(cx, cy) {
             keepGuard();
             const r = brushSize, r2 = r * r;
+            const innerR = r * (hardness / 100);            // full-strength radius
+            const falloff = Math.max(1, r - innerR);
             const x0 = Math.max(0, cx - r), x1 = Math.min(w - 1, cx + r);
             const y0 = Math.max(0, cy - r), y1 = Math.min(h - 1, cy + r);
             for (let y = y0; y <= y1; y++) {
                 for (let x = x0; x <= x1; x++) {
                     const dx = x - cx, dy = y - cy;
-                    if (dx * dx + dy * dy <= r2) mask[y * w + x] = effect;
+                    const d2 = dx * dx + dy * dy;
+                    if (d2 > r2) continue;
+                    const idx = y * w + x;
+                    if (hardness >= 100) { mask[idx] = effect; continue; }
+                    const d = Math.sqrt(d2);
+                    const a = d <= innerR ? 1 : 1 - (d - innerR) / falloff; // strength 0..1
+                    if (a <= 0) continue;
+                    mask[idx] = Math.round(mask[idx] * (1 - a) + effect * a);
                 }
             }
             scheduleRender();
@@ -275,29 +298,57 @@
                 samBusy = false;
             }
         }
+        // Undo / view-transform helpers
+        function pushUndo() { undoStack.push(mask.slice()); if (undoStack.length > 25) undoStack.shift(); }
+        function undo() {
+            if (!undoStack.length) { setStatus('Niente da annullare.'); return; }
+            mask.set(undoStack.pop()); scheduleRender();
+        }
+        function applyTransform() {
+            canvas.style.transformOrigin = 'center center';
+            canvas.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+            const lbl = overlay.querySelector('#me-zoom-lbl');
+            if (lbl) lbl.textContent = Math.round(zoom * 100) + '%';
+        }
+        function setZoom(z) { zoom = Math.max(1, Math.min(8, z)); if (zoom === 1) { panX = 0; panY = 0; } applyTransform(); }
+        function strokeLine(a, b) {
+            const dd = Math.hypot(b.x - a.x, b.y - a.y);
+            const steps = Math.max(1, Math.round(dd / Math.max(1, brushSize / 2)));
+            for (let s = 1; s <= steps; s++) {
+                paintAt(Math.round(a.x + (b.x - a.x) * s / steps), Math.round(a.y + (b.y - a.y) * s / steps));
+            }
+        }
+        function _cxy(ev) { return ev.touches ? { x: ev.touches[0].clientX, y: ev.touches[0].clientY } : { x: ev.clientX, y: ev.clientY }; }
+        function _pinchDist(t) { return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY); }
+
+        let panning = false, panStart = null, pinchDist = 0, pinchZoom = 1;
+
         function onDown(ev) {
+            if (ev.touches && ev.touches.length >= 2) { // pinch zoom
+                ev.preventDefault(); pinchDist = _pinchDist(ev.touches); pinchZoom = zoom; drawing = false; hideBrushCursor(); return;
+            }
             ev.preventDefault();
+            if (tool === 'pan') { panning = true; const c = _cxy(ev); panStart = { x: c.x - panX, y: c.y - panY }; return; }
             const p = toWork(ev);
-            if (tool === 'object') { samClick(p); return; }
-            if (tool === 'wand') { magicWand(p.x, p.y); return; }
-            drawing = true; lastPt = p; paintAt(p.x, p.y);
+            if (tool === 'object') { pushUndo(); samClick(p); return; }
+            if (tool === 'wand') { pushUndo(); magicWand(p.x, p.y); return; }
+            // brush
+            pushUndo();
+            drawing = true;
+            if ((straightLine || ev.shiftKey) && lastBrushPt) strokeLine(lastBrushPt, p);
+            else paintAt(p.x, p.y);
+            lastPt = p; lastBrushPt = p;
         }
         function onMove(ev) {
-            if (!drawing || tool !== 'brush') return;
+            if (ev.touches && ev.touches.length >= 2 && pinchDist) { ev.preventDefault(); setZoom(pinchZoom * (_pinchDist(ev.touches) / pinchDist)); return; }
+            if (panning) { ev.preventDefault(); const c = _cxy(ev); panX = c.x - panStart.x; panY = c.y - panStart.y; applyTransform(); return; }
+            if (!drawing || tool !== 'brush' || straightLine) return;
             ev.preventDefault();
             const p = toWork(ev);
-            // interpolate between last point and current for smooth strokes
-            if (lastPt) {
-                const dist = Math.hypot(p.x - lastPt.x, p.y - lastPt.y);
-                const steps = Math.max(1, Math.round(dist / (brushSize / 2)));
-                for (let s = 1; s <= steps; s++) {
-                    paintAt(Math.round(lastPt.x + (p.x - lastPt.x) * s / steps),
-                            Math.round(lastPt.y + (p.y - lastPt.y) * s / steps));
-                }
-            }
-            lastPt = p;
+            if (lastPt) strokeLine(lastPt, p);
+            lastPt = p; lastBrushPt = p;
         }
-        function onUp() { drawing = false; lastPt = null; }
+        function onUp() { drawing = false; lastPt = null; panning = false; pinchDist = 0; }
 
         canvas.addEventListener('mousedown', onDown);
         canvas.addEventListener('mousemove', onMove);
@@ -323,8 +374,12 @@
                 const on = (parseInt(b.dataset.effect) ? 255 : 0) === effect;
                 b.style.background = on ? 'var(--accent-color)' : 'transparent';
             });
+            const isBrush = tool === 'brush';
             overlay.querySelector('#me-tol-wrap').style.display = tool === 'wand' ? 'flex' : 'none';
-            overlay.querySelector('#me-brush-wrap').style.display = tool === 'brush' ? 'flex' : 'none';
+            overlay.querySelector('#me-brush-wrap').style.display = isBrush ? 'flex' : 'none';
+            overlay.querySelector('#me-hard-wrap').style.display = isBrush ? 'flex' : 'none';
+            overlay.querySelector('#me-line').style.display = isBrush ? 'inline-flex' : 'none';
+            canvas.style.cursor = tool === 'pan' ? 'grab' : 'crosshair';
         }
         overlay.querySelectorAll('.me-tool').forEach(b => b.onclick = () => { tool = b.dataset.tool; if (tool !== 'brush') hideBrushCursor(); if (tool === 'object') setStatus('Clicca su un oggetto per selezionarlo (la prima volta carica il modello).'); refreshToolButtons(); });
         overlay.querySelectorAll('.me-effect').forEach(b => b.onclick = () => { effect = parseInt(b.dataset.effect) ? 255 : 0; refreshToolButtons(); });
@@ -335,8 +390,19 @@
             const r = canvas.getBoundingClientRect();
             showBrushCursorAt(r.left + r.width / 2, r.top + r.height / 2);
         };
-        overlay.querySelector('#me-invert').onclick = () => { for (let i = 0; i < mask.length; i++) mask[i] = 255 - mask[i]; firstKeep = false; scheduleRender(); };
-        overlay.querySelector('#me-reset').onclick = () => { mask.fill(255); firstKeep = (mode === 'highlight'); scheduleRender(); };
+        overlay.querySelector('#me-hard').oninput = (e) => { hardness = parseInt(e.target.value); };
+        overlay.querySelector('#me-line').onclick = () => {
+            straightLine = !straightLine;
+            const b = overlay.querySelector('#me-line');
+            b.style.background = straightLine ? 'var(--accent-color)' : '';
+            setStatus(straightLine ? 'Linea retta: tocca i punti da collegare. Ritocca il tasto per disattivare.' : '');
+            if (!straightLine) lastBrushPt = null;
+        };
+        overlay.querySelector('#me-undo').onclick = () => undo();
+        overlay.querySelector('#me-zoom-in').onclick = () => setZoom(zoom * 1.3);
+        overlay.querySelector('#me-zoom-out').onclick = () => setZoom(zoom / 1.3);
+        overlay.querySelector('#me-invert').onclick = () => { pushUndo(); for (let i = 0; i < mask.length; i++) mask[i] = 255 - mask[i]; firstKeep = false; scheduleRender(); };
+        overlay.querySelector('#me-reset').onclick = () => { pushUndo(); mask.fill(255); firstKeep = (mode === 'highlight'); lastBrushPt = null; scheduleRender(); };
         refreshToolButtons();
 
         // --- AI auto-segmentation (delegated to the shared GPU-accelerated engine) ---
@@ -347,6 +413,7 @@
             try {
                 const aiMask = await window.AIEngine.segmentSubject(opts.imageUrl, w, h, setStatus);
                 if (aiMask) {
+                    pushUndo();
                     for (let i = 0; i < w * h; i++) mask[i] = aiMask[i]; // keep soft alpha for smooth edges
                     firstKeep = false; // AI already produced subject-vs-rest
                     scheduleRender();
