@@ -65,11 +65,12 @@
             gray[i] = (base[j] * 0.299 + base[j + 1] * 0.587 + base[j + 2] * 0.114) | 0;
         }
 
-        // Mask: 1 = subject/keep, 0 = background. Defaults differ by mode.
+        // Mask: 0..255 soft alpha. 255 = subject/keep, 0 = background.
+        // Soft values (from the AI model) give smooth, anti-aliased edges.
         const mask = new Uint8Array(w * h);
-        if (mode === 'cutout') mask.fill(1); // start keeping everything, click bg to remove
+        if (mode === 'cutout') mask.fill(255); // start keeping everything, click bg to remove
 
-        // Optionally seed from an existing alpha/grey mask image
+        // Optionally seed from an existing alpha/grey mask image (keep soft values)
         if (opts.initialMaskUrl) {
             try {
                 const mImg = await _loadImage(opts.initialMaskUrl);
@@ -81,15 +82,14 @@
                 for (let i = 0; i < w * h; i++) {
                     // Use alpha if present (cutout source), else luminance
                     const a = md[i * 4 + 3];
-                    const v = a < 255 ? a : md[i * 4];
-                    mask[i] = v > 127 ? 1 : 0;
+                    mask[i] = a < 255 ? a : md[i * 4];
                 }
             } catch (e) { /* ignore seed failure */ }
         }
 
         // --- Tool state ---
         let tool = 'wand';                                  // 'wand' | 'brush'
-        let effect = mode === 'cutout' ? 0 : 1;             // wand/brush sets mask to this
+        let effect = mode === 'cutout' ? 0 : 255;           // wand/brush sets mask to this (0 or 255)
         let tolerance = 32;
         let brushSize = Math.max(10, Math.round(Math.max(w, h) / 35));
 
@@ -153,12 +153,16 @@
             rafPending = false;
             for (let i = 0; i < w * h; i++) {
                 const j = i * 4;
+                const m = mask[i];
                 if (mode === 'cutout') {
                     out[j] = base[j]; out[j + 1] = base[j + 1]; out[j + 2] = base[j + 2];
-                    out[j + 3] = mask[i] ? base[j + 3] : 0;
+                    out[j + 3] = (base[j + 3] * m / 255) | 0;        // soft alpha
                 } else {
-                    if (mask[i]) { out[j] = base[j]; out[j + 1] = base[j + 1]; out[j + 2] = base[j + 2]; }
-                    else { const g = gray[i]; out[j] = g; out[j + 1] = g; out[j + 2] = g; }
+                    // Smoothly blend colour (subject) with grayscale (background)
+                    const g = gray[i];
+                    out[j] = (base[j] * m + g * (255 - m)) / 255 | 0;
+                    out[j + 1] = (base[j + 1] * m + g * (255 - m)) / 255 | 0;
+                    out[j + 2] = (base[j + 2] * m + g * (255 - m)) / 255 | 0;
                     out[j + 3] = 255;
                 }
             }
@@ -252,18 +256,18 @@
                 b.style.background = on ? 'var(--accent-color)' : 'transparent';
             });
             overlay.querySelectorAll('.me-effect').forEach(b => {
-                const on = parseInt(b.dataset.effect) === effect;
+                const on = (parseInt(b.dataset.effect) ? 255 : 0) === effect;
                 b.style.background = on ? 'var(--accent-color)' : 'transparent';
             });
             overlay.querySelector('#me-tol-wrap').style.display = tool === 'wand' ? 'flex' : 'none';
             overlay.querySelector('#me-brush-wrap').style.display = tool === 'brush' ? 'flex' : 'none';
         }
         overlay.querySelectorAll('.me-tool').forEach(b => b.onclick = () => { tool = b.dataset.tool; refreshToolButtons(); });
-        overlay.querySelectorAll('.me-effect').forEach(b => b.onclick = () => { effect = parseInt(b.dataset.effect); refreshToolButtons(); });
+        overlay.querySelectorAll('.me-effect').forEach(b => b.onclick = () => { effect = parseInt(b.dataset.effect) ? 255 : 0; refreshToolButtons(); });
         overlay.querySelector('#me-tol').oninput = (e) => { tolerance = parseInt(e.target.value); };
         overlay.querySelector('#me-brush').oninput = (e) => { brushSize = parseInt(e.target.value); };
-        overlay.querySelector('#me-invert').onclick = () => { for (let i = 0; i < mask.length; i++) mask[i] = mask[i] ? 0 : 1; scheduleRender(); };
-        overlay.querySelector('#me-reset').onclick = () => { mask.fill(mode === 'cutout' ? 1 : 0); scheduleRender(); };
+        overlay.querySelector('#me-invert').onclick = () => { for (let i = 0; i < mask.length; i++) mask[i] = 255 - mask[i]; scheduleRender(); };
+        overlay.querySelector('#me-reset').onclick = () => { mask.fill(mode === 'cutout' ? 255 : 0); scheduleRender(); };
         refreshToolButtons();
 
         // --- AI auto-segmentation (delegated to the shared GPU-accelerated engine) ---
@@ -274,7 +278,7 @@
             try {
                 const aiMask = await window.AIEngine.segmentSubject(opts.imageUrl, w, h, setStatus);
                 if (aiMask) {
-                    for (let i = 0; i < w * h; i++) mask[i] = aiMask[i] > 127 ? 1 : 0;
+                    for (let i = 0; i < w * h; i++) mask[i] = aiMask[i]; // keep soft alpha for smooth edges
                     scheduleRender();
                     setStatus('Segmentazione AI applicata — rifinisci con bacchetta/pennello se serve.');
                 } else {
@@ -296,19 +300,19 @@
             if (mode === 'cutout') {
                 const o = ectx.createImageData(w, h), od = o.data;
                 for (let i = 0; i < w * h; i++) {
-                    const j = i * 4;
+                    const j = i * 4, m = mask[i];
                     od[j] = base[j]; od[j + 1] = base[j + 1]; od[j + 2] = base[j + 2];
-                    od[j + 3] = mask[i] ? base[j + 3] : 0;
+                    od[j + 3] = (base[j + 3] * m / 255) | 0;          // soft alpha
                 }
-                _featherAlpha(od, w, h);
                 ectx.putImageData(o, 0, 0);
                 return ec.toDataURL('image/png');
             } else {
                 const o = ectx.createImageData(w, h), od = o.data;
                 for (let i = 0; i < w * h; i++) {
-                    const j = i * 4;
-                    if (mask[i]) { od[j] = base[j]; od[j + 1] = base[j + 1]; od[j + 2] = base[j + 2]; }
-                    else { const g = gray[i]; od[j] = g; od[j + 1] = g; od[j + 2] = g; }
+                    const j = i * 4, m = mask[i], g = gray[i];
+                    od[j] = (base[j] * m + g * (255 - m)) / 255 | 0;
+                    od[j + 1] = (base[j + 1] * m + g * (255 - m)) / 255 | 0;
+                    od[j + 2] = (base[j + 2] * m + g * (255 - m)) / 255 | 0;
                     od[j + 3] = 255;
                 }
                 ectx.putImageData(o, 0, 0);
@@ -328,21 +332,5 @@
             if (opts.onApply) opts.onApply(result);
         };
     };
-
-    // Light 1px feather of the alpha edge to avoid hard jaggies (cutout export)
-    function _featherAlpha(data, w, h) {
-        const a = new Uint8ClampedArray(w * h);
-        for (let i = 0; i < w * h; i++) a[i] = data[i * 4 + 3];
-        for (let y = 0; y < h; y++) {
-            for (let x = 0; x < w; x++) {
-                const i = y * w + x;
-                if (a[i] === 0) continue;
-                // if any 4-neighbour is transparent, soften this edge pixel
-                const edge = (x > 0 && a[i - 1] === 0) || (x < w - 1 && a[i + 1] === 0) ||
-                             (y > 0 && a[i - w] === 0) || (y < h - 1 && a[i + w] === 0);
-                if (edge) data[i * 4 + 3] = Math.round(a[i] * 0.55);
-            }
-        }
-    }
 
 })();

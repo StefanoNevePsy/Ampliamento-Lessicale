@@ -82,6 +82,22 @@ public class NpuCutoutPlugin extends Plugin {
         call.resolve(ret);
     }
 
+    /** Load (and cache) a model asset to verify it is bundled and whether NNAPI engaged. */
+    @PluginMethod
+    public void prepare(PluginCall call) {
+        try {
+            String assetName = call.getString("assetName", "rmbg-2.0.onnx");
+            session(assetName); // throws if the asset is missing or fails to load
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            ret.put("asset", assetName);
+            ret.put("accelerator", Boolean.TRUE.equals(nnapiUsed.get(assetName)) ? "nnapi" : "cpu");
+            call.resolve(ret);
+        } catch (Throwable e) {
+            call.reject("prepare failed: " + e.getMessage());
+        }
+    }
+
     @PluginMethod
     public void removeBackground(PluginCall call) {
         try {

@@ -282,10 +282,23 @@ window.AIEngine = (function () {
         return maskImg.data;                                  // grayscale, length w*h
     }
 
-    // Pre-load the model (used by the settings "test" button)
+    // Pre-load the web model (transformers.js)
     async function preload(onStatus) {
         await getSegmenter(onStatus);
         return _seg;
+    }
+
+    // Verify the native plugin + bundled model asset, reporting the accelerator
+    async function preloadNative(onStatus) {
+        const P = nativePlugin();
+        if (!P) throw new Error('Plugin nativo non presente (build/app non nativa).');
+        const cfg = getConfig();
+        const m = candidateList()[0];
+        const id = cfg.modelId || m.id;
+        const assetName = _assetNameFor(id);
+        onStatus && onStatus('Verifica modello nativo: ' + assetName + '...');
+        const res = await P.prepare({ assetName });
+        return { native: true, model: id, asset: assetName, accelerator: (res && res.accelerator) || 'cpu' };
     }
 
     function status() {
@@ -297,7 +310,7 @@ window.AIEngine = (function () {
 
     return {
         getConfig, setConfig, capabilities, deviceChain, nativeAvailable,
-        loadTransformers, getSegmenter, segmentSubject, preload, status, unload,
+        loadTransformers, getSegmenter, segmentSubject, preload, preloadNative, status, unload,
         SEG_MODELS
     };
 })();
@@ -344,12 +357,23 @@ window.testAiEngine = async function () {
     const upd = (t) => { if (s) s.textContent = t; };
     AIEngine.unload();
     try {
-        upd('Avvio motore AI...');
-        const seg = await AIEngine.preload(upd);
-        if (s) s.innerHTML = `<span style="color:var(--success-color);"><i class="fa-solid fa-check"></i> Pronto: ${seg.meta.id} su ${seg.device.toUpperCase()} (${seg.dtype}).</span>`;
+        // Test whichever engine is actually active: native (NNAPI) or web (WebGPU)
+        if (AIEngine.nativeAvailable()) {
+            const r = await AIEngine.preloadNative(upd);
+            const accel = r.accelerator === 'nnapi'
+                ? '<b style="color:var(--success-color)">NPU/GPU (NNAPI)</b>'
+                : '<b style="color:var(--warning-color)">CPU (NNAPI non ha accelerato)</b>';
+            if (s) s.innerHTML = `<span style="color:var(--success-color);"><i class="fa-solid fa-check"></i> Nativo pronto: ${r.asset} — ${accel}</span>`;
+        } else {
+            const seg = await AIEngine.preload(upd);
+            if (s) s.innerHTML = `<span style="color:var(--success-color);"><i class="fa-solid fa-check"></i> Web pronto: ${seg.meta.id} su ${seg.device.toUpperCase()} (${seg.dtype}).</span>`;
+        }
         if (window.populateAiEngineSettings) populateAiEngineSettings();
     } catch (e) {
-        if (s) s.innerHTML = `<span style="color:var(--danger-color);"><i class="fa-solid fa-xmark"></i> ${e.message || e}</span><br><span style="font-size:0.75rem;">Prova il download manuale del modello (pulsante qui sopra).</span>`;
+        const hint = AIEngine.nativeAvailable()
+            ? 'Verifica che il file del modello sia in native-models\\ (rinominato rmbg-2.0.onnx / rmbg-1.4.onnx) e di aver eseguito "Setup plugin NPU" + rebuild.'
+            : 'Prova il download manuale del modello (pulsante qui sopra).';
+        if (s) s.innerHTML = `<span style="color:var(--danger-color);"><i class="fa-solid fa-xmark"></i> ${e.message || e}</span><br><span style="font-size:0.75rem;">${hint}</span>`;
     }
 };
 
