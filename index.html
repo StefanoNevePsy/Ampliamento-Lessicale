@@ -476,20 +476,25 @@
                 <h4 style="margin:18px 0 10px; color:#a78bfa;"><i class="fa-solid fa-robot"></i> Scontorno AI</h4>
                 <p class="modal-hint" id="ai-engine-caps" style="margin-bottom:8px;"></p>
                 <label class="modal-label">Motore</label>
-                <select id="ai-engine-engine">
+                <select id="ai-engine-engine" onchange="saveAiEngineSettings()">
                     <option value="auto">Automatico (nativo NPU se presente, altrimenti web)</option>
                     <option value="native">Nativo NPU / NNAPI (solo app Android col plugin)</option>
                     <option value="web">Web / WebGPU (sempre disponibile)</option>
                 </select>
                 <label class="modal-label" style="margin-top:10px;">Accelerazione hardware <span class="modal-label-sm">(solo motore web)</span></label>
-                <select id="ai-engine-device">
+                <select id="ai-engine-device" onchange="saveAiEngineSettings()">
                     <option value="auto">Automatica (GPU se disponibile)</option>
                     <option value="gpu">GPU (WebGPU)</option>
                     <option value="npu">NPU se disponibile (sperimentale) &rarr; GPU &rarr; CPU</option>
                     <option value="cpu">Solo CPU (WASM)</option>
                 </select>
-                <label class="modal-label" style="margin-top:10px;">Modello <span class="modal-label-sm">(vuoto = RMBG-2.0, poi 1.4 di riserva)</span></label>
-                <input type="text" id="ai-engine-model" placeholder="briaai/RMBG-2.0">
+                <label class="modal-label" style="margin-top:10px;">Modello</label>
+                <select id="ai-engine-model" onchange="saveAiEngineSettings()">
+                    <option value="briaai/RMBG-1.4">RMBG-1.4 — veloce, consigliato</option>
+                    <option value="briaai/RMBG-2.0">RMBG-2.0 — qualità, più lento</option>
+                    <option value="onnx-community/RMBG-2.0">RMBG-2.0 (onnx-community)</option>
+                    <option value="">Automatico (prova 2.0, poi 1.4)</option>
+                </select>
                 <label class="modal-label" style="margin-top:10px;">Cartella modello locale <span class="modal-label-sm">(fallback se il download online fallisce)</span></label>
                 <input type="text" id="ai-engine-localpath" placeholder="./models/">
                 <label class="setting-option" style="margin-top:8px;">

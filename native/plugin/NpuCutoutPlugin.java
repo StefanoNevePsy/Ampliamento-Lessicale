@@ -62,19 +62,25 @@ public class NpuCutoutPlugin extends Plugin {
         // Load from a real file path so ORT memory-maps the weights OFF the Java
         // heap. Reading the whole model into a byte[] would OOM the ~256MB heap.
         String modelPath = ensureModelFile(assetName);
-        OrtSession.SessionOptions opts = new OrtSession.SessionOptions();
-        boolean nnapi = false;
+
+        // Try NNAPI (NPU/GPU via the MediaTek APU driver). If session creation
+        // fails — e.g. NNAPI's NHWC layout transform needs op kernels the model's
+        // opset doesn't provide (the "MaxPool(11)" error on RMBG-1.4) — fall back
+        // to a plain CPU session, which keeps the original NCHW graph.
         try {
-            // NNAPI EP -> routes supported ops to the NPU/GPU (MediaTek APU driver)
+            OrtSession.SessionOptions opts = new OrtSession.SessionOptions();
             opts.addNnapi();
-            nnapi = true;
-        } catch (Throwable t) {
-            // NNAPI unavailable on this device/build: fall back to CPU (XNNPACK)
+            s = env().createSession(modelPath, opts);
+            sessions.put(assetName, s);
+            nnapiUsed.put(assetName, true);
+            return s;
+        } catch (Throwable nnapiErr) {
+            OrtSession.SessionOptions cpuOpts = new OrtSession.SessionOptions();
+            s = env().createSession(modelPath, cpuOpts);
+            sessions.put(assetName, s);
+            nnapiUsed.put(assetName, false);
+            return s;
         }
-        s = env().createSession(modelPath, opts);
-        sessions.put(assetName, s);
-        nnapiUsed.put(assetName, nnapi);
-        return s;
     }
 
     /**
@@ -184,11 +190,19 @@ public class NpuCutoutPlugin extends Plugin {
             input.close();
             results.close();
 
+            // Auto-detect whether the output needs a sigmoid: if values already
+            // sit in [0,1] the model emitted probabilities (apply none); if it
+            // emits logits (values outside [0,1]) apply sigmoid. This makes the
+            // 'sigmoid' hint robust across RMBG-1.4 (probabilities) and 2.0.
+            float mn = Float.POSITIVE_INFINITY, mx = Float.NEGATIVE_INFINITY;
+            for (int i = 0; i < plane; i++) { float v = flat[i]; if (v < mn) mn = v; if (v > mx) mx = v; }
+            boolean applySig = (mx > 1.0001f || mn < -0.0001f);
+
             // Build grayscale mask, scale to requested output size
             int[] maskPx = new int[plane];
             for (int i = 0; i < plane; i++) {
                 float v = flat[i];
-                if (sigmoid) v = (float) (1.0 / (1.0 + Math.exp(-v)));
+                if (applySig) v = (float) (1.0 / (1.0 + Math.exp(-v)));
                 int a = Math.round(v * 255f);
                 if (a < 0) a = 0; if (a > 255) a = 255;
                 maskPx[i] = (0xFF << 24) | (a << 16) | (a << 8) | a;

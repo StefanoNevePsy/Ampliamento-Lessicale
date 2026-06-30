@@ -346,6 +346,7 @@ window.saveAiEngineSettings = function () {
         localModelPath: ((document.getElementById('ai-engine-localpath') || {}).value || '').trim(),
         useLocalFirst: !!(document.getElementById('ai-engine-localfirst') || {}).checked,
     });
+    if (window.populateAiEngineSettings) populateAiEngineSettings(); // refresh the active-engine readout
     const s = document.getElementById('ai-engine-status');
     if (s) s.innerHTML = '<span style="color:var(--success-color);">Impostazioni salvate. Premi "Carica/Test" per verificare.</span>';
 };
