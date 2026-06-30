@@ -4,6 +4,31 @@
 
 const _scontornoMemCache = {};
 
+// --- "Use cut-outs everywhere" preference ---
+// When ON, every mode prefers an item's masked (scontornata) image; when OFF
+// (default) only the modes that already use it by default do.
+function getUseScontornoEverywhere() {
+    return localStorage.getItem('scontorno_everywhere') === '1';
+}
+function setUseScontornoEverywhere(v) {
+    localStorage.setItem('scontorno_everywhere', v ? '1' : '0');
+}
+window.getUseScontornoEverywhere = getUseScontornoEverywhere;
+window.setUseScontornoEverywhere = setUseScontornoEverywhere;
+
+// Return the masked image when the global preference is on and one exists,
+// otherwise the provided default URL (the mode's existing behaviour).
+function preferScontorno(item, defaultUrl) {
+    return (item && item.maskedUrl && getUseScontornoEverywhere()) ? item.maskedUrl : defaultUrl;
+}
+// Resolve an item's display image, honouring the global preference.
+function imgUrl(o) {
+    if (!o) return getPlaceholderUrl('');
+    return preferScontorno(o, o.url || getPlaceholderUrl(o.label));
+}
+window.preferScontorno = preferScontorno;
+window.imgUrl = imgUrl;
+
 function getScontornoTolerance() {
     return parseInt(localStorage.getItem('scontorno_tolerance')) || 35;
 }

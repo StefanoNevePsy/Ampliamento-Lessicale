@@ -548,6 +548,7 @@ window.populateAiEngineSettings = function () {
     set('ai-engine-model', cfg.modelId);
     set('ai-engine-localpath', cfg.localModelPath);
     chk('ai-engine-localfirst', cfg.useLocalFirst);
+    if (typeof getUseScontornoEverywhere === 'function') chk('scontorno-everywhere', getUseScontornoEverywhere());
     const capsEl = document.getElementById('ai-engine-caps');
     if (capsEl) {
         const st = AIEngine.status();

@@ -203,7 +203,7 @@ function renderTact(items, stage) {
         stage.innerHTML = `
         <div class="tact-stage" onclick="window.nextTact()">
             <div class="tact-card-lg">
-                <img src="${item.url || getPlaceholderUrl(item.label)}"
+                <img src="${imgUrl(item)}"
                      class="${feedbackClass}"
                      style="transition:0.3s;"
                      onerror="handleImgError(this, '${item.label}')">
@@ -257,7 +257,7 @@ function updateRanContent() {
                     gap:10px; overflow-y:auto;">
             ${items.map(x => `
                 <div style="background:white; border-radius:8px; padding:4px; display:flex; align-items:center; justify-content:center; min-height:0; min-width:0; overflow:hidden; box-shadow:0 2px 5px rgba(0,0,0,0.2);">
-                    <img src="${x.url || getPlaceholderUrl(x.label)}" style="max-width:100%; max-height:100%; object-fit:contain;" onerror="handleImgError(this,'${x.label}')">
+                    <img src="${imgUrl(x)}" style="max-width:100%; max-height:100%; object-fit:contain;" onerror="handleImgError(this,'${x.label}')">
                 </div>
             `).join('')}
         </div>`;
@@ -269,7 +269,7 @@ function updateRanContent() {
         c.innerHTML = `
         <div class="ran-single-stage">
             <div style="flex:1; display:flex; flex-direction:column; justify-content:center; width:100%; overflow:hidden;">
-                <img src="${x.url || getPlaceholderUrl(x.label)}"
+                <img src="${imgUrl(x)}"
                      class="ran-main-img ${feedbackClass}"
                      style="transition:0.3s;"
                      onerror="handleImgError(this,'${x.label}')">
@@ -327,7 +327,7 @@ function renderRanIntensivo(items, stage) {
         <div id="ran-content" style="flex:1; min-height:0;">
             <div class="ran-single-stage">
                 <div style="flex:1; display:flex; flex-direction:column; justify-content:center; width:100%; overflow:hidden;">
-                    <img src="${current.url || getPlaceholderUrl(current.label)}"
+                    <img src="${imgUrl(current)}"
                          class="ran-main-img"
                          style="transition:0.3s;"
                          onerror="handleImgError(this,'${current.label}')">
@@ -511,7 +511,7 @@ function renderFluenzaUI(stage) {
         <!-- Image area -->
         <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:15px; overflow:hidden;">
             ${currentItem ? `
-                <img src="${currentItem.url || getPlaceholderUrl(currentItem.label)}"
+                <img src="${imgUrl(currentItem)}"
                      class="ran-main-img ${currentResult === false ? 'feedback-fail' : currentResult === true ? 'feedback-success' : ''}"
                      style="transition:0.3s;"
                      onerror="handleImgError(this,'${currentItem.label}')">
@@ -657,7 +657,7 @@ function renderTombola(items, stage) {
                     <div class="card-grid" id="slot-${idx}"
                          onclick="handleMatchClick(${idx}, '${item.label}')"
                          style="aspect-ratio:unset; height:auto; min-height:0; min-width:0; overflow:hidden;">
-                        <img src="${item.url || getPlaceholderUrl(item.label)}"
+                        <img src="${imgUrl(item)}"
                              style="max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain;"
                              onerror="handleImgError(this, '${item.label}')">
                     </div>
@@ -669,7 +669,7 @@ function renderTombola(items, stage) {
 function getDeckHtml() {
     if (state.deck.length === 0) return `<span>FINITO!</span>`;
     const c = state.deck[0];
-    return `<img src="${c.url || getPlaceholderUrl(c.label)}" style="width:40px; height:40px; object-fit:contain;"> <span style="color:#333; font-weight:bold; padding-right:10px;">${c.label}</span>`;
+    return `<img src="${imgUrl(c)}" style="width:40px; height:40px; object-fit:contain;"> <span style="color:#333; font-weight:bold; padding-right:10px;">${c.label}</span>`;
 }
 
 window.handleMatchClick = (idx, label) => {
@@ -762,7 +762,7 @@ function renderMemory(items, stage) {
                     <div class="card-grid" id="mem-${idx}" onclick="flipCard(${idx})"
                          style="background:var(--accent-color); aspect-ratio:unset; height:auto; min-height:0; min-width:0; overflow:hidden;">
                         <div class="mem-content" style="display:none; width:100%; height:100%;">
-                            <img src="${item.url || getPlaceholderUrl(item.label)}"
+                            <img src="${imgUrl(item)}"
                                  style="max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; background:white; border-radius:6px;"
                                  onerror="handleImgError(this, '${item.label}')">
                         </div>
@@ -994,7 +994,7 @@ function showPoolBatch(stage) {
                     gap:10px; overflow-y:auto;">
             ${batch.map((item) => `
                 <div class="card-grid" style="aspect-ratio:unset; height:auto; min-height:0; min-width:0; overflow:hidden;">
-                    <img src="${item.url || getPlaceholderUrl(item.label)}"
+                    <img src="${imgUrl(item)}"
                          style="max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain;"
                          onerror="handleImgError(this, '${item.label}')">
                 </div>
@@ -1095,7 +1095,7 @@ function showIntrusoRound(stage, round) {
                 <div class="card-grid" id="intruso-${idx}"
                      onclick="handleIntrusoClick(${idx})"
                      style="aspect-ratio:unset; height:auto; min-height:0; min-width:0; overflow:hidden; cursor:pointer; transition:0.3s;">
-                    <img src="${card.url || getPlaceholderUrl(card.label)}"
+                    <img src="${imgUrl(card)}"
                          style="max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain;"
                          onerror="handleImgError(this, '${card.label}')">
                 </div>
@@ -1231,7 +1231,7 @@ function renderTopologia(items, stage) {
                 box-shadow:0 4px 15px rgba(0,0,0,0.3); z-index:1; user-select:none; transition:box-shadow 0.2s;`;
 
             const img = document.createElement('img');
-            img.src = item.url || getPlaceholderUrl(item.label);
+            img.src = imgUrl(item);
             img.draggable = false;
             img.style.cssText = 'max-width:100%; max-height:75%; object-fit:contain; pointer-events:none;';
             img.onerror = function () { handleImgError(this, item.label); };
@@ -1397,7 +1397,7 @@ function renderSequenzeUI(stage) {
                             box-shadow:${isSelected ? '0 0 20px rgba(99,102,241,0.5)' : '0 2px 10px rgba(0,0,0,0.25)'};
                             display:flex; flex-direction:column; align-items:center; gap:6px;
                             transition:0.15s; user-select:none; ${isSelected ? 'transform:scale(1.05);' : ''}">
-                    <img src="${card.url || getPlaceholderUrl(card.label)}" style="width:100px; height:100px; object-fit:contain; border-radius:10px;" draggable="false" onerror="handleImgError(this, '${card.label}')">
+                    <img src="${imgUrl(card)}" style="width:100px; height:100px; object-fit:contain; border-radius:10px;" draggable="false" onerror="handleImgError(this, '${card.label}')">
                     <span style="color:#333; font-weight:bold; font-size:0.8rem; text-align:center; max-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${card.label}</span>
                 </div>`;
     }).join('')}
@@ -1429,7 +1429,7 @@ function renderSequenzeUI(stage) {
                     <span style="width:30px; height:30px; border-radius:50%; background:rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:0.9rem; color:var(--text-secondary);">${slotIdx + 1}</span>
                     ${placedItem ? `
                         <div style="background:white; border-radius:12px; padding:5px;">
-                            <img src="${placedItem.url || getPlaceholderUrl(placedItem.label)}" style="width:100px; height:100px; object-fit:contain; border-radius:10px;" draggable="false" onerror="handleImgError(this, '${placedItem.label}')">
+                            <img src="${imgUrl(placedItem)}" style="width:100px; height:100px; object-fit:contain; border-radius:10px;" draggable="false" onerror="handleImgError(this, '${placedItem.label}')">
                         </div>
                         <span style="font-weight:bold; font-size:0.8rem; text-align:center; word-break:break-word; line-height:1.1;">${placedItem.label}</span>
                         ${verified && isWrong ? `<span style="font-size:0.65rem; color:${wrongColor}; text-align:center;"><i class="fa-solid fa-arrow-down"></i> ${state.sequenzeCorrectOrder[slotIdx].label}</span>` : ''}
@@ -1626,7 +1626,7 @@ function renderRaccontoUI(stage) {
                             transition:0.2s; box-shadow:${shadow}; ${scale} user-select:none; position:relative;">
                     <span style="width:28px; height:28px; border-radius:50%; background:rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:0.85rem; color:var(--text-secondary);">${idx + 1}</span>
                     <div style="background:white; border-radius:12px; padding:5px;">
-                        <img src="${item.url || getPlaceholderUrl(item.label)}" style="width:120px; height:120px; object-fit:contain; border-radius:10px;" draggable="false" onerror="handleImgError(this, '${item.label}')">
+                        <img src="${imgUrl(item)}" style="width:120px; height:120px; object-fit:contain; border-radius:10px;" draggable="false" onerror="handleImgError(this, '${item.label}')">
                     </div>
                     <span style="font-weight:bold; font-size:0.85rem; text-align:center; word-break:break-word; line-height:1.1;">${item.label}</span>
                     ${resultIcon ? `<div style="position:absolute; top:6px; right:6px;">${resultIcon}</div>` : ''}
@@ -1713,7 +1713,7 @@ function setupSequenzeDrag() {
     function createGhost(item, x, y) {
         const ghost = document.createElement('div');
         ghost.style.cssText = `position:fixed; z-index:9999; pointer-events:none; width:110px; left:${x-55}px; top:${y-65}px; opacity:0.92; transform:scale(1.1) rotate(3deg); border-radius:14px; overflow:hidden; box-shadow:0 12px 40px rgba(99,102,241,0.5); background:white; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:6px; gap:4px; transition:none;`;
-        ghost.innerHTML = `<img src="${item.url || getPlaceholderUrl(item.label)}" style="width:90px; height:90px; object-fit:contain; border-radius:10px;" draggable="false"><span style="font-weight:bold; font-size:0.75rem; color:#333; text-align:center; line-height:1.1;">${item.label}</span>`;
+        ghost.innerHTML = `<img src="${imgUrl(item)}" style="width:90px; height:90px; object-fit:contain; border-radius:10px;" draggable="false"><span style="font-weight:bold; font-size:0.75rem; color:#333; text-align:center; line-height:1.1;">${item.label}</span>`;
         document.body.appendChild(ghost);
         return ghost;
     }
@@ -1898,7 +1898,7 @@ function showCategorizzazioneItem(stage) {
         </div>
         <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:15px; min-height:0;">
             <div id="cat-card" style="background:white; border-radius:16px; padding:10px; max-width:300px; width:100%; max-height:55%; display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 10px 40px rgba(0,0,0,0.5); transition:0.3s;">
-                <img src="${item.url || getPlaceholderUrl(item.label)}"
+                <img src="${imgUrl(item)}"
                      style="max-width:100%; max-height:85%; object-fit:contain; border-radius:8px;"
                      onerror="handleImgError(this, '${item.label}')">
                 <div style="font-size:1rem; color:#333; font-weight:800; margin-top:6px; text-transform:uppercase;">${item.label}</div>
@@ -2012,7 +2012,7 @@ function renderSearchFind(items, stage) {
                 </div>
             </div>
             <div class="sf-viewport" id="sf-viewport">
-                <img src="${s.url || getPlaceholderUrl(s.label)}" class="sf-image" onerror="handleImgError(this,'${s.label}')">
+                <img src="${imgUrl(s)}" class="sf-image" onerror="handleImgError(this,'${s.label}')">
             </div>
         </div>`;
     setupSearchFindTouch();
@@ -2290,7 +2290,7 @@ function renderTombolaSonora(items, stage) {
                     <div class="card-grid" id="audio-slot-${idx}"
                          onclick="handleAudioMatchClick(${idx}, '${item.label.replace(/'/g, "\\'")}')"
                          style="aspect-ratio:unset; height:auto; min-height:0; min-width:0; overflow:hidden;">
-                        <img src="${item.url || getPlaceholderUrl(item.label)}"
+                        <img src="${imgUrl(item)}"
                              style="max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain;"
                              onerror="handleImgError(this, '${item.label}')">
                     </div>
@@ -2572,7 +2572,7 @@ function _showRicordaBoard(stage, cards, flipped) {
                     <!-- Front: image -->
                     <div style="position:absolute; inset:0; backface-visibility:hidden; -webkit-backface-visibility:hidden;
                                 background:white; border-radius:12px; padding:5px; display:flex; align-items:center; justify-content:center; overflow:hidden;">
-                        <img src="${item.url || getPlaceholderUrl(item.label)}"
+                        <img src="${imgUrl(item)}"
                              style="max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; border-radius:6px;"
                              onerror="handleImgError(this, '${(item.label || '').replace(/'/g, "\\'")}')">
                     </div>
@@ -2801,7 +2801,7 @@ function _spRender(stage) {
     const item = sp.currentItem;
     const isPlural = sp.currentForm === 'plural';
     const count = sp.pluralCount;
-    const url = (isPlural && count > 1 && item.maskedUrl) ? item.maskedUrl : (item.url || getPlaceholderUrl(item.label));
+    const url = (isPlural && count > 1 && item.maskedUrl) ? item.maskedUrl : (imgUrl(item));
 
     // Compute grid layout for plural display
     let cols, rows;
@@ -2982,7 +2982,7 @@ function _stroopNumRender(stage) {
     if (!sn) return;
     const item = sn.currentItem;
     const count = sn.currentCount;
-    const url = (count > 1 && item.maskedUrl) ? item.maskedUrl : (item.url || getPlaceholderUrl(item.label));
+    const url = (count > 1 && item.maskedUrl) ? item.maskedUrl : (imgUrl(item));
 
     let cols, rows;
     if (count === 1) { cols = 1; rows = 1; }
@@ -3145,7 +3145,7 @@ function _goNogoRender(stage) {
     const gn = state._goNogoState;
     if (!gn) return;
     const item = gn.currentItem;
-    const url = item.url || getPlaceholderUrl(item.label);
+    const url = imgUrl(item);
 
     const tagOptions = state.selectedPoolTags.map(t =>
         `<option value="${t}" ${t === gn.noGoTag ? 'selected' : ''}>${t}</option>`
@@ -3318,7 +3318,7 @@ function _stroopEtRender(stage) {
     const se = state._stroopEtState;
     if (!se) return;
     const item = se.currentItem;
-    const url = item.url || getPlaceholderUrl(item.label);
+    const url = imgUrl(item);
     const wrongLabel = se.mismatchLabel;
     const correctLabel = item.label || '';
 
@@ -3483,7 +3483,7 @@ function _topoCompPrepareRound() {
 }
 
 function _topoCompGetImgUrl(item) {
-    return item.maskedUrl || item.url || getPlaceholderUrl(item.label);
+    return item.maskedUrl || imgUrl(item);
 }
 
 function _topoCompRender(stage) {
@@ -3668,7 +3668,7 @@ window.topoCompSelectPersonaggio = () => {
     const stage = document.getElementById('game-stage');
 
     const gridHtml = tc.items.map((item, idx) => {
-        const url = item.maskedUrl || item.url || getPlaceholderUrl(item.label);
+        const url = item.maskedUrl || imgUrl(item);
         const isSelected = tc.personaggio && tc.personaggio.label === item.label && tc.personaggio.url === item.url;
         return `<div onclick="topoCompPickPersonaggio(${idx})" style="cursor:pointer; padding:6px; border:3px solid ${isSelected ? 'var(--accent-color)' : 'transparent'}; border-radius:var(--radius-md); background:rgba(255,255,255,0.05); display:flex; flex-direction:column; align-items:center; gap:4px;">
             <img src="${url}" style="width:60px; height:60px; object-fit:contain;" onerror="handleImgError(this, '${(item.label || '').replace(/'/g, "\\'")}')">

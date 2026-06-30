@@ -509,6 +509,15 @@
                     <button class="btn btn-ghost" onclick="showAiModelInstructions()" style="font-size:0.8rem;"><i class="fa-solid fa-circle-info"></i> Download manuale</button>
                 </div>
                 <p class="modal-hint" id="ai-engine-status" style="margin-top:8px;"></p>
+
+                <h4 style="margin:18px 0 10px; color:var(--success-color);"><i class="fa-solid fa-scissors"></i> Uso delle immagini scontornate</h4>
+                <label class="setting-option">
+                    <input type="checkbox" id="scontorno-everywhere" onchange="setUseScontornoEverywhere(this.checked)" style="width:18px; height:18px; accent-color:var(--accent-color);">
+                    <div>
+                        <div class="setting-option-label">Usa le scontornate in tutte le modalit&agrave;</div>
+                        <div class="setting-option-desc">Se attivo, ogni modalit&agrave; mostra l'immagine senza sfondo (quando disponibile); se disattivo, solo le modalit&agrave; che la usano gi&agrave; di default.</div>
+                    </div>
+                </label>
             </div>
 
             <!-- TAB: THEME -->

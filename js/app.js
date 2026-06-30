@@ -713,7 +713,8 @@ window.loadSelectedSet = async (setId) => {
             if (activeVariant > 0 && typeof getItemVariantUrl === 'function') {
                 playItems = playItems.map(item => {
                     const varUrl = getItemVariantUrl(item, activeVariant);
-                    if (varUrl && varUrl !== item.url) return { ...item, url: varUrl, _originalUrl: item.url };
+                    // Drop the base maskedUrl on variants (the cut-out is for the base image)
+                    if (varUrl && varUrl !== item.url) return { ...item, url: varUrl, maskedUrl: undefined, _originalUrl: item.url };
                     return item;
                 });
             }
@@ -1305,7 +1306,7 @@ window.startGame = () => {
         playItems = playItems.map(item => {
             const varUrl = getItemVariantUrl(item, activeVariant);
             if (varUrl && varUrl !== item.url) {
-                return { ...item, url: varUrl, _originalUrl: item.url };
+                return { ...item, url: varUrl, maskedUrl: undefined, _originalUrl: item.url };
             }
             return item;
         });
