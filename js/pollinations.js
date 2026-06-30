@@ -491,7 +491,7 @@ window.openPollinationsGenerator = (itemIndex) => {
             <!-- Gemini (Nano Banana 2 Lite) tab -->
             <div id="img-tab-gemini" style="${_imgGenTab !== 'gemini' ? 'display:none;' : ''}">
                 <div style="background:rgba(66,133,244,0.1); border:1px solid rgba(66,133,244,0.3); border-radius:10px; padding:6px 10px; margin-bottom:10px; font-size:0.74rem; color:#8ab4f8;">
-                    <i class="fa-solid fa-wand-magic-sparkles"></i> Google <b>Nano Banana 2 Lite</b> &mdash; a pagamento (richiede chiave Gemini con fatturazione attiva, ~0,034$/1000 immagini).
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Google <b>Nano Banana 2 Lite</b> &mdash; a pagamento (chiave Gemini con fatturazione attiva): ~0,034$ a immagine (~0,017$ in batch).
                 </div>
                 <label style="font-size:0.8rem; color:#aaa;">Prompt</label>
                 <textarea id="gemini-prompt" rows="2" style="width:100%; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.95rem; resize:vertical; font-family:inherit; margin-bottom:6px;">${escapeHtml(item.label)}</textarea>
