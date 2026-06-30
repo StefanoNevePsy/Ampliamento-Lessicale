@@ -384,11 +384,21 @@ window.AIEngine = (function () {
                     try { head = await fetch(abs, { method: 'HEAD' }); } catch (he) { head = null; }
                     if (head && !head.ok) { tried.push(`${short} [${head.status}]`); continue; }
                 }
+                const sOpts = { executionProviders: ['webgpu', 'wasm'], graphOptimizationLevel: 'all' };
+                // External-data weights: many RMBG-2.0 exports store weights in a
+                // sibling "<model>.onnx_data" file. Detect and pass it explicitly
+                // (ORT can't resolve the relative reference on its own here).
+                const dataUrl = abs.replace(/\.onnx(\?.*)?$/, '.onnx_data');
+                try {
+                    const dh = await fetch(dataUrl, { method: 'HEAD' });
+                    if (dh && dh.ok) {
+                        const dataName = decodeURIComponent(dataUrl.split('/').pop().split('?')[0]);
+                        sOpts.externalData = [{ path: dataName, data: dataUrl }];
+                        onStatus && onStatus(`Pesi esterni trovati: ${dataName}`);
+                    }
+                } catch (de) { /* no sidecar */ }
                 onStatus && onStatus(`${local ? 'Carico locale' : 'Scarico'}: ${short}...`);
-                const sess = await ort.InferenceSession.create(abs, {
-                    executionProviders: ['webgpu', 'wasm'],
-                    graphOptimizationLevel: 'all'
-                });
+                const sess = await ort.InferenceSession.create(abs, sOpts);
                 _ortSessions[meta.id] = sess;
                 onStatus && onStatus(`Modello caricato: ${short}`);
                 return sess;
@@ -473,11 +483,12 @@ window.AIEngine = (function () {
     }
 
     function _wantsOrtWeb() {
-        // Disabled by default: RMBG-2.0's fp16/fp32 ONNX use an EXTERNAL data file
-        // that ORT-Web can't fetch reliably. transformers.js handles external data
-        // and runs on WebGPU too, and auto-tries onnx-community/RMBG-2.0. ORT-Web
-        // stays available for self-contained .onnx via the explicit setting below.
-        return getConfig().useOrtWeb === true && capabilities().webgpu;
+        // RMBG-2.0 (BiRefNet) often isn't supported by transformers.js, so run the
+        // raw .onnx via ORT-Web on WebGPU. External-data weights are handled below.
+        const cfg = getConfig();
+        if (cfg.useOrtWeb === false) return false;
+        const id = cfg.modelId || candidateList()[0].id;
+        return capabilities().webgpu && /2\.?0|birefnet/i.test(id);
     }
 
     // ===== SAM-family click-to-segment (for the highlight/evidenzia editor) =====
