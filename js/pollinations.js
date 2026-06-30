@@ -362,6 +362,40 @@ async function generateGeminiImage(prompt, style) {
     return `data:${mime};base64,${inline.data}`;
 }
 
+// Guide: how to get ~8.800 free Nano Banana images via the Google Cloud trial.
+window.showGeminiBulkGuide = () => {
+    const existing = document.getElementById('modal-gemini-trial');
+    if (existing) existing.remove();
+    const modal = document.createElement('div');
+    modal.id = 'modal-gemini-trial';
+    modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:21000; display:flex; align-items:center; justify-content:center; padding:20px; overflow-y:auto;';
+    modal.innerHTML = `
+        <div style="width:100%; max-width:520px; background:#1e1e2f; border-radius:16px; border:1px solid var(--glass-border); padding:22px; max-height:90vh; overflow-y:auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h3 style="margin:0; color:white; font-size:1.05rem;"><i class="fa-solid fa-images" style="color:#34d399;"></i> Immagini in blocco gratis (Nano Banana)</h3>
+                <button class="btn btn-ghost" onclick="document.getElementById('modal-gemini-trial').remove()" style="padding:6px 10px;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <p style="color:var(--text-secondary); font-size:0.85rem; margin:0 0 12px;">Il modello immagini di Google (Nano&nbsp;Banana) costa ~0,034$ a immagine, ma i <b>300$ di credito di prova</b> di Google Cloud bastano per <b>~8.800 immagini gratis</b>. Una volta configurato, il generatore in blocco le crea tutte da solo.</p>
+            <ol style="color:#ddd; font-size:0.85rem; line-height:1.6; padding-left:20px; margin:0 0 12px;">
+                <li>Apri <a href="https://console.cloud.google.com/" target="_blank" style="color:#8ab4f8;">console.cloud.google.com</a> e accedi con Google.</li>
+                <li>In alto, <b>crea un nuovo progetto</b> (es. &laquo;stimoli&raquo;).</li>
+                <li>Attiva la <b>prova gratuita</b> (300$ / 90 giorni). Serve una carta per verifica, ma <b>non c'è addebito automatico</b> alla fine della prova.</li>
+                <li>Cerca e <b>abilita</b> &laquo;<b>Generative Language API</b>&raquo; per quel progetto.</li>
+                <li>Vai su <a href="https://aistudio.google.com/apikey" target="_blank" style="color:#8ab4f8;">aistudio.google.com/apikey</a> &rarr; <b>Create API key</b> e scegli <b>il progetto appena creato</b> (quello con la fatturazione attiva).</li>
+                <li>Copia la chiave e incollala in <b>Impostazioni &rarr; API &rarr; Gemini AI</b>.</li>
+                <li>Nell'editor di un set: <b>Genera in blocco</b> &rarr; <b>Nano Banana</b> &rarr; scegli gli stili e avvia. Genera tutti gli item mancanti in automatico.</li>
+            </ol>
+            <div style="background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); border-radius:10px; padding:10px; font-size:0.8rem; color:#6ee7b7; margin-bottom:8px;">
+                <i class="fa-solid fa-shield-halved"></i> Alla fine dei 300$ (o dei 90 giorni) il servizio si ferma e basta: Google <b>non</b> addebita nulla senza una tua conferma esplicita di passaggio a pagamento.
+            </div>
+            <div style="background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3); border-radius:10px; padding:10px; font-size:0.8rem; color:#fcd34d; margin-bottom:14px;">
+                <i class="fa-solid fa-circle-info"></i> La stessa chiave serve sia per le immagini sia per la traduzione delle etichette: una sola configurazione.
+            </div>
+            <button class="btn btn-primary" style="width:100%; padding:12px;" onclick="document.getElementById('modal-gemini-trial').remove()">Ho capito</button>
+        </div>`;
+    document.body.appendChild(modal);
+};
+
 // --- SINGLE ITEM IMAGE GENERATOR (with tabs: Pixabay / Openverse / Cloudflare) ---
 let _pollSelectedStyle = null;
 let _pollLastImageUrl = null;
@@ -886,7 +920,7 @@ window.openBulkPollinations = () => {
             <label style="font-size:0.8rem; color:#aaa;">Sorgente immagini</label>
             <div style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">
                 ${hasCloudflare ? `<button class="btn btn-ghost bulk-engine-btn selected" data-engine="cloudflare" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-cloud"></i> Cloudflare Flux</button>` : ''}
-                ${hasGeminiKey ? `<button class="btn btn-ghost bulk-engine-btn ${!hasCloudflare ? 'selected' : ''}" data-engine="gemini" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;" title="A pagamento (fatturazione attiva)"><i class="fa-solid fa-wand-magic-sparkles"></i> Nano Banana</button>` : ''}
+                ${hasGeminiKey ? `<button class="btn btn-ghost bulk-engine-btn ${!hasCloudflare ? 'selected' : ''}" data-engine="gemini" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;" title="Gratis con i crediti di prova Google (~8.800 immagini). Vedi guida in Impostazioni > API."><i class="fa-solid fa-wand-magic-sparkles"></i> Nano Banana</button>` : ''}
                 ${hasPixabay ? `<button class="btn btn-ghost bulk-engine-btn ${!hasCloudflare && !hasGeminiKey ? 'selected' : ''}" data-engine="pixabay" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-search"></i> Pixabay</button>` : ''}
                 <button class="btn btn-ghost bulk-engine-btn ${!hasCloudflare && !hasPixabay ? 'selected' : ''}" data-engine="arasaac" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-icons"></i> ARASAAC</button>
                 <button class="btn btn-ghost bulk-engine-btn" data-engine="openverse" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-images"></i> Openverse</button>
