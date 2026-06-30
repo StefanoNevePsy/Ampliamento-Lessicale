@@ -237,11 +237,20 @@ window.AIEngine = (function () {
     // The engine that will actually be used for the current model ('native'|'web')
     function effectiveEngine() {
         const cfg = getConfig();
-        if (!nativePlugin() || cfg.engine === 'web') return 'web';
         if (cfg.engine === 'native') return 'native';
-        const m = candidateList()[0];
-        const id = cfg.modelId || m.id;
-        return autoPreferNative(_assetNameFor(id), id) ? 'native' : 'web';
+        if (cfg.engine === 'web') return 'web';
+        // AUTO: prefer the GPU. WebGPU runs the WHOLE model on the GPU (ORT-Web for
+        // RMBG-2.0, transformers.js for 1.4) — faster than NNAPI, which offloads
+        // only some ops and runs the rest on CPU. Native is only used in auto when
+        // WebGPU isn't available.
+        if (!capabilities().webgpu && nativePlugin()) return 'native';
+        return 'web';
+    }
+
+    // A human label for the engine/backend that will run the current model
+    function effectiveEngineLabel() {
+        if (effectiveEngine() === 'native') return 'Nativo NPU (NNAPI)';
+        return _wantsOrtWeb() ? 'GPU (ORT-Web WebGPU)' : 'GPU (WebGPU)';
     }
 
     // Native NPU/GPU segmentation via the Capacitor plugin (ONNX Runtime + NNAPI).
@@ -285,6 +294,128 @@ window.AIEngine = (function () {
         return mask;
     }
 
+    // ===== ORT-Web WebGPU engine: runs the raw .onnx ENTIRELY on the GPU =====
+    // Unlike NNAPI (which offloads only supported ops and runs the rest on CPU),
+    // the WebGPU EP implements every op on the GPU, so a heavy model like
+    // RMBG-2.0 runs fully GPU-accelerated. Used for big models transformers.js
+    // can't load; falls back to transformers.js on any failure.
+    const ORT_WEB_CDN = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.webgpu.min.mjs';
+    const ORT_WASM_BASE = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/';
+    let _ort = null;
+    const _ortSessions = {};
+
+    function _loadImg(url) {
+        return new Promise((resolve, reject) => {
+            const im = new Image();
+            im.crossOrigin = 'anonymous';
+            im.onload = () => resolve(im);
+            im.onerror = () => reject(new Error('Immagine non caricabile'));
+            im.src = url;
+        });
+    }
+
+    async function _loadOrt(onStatus) {
+        if (_ort) return _ort;
+        onStatus && onStatus('Caricamento runtime WebGPU (ORT)...');
+        _ort = await import(/* @vite-ignore */ ORT_WEB_CDN);
+        try { _ort.env.wasm.wasmPaths = ORT_WASM_BASE; } catch (e) { /* ignore */ }
+        return _ort;
+    }
+
+    // Candidate model URLs for ORT-Web: local web folder first, then Hugging Face
+    // (fp16 variant — good on WebGPU, with fp32 I/O so our float input works).
+    function _ortModelUrls(meta) {
+        const cfg = getConfig();
+        const urls = [];
+        if (cfg.localModelPath) {
+            urls.push(cfg.localModelPath.replace(/\/$/, '') + '/' + _assetNameFor(meta.id));
+        }
+        urls.push(`https://huggingface.co/${meta.id}/resolve/main/onnx/model_fp16.onnx`);
+        urls.push(`https://huggingface.co/${meta.id}/resolve/main/onnx/model.onnx`);
+        return urls;
+    }
+
+    async function _ortGetSession(meta, onStatus) {
+        if (_ortSessions[meta.id]) return _ortSessions[meta.id];
+        const ort = await _loadOrt(onStatus);
+        let lastErr;
+        for (const url of _ortModelUrls(meta)) {
+            try {
+                onStatus && onStatus('Caricamento modello su GPU (può richiedere tempo la prima volta)...');
+                const sess = await ort.InferenceSession.create(url, {
+                    executionProviders: ['webgpu', 'wasm'],
+                    graphOptimizationLevel: 'all'
+                });
+                _ortSessions[meta.id] = sess;
+                return sess;
+            } catch (e) { lastErr = e; console.warn('ORT-Web model load failed:', url, e); }
+        }
+        throw new Error('Modello non caricabile via ORT-Web. ' + (lastErr && lastErr.message || ''));
+    }
+
+    async function ortWebSegment(imageUrl, w, h, onStatus) {
+        const meta = candidateList()[0];
+        const size = meta.size || 1024;
+        const sess = await _ortGetSession(meta, onStatus);
+        const ort = await _loadOrt(onStatus);
+
+        // Preprocess -> NCHW float32, normalized
+        const img = await _loadImg(imageUrl);
+        const c = document.createElement('canvas');
+        c.width = size; c.height = size;
+        const cx = c.getContext('2d', { willReadFrequently: true });
+        cx.drawImage(img, 0, 0, size, size);
+        const px = cx.getImageData(0, 0, size, size).data;
+        const plane = size * size;
+        const data = new Float32Array(3 * plane);
+        for (let i = 0; i < plane; i++) {
+            const j = i * 4;
+            data[i] = (px[j] / 255 - meta.mean[0]) / meta.std[0];
+            data[plane + i] = (px[j + 1] / 255 - meta.mean[1]) / meta.std[1];
+            data[2 * plane + i] = (px[j + 2] / 255 - meta.mean[2]) / meta.std[2];
+        }
+
+        onStatus && onStatus('Analisi immagine sulla GPU (WebGPU)...');
+        const input = new ort.Tensor('float32', data, [1, 3, size, size]);
+        const feeds = {}; feeds[sess.inputNames[0]] = input;
+        const out = await sess.run(feeds);
+        const t = out[sess.outputNames[0]];
+        const od = t.data;
+        if (!(od instanceof Float32Array)) throw new Error('Output ORT non float32 (' + t.type + ')');
+
+        // Auto-detect sigmoid (logits vs probabilities)
+        let mn = Infinity, mx = -Infinity;
+        for (let i = 0; i < plane; i++) { const v = od[i]; if (v < mn) mn = v; if (v > mx) mx = v; }
+        const sig = (mx > 1.0001 || mn < -0.0001);
+
+        // Build mask at model size, then resize to requested w*h
+        const mc = document.createElement('canvas'); mc.width = size; mc.height = size;
+        const mctx = mc.getContext('2d', { willReadFrequently: true });
+        const mim = mctx.createImageData(size, size); const md = mim.data;
+        for (let i = 0; i < plane; i++) {
+            let v = od[i];
+            if (sig) v = 1 / (1 + Math.exp(-v));
+            let a = Math.round(v * 255); if (a < 0) a = 0; if (a > 255) a = 255;
+            md[i * 4] = md[i * 4 + 1] = md[i * 4 + 2] = a; md[i * 4 + 3] = 255;
+        }
+        mctx.putImageData(mim, 0, 0);
+        const fc = document.createElement('canvas'); fc.width = w; fc.height = h;
+        const fctx = fc.getContext('2d', { willReadFrequently: true });
+        fctx.drawImage(mc, 0, 0, w, h);
+        const fd = fctx.getImageData(0, 0, w, h).data;
+        const mask = new Uint8Array(w * h);
+        for (let i = 0; i < w * h; i++) mask[i] = fd[i * 4];
+        onStatus && onStatus('Scontorno GPU completato.');
+        return mask;
+    }
+
+    function _wantsOrtWeb() {
+        const cfg = getConfig();
+        const id = cfg.modelId || candidateList()[0].id;
+        // Big BiRefNet model that transformers.js can't reliably load -> use ORT-Web.
+        return capabilities().webgpu && /2\.?0|birefnet/i.test(id);
+    }
+
     // Segment the subject. Returns a Uint8 grayscale mask (length w*h), 255=subject.
     async function segmentSubject(imageUrl, w, h, onStatus) {
         // Per-model routing: native only when it's actually the better path
@@ -294,6 +425,16 @@ window.AIEngine = (function () {
             onStatus && onStatus('Motore nativo non riuscito, uso il motore web...');
         } else if (getConfig().engine === 'native') {
             onStatus && onStatus('Plugin nativo NPU assente (build/app non nativa): uso il motore web.');
+        }
+        // Web path: prefer ORT-Web WebGPU (whole model on GPU) for big models
+        if (_wantsOrtWeb()) {
+            try {
+                const om = await ortWebSegment(imageUrl, w, h, onStatus);
+                if (om) return om;
+            } catch (e) {
+                console.warn('ORT-Web WebGPU failed, falling back to transformers.js:', e);
+                onStatus && onStatus('ORT-Web non riuscito, uso transformers.js...');
+            }
         }
         const seg = await getSegmenter(onStatus);
         const { RawImage } = await loadTransformers(onStatus);
@@ -313,6 +454,17 @@ window.AIEngine = (function () {
     async function preload(onStatus) {
         await getSegmenter(onStatus);
         return _seg;
+    }
+
+    // Pre-load whichever WEB backend will run the current model (ORT-Web or transformers.js)
+    async function preloadWeb(onStatus) {
+        if (_wantsOrtWeb()) {
+            const meta = candidateList()[0];
+            await _ortGetSession(meta, onStatus);
+            return { backend: 'ort-webgpu', model: meta.id };
+        }
+        const seg = await getSegmenter(onStatus);
+        return { backend: 'transformers', model: seg.meta.id, device: seg.device, dtype: seg.dtype };
     }
 
     // Verify the native plugin + bundled model asset, reporting the accelerator
@@ -336,8 +488,9 @@ window.AIEngine = (function () {
     function unload() { _seg = null; _segLoading = null; }
 
     return {
-        getConfig, setConfig, capabilities, deviceChain, nativeAvailable, effectiveEngine,
-        loadTransformers, getSegmenter, segmentSubject, preload, preloadNative, status, unload,
+        getConfig, setConfig, capabilities, deviceChain, nativeAvailable,
+        effectiveEngine, effectiveEngineLabel,
+        loadTransformers, getSegmenter, segmentSubject, preload, preloadNative, preloadWeb, status, unload,
         SEG_MODELS
     };
 })();
@@ -357,7 +510,7 @@ window.populateAiEngineSettings = function () {
     const capsEl = document.getElementById('ai-engine-caps');
     if (capsEl) {
         const st = AIEngine.status();
-        const activeEngine = AIEngine.effectiveEngine() === 'native' ? 'Nativo NPU (NNAPI)' : 'Web (WebGPU/CPU)';
+        const activeEngine = AIEngine.effectiveEngineLabel();
         const nativeBadge = `Motore attivo: <b style="color:var(--success-color)">${activeEngine}</b> · ` +
             `Plugin nativo: <b style="color:${caps.native ? 'var(--success-color)' : 'var(--text-secondary)'}">${caps.native ? 'presente' : 'assente'}</b> · `;
         capsEl.innerHTML = `${nativeBadge}WebGPU (GPU): <b style="color:${caps.webgpu ? 'var(--success-color)' : 'var(--danger-color)'}">${caps.webgpu ? 'disponibile' : 'non disponibile'}</b> · WebNN (NPU): <b style="color:${caps.webnn ? 'var(--success-color)' : 'var(--text-secondary)'}">${caps.webnn ? 'sperimentale' : 'non disponibile'}</b>${st.loaded ? ` · <span style="color:var(--success-color);">Caricato: ${st.model} su ${st.device.toUpperCase()}</span>` : ''}`;
@@ -393,8 +546,11 @@ window.testAiEngine = async function () {
                 : '<b style="color:var(--warning-color)">CPU (NNAPI non ha accelerato)</b>';
             if (s) s.innerHTML = `<span style="color:var(--success-color);"><i class="fa-solid fa-check"></i> Nativo pronto: ${r.asset} — ${accel}</span>`;
         } else {
-            const seg = await AIEngine.preload(upd);
-            if (s) s.innerHTML = `<span style="color:var(--success-color);"><i class="fa-solid fa-check"></i> Web pronto: ${seg.meta.id} su ${seg.device.toUpperCase()} (${seg.dtype}).</span>`;
+            const r = await AIEngine.preloadWeb(upd);
+            const label = r.backend === 'ort-webgpu'
+                ? `<b style="color:var(--success-color)">GPU (ORT-Web WebGPU)</b> — ${r.model}`
+                : `${r.model} su ${(r.device || '').toUpperCase()} (${r.dtype || ''})`;
+            if (s) s.innerHTML = `<span style="color:var(--success-color);"><i class="fa-solid fa-check"></i> Web pronto: ${label}</span>`;
         }
         if (window.populateAiEngineSettings) populateAiEngineSettings();
     } catch (e) {

@@ -278,13 +278,18 @@ function renderEditorList() {
         const hasSeq = item.seqNumber ? `<i class="fa-solid fa-arrow-down-1-9" style="color:var(--accent-color); font-size:0.6rem;" title="Seq: ${item.seqNumber}"></i>` : '';
 
         // Resolve display URL based on active editing variant
-        const displayUrl = getItemVariantUrl(item, editVariant);
+        let displayUrl = getItemVariantUrl(item, editVariant);
         const hasVariantImg = editVariant > 0 && item.variantUrls && item.variantUrls[editVariant];
+        // When "show cut-outs" is on, preview the masked (scontornata) version so
+        // the AI/bulk results are visible. Checkerboard makes transparency obvious.
+        const showMasked = state._editorShowMasked && item.maskedUrl;
+        if (showMasked) displayUrl = item.maskedUrl;
+        const thumbBg = showMasked ? 'background:repeating-conic-gradient(#777 0% 25%, #555 0% 50%) 50%/12px 12px;' : '';
 
         return `
         <div class="editor-item" style="${activeStyle} ${opacityStyle} transition:0.2s; cursor:pointer;" onclick="setActiveItem(${idx})">
-            <div class="editor-thumb" style="cursor:pointer; position:relative;${editVariant > 0 && !hasVariantImg ? ' outline:2px dashed var(--warning-color); outline-offset:-2px;' : ''}" onclick="triggerItemUpload(${idx}); event.stopPropagation();" title="Clicca per caricare">
-                <img src="${displayUrl || getPlaceholderUrl(item.label)}" style="width:100%; height:100%; object-fit:cover; pointer-events:none;">
+            <div class="editor-thumb" style="cursor:pointer; position:relative;${thumbBg}${editVariant > 0 && !hasVariantImg ? ' outline:2px dashed var(--warning-color); outline-offset:-2px;' : ''}" onclick="triggerItemUpload(${idx}); event.stopPropagation();" title="Clicca per caricare">
+                <img src="${displayUrl || getPlaceholderUrl(item.label)}" style="width:100%; height:100%; object-fit:${showMasked ? 'contain' : 'cover'}; pointer-events:none;">
                 <div style="position:absolute; inset:0; background:rgba(0,0,0,0.3); display:flex; justify-content:center; align-items:center; opacity:0;">
                     <i class="fa-solid fa-camera" style="color:white;"></i>
                 </div>
@@ -440,7 +445,14 @@ function _openScontornoPreview(item, onDone) {
         }
     };
 
-    runPreview(tolerance);
+    // If a cut-out already exists (e.g. from the AI/bulk models), show THAT first
+    // instead of immediately running the colour-based scontorno over it.
+    if (item.maskedUrl) {
+        currentResult = item.maskedUrl;
+        resultDiv.innerHTML = `<img src="${item.maskedUrl}" style="max-width:100%; max-height:200px; object-fit:contain;"><div style="font-size:0.62rem; color:var(--text-muted); margin-top:4px;">Scontorno attuale (AI/manuale). Muovi la tolleranza per rifare quello a colori.</div>`;
+    } else {
+        runPreview(tolerance);
+    }
 
     slider.addEventListener('input', () => {
         valLabel.textContent = slider.value;
@@ -526,6 +538,17 @@ window.aiBatchScontornoEditor = async () => {
     hideBackupProgress();
     renderEditorList();
     alert(`Scontorno AI completato: ${done - failed} riuscite${failed ? `, ${failed} fallite` : ''}.`);
+};
+
+// Toggle the editor thumbnails between originals and cut-outs (masked) so the
+// AI/bulk scontorno results can be reviewed at a glance.
+window.toggleEditorShowMasked = () => {
+    state._editorShowMasked = !state._editorShowMasked;
+    const btn = document.getElementById('btn-toggle-masked');
+    if (btn) btn.innerHTML = state._editorShowMasked
+        ? '<i class="fa-solid fa-eye-slash"></i> Mostra originali'
+        : '<i class="fa-solid fa-eye"></i> Mostra scontornate';
+    renderEditorList();
 };
 
 // Remove every existing background-removal result in the set, so they can be

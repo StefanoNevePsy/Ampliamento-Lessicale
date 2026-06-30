@@ -374,6 +374,7 @@
                  <button class="btn btn-ghost" onclick="openBulkPollinations()" style="color:var(--accent-color); border-color:rgba(99,102,241,0.3);"><i class="fa-solid fa-wand-magic-sparkles"></i> Genera Immagini AI</button>
                  <button class="btn btn-ghost" onclick="aiBatchScontornoEditor()" style="color:#a78bfa; border-color:rgba(167,139,250,0.3);" title="Rimuovi lo sfondo a tutte le immagini con l'AI (modello caricato una volta)"><i class="fa-solid fa-robot"></i> Scontorno AI (Bulk)</button>
                  <button class="btn btn-ghost" onclick="clearAllScontorni()" style="color:#f87171; border-color:rgba(248,113,113,0.3);" title="Rimuovi tutti gli scontorni gi&agrave; fatti (per rifarli)"><i class="fa-solid fa-broom"></i> Azzera scontorni</button>
+                 <button id="btn-toggle-masked" class="btn btn-ghost" onclick="toggleEditorShowMasked()" title="Mostra le immagini scontornate (anteprima maschere AI)"><i class="fa-solid fa-eye"></i> Mostra scontornate</button>
             </div>
             <div id="editor-list"></div>
             <div style="display:flex; gap:8px; margin-top:20px;">
