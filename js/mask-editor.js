@@ -92,8 +92,9 @@
         let tool = 'wand';                                  // 'wand' | 'brush' | 'object' | 'pan'
         let effect = mode === 'cutout' ? 0 : 255;           // wand/brush sets mask to this (0 or 255)
         let hardness = 100;                                 // brush hardness 0..100
-        let straightLine = false;                           // straight-line brush mode
-        let lastBrushPt = null;                             // anchor for straight lines / shift-click
+        let straightLine = false;                           // straight-line (two-click) mode
+        let lineAnchor = null;                              // first click of a two-click line
+        let lastBrushPt = null;                             // anchor for shift-click lines
         let zoom = 1, panX = 0, panY = 0;                   // view transform
         const undoStack = [];                               // mask snapshots
         // In highlight, the FIRST "keep" selection desaturates everything else,
@@ -333,9 +334,22 @@
             if (tool === 'object') { pushUndo(); samClick(p); return; }
             if (tool === 'wand') { pushUndo(); magicWand(p.x, p.y); return; }
             // brush
+            if (straightLine) {
+                // Two independent clicks define a straight segment (allows
+                // non-contiguous selections). First click = start, second = end.
+                if (lineAnchor) {
+                    pushUndo(); strokeLine(lineAnchor, p); lineAnchor = null;
+                    setStatus('Segmento tracciato. Tocca due nuovi punti per un altro.');
+                } else {
+                    pushUndo(); paintAt(p.x, p.y); lineAnchor = p;
+                    setStatus('Punto iniziale segnato — tocca il punto finale.');
+                }
+                lastBrushPt = p;
+                return; // no free-drawing in line mode
+            }
             pushUndo();
             drawing = true;
-            if ((straightLine || ev.shiftKey) && lastBrushPt) strokeLine(lastBrushPt, p);
+            if (ev.shiftKey && lastBrushPt) strokeLine(lastBrushPt, p); // Photoshop-style
             else paintAt(p.x, p.y);
             lastPt = p; lastBrushPt = p;
         }
@@ -395,8 +409,8 @@
             straightLine = !straightLine;
             const b = overlay.querySelector('#me-line');
             b.style.background = straightLine ? 'var(--accent-color)' : '';
-            setStatus(straightLine ? 'Linea retta: tocca i punti da collegare. Ritocca il tasto per disattivare.' : '');
-            if (!straightLine) lastBrushPt = null;
+            lineAnchor = null;
+            setStatus(straightLine ? 'Linea: tocca due punti per collegarli dritti (segmenti indipendenti).' : '');
         };
         overlay.querySelector('#me-undo').onclick = () => undo();
         overlay.querySelector('#me-zoom-in').onclick = () => setZoom(zoom * 1.3);

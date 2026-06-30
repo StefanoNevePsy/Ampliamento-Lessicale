@@ -560,10 +560,10 @@ window.AIEngine = (function () {
         const mc = document.createElement('canvas'); mc.width = W; mc.height = H;
         const mctx = mc.getContext('2d', { willReadFrequently: true });
         const im = mctx.createImageData(W, H); const idata = im.data;
-        let setCount = 0;
+        let setCount = 0, sumX = 0, sumY = 0;
         for (let i = 0; i < H * W; i++) {
             const on = at(i) ? 255 : 0;
-            if (on) setCount++;
+            if (on) { setCount++; sumX += i % W; sumY += (i / W) | 0; }
             idata[i * 4] = idata[i * 4 + 1] = idata[i * 4 + 2] = on; idata[i * 4 + 3] = 255;
         }
         mctx.putImageData(im, 0, 0);
@@ -576,7 +576,9 @@ window.AIEngine = (function () {
 
         const pct = Math.round(100 * setCount / (H * W));
         const sc = (scores[best] != null) ? Number(scores[best]).toFixed(2) : '?';
-        const dbg = `[dims ${m0.dims.join('x')} ${planar ? 'planar' : 'interl'} n${nMasks}]`;
+        const cenx = setCount ? (sumX / setCount / W).toFixed(2) : '?';
+        const ceny = setCount ? (sumY / setCount / H).toFixed(2) : '?';
+        const dbg = `[${planar ? 'pl' : 'in'} ${m0.dims.join('x')} click ${pt.nx.toFixed(2)},${pt.ny.toFixed(2)} centro ${cenx},${ceny}]`;
         if (setCount === 0) {
             onStatus && onStatus(`Nessun oggetto trovato qui (punteggio ${sc}). ${dbg}`);
         } else {
