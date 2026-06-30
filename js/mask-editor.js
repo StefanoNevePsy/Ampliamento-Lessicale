@@ -285,10 +285,10 @@
         // just picks the smallest detected region containing it.
         async function samClick(p) {
             if (samBusy) return;
-            if (!window.AIEngine || !window.AIEngine.panopticSegment) { setStatus('Segmentazione AI non disponibile.'); return; }
+            if (!window.AIEngine || !window.AIEngine.objectSegments) { setStatus('Segmentazione AI non disponibile.'); return; }
             samBusy = true;
             try {
-                const segs = await window.AIEngine.panopticSegment(opts.imageUrl, w, h, setStatus);
+                const segs = await window.AIEngine.objectSegments(opts.imageUrl, w, h, setStatus);
                 const idx = Math.min(w * h - 1, Math.max(0, p.y * w + p.x));
                 const hits = segs.filter(s => s.data[idx] > 127).sort((a, b) => a.area - b.area);
                 if (!hits.length) { setStatus('Nessun oggetto qui. Tocca 🐞 per vedere quelli rilevati.'); return; }
@@ -336,10 +336,10 @@
         }
         // Debug: overlay ALL detected objects, each in a distinct colour.
         async function samDebugOverlay() {
-            if (!window.AIEngine || !window.AIEngine.panopticSegment) { setStatus('Debug non disponibile.'); return; }
+            if (!window.AIEngine || !window.AIEngine.objectSegments) { setStatus('Debug non disponibile.'); return; }
             if (samBusy) return; samBusy = true;
             try {
-                const segs = await window.AIEngine.panopticSegment(opts.imageUrl, w, h, setStatus);
+                const segs = await window.AIEngine.objectSegments(opts.imageUrl, w, h, setStatus);
                 const o = ctxWork.createImageData(w, h); const od = o.data;
                 for (let i = 0; i < w * h; i++) { const j = i * 4; od[j] = base[j]; od[j + 1] = base[j + 1]; od[j + 2] = base[j + 2]; od[j + 3] = 255; }
                 segs.forEach((s, k) => { const c = _hue(k); for (let i = 0; i < w * h; i++) if (s.data[i] > 127) { const j = i * 4; od[j] = (od[j] + c[0] * 2) / 3; od[j + 1] = (od[j + 1] + c[1] * 2) / 3; od[j + 2] = (od[j + 2] + c[2] * 2) / 3; } });
@@ -542,6 +542,42 @@
         cx.putImageData(im, 0, 0);
         const url = c.toDataURL('image/png');
         c.width = c.height = 0; // hint the GC to release the backing store
+        return url;
+    };
+
+    // Headless AI highlight: keep the subject coloured, desaturate the background.
+    // Uses native ML Kit subject mask when available (stable), else RMBG. For bulk.
+    window.aiHighlightDataUrl = async function (imageUrl, onStatus) {
+        if (!window.AIEngine) throw new Error('Motore AI non disponibile');
+        const img = await _loadImage(imageUrl);
+        let w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+        if (w > MAX_DIM || h > MAX_DIM) {
+            const s = MAX_DIM / Math.max(w, h);
+            w = Math.round(w * s); h = Math.round(h * s);
+        }
+        let mask = null;
+        const native = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.NpuCutout;
+        if (native && native.subjectSegment && window.AIEngine.nativeSubjects) {
+            try { const r = await window.AIEngine.nativeSubjects(imageUrl, w, h, onStatus); if (r && r.foreground) mask = r.foreground.data; } catch (e) { /* fallback */ }
+        }
+        if (!mask) mask = await window.AIEngine.segmentSubject(imageUrl, w, h, onStatus);
+        if (!mask) return null;
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const cx = c.getContext('2d', { willReadFrequently: true });
+        cx.drawImage(img, 0, 0, w, h);
+        const im = cx.getImageData(0, 0, w, h);
+        const d = im.data;
+        for (let i = 0; i < w * h; i++) {
+            const j = i * 4, m = mask[i];
+            const g = (d[j] * 0.299 + d[j + 1] * 0.587 + d[j + 2] * 0.114) | 0;
+            d[j] = (d[j] * m + g * (255 - m)) / 255 | 0;
+            d[j + 1] = (d[j + 1] * m + g * (255 - m)) / 255 | 0;
+            d[j + 2] = (d[j + 2] * m + g * (255 - m)) / 255 | 0;
+        }
+        cx.putImageData(im, 0, 0);
+        const url = c.toDataURL('image/webp', 0.9);
+        c.width = c.height = 0;
         return url;
     };
 

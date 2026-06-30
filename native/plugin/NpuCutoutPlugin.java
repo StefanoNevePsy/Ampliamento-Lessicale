@@ -24,6 +24,12 @@ import java.util.HashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.segmentation.subject.Subject;
+import com.google.mlkit.vision.segmentation.subject.SubjectSegmentation;
+import com.google.mlkit.vision.segmentation.subject.SubjectSegmenter;
+import com.google.mlkit.vision.segmentation.subject.SubjectSegmenterOptions;
+
 import ai.onnxruntime.OnnxTensor;
 import ai.onnxruntime.OrtEnvironment;
 import ai.onnxruntime.OrtSession;
@@ -129,6 +135,91 @@ public class NpuCutoutPlugin extends Plugin {
         JSObject ret = new JSObject();
         ret.put("available", true);
         call.resolve(ret);
+    }
+
+    /**
+     * ML Kit Subject Segmentation: foreground mask + per-subject masks. On-device,
+     * GPU/NPU accelerated, no WebView memory limits. Returns base64 PNG masks.
+     */
+    @PluginMethod
+    public void subjectSegment(PluginCall call) {
+        Bitmap src = null;
+        try {
+            String dataUrl = call.getString("image");
+            if (dataUrl == null) { call.reject("missing image"); return; }
+            boolean multiple = call.getBoolean("multiple", true);
+            int comma = dataUrl.indexOf(',');
+            byte[] bytes = Base64.decode(comma >= 0 ? dataUrl.substring(comma + 1) : dataUrl, Base64.DEFAULT);
+            src = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+            if (src == null) { call.reject("image decode failed"); return; }
+
+            SubjectSegmenterOptions.Builder ob = new SubjectSegmenterOptions.Builder()
+                .enableForegroundConfidenceMask();
+            if (multiple) {
+                ob.enableMultipleSubjects(
+                    new SubjectSegmenterOptions.SubjectResultOptions.Builder()
+                        .enableConfidenceMask().build());
+            }
+            SubjectSegmenter segmenter = SubjectSegmentation.getClient(ob.build());
+            InputImage input = InputImage.fromBitmap(src, 0);
+            final int w = src.getWidth(), h = src.getHeight();
+            final Bitmap srcRef = src;
+
+            segmenter.process(input)
+                .addOnSuccessListener(result -> {
+                    try {
+                        JSObject ret = new JSObject();
+                        ret.put("width", w); ret.put("height", h);
+                        FloatBuffer fg = result.getForegroundConfidenceMask();
+                        if (fg != null) ret.put("foreground", floatMaskToPng(fg, 0, 0, w, h, w, h));
+
+                        JSArray subs = new JSArray();
+                        if (multiple && result.getSubjects() != null) {
+                            for (Subject s : result.getSubjects()) {
+                                FloatBuffer cm = s.getConfidenceMask();
+                                if (cm == null) continue;
+                                JSObject so = new JSObject();
+                                // Place the subject's local mask onto a full-size canvas
+                                so.put("mask", floatMaskToPng(cm, s.getStartX(), s.getStartY(), s.getWidth(), s.getHeight(), w, h));
+                                subs.put(so);
+                            }
+                        }
+                        ret.put("subjects", subs);
+                        srcRef.recycle();
+                        call.resolve(ret);
+                    } catch (Throwable e) {
+                        srcRef.recycle();
+                        call.reject("subject post-process: " + e.getMessage());
+                    }
+                })
+                .addOnFailureListener(e -> { srcRef.recycle(); call.reject("subject segmentation failed: " + e.getMessage()); });
+        } catch (Throwable e) {
+            if (src != null) src.recycle();
+            call.reject("subject segmentation: " + e.getMessage());
+        }
+    }
+
+    // Convert a ML Kit confidence FloatBuffer (region sw*sh at offset sx,sy) into a
+    // full fullW*fullH grayscale PNG (white = subject). Values are 0..1 confidences.
+    private String floatMaskToPng(FloatBuffer mask, int sx, int sy, int sw, int sh, int fullW, int fullH) {
+        mask.rewind();
+        int[] px = new int[fullW * fullH]; // default 0 (transparent/black)
+        for (int y = 0; y < sh; y++) {
+            for (int x = 0; x < sw; x++) {
+                float v = mask.get();
+                int a = Math.round(v * 255f); if (a < 0) a = 0; if (a > 255) a = 255;
+                int gx = sx + x, gy = sy + y;
+                if (gx >= 0 && gx < fullW && gy >= 0 && gy < fullH) {
+                    px[gy * fullW + gx] = (0xFF << 24) | (a << 16) | (a << 8) | a;
+                }
+            }
+        }
+        Bitmap bmp = Bitmap.createBitmap(fullW, fullH, Bitmap.Config.ARGB_8888);
+        bmp.setPixels(px, 0, fullW, 0, 0, fullW, fullH);
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        bmp.compress(Bitmap.CompressFormat.PNG, 100, bos);
+        bmp.recycle();
+        return "data:image/png;base64," + Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP);
     }
 
     /** Load (and cache) a model asset to verify it is bundled and whether NNAPI engaged. */

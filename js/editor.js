@@ -540,6 +540,40 @@ window.aiBatchScontornoEditor = async () => {
     alert(`Scontorno AI completato: ${done - failed} riuscite${failed ? `, ${failed} fallite` : ''}.`);
 };
 
+// Bulk AI highlight: keep the subject coloured, desaturate the background, for
+// every image. Uses the native ML Kit subject mask when available, else RMBG.
+// The result replaces item.url; item.originalUrl preserves the source.
+window.aiBatchHighlightEditor = async () => {
+    if (typeof aiHighlightDataUrl !== 'function') { alert('Editor AI non disponibile.'); return; }
+    const items = state.editingItems.filter(i => i.url && i.url.startsWith('data:'));
+    if (items.length === 0) { alert('Nessuna immagine da evidenziare.'); return; }
+    const proceed = (typeof themedConfirm === 'function')
+        ? await themedConfirm(`Evidenziare il soggetto in ${items.length} immagini?\nLo sfondo diventa bianco e nero. L'originale resta recuperabile.`)
+        : confirm(`Evidenziare il soggetto in ${items.length} immagini?`);
+    if (!proceed) return;
+
+    let done = 0, failed = 0;
+    showBackupProgress('Preparazione modello AI...', 0);
+    for (const item of items) {
+        const label = item.label || `#${done + 1}`;
+        try {
+            const pct = (done / items.length) * 100;
+            showBackupProgress(`Evidenzia AI: ${label} (${done + 1}/${items.length})`, pct);
+            const res = await aiHighlightDataUrl(item.url, (t) => showBackupProgress(`${t} — ${label} (${done + 1}/${items.length})`, pct));
+            if (res) { if (!item.originalUrl) item.originalUrl = item.url; item.url = res; delete item.maskedUrl; }
+            else failed++;
+        } catch (e) {
+            console.warn('bulk AI highlight failed for', label, e);
+            failed++;
+        }
+        done++;
+        await new Promise(r => setTimeout(r, 0));
+    }
+    hideBackupProgress();
+    renderEditorList();
+    alert(`Evidenzia AI completata: ${done - failed} riuscite${failed ? `, ${failed} fallite` : ''}.`);
+};
+
 // Toggle the editor thumbnails between originals and cut-outs (masked) so the
 // AI/bulk scontorno results can be reviewed at a glance.
 window.toggleEditorShowMasked = () => {

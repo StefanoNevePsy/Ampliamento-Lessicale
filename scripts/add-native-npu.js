@@ -105,16 +105,23 @@ const ORT_VERSION = '1.19.2';
 const gradlePath = path.join(androidDir, 'app', 'build.gradle');
 if (fs.existsSync(gradlePath)) {
     let g = fs.readFileSync(gradlePath, 'utf8');
-    if (!g.includes('onnxruntime-android')) {
-        const dep = `    // Native NPU/GPU subject segmentation (ONNX Runtime + NNAPI)\n` +
-                    `    implementation "com.microsoft.onnxruntime:onnxruntime-android:${ORT_VERSION}"\n`;
+    if (!g.includes('onnxruntime-android') || !g.includes('subject-segmentation')) {
+        let dep = '';
+        if (!g.includes('onnxruntime-android')) {
+            dep += `    // Native NPU/GPU background removal (ONNX Runtime + NNAPI)\n` +
+                   `    implementation "com.microsoft.onnxruntime:onnxruntime-android:${ORT_VERSION}"\n`;
+        }
+        if (!g.includes('subject-segmentation')) {
+            dep += `    // ML Kit on-device subject segmentation (GPU/NPU, distinguishes subjects)\n` +
+                   `    implementation "com.google.mlkit:subject-segmentation:16.0.0-beta1"\n`;
+        }
         if (/dependencies\s*\{/.test(g)) {
             g = g.replace(/dependencies\s*\{/, m => `${m}\n${dep}`);
             fs.writeFileSync(gradlePath, g, 'utf8');
-            console.log(`[npu] Added onnxruntime-android:${ORT_VERSION} to app/build.gradle`);
+            console.log(`[npu] Added native deps (ORT ${ORT_VERSION} + ML Kit subject-segmentation) to app/build.gradle`);
             changed = true;
         } else {
-            console.log('[npu] Could not find dependencies{} in app/build.gradle — add ORT manually.');
+            console.log('[npu] Could not find dependencies{} in app/build.gradle — add deps manually.');
         }
     }
 } else {

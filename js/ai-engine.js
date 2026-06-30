@@ -654,6 +654,51 @@ window.AIEngine = (function () {
         return { model: p._id, device: p._device };
     }
 
+    // Native ML Kit subject segmentation (on-device, GPU/NPU, distinguishes
+    // subjects). Returns { subjects: [{data,area}], foreground: {data,area} } or null.
+    let _subjCache = null;
+    async function _decodeMaskToUint8(url, w, h) {
+        const img = await _loadImg(url);
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        const cx = c.getContext('2d', { willReadFrequently: true });
+        cx.drawImage(img, 0, 0, w, h);
+        const d = cx.getImageData(0, 0, w, h).data;
+        const m = new Uint8Array(w * h); let area = 0;
+        for (let i = 0; i < w * h; i++) { m[i] = d[i * 4]; if (m[i] > 127) area++; }
+        return { data: m, area };
+    }
+    async function nativeSubjects(imageUrl, w, h, onStatus) {
+        const P = nativePlugin();
+        if (!P || !P.subjectSegment) return null;
+        if (_subjCache && _subjCache.url === imageUrl && _subjCache.w === w && _subjCache.h === h) return _subjCache.val;
+        onStatus && onStatus('Segmentazione soggetti (nativa)...');
+        const res = await P.subjectSegment({ image: imageUrl, multiple: true });
+        const subjects = [];
+        for (const s of (res.subjects || [])) { const dd = await _decodeMaskToUint8(s.mask, w, h); subjects.push({ ...dd, label: 'soggetto' }); }
+        const foreground = res.foreground ? await _decodeMaskToUint8(res.foreground, w, h) : null;
+        const val = { subjects, foreground };
+        _subjCache = { url: imageUrl, w, h, val };
+        return val;
+    }
+
+    // Unified object segmentation for the editor: native subjects first (stable,
+    // distinguishes subjects), panoptic as fallback. Returns [{data,area,label}].
+    async function objectSegments(imageUrl, w, h, onStatus) {
+        const P = nativePlugin();
+        if (P && P.subjectSegment) {
+            try {
+                const r = await nativeSubjects(imageUrl, w, h, onStatus);
+                if (r) {
+                    const segs = r.subjects.slice();
+                    if (r.foreground) segs.push({ ...r.foreground, label: 'soggetto (intero)' });
+                    if (segs.length) return segs;
+                }
+            } catch (e) { console.warn('native subjects failed, falling back to panoptic:', e); }
+        }
+        return panopticSegment(imageUrl, w, h, onStatus);
+    }
+    function objectSegmentsReset() { _subjCache = null; _panCache = null; }
+
     // Debug: return ALL of SAM's candidate masks for a point, each resized to w*h.
     // Lets the UI overlay them in different colours to see what the model produces.
     async function samDebugMasks(imageUrl, pt, w, h, onStatus) {
@@ -772,6 +817,7 @@ window.AIEngine = (function () {
         loadTransformers, getSegmenter, segmentSubject, preload, preloadNative, preloadWeb, status, unload,
         samPredict, samDebugMasks, preloadSam,
         panopticSegment, panopticReset, preloadPanoptic,
+        nativeSubjects, objectSegments, objectSegmentsReset,
         SEG_MODELS
     };
 })();
