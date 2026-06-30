@@ -490,6 +490,44 @@ window.batchScontornoEditor = async () => {
     renderEditorList();
 };
 
+// Bulk AI scontorno: removes the background of every image in the set using the
+// AI model, loaded ONCE and reused. Processes one image at a time and yields
+// between them so memory stays bounded (no all-at-once decode/compose).
+window.aiBatchScontornoEditor = async () => {
+    if (typeof aiCutoutDataUrl !== 'function') { alert('Editor AI non disponibile.'); return; }
+    const items = state.editingItems.filter(i => i.url && i.url.startsWith('data:') && !i.maskedUrl);
+    if (items.length === 0) {
+        alert('Nessuna immagine da scontornare (sono già tutte scontornate, o mancano le immagini).');
+        return;
+    }
+    const proceed = (typeof themedConfirm === 'function')
+        ? await themedConfirm(`Scontornare ${items.length} immagini con l'AI?\nIl modello viene caricato una sola volta. Su molte immagini può richiedere qualche minuto.`)
+        : confirm(`Scontornare ${items.length} immagini con l'AI?`);
+    if (!proceed) return;
+
+    let done = 0, failed = 0;
+    showBackupProgress('Preparazione modello AI...', 0);
+    for (const item of items) {
+        const label = item.label || `#${done + 1}`;
+        try {
+            const pct = (done / items.length) * 100;
+            showBackupProgress(`Scontorno AI: ${label} (${done + 1}/${items.length})`, pct);
+            const res = await aiCutoutDataUrl(item.url, (t) => showBackupProgress(`${t} — ${label} (${done + 1}/${items.length})`, pct));
+            if (res) item.maskedUrl = res; else failed++;
+        } catch (e) {
+            console.warn('bulk AI scontorno failed for', label, e);
+            failed++;
+        }
+        done++;
+        // Yield to the event loop so the UI updates and the GC can reclaim the
+        // per-image canvas/ImageData before the next one.
+        await new Promise(r => setTimeout(r, 0));
+    }
+    hideBackupProgress();
+    renderEditorList();
+    alert(`Scontorno AI completato: ${done - failed} riuscite${failed ? `, ${failed} fallite` : ''}.`);
+};
+
 window.openScontornoSettings = async () => {
     const current = getScontornoTolerance();
     const val = await themedPrompt('Tolleranza scontorno (5-80).\nBassa = conservativo, Alta = aggressivo:', String(current));

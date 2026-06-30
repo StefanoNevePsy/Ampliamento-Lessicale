@@ -372,6 +372,7 @@
                  <button class="btn btn-ghost" onclick="document.getElementById('bulk-upload').click()"><i class="fa-solid fa-images"></i> Carica Immagini (Bulk)</button>
                  <input type="file" id="bulk-upload" class="hidden" multiple accept="image/*" onchange="bulkUploadImages(this)">
                  <button class="btn btn-ghost" onclick="openBulkPollinations()" style="color:var(--accent-color); border-color:rgba(99,102,241,0.3);"><i class="fa-solid fa-wand-magic-sparkles"></i> Genera Immagini AI</button>
+                 <button class="btn btn-ghost" onclick="aiBatchScontornoEditor()" style="color:#a78bfa; border-color:rgba(167,139,250,0.3);" title="Rimuovi lo sfondo a tutte le immagini con l'AI (modello caricato una volta)"><i class="fa-solid fa-robot"></i> Scontorno AI (Bulk)</button>
             </div>
             <div id="editor-list"></div>
             <div style="display:flex; gap:8px; margin-top:20px;">

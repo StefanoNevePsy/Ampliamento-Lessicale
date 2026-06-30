@@ -333,4 +333,33 @@
         };
     };
 
+    // Headless AI cutout: run segmentation on an image URL and return a
+    // transparent PNG dataURL (soft alpha). Used by bulk scontorno. Processes a
+    // single image; the caller loops sequentially so memory stays bounded and
+    // the AIEngine model is loaded once and reused.
+    window.aiCutoutDataUrl = async function (imageUrl, onStatus) {
+        if (!window.AIEngine) throw new Error('Motore AI non disponibile');
+        const img = await _loadImage(imageUrl);
+        let w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+        if (w > MAX_DIM || h > MAX_DIM) {
+            const s = MAX_DIM / Math.max(w, h);
+            w = Math.round(w * s); h = Math.round(h * s);
+        }
+        const mask = await window.AIEngine.segmentSubject(imageUrl, w, h, onStatus);
+        if (!mask) return null;
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const cx = c.getContext('2d', { willReadFrequently: true });
+        cx.drawImage(img, 0, 0, w, h);
+        const im = cx.getImageData(0, 0, w, h);
+        const d = im.data;
+        for (let i = 0; i < w * h; i++) {
+            d[i * 4 + 3] = (d[i * 4 + 3] * mask[i] / 255) | 0; // soft alpha
+        }
+        cx.putImageData(im, 0, 0);
+        const url = c.toDataURL('image/png');
+        c.width = c.height = 0; // hint the GC to release the backing store
+        return url;
+    };
+
 })();

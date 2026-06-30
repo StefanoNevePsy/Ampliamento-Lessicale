@@ -21,6 +21,8 @@ import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import ai.onnxruntime.OnnxTensor;
 import ai.onnxruntime.OrtEnvironment;
@@ -44,6 +46,10 @@ public class NpuCutoutPlugin extends Plugin {
     private OrtEnvironment env;
     private final HashMap<String, OrtSession> sessions = new HashMap<>();
     private final HashMap<String, Boolean> nnapiUsed = new HashMap<>();
+    // Single background thread: keeps heavy model load/inference OFF the UI
+    // thread and serializes calls so the model is loaded once and reused
+    // (ideal for bulk processing).
+    private final ExecutorService exec = Executors.newSingleThreadExecutor();
 
     private OrtEnvironment env() {
         if (env == null) env = OrtEnvironment.getEnvironment();
@@ -110,21 +116,24 @@ public class NpuCutoutPlugin extends Plugin {
     /** Load (and cache) a model asset to verify it is bundled and whether NNAPI engaged. */
     @PluginMethod
     public void prepare(PluginCall call) {
-        try {
-            String assetName = call.getString("assetName", "rmbg-2.0.onnx");
-            session(assetName); // throws if the asset is missing or fails to load
-            JSObject ret = new JSObject();
-            ret.put("ok", true);
-            ret.put("asset", assetName);
-            ret.put("accelerator", Boolean.TRUE.equals(nnapiUsed.get(assetName)) ? "nnapi" : "cpu");
-            call.resolve(ret);
-        } catch (Throwable e) {
-            call.reject("prepare failed: " + e.getMessage());
-        }
+        exec.execute(() -> {
+            try {
+                String assetName = call.getString("assetName", "rmbg-2.0.onnx");
+                session(assetName); // throws if the asset is missing or fails to load
+                JSObject ret = new JSObject();
+                ret.put("ok", true);
+                ret.put("asset", assetName);
+                ret.put("accelerator", Boolean.TRUE.equals(nnapiUsed.get(assetName)) ? "nnapi" : "cpu");
+                call.resolve(ret);
+            } catch (Throwable e) {
+                call.reject("prepare failed: " + e.getMessage());
+            }
+        });
     }
 
     @PluginMethod
     public void removeBackground(PluginCall call) {
+      exec.execute(() -> {
         try {
             String dataUrl = call.getString("image");
             if (dataUrl == null) { call.reject("missing image"); return; }
@@ -201,6 +210,7 @@ public class NpuCutoutPlugin extends Plugin {
             // PluginCall.reject has no (String, Throwable) overload; pass the message only.
             call.reject("npu cutout failed: " + e.getMessage());
         }
+      });
     }
 
     private float[] readVec3(JSArray a, float d0, float d1, float d2) {
