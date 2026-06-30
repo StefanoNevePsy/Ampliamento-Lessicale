@@ -314,6 +314,31 @@ window.AIEngine = (function () {
         });
     }
 
+    // IEEE-754 float32 <-> float16 (half) conversions for fp16 ONNX models whose
+    // input/output tensors are float16 (ORT-Web represents them as Uint16Array).
+    const _f32buf = new Float32Array(1), _u32buf = new Uint32Array(_f32buf.buffer);
+    function _f32tof16(val) {
+        _f32buf[0] = val; const i = _u32buf[0];
+        const sign = (i >> 16) & 0x8000;
+        let exp = ((i >> 23) & 0xff) - 127 + 15;
+        const mant = i & 0x7fffff;
+        if (exp <= 0) return sign;            // underflow -> signed zero
+        if (exp >= 31) return sign | 0x7c00;  // overflow -> inf
+        return sign | (exp << 10) | (mant >> 13);
+    }
+    function _f16tof32(h) {
+        const sign = (h & 0x8000) << 16;
+        let exp = (h >> 10) & 0x1f;
+        let mant = h & 0x3ff;
+        let f;
+        if (exp === 0) {
+            if (mant === 0) { f = sign; }
+            else { exp = 1; while ((mant & 0x400) === 0) { mant <<= 1; exp--; } mant &= 0x3ff; f = sign | ((exp - 15 + 127) << 23) | (mant << 13); }
+        } else if (exp === 31) { f = sign | 0x7f800000 | (mant << 13); }
+        else { f = sign | ((exp - 15 + 127) << 23) | (mant << 13); }
+        _u32buf[0] = f; return _f32buf[0];
+    }
+
     async function _loadOrt(onStatus) {
         if (_ort) return _ort;
         onStatus && onStatus('Caricamento runtime WebGPU (ORT)...');
@@ -376,12 +401,28 @@ window.AIEngine = (function () {
         }
 
         onStatus && onStatus('Analisi immagine sulla GPU (WebGPU)...');
-        const input = new ort.Tensor('float32', data, [1, 3, size, size]);
-        const feeds = {}; feeds[sess.inputNames[0]] = input;
-        const out = await sess.run(feeds);
+        const dims = [1, 3, size, size];
+        const inName = sess.inputNames[0];
+        let out;
+        try {
+            const feeds = {}; feeds[inName] = new ort.Tensor('float32', data, dims);
+            out = await sess.run(feeds);
+        } catch (e) {
+            // Some fp16 ONNX expect a float16 input tensor — retry in fp16.
+            const half = new Uint16Array(data.length);
+            for (let i = 0; i < data.length; i++) half[i] = _f32tof16(data[i]);
+            const feeds = {}; feeds[inName] = new ort.Tensor('float16', half, dims);
+            out = await sess.run(feeds);
+        }
         const t = out[sess.outputNames[0]];
-        const od = t.data;
-        if (!(od instanceof Float32Array)) throw new Error('Output ORT non float32 (' + t.type + ')');
+        let od = t.data;
+        if (od instanceof Uint16Array) {            // float16 output -> float32
+            const f = new Float32Array(od.length);
+            for (let i = 0; i < od.length; i++) f[i] = _f16tof32(od[i]);
+            od = f;
+        } else if (!(od instanceof Float32Array)) {
+            throw new Error('Output ORT non gestito (' + t.type + ')');
+        }
 
         // Auto-detect sigmoid (logits vs probabilities)
         let mn = Infinity, mx = -Infinity;
