@@ -145,6 +145,29 @@
         const statusEl = overlay.querySelector('#me-status');
         const setStatus = (t) => { statusEl.textContent = t || ''; };
 
+        // --- Brush-size cursor preview (circle following the pointer) ---
+        const brushCursor = document.createElement('div');
+        brushCursor.style.cssText = 'position:fixed; pointer-events:none; border:2px solid rgba(255,255,255,0.95); box-shadow:0 0 0 1px rgba(0,0,0,0.7), inset 0 0 0 1px rgba(0,0,0,0.7); border-radius:50%; transform:translate(-50%,-50%); display:none; z-index:100002;';
+        document.body.appendChild(brushCursor);
+        function brushDisplayDiameter() {
+            const r = canvas.getBoundingClientRect();
+            return brushSize * 2 * (r.width / w);
+        }
+        function showBrushCursorAt(clientX, clientY) {
+            const d = brushDisplayDiameter();
+            brushCursor.style.width = d + 'px';
+            brushCursor.style.height = d + 'px';
+            brushCursor.style.left = clientX + 'px';
+            brushCursor.style.top = clientY + 'px';
+            brushCursor.style.display = 'block';
+        }
+        function updateBrushCursor(ev) {
+            if (tool !== 'brush') { brushCursor.style.display = 'none'; return; }
+            showBrushCursorAt(ev.touches ? ev.touches[0].clientX : ev.clientX,
+                              ev.touches ? ev.touches[0].clientY : ev.clientY);
+        }
+        const hideBrushCursor = () => { brushCursor.style.display = 'none'; };
+
         // --- Preview compositing ---
         const outImg = ctxWork.createImageData(w, h);
         const out = outImg.data;
@@ -249,6 +272,13 @@
         canvas.addEventListener('touchmove', onMove, { passive: false });
         canvas.addEventListener('touchend', onUp);
 
+        // Brush-size cursor preview follows the pointer over the canvas
+        canvas.addEventListener('mousemove', updateBrushCursor);
+        canvas.addEventListener('mouseenter', updateBrushCursor);
+        canvas.addEventListener('mouseleave', hideBrushCursor);
+        canvas.addEventListener('touchmove', updateBrushCursor, { passive: false });
+        canvas.addEventListener('touchstart', updateBrushCursor, { passive: false });
+
         // --- Toolbar wiring ---
         function refreshToolButtons() {
             overlay.querySelectorAll('.me-tool').forEach(b => {
@@ -262,10 +292,15 @@
             overlay.querySelector('#me-tol-wrap').style.display = tool === 'wand' ? 'flex' : 'none';
             overlay.querySelector('#me-brush-wrap').style.display = tool === 'brush' ? 'flex' : 'none';
         }
-        overlay.querySelectorAll('.me-tool').forEach(b => b.onclick = () => { tool = b.dataset.tool; refreshToolButtons(); });
+        overlay.querySelectorAll('.me-tool').forEach(b => b.onclick = () => { tool = b.dataset.tool; if (tool !== 'brush') hideBrushCursor(); refreshToolButtons(); });
         overlay.querySelectorAll('.me-effect').forEach(b => b.onclick = () => { effect = parseInt(b.dataset.effect) ? 255 : 0; refreshToolButtons(); });
         overlay.querySelector('#me-tol').oninput = (e) => { tolerance = parseInt(e.target.value); };
-        overlay.querySelector('#me-brush').oninput = (e) => { brushSize = parseInt(e.target.value); };
+        overlay.querySelector('#me-brush').oninput = (e) => {
+            brushSize = parseInt(e.target.value);
+            // Show a centered preview circle while adjusting so the size is visible
+            const r = canvas.getBoundingClientRect();
+            showBrushCursorAt(r.left + r.width / 2, r.top + r.height / 2);
+        };
         overlay.querySelector('#me-invert').onclick = () => { for (let i = 0; i < mask.length; i++) mask[i] = 255 - mask[i]; scheduleRender(); };
         overlay.querySelector('#me-reset').onclick = () => { mask.fill(mode === 'cutout' ? 255 : 0); scheduleRender(); };
         refreshToolButtons();
@@ -322,6 +357,7 @@
 
         const close = () => {
             window.removeEventListener('mouseup', onUp);
+            brushCursor.remove();
             overlay.remove();
         };
         overlay.querySelector('#me-cancel').onclick = close;
