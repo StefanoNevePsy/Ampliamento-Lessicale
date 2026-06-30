@@ -26,8 +26,15 @@ function imgUrl(o) {
     if (!o) return getPlaceholderUrl('');
     return preferScontorno(o, o.url || getPlaceholderUrl(o.label));
 }
+// True when the cut-out (transparent) image is actually being shown for this
+// item — so the surrounding card should be transparent (canvas background),
+// not white.
+function showingScontorno(item) {
+    return !!(item && item.maskedUrl && getUseScontornoEverywhere());
+}
 window.preferScontorno = preferScontorno;
 window.imgUrl = imgUrl;
+window.showingScontorno = showingScontorno;
 
 function getScontornoTolerance() {
     return parseInt(localStorage.getItem('scontorno_tolerance')) || 35;

@@ -312,6 +312,56 @@ async function generateCloudflareImage(prompt, style) {
     return `data:${mime};base64,${b64}`;
 }
 
+// Google "Nano Banana 2 Lite" (gemini-3.1-flash-lite-image) via the Gemini API.
+// PAID model (no free tier for image generation) — needs a key with billing on.
+const GEMINI_IMAGE_MODEL = 'gemini-3.1-flash-lite-image';
+async function generateGeminiImage(prompt, style) {
+    const key = (typeof getGeminiApiKey === 'function') ? getGeminiApiKey() : '';
+    if (!key) throw new Error('Chiave API Gemini non configurata. Vai in Impostazioni > API.');
+
+    const parts = [prompt, 'isolated on pure white background, centered, studio lighting, no shadow, single subject'];
+    if (style) { const s = POLL_STYLES.find(st => st.id === style); if (s) parts.push(s.prompt); }
+    const fullPrompt = parts.join(', ');
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent?key=${encodeURIComponent(key)}`;
+    let response;
+    try {
+        response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: fullPrompt }] }],
+                generationConfig: { responseModalities: ['IMAGE'] }
+            })
+        });
+    } catch (e) {
+        throw new Error('Impossibile contattare l\'API Gemini. Verifica la connessione.');
+    }
+
+    if (!response.ok) {
+        let msg = '';
+        try { const d = await response.json(); msg = (d.error && d.error.message) || JSON.stringify(d); }
+        catch (_) { msg = await response.text().catch(() => ''); }
+        if (response.status === 429) throw new Error('Rate limit Gemini. Riprova tra poco.');
+        if (response.status === 403 || /billing|FAILED_PRECONDITION|not enabled/i.test(msg)) {
+            throw new Error('Nano Banana 2 Lite richiede la fatturazione attiva sul progetto Google (modello a pagamento).');
+        }
+        throw new Error(`Errore Gemini (${response.status}): ${String(msg).slice(0, 300)}`);
+    }
+
+    const data = await response.json();
+    const cand = data.candidates && data.candidates[0];
+    const outParts = (cand && cand.content && cand.content.parts) || [];
+    const imgPart = outParts.find(p => p.inlineData || p.inline_data);
+    const inline = imgPart && (imgPart.inlineData || imgPart.inline_data);
+    if (!inline || !inline.data) {
+        const fr = cand && (cand.finishReason || cand.finish_reason);
+        throw new Error('Nessuna immagine restituita da Gemini' + (fr ? ` (${fr})` : '') + '. Il prompt potrebbe essere stato rifiutato.');
+    }
+    const mime = inline.mimeType || inline.mime_type || 'image/png';
+    return `data:${mime};base64,${inline.data}`;
+}
+
 // --- SINGLE ITEM IMAGE GENERATOR (with tabs: Pixabay / Openverse / Cloudflare) ---
 let _pollSelectedStyle = null;
 let _pollLastImageUrl = null;
@@ -334,6 +384,7 @@ window.openPollinationsGenerator = (itemIndex) => {
 
     const hasPixabay = !!getPixabayApiKey();
     const hasCloudflare = !!getCloudflareWorkerUrl();
+    const hasGeminiKey = typeof getGeminiApiKey === 'function' && !!getGeminiApiKey();
 
     modal.innerHTML = `
         <div style="width:100%; max-width:540px; background:#1e1e2f; border-radius:16px; border:1px solid var(--glass-border); padding:24px; max-height:90vh; overflow-y:auto;">
@@ -355,6 +406,9 @@ window.openPollinationsGenerator = (itemIndex) => {
                 </button>
                 <button class="img-src-tab ${_imgGenTab === 'cloudflare' ? 'active' : ''}" onclick="switchImgGenTab('cloudflare', ${itemIndex})" style="padding:6px 12px; border:none; border-radius:8px 8px 0 0; background:${_imgGenTab === 'cloudflare' ? 'rgba(99,102,241,0.2)' : 'transparent'}; color:${_imgGenTab === 'cloudflare' ? 'var(--accent-color)' : 'var(--text-secondary)'}; cursor:pointer; font-size:0.8rem; font-weight:600;">
                     <i class="fa-solid fa-cloud"></i> Cloudflare ${!hasCloudflare ? '<span style="font-size:0.6rem; opacity:0.5;">(no url)</span>' : ''}
+                </button>
+                <button class="img-src-tab ${_imgGenTab === 'gemini' ? 'active' : ''}" onclick="switchImgGenTab('gemini', ${itemIndex})" style="padding:6px 12px; border:none; border-radius:8px 8px 0 0; background:${_imgGenTab === 'gemini' ? 'rgba(99,102,241,0.2)' : 'transparent'}; color:${_imgGenTab === 'gemini' ? 'var(--accent-color)' : 'var(--text-secondary)'}; cursor:pointer; font-size:0.8rem; font-weight:600;">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Gemini ${!hasGeminiKey ? '<span style="font-size:0.6rem; opacity:0.5;">(no key)</span>' : ''}
                 </button>
             </div>
 
@@ -434,6 +488,28 @@ window.openPollinationsGenerator = (itemIndex) => {
                 </div>
             </div>
 
+            <!-- Gemini (Nano Banana 2 Lite) tab -->
+            <div id="img-tab-gemini" style="${_imgGenTab !== 'gemini' ? 'display:none;' : ''}">
+                <div style="background:rgba(66,133,244,0.1); border:1px solid rgba(66,133,244,0.3); border-radius:10px; padding:6px 10px; margin-bottom:10px; font-size:0.74rem; color:#8ab4f8;">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Google <b>Nano Banana 2 Lite</b> &mdash; a pagamento (richiede chiave Gemini con fatturazione attiva, ~0,034$/1000 immagini).
+                </div>
+                <label style="font-size:0.8rem; color:#aaa;">Prompt</label>
+                <textarea id="gemini-prompt" rows="2" style="width:100%; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.95rem; resize:vertical; font-family:inherit; margin-bottom:6px;">${escapeHtml(item.label)}</textarea>
+                <label style="display:flex; align-items:center; gap:6px; font-size:0.78rem; color:#aaa; margin-bottom:10px; cursor:pointer;">
+                    <input type="checkbox" id="gemini-autotranslate" checked style="width:15px; height:15px; accent-color:var(--accent-color);">
+                    Traduci automaticamente in inglese prima di generare
+                </label>
+                <label style="font-size:0.8rem; color:#aaa;">Stile</label>
+                <div id="gemini-styles" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;">
+                    ${POLL_STYLES.map(s => `
+                        <div class="poll-style-btn" data-style-id="${s.id}" onclick="selectPollStyle(this)"
+                             style="border-color:${s.color}40;">
+                            <i class="fa-solid ${s.icon}" style="color:${s.color};"></i> ${s.label}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+
             <!-- Shared preview/status -->
             <div id="poll-preview" style="display:none; text-align:center; margin-bottom:12px;">
                 <img id="poll-preview-img" src="" style="max-width:100%; max-height:250px; border-radius:10px; border:2px solid var(--glass-border);">
@@ -474,7 +550,7 @@ window.openPollinationsGenerator = (itemIndex) => {
 
 window.switchImgGenTab = (tab, itemIndex) => {
     _imgGenTab = tab;
-    ['pixabay', 'arasaac', 'openverse', 'cloudflare'].forEach(t => {
+    ['pixabay', 'arasaac', 'openverse', 'cloudflare', 'gemini'].forEach(t => {
         const el = document.getElementById('img-tab-' + t);
         if (el) el.style.display = t === tab ? '' : 'none';
     });
@@ -707,10 +783,11 @@ window.runImageGeneration = async (itemIndex) => {
     const tab = _imgGenTab;
     if (tab === 'pixabay') return;
 
-    const promptEl = document.getElementById('cloudflare-prompt');
+    const isGemini = tab === 'gemini';
+    const promptEl = document.getElementById(isGemini ? 'gemini-prompt' : 'cloudflare-prompt');
     const prompt = promptEl?.value?.trim();
     if (!prompt) { alert('Inserisci un prompt.'); return; }
-    const autoTranslate = document.getElementById('cf-autotranslate')?.checked !== false;
+    const autoTranslate = document.getElementById(isGemini ? 'gemini-autotranslate' : 'cf-autotranslate')?.checked !== false;
 
     const genBtn = document.getElementById('poll-generate-btn');
     const status = document.getElementById('poll-status');
@@ -727,9 +804,11 @@ window.runImageGeneration = async (itemIndex) => {
 
     try {
         const finalPrompt = autoTranslate ? await translateSingleLabel(prompt) : prompt;
-        document.getElementById('poll-status-text').textContent = `Generazione in corso (Cloudflare Flux)...`;
+        document.getElementById('poll-status-text').textContent = `Generazione in corso (${isGemini ? 'Nano Banana 2 Lite' : 'Cloudflare Flux'})...`;
 
-        const imageUrl = await generateCloudflareImage(finalPrompt, _pollSelectedStyle);
+        const imageUrl = isGemini
+            ? await generateGeminiImage(finalPrompt, _pollSelectedStyle)
+            : await generateCloudflareImage(finalPrompt, _pollSelectedStyle);
         _pollLastImageUrl = imageUrl;
 
         document.getElementById('poll-preview-img').src = imageUrl;
@@ -795,6 +874,7 @@ window.openBulkPollinations = () => {
 
     const hasPixabay = !!getPixabayApiKey();
     const hasCloudflare = !!getCloudflareWorkerUrl();
+    const hasGeminiKey = typeof getGeminiApiKey === 'function' && !!getGeminiApiKey();
 
     modal.innerHTML = `
         <div style="width:100%; max-width:500px; background:#1e1e2f; border-radius:16px; border:1px solid var(--glass-border); padding:24px; max-height:90vh; overflow-y:auto;">
@@ -806,7 +886,8 @@ window.openBulkPollinations = () => {
             <label style="font-size:0.8rem; color:#aaa;">Sorgente immagini</label>
             <div style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">
                 ${hasCloudflare ? `<button class="btn btn-ghost bulk-engine-btn selected" data-engine="cloudflare" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-cloud"></i> Cloudflare Flux</button>` : ''}
-                ${hasPixabay ? `<button class="btn btn-ghost bulk-engine-btn ${!hasCloudflare ? 'selected' : ''}" data-engine="pixabay" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-search"></i> Pixabay</button>` : ''}
+                ${hasGeminiKey ? `<button class="btn btn-ghost bulk-engine-btn ${!hasCloudflare ? 'selected' : ''}" data-engine="gemini" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;" title="A pagamento (fatturazione attiva)"><i class="fa-solid fa-wand-magic-sparkles"></i> Nano Banana</button>` : ''}
+                ${hasPixabay ? `<button class="btn btn-ghost bulk-engine-btn ${!hasCloudflare && !hasGeminiKey ? 'selected' : ''}" data-engine="pixabay" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-search"></i> Pixabay</button>` : ''}
                 <button class="btn btn-ghost bulk-engine-btn ${!hasCloudflare && !hasPixabay ? 'selected' : ''}" data-engine="arasaac" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-icons"></i> ARASAAC</button>
                 <button class="btn btn-ghost bulk-engine-btn" data-engine="openverse" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-images"></i> Openverse</button>
             </div>
@@ -873,11 +954,13 @@ window.openBulkPollinations = () => {
 window.selectBulkEngine = (el) => {
     document.querySelectorAll('.bulk-engine-btn').forEach(b => b.classList.remove('selected'));
     el.classList.add('selected');
-    const isCf = el.dataset.engine === 'cloudflare';
+    const engine = el.dataset.engine;
+    const isCf = engine === 'cloudflare';
+    const usesStyles = isCf || engine === 'gemini'; // AI generators use style prompts
     const cfSection = document.getElementById('bulk-cf-model-section');
     if (cfSection) cfSection.style.display = isCf ? '' : 'none';
     const stylesSection = document.getElementById('bulk-styles-section');
-    if (stylesSection) stylesSection.style.display = isCf ? '' : 'none';
+    if (stylesSection) stylesSection.style.display = usesStyles ? '' : 'none';
 };
 
 window.closeBulkPollinations = () => {
@@ -895,7 +978,7 @@ window.runBulkPollGeneration = async () => {
     const engine = document.querySelector('.bulk-engine-btn.selected')?.dataset?.engine || (getCloudflareWorkerUrl() ? 'cloudflare' : 'pixabay');
 
     const selectedStyles = [];
-    if (engine === 'cloudflare') {
+    if (engine === 'cloudflare' || engine === 'gemini') {
         document.querySelectorAll('#bulk-poll-styles .poll-style-btn.selected').forEach(btn => {
             selectedStyles.push(btn.dataset.styleId);
         });
@@ -972,6 +1055,8 @@ window.runBulkPollGeneration = async () => {
                 } else {
                     throw new Error('Nessun pittogramma');
                 }
+            } else if (engine === 'gemini') {
+                imageUrl = await generateGeminiImage(translatedLabel, randomStyle);
             } else {
                 imageUrl = await generateCloudflareImage(translatedLabel, randomStyle);
             }
@@ -986,7 +1071,7 @@ window.runBulkPollGeneration = async () => {
         log.scrollTop = log.scrollHeight;
 
         if (_bulkPollGenerating && completed < items.length) {
-            const delay = engine === 'cloudflare' ? 800 : 500;
+            const delay = (engine === 'cloudflare' || engine === 'gemini') ? 800 : 500;
             await new Promise(r => setTimeout(r, delay));
         }
     }

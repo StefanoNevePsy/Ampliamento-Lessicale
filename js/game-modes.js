@@ -256,7 +256,7 @@ function updateRanContent() {
                     grid-template-rows:repeat(${rows}, minmax(80px, 1fr));
                     gap:10px; overflow-y:auto;">
             ${items.map(x => `
-                <div style="background:white; border-radius:8px; padding:4px; display:flex; align-items:center; justify-content:center; min-height:0; min-width:0; overflow:hidden; box-shadow:0 2px 5px rgba(0,0,0,0.2);">
+                <div style="background:${showingScontorno(x) ? 'transparent' : 'white'}; border-radius:8px; padding:4px; display:flex; align-items:center; justify-content:center; min-height:0; min-width:0; overflow:hidden; ${showingScontorno(x) ? '' : 'box-shadow:0 2px 5px rgba(0,0,0,0.2);'}">
                     <img src="${imgUrl(x)}" style="max-width:100%; max-height:100%; object-fit:contain;" onerror="handleImgError(this,'${x.label}')">
                 </div>
             `).join('')}
@@ -270,7 +270,7 @@ function updateRanContent() {
         <div class="ran-single-stage">
             <div style="flex:1; display:flex; flex-direction:column; justify-content:center; width:100%; overflow:hidden;">
                 <img src="${imgUrl(x)}"
-                     class="ran-main-img ${feedbackClass}"
+                     class="ran-main-img ${showingScontorno(x) ? 'cutout' : ''} ${feedbackClass}"
                      style="transition:0.3s;"
                      onerror="handleImgError(this,'${x.label}')">
                 <h2 style="text-align:center;">${x.label}</h2>
@@ -328,7 +328,7 @@ function renderRanIntensivo(items, stage) {
             <div class="ran-single-stage">
                 <div style="flex:1; display:flex; flex-direction:column; justify-content:center; width:100%; overflow:hidden;">
                     <img src="${imgUrl(current)}"
-                         class="ran-main-img"
+                         class="ran-main-img ${showingScontorno(current) ? 'cutout' : ''}"
                          style="transition:0.3s;"
                          onerror="handleImgError(this,'${current.label}')">
                     <h2 style="text-align:center;">${current.label}</h2>
