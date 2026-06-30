@@ -538,23 +538,29 @@ window.AIEngine = (function () {
         const md = m0.data;
         const scores = (outputs.iou_scores && outputs.iou_scores.data) || [1];
         const nMasks = scores.length || 1;
-        let best = 0; for (let i = 1; i < nMasks; i++) if ((scores[i] || 0) > (scores[best] || 0)) best = i;
 
         // Figure out the layout from dims (drop the batch dim if present). The
-        // mask-count dim is the one equal to nMasks; the other two are H,W. It
-        // can be planar [nMasks,H,W] (index = best*H*W + i) or interleaved
-        // [H,W,nMasks] (index = i*nMasks + best). Getting this wrong gives a
-        // sheared/blocky mask, so detect it explicitly.
+        // mask-count dim equals nMasks; the other two are H,W. Planar
+        // [nMasks,H,W] (k*H*W + i) or interleaved [H,W,nMasks] (i*nMasks + k).
         let d = Array.from(m0.dims);
-        if (d.length === 4) d = d.slice(1);          // [batch,...] -> [...]
+        if (d.length === 4) d = d.slice(1);
         let H, W, planar;
         if (d.length === 3 && d[0] === nMasks) { planar = true; H = d[1]; W = d[2]; }
         else if (d.length === 3 && d[2] === nMasks) { planar = false; H = d[0]; W = d[1]; }
-        else { // fallback: assume planar, spatial = largest two dims
-            const big = d.filter(x => x !== nMasks);
-            H = big[0] || d[d.length - 2]; W = big[1] || d[d.length - 1]; planar = true;
-        }
-        const at = (i) => planar ? md[best * H * W + i] : md[i * nMasks + best];
+        else { const big = d.filter(x => x !== nMasks); H = big[0] || d[d.length - 2]; W = big[1] || d[d.length - 1]; planar = true; }
+        const maskAt = (k, i) => planar ? md[k * H * W + i] : md[i * nMasks + k];
+
+        // SAM returns 3 masks at different scales (subpart / part / whole). The
+        // max-IoU one is usually the WHOLE scene, so a click on a small object
+        // selects everything. Instead pick the SMALLEST mask above a minimum
+        // area, i.e. the specific object under the click.
+        const areas = new Array(nMasks).fill(0);
+        for (let k = 0; k < nMasks; k++) for (let i = 0; i < H * W; i++) if (maskAt(k, i)) areas[k]++;
+        const minA = 0.001 * H * W;                 // ignore degenerate tiny masks
+        let best = -1;
+        for (let k = 0; k < nMasks; k++) if (areas[k] >= minA && (best < 0 || areas[k] < areas[best])) best = k;
+        if (best < 0) { best = 0; for (let k = 1; k < nMasks; k++) if (areas[k] > areas[best]) best = k; }
+        const at = (i) => maskAt(best, i);
 
         // Rasterize the chosen mask, count pixels (diagnostics), resize to w*h
         const mc = document.createElement('canvas'); mc.width = W; mc.height = H;
