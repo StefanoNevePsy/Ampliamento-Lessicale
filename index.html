@@ -497,11 +497,12 @@
                     <option value="briaai/RMBG-2.0">RMBG-2.0 (briaai, solo nativo)</option>
                     <option value="">Automatico (prova 2.0, poi 1.4)</option>
                 </select>
-                <label class="modal-label" style="margin-top:10px;">Modello segmentazione <span class="modal-label-sm">(evidenzia: clic per selezionare un oggetto)</span></label>
+                <label class="modal-label" style="margin-top:10px;">Modello segmentazione <span class="modal-label-sm">(evidenzia: rileva gli oggetti, clic per selezionarli)</span></label>
                 <select id="ai-sam-model" onchange="saveAiEngineSettings()">
-                    <option value="">SlimSAM — leggero, consigliato</option>
-                    <option value="Xenova/slimsam-77-uniform">SlimSAM 77 (uniform)</option>
-                    <option value="Xenova/sam-vit-base">SAM ViT-Base — qualità, più pesante</option>
+                    <option value="">DETR ResNet-50 panottico — consigliato</option>
+                    <option value="Xenova/detr-resnet-50-panoptic">DETR ResNet-50 panottico</option>
+                    <option value="Xenova/mask2former-swin-base-coco-panoptic">Mask2Former Base — qualità, più pesante</option>
+                    <option value="Xenova/mask2former-swin-large-coco-panoptic">Mask2Former Large — massima qualità</option>
                 </select>
                 <div style="margin-top:8px;">
                     <button class="btn btn-ghost" onclick="testSamEngine()" style="font-size:0.8rem; color:#a78bfa;"><i class="fa-solid fa-vial"></i> Carica/Test segmentazione</button>

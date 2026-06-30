@@ -281,21 +281,24 @@
 
         // --- Pointer handling ---
         let drawing = false, lastPt = null, samBusy = false;
-        // Click-to-segment (SAM): segment the object under the click and merge it
-        // into the mask with the current effect (add to keep, remove to drop).
+        // Panoptic click-to-select: segment the whole image once, then a click
+        // just picks the smallest detected region containing it.
         async function samClick(p) {
             if (samBusy) return;
-            if (!window.AIEngine || !window.AIEngine.samPredict) { setStatus('Segmentazione AI non disponibile.'); return; }
+            if (!window.AIEngine || !window.AIEngine.panopticSegment) { setStatus('Segmentazione AI non disponibile.'); return; }
             samBusy = true;
             try {
-                const objMask = await window.AIEngine.samPredict(opts.imageUrl, { nx: p.x / w, ny: p.y / h }, w, h, setStatus);
-                if (objMask) {
-                    keepGuard();
-                    for (let i = 0; i < w * h; i++) if (objMask[i] > 127) mask[i] = effect;
-                    scheduleRender();
-                }
+                const segs = await window.AIEngine.panopticSegment(opts.imageUrl, w, h, setStatus);
+                const idx = Math.min(w * h - 1, Math.max(0, p.y * w + p.x));
+                const hits = segs.filter(s => s.data[idx] > 127).sort((a, b) => a.area - b.area);
+                if (!hits.length) { setStatus('Nessun oggetto qui. Tocca 🐞 per vedere quelli rilevati.'); return; }
+                const seg = hits[0];
+                keepGuard();
+                for (let i = 0; i < w * h; i++) if (seg.data[i] > 127) mask[i] = effect;
+                scheduleRender();
+                setStatus(`Selezionato: ${seg.label} (${Math.round(100 * seg.area / (w * h))}% area). Clicca altri oggetti o rifinisci.`);
             } catch (e) {
-                console.warn('SAM click failed:', e);
+                console.warn('panoptic click failed:', e);
                 setStatus('Segmentazione non riuscita: ' + (e.message || e));
             } finally {
                 samBusy = false;
@@ -326,20 +329,23 @@
 
         let panning = false, panStart = null, pinchDist = 0, pinchZoom = 1;
 
-        // Debug: overlay SAM's candidate masks (R/G/B) on the colour image.
-        async function samDebugClick(p) {
-            if (!window.AIEngine || !window.AIEngine.samDebugMasks) { setStatus('Debug non disponibile.'); return; }
+        function _hue(k) { // distinct colour per object
+            const h6 = ((k * 53) % 360) / 60, x = 1 - Math.abs(h6 % 2 - 1);
+            const [r, g, b] = h6 < 1 ? [1, x, 0] : h6 < 2 ? [x, 1, 0] : h6 < 3 ? [0, 1, x] : h6 < 4 ? [0, x, 1] : h6 < 5 ? [x, 0, 1] : [1, 0, x];
+            return [r * 255, g * 255, b * 255];
+        }
+        // Debug: overlay ALL detected objects, each in a distinct colour.
+        async function samDebugOverlay() {
+            if (!window.AIEngine || !window.AIEngine.panopticSegment) { setStatus('Debug non disponibile.'); return; }
             if (samBusy) return; samBusy = true;
             try {
-                const res = await window.AIEngine.samDebugMasks(opts.imageUrl, { nx: p.x / w, ny: p.y / h }, w, h, setStatus);
+                const segs = await window.AIEngine.panopticSegment(opts.imageUrl, w, h, setStatus);
                 const o = ctxWork.createImageData(w, h); const od = o.data;
                 for (let i = 0; i < w * h; i++) { const j = i * 4; od[j] = base[j]; od[j + 1] = base[j + 1]; od[j + 2] = base[j + 2]; od[j + 3] = 255; }
-                const cols = [[255, 40, 40], [40, 255, 40], [60, 140, 255]];
-                res.masks.forEach((m, k) => { const c = cols[k % 3]; for (let i = 0; i < w * h; i++) if (m.data[i] > 127) { const j = i * 4; od[j] = (od[j] + c[0] * 2) / 3; od[j + 1] = (od[j + 1] + c[1] * 2) / 3; od[j + 2] = (od[j + 2] + c[2] * 2) / 3; } });
+                segs.forEach((s, k) => { const c = _hue(k); for (let i = 0; i < w * h; i++) if (s.data[i] > 127) { const j = i * 4; od[j] = (od[j] + c[0] * 2) / 3; od[j + 1] = (od[j + 1] + c[1] * 2) / 3; od[j + 2] = (od[j + 2] + c[2] * 2) / 3; } });
                 ctxWork.putImageData(o, 0, 0);
                 ctxDisp.clearRect(0, 0, w, h); ctxDisp.drawImage(workCanvas, 0, 0);
-                const leg = res.masks.map((m, k) => `${['🔴', '🟢', '🔵'][k] || k}${m.area}%/${m.score}`).join('  ');
-                setStatus(`Debug ${res.dims} ${res.planar ? 'pl' : 'in'} — ${leg}. Tocca di nuovo (bug) per uscire.`);
+                setStatus(`${segs.length} oggetti: ${segs.map(s => s.label).slice(0, 10).join(', ')}. Tocca 🐞 per uscire.`);
             } catch (e) { setStatus('Debug fallito: ' + (e.message || e)); }
             finally { samBusy = false; }
         }
@@ -350,7 +356,7 @@
             ev.preventDefault();
             if (tool === 'pan') { panning = true; const c = _cxy(ev); panStart = { x: c.x - panX, y: c.y - panY }; return; }
             const p = toWork(ev);
-            if (tool === 'object') { if (samDebug) { samDebugClick(p); } else { pushUndo(); samClick(p); } return; }
+            if (tool === 'object') { if (samDebug) { samDebugOverlay(); } else { pushUndo(); samClick(p); } return; }
             if (tool === 'wand') { pushUndo(); magicWand(p.x, p.y); return; }
             // brush
             if (straightLine) {
@@ -434,7 +440,7 @@
         overlay.querySelector('#me-samdbg').onclick = () => {
             samDebug = !samDebug;
             overlay.querySelector('#me-samdbg').style.background = samDebug ? 'var(--accent-color)' : 'transparent';
-            if (samDebug) { tool = 'object'; refreshToolButtons(); setStatus('Debug attivo: clicca per vedere le 3 maschere SAM (R/G/B).'); }
+            if (samDebug) { tool = 'object'; refreshToolButtons(); samDebugOverlay(); }
             else { setStatus(''); scheduleRender(); }
         };
         overlay.querySelector('#me-undo').onclick = () => undo();

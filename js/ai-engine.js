@@ -33,7 +33,7 @@ window.AIEngine = (function () {
         try { c = JSON.parse(localStorage.getItem(CFG_KEY) || '{}'); } catch (e) { c = {}; }
         return Object.assign({
             engine: 'auto',        // 'auto' (native if present, else web) | 'native' | 'web'
-            samModelId: '',        // segmentation (highlight) model — separate from RMBG scontorno
+            panopticModelId: '',   // panoptic segmentation model for the highlight "object" tool
             device: 'auto',        // web engine only: 'auto' | 'gpu' | 'npu' | 'cpu'
             dtype: '',             // '' = auto per device, or 'fp16'|'q8'|'q4'|'fp32'
             modelId: '',           // '' = use SEG_MODELS candidates
@@ -48,6 +48,7 @@ window.AIEngine = (function () {
         // Force a reload of the models next time settings change
         _seg = null; _segLoading = null;
         _sam = null; _samImg = null;
+        _pan = null; _panCache = null;
         return c;
     }
 
@@ -599,6 +600,55 @@ window.AIEngine = (function () {
         return { model: s.id, device: s.device };
     }
 
+    // ===== Panoptic segmentation (Photoshop-style "detect all objects") =====
+    // Segments the WHOLE image into objects/regions in one pass; clicking just
+    // picks which precomputed region — no fragile point prompt.
+    const PANOPTIC_DEFAULT = 'Xenova/detr-resnet-50-panoptic';
+    let _pan = null;            // pipeline
+    let _panCache = null;       // { url, w, h, segments }
+
+    async function _loadPanoptic(onStatus) {
+        if (_pan) return _pan;
+        const T = await loadTransformers(onStatus);
+        const { pipeline } = T;
+        if (!pipeline) throw new Error('pipeline non disponibile in transformers.js');
+        const id = getConfig().panopticModelId || PANOPTIC_DEFAULT;
+        const device = capabilities().webgpu ? 'webgpu' : 'wasm';
+        onStatus && onStatus(`Caricamento modello panottico (${id})...`);
+        _pan = await pipeline('image-segmentation', id, { device, progress_callback: _progress(onStatus) });
+        _pan._id = id; _pan._device = device;
+        return _pan;
+    }
+
+    // Returns [{ label, score, data: Uint8(w*h), area }] for every detected region.
+    async function panopticSegment(imageUrl, w, h, onStatus) {
+        if (_panCache && _panCache.url === imageUrl && _panCache.w === w && _panCache.h === h) return _panCache.segments;
+        const pan = await _loadPanoptic(onStatus);
+        onStatus && onStatus('Rilevamento oggetti...');
+        const output = await pan(imageUrl);                    // [{score,label,mask:RawImage}]
+        const segments = [];
+        for (const o of output) {
+            if (!o.mask) continue;
+            const r = (typeof o.mask.resize === 'function') ? await o.mask.resize(w, h) : o.mask;
+            const ch = r.channels || 1;
+            const src = r.data;
+            const data = new Uint8Array(w * h);
+            let area = 0;
+            for (let i = 0; i < w * h; i++) { const v = src[i * ch]; data[i] = v; if (v > 127) area++; }
+            segments.push({ label: o.label || 'oggetto', score: Number(o.score || 0), data, area });
+        }
+        _panCache = { url: imageUrl, w, h, segments };
+        onStatus && onStatus(`Rilevati ${segments.length} oggetti. Clicca su quello da selezionare.`);
+        return segments;
+    }
+
+    function panopticReset() { _panCache = null; }
+    async function preloadPanoptic(onStatus) {
+        _pan = null; _panCache = null;
+        const p = await _loadPanoptic(onStatus);
+        return { model: p._id, device: p._device };
+    }
+
     // Debug: return ALL of SAM's candidate masks for a point, each resized to w*h.
     // Lets the UI overlay them in different colours to see what the model produces.
     async function samDebugMasks(imageUrl, pt, w, h, onStatus) {
@@ -716,6 +766,7 @@ window.AIEngine = (function () {
         effectiveEngine, effectiveEngineLabel,
         loadTransformers, getSegmenter, segmentSubject, preload, preloadNative, preloadWeb, status, unload,
         samPredict, samDebugMasks, preloadSam,
+        panopticSegment, panopticReset, preloadPanoptic,
         SEG_MODELS
     };
 })();
@@ -728,7 +779,7 @@ window.populateAiEngineSettings = function () {
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
     const chk = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v; };
     set('ai-engine-engine', cfg.engine);
-    set('ai-sam-model', cfg.samModelId);
+    set('ai-sam-model', cfg.panopticModelId);
     set('ai-engine-device', cfg.device);
     set('ai-engine-model', cfg.modelId);
     set('ai-engine-localpath', cfg.localModelPath);
@@ -748,7 +799,7 @@ window.saveAiEngineSettings = function () {
     if (!window.AIEngine) return;
     AIEngine.setConfig({
         engine: (document.getElementById('ai-engine-engine') || {}).value || 'auto',
-        samModelId: ((document.getElementById('ai-sam-model') || {}).value || '').trim(),
+        panopticModelId: ((document.getElementById('ai-sam-model') || {}).value || '').trim(),
         device: (document.getElementById('ai-engine-device') || {}).value || 'auto',
         modelId: ((document.getElementById('ai-engine-model') || {}).value || '').trim(),
         localModelPath: ((document.getElementById('ai-engine-localpath') || {}).value || '').trim(),
@@ -796,8 +847,8 @@ window.testSamEngine = async function () {
     const upd = (t) => { if (s) s.textContent = t; };
     try {
         upd('Caricamento modello segmentazione (prima volta: download)...');
-        const r = await AIEngine.preloadSam(upd);
-        if (s) s.innerHTML = `<span style="color:var(--success-color);"><i class="fa-solid fa-check"></i> Segmentazione pronta: ${r.model} su ${r.device.toUpperCase()}.</span>`;
+        const r = await AIEngine.preloadPanoptic(upd);
+        if (s) s.innerHTML = `<span style="color:var(--success-color);"><i class="fa-solid fa-check"></i> Segmentazione pronta: ${r.model} su ${(r.device || '').toUpperCase()}.</span>`;
     } catch (e) {
         if (s) s.innerHTML = `<span style="color:var(--danger-color);"><i class="fa-solid fa-xmark"></i> Segmentazione: ${e.message || e}</span>`;
     }
