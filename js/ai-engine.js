@@ -31,6 +31,7 @@ window.AIEngine = (function () {
         try { c = JSON.parse(localStorage.getItem(CFG_KEY) || '{}'); } catch (e) { c = {}; }
         return Object.assign({
             engine: 'auto',        // 'auto' (native if present, else web) | 'native' | 'web'
+            samModelId: '',        // segmentation (highlight) model — separate from RMBG scontorno
             device: 'auto',        // web engine only: 'auto' | 'gpu' | 'npu' | 'cpu'
             dtype: '',             // '' = auto per device, or 'fp16'|'q8'|'q4'|'fp32'
             modelId: '',           // '' = use SEG_MODELS candidates
@@ -42,8 +43,9 @@ window.AIEngine = (function () {
     function setConfig(patch) {
         const c = Object.assign(getConfig(), patch || {});
         localStorage.setItem(CFG_KEY, JSON.stringify(c));
-        // Force a reload of the model next time settings change
+        // Force a reload of the models next time settings change
         _seg = null; _segLoading = null;
+        _sam = null; _samImg = null;
         return c;
     }
 
@@ -457,6 +459,88 @@ window.AIEngine = (function () {
         return capabilities().webgpu && /2\.?0|birefnet/i.test(id);
     }
 
+    // ===== SAM-family click-to-segment (for the highlight/evidenzia editor) =====
+    // Separate from the RMBG scontorno model: a promptable model (SlimSAM /
+    // MobileSAM via transformers.js) that segments the object under a click.
+    // The image is encoded once (cached) and each click runs the light decoder.
+    const SAM_DEFAULT = 'Xenova/slimsam-77-uniform';
+    let _sam = null;            // { model, processor, id }
+    let _samImg = null;         // { url, image, inputs, embeddings }
+
+    async function _loadSam(onStatus) {
+        if (_sam) return _sam;
+        const T = await loadTransformers(onStatus);
+        const { SamModel, AutoProcessor } = T;
+        if (!SamModel) throw new Error('SAM non supportato da questa versione di transformers.js');
+        const id = getConfig().samModelId || SAM_DEFAULT;
+        const device = capabilities().webgpu ? 'webgpu' : 'wasm';
+        const dtype = device === 'webgpu' ? 'fp16' : 'q8';
+        onStatus && onStatus(`Caricamento modello segmentazione (${id})...`);
+        const model = await SamModel.from_pretrained(id, { device, dtype });
+        const processor = await AutoProcessor.from_pretrained(id);
+        _sam = { model, processor, id, device };
+        return _sam;
+    }
+
+    async function _samEmbed(imageUrl, onStatus) {
+        if (_samImg && _samImg.url === imageUrl) return _samImg;
+        const { model, processor } = await _loadSam(onStatus);
+        const { RawImage } = await loadTransformers(onStatus);
+        onStatus && onStatus('Analisi immagine (segmentazione)...');
+        const image = await RawImage.fromURL(imageUrl);
+        const inputs = await processor(image);
+        const embeddings = await model.get_image_embeddings(inputs);
+        _samImg = { url: imageUrl, image, inputs, embeddings };
+        return _samImg;
+    }
+
+    // Segment the object under a point. `pt` is {nx, ny} normalized (0..1).
+    // Returns a Uint8 mask (length w*h), 255 = object.
+    async function samPredict(imageUrl, pt, w, h, onStatus) {
+        const { model, processor } = await _loadSam(onStatus);
+        const emb = await _samEmbed(imageUrl, onStatus);
+        const ow = emb.image.width, oh = emb.image.height;
+        const px = Math.round(pt.nx * ow), py = Math.round(pt.ny * oh);
+
+        onStatus && onStatus('Segmentazione oggetto...');
+        const dec = await processor(emb.image, { input_points: [[[px, py]]], input_labels: [[1]] });
+        const outputs = await model({
+            image_embeddings: emb.embeddings.image_embeddings,
+            image_positional_embeddings: emb.embeddings.image_positional_embeddings,
+            input_points: dec.input_points,
+            input_labels: dec.input_labels
+        });
+        const masks = await processor.post_process_masks(outputs.pred_masks, dec.original_sizes, dec.reshaped_input_sizes);
+        // masks[0]: dims [1, n_masks, H, W]; choose the highest-IoU candidate
+        const m0 = masks[0];
+        const dims = m0.dims; // [1, n, H, W]
+        const nMasks = dims[1], H = dims[2], W = dims[3];
+        const scores = outputs.iou_scores.data;
+        let best = 0; for (let i = 1; i < nMasks; i++) if (scores[i] > scores[best]) best = i;
+        const md = m0.data; // boolean/uint8 flattened
+        const off = best * H * W;
+
+        // Rasterize the chosen mask to a canvas, then resize to w*h
+        const mc = document.createElement('canvas'); mc.width = W; mc.height = H;
+        const mctx = mc.getContext('2d', { willReadFrequently: true });
+        const im = mctx.createImageData(W, H); const id = im.data;
+        for (let i = 0; i < H * W; i++) { const a = md[off + i] ? 255 : 0; id[i * 4] = id[i * 4 + 1] = id[i * 4 + 2] = a; id[i * 4 + 3] = 255; }
+        mctx.putImageData(im, 0, 0);
+        const fc = document.createElement('canvas'); fc.width = w; fc.height = h;
+        const fctx = fc.getContext('2d', { willReadFrequently: true });
+        fctx.drawImage(mc, 0, 0, w, h);
+        const fd = fctx.getImageData(0, 0, w, h).data;
+        const mask = new Uint8Array(w * h);
+        for (let i = 0; i < w * h; i++) mask[i] = fd[i * 4];
+        onStatus && onStatus('Oggetto selezionato — clicca altre parti o rifinisci col pennello.');
+        return mask;
+    }
+
+    async function preloadSam(onStatus) {
+        const s = await _loadSam(onStatus);
+        return { model: s.id, device: s.device };
+    }
+
     // Segment the subject. Returns a Uint8 grayscale mask (length w*h), 255=subject.
     async function segmentSubject(imageUrl, w, h, onStatus) {
         // Per-model routing: native only when it's actually the better path
@@ -532,6 +616,7 @@ window.AIEngine = (function () {
         getConfig, setConfig, capabilities, deviceChain, nativeAvailable,
         effectiveEngine, effectiveEngineLabel,
         loadTransformers, getSegmenter, segmentSubject, preload, preloadNative, preloadWeb, status, unload,
+        samPredict, preloadSam,
         SEG_MODELS
     };
 })();
@@ -544,6 +629,7 @@ window.populateAiEngineSettings = function () {
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
     const chk = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v; };
     set('ai-engine-engine', cfg.engine);
+    set('ai-sam-model', cfg.samModelId);
     set('ai-engine-device', cfg.device);
     set('ai-engine-model', cfg.modelId);
     set('ai-engine-localpath', cfg.localModelPath);
@@ -563,6 +649,7 @@ window.saveAiEngineSettings = function () {
     if (!window.AIEngine) return;
     AIEngine.setConfig({
         engine: (document.getElementById('ai-engine-engine') || {}).value || 'auto',
+        samModelId: ((document.getElementById('ai-sam-model') || {}).value || '').trim(),
         device: (document.getElementById('ai-engine-device') || {}).value || 'auto',
         modelId: ((document.getElementById('ai-engine-model') || {}).value || '').trim(),
         localModelPath: ((document.getElementById('ai-engine-localpath') || {}).value || '').trim(),

@@ -114,6 +114,7 @@
 
             <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:center; flex-shrink:0;">
                 <div style="display:flex; gap:4px; background:rgba(255,255,255,0.06); border-radius:8px; padding:3px;">
+                    <button class="me-tool" data-tool="object" style="border:none; cursor:pointer; padding:7px 11px; border-radius:6px; font-size:0.78rem; color:#fff;" title="Clicca su un oggetto per selezionarlo (AI)"><i class="fa-solid fa-hand-pointer"></i> Oggetto AI</button>
                     <button class="me-tool" data-tool="wand" style="border:none; cursor:pointer; padding:7px 11px; border-radius:6px; font-size:0.78rem; color:#fff;"><i class="fa-solid fa-wand-magic-sparkles"></i> Bacchetta</button>
                     <button class="me-tool" data-tool="brush" style="border:none; cursor:pointer; padding:7px 11px; border-radius:6px; font-size:0.78rem; color:#fff;"><i class="fa-solid fa-paintbrush"></i> Pennello</button>
                 </div>
@@ -241,10 +242,30 @@
         }
 
         // --- Pointer handling ---
-        let drawing = false, lastPt = null;
+        let drawing = false, lastPt = null, samBusy = false;
+        // Click-to-segment (SAM): segment the object under the click and merge it
+        // into the mask with the current effect (add to keep, remove to drop).
+        async function samClick(p) {
+            if (samBusy) return;
+            if (!window.AIEngine || !window.AIEngine.samPredict) { setStatus('Segmentazione AI non disponibile.'); return; }
+            samBusy = true;
+            try {
+                const objMask = await window.AIEngine.samPredict(opts.imageUrl, { nx: p.x / w, ny: p.y / h }, w, h, setStatus);
+                if (objMask) {
+                    for (let i = 0; i < w * h; i++) if (objMask[i] > 127) mask[i] = effect;
+                    scheduleRender();
+                }
+            } catch (e) {
+                console.warn('SAM click failed:', e);
+                setStatus('Segmentazione non riuscita: ' + (e.message || e));
+            } finally {
+                samBusy = false;
+            }
+        }
         function onDown(ev) {
             ev.preventDefault();
             const p = toWork(ev);
+            if (tool === 'object') { samClick(p); return; }
             if (tool === 'wand') { magicWand(p.x, p.y); return; }
             drawing = true; lastPt = p; paintAt(p.x, p.y);
         }
@@ -292,7 +313,7 @@
             overlay.querySelector('#me-tol-wrap').style.display = tool === 'wand' ? 'flex' : 'none';
             overlay.querySelector('#me-brush-wrap').style.display = tool === 'brush' ? 'flex' : 'none';
         }
-        overlay.querySelectorAll('.me-tool').forEach(b => b.onclick = () => { tool = b.dataset.tool; if (tool !== 'brush') hideBrushCursor(); refreshToolButtons(); });
+        overlay.querySelectorAll('.me-tool').forEach(b => b.onclick = () => { tool = b.dataset.tool; if (tool !== 'brush') hideBrushCursor(); if (tool === 'object') setStatus('Clicca su un oggetto per selezionarlo (la prima volta carica il modello).'); refreshToolButtons(); });
         overlay.querySelectorAll('.me-effect').forEach(b => b.onclick = () => { effect = parseInt(b.dataset.effect) ? 255 : 0; refreshToolButtons(); });
         overlay.querySelector('#me-tol').oninput = (e) => { tolerance = parseInt(e.target.value); };
         overlay.querySelector('#me-brush').oninput = (e) => {
