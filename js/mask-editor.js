@@ -65,10 +65,11 @@
             gray[i] = (base[j] * 0.299 + base[j + 1] * 0.587 + base[j + 2] * 0.114) | 0;
         }
 
-        // Mask: 0..255 soft alpha. 255 = subject/keep, 0 = background.
-        // Soft values (from the AI model) give smooth, anti-aliased edges.
+        // Mask: 0..255 soft alpha. 255 = subject/keep (coloured / opaque),
+        // 0 = background (grey / transparent). Both modes start fully "kept"
+        // (cutout: nothing removed yet; highlight: image fully coloured).
         const mask = new Uint8Array(w * h);
-        if (mode === 'cutout') mask.fill(255); // start keeping everything, click bg to remove
+        mask.fill(255);
 
         // Optionally seed from an existing alpha/grey mask image (keep soft values)
         if (opts.initialMaskUrl) {
@@ -88,8 +89,11 @@
         }
 
         // --- Tool state ---
-        let tool = 'wand';                                  // 'wand' | 'brush'
+        let tool = 'wand';                                  // 'wand' | 'brush' | 'object'
         let effect = mode === 'cutout' ? 0 : 255;           // wand/brush sets mask to this (0 or 255)
+        // In highlight, the FIRST "keep" selection desaturates everything else,
+        // so picking the subject leaves only it coloured.
+        let firstKeep = (mode === 'highlight');
         let tolerance = 32;
         let brushSize = Math.max(10, Math.round(Math.max(w, h) / 35));
 
@@ -119,8 +123,8 @@
                     <button class="me-tool" data-tool="brush" style="border:none; cursor:pointer; padding:7px 11px; border-radius:6px; font-size:0.78rem; color:#fff;"><i class="fa-solid fa-paintbrush"></i> Pennello</button>
                 </div>
                 <div style="display:flex; gap:4px; background:rgba(255,255,255,0.06); border-radius:8px; padding:3px;">
-                    <button class="me-effect" data-effect="${mode === 'cutout' ? '0' : '1'}" style="border:none; cursor:pointer; padding:7px 11px; border-radius:6px; font-size:0.78rem; color:#fff;">${effectRemLabel}</button>
-                    <button class="me-effect" data-effect="${mode === 'cutout' ? '1' : '0'}" style="border:none; cursor:pointer; padding:7px 11px; border-radius:6px; font-size:0.78rem; color:#fff;">${effectAddLabel}</button>
+                    <button class="me-effect" data-effect="1" style="border:none; cursor:pointer; padding:7px 11px; border-radius:6px; font-size:0.78rem; color:#fff;">${effectAddLabel}</button>
+                    <button class="me-effect" data-effect="0" style="border:none; cursor:pointer; padding:7px 11px; border-radius:6px; font-size:0.78rem; color:#fff;">${effectRemLabel}</button>
                 </div>
                 <label id="me-tol-wrap" style="display:flex; align-items:center; gap:6px; color:#ccc; font-size:0.72rem;">Tolleranza <input id="me-tol" type="range" min="5" max="90" value="${tolerance}" style="width:90px; accent-color:var(--accent-color);"></label>
                 <label id="me-brush-wrap" style="display:none; align-items:center; gap:6px; color:#ccc; font-size:0.72rem;">Pennello <input id="me-brush" type="range" min="3" max="${Math.round(Math.max(w, h) / 6)}" value="${brushSize}" style="width:90px; accent-color:var(--accent-color);"></label>
@@ -205,9 +209,16 @@
             return { x: Math.floor(cx / r.width * w), y: Math.floor(cy / r.height * h) };
         }
 
+        // In highlight, the first "keep" (effect=255) selection desaturates
+        // everything else, so only the chosen subject stays coloured.
+        function keepGuard() {
+            if (firstKeep && mode === 'highlight' && effect === 255) { mask.fill(0); firstKeep = false; }
+        }
+
         // --- Magic wand (flood fill by colour similarity from seed) ---
         function magicWand(sx, sy) {
             if (sx < 0 || sy < 0 || sx >= w || sy >= h) return;
+            keepGuard();
             const seed = (sy * w + sx) * 4;
             const sr = base[seed], sg = base[seed + 1], sb = base[seed + 2];
             const visited = new Uint8Array(w * h);
@@ -229,6 +240,7 @@
 
         // --- Brush (paint circle into mask) ---
         function paintAt(cx, cy) {
+            keepGuard();
             const r = brushSize, r2 = r * r;
             const x0 = Math.max(0, cx - r), x1 = Math.min(w - 1, cx + r);
             const y0 = Math.max(0, cy - r), y1 = Math.min(h - 1, cy + r);
@@ -252,6 +264,7 @@
             try {
                 const objMask = await window.AIEngine.samPredict(opts.imageUrl, { nx: p.x / w, ny: p.y / h }, w, h, setStatus);
                 if (objMask) {
+                    keepGuard();
                     for (let i = 0; i < w * h; i++) if (objMask[i] > 127) mask[i] = effect;
                     scheduleRender();
                 }
@@ -322,8 +335,8 @@
             const r = canvas.getBoundingClientRect();
             showBrushCursorAt(r.left + r.width / 2, r.top + r.height / 2);
         };
-        overlay.querySelector('#me-invert').onclick = () => { for (let i = 0; i < mask.length; i++) mask[i] = 255 - mask[i]; scheduleRender(); };
-        overlay.querySelector('#me-reset').onclick = () => { mask.fill(mode === 'cutout' ? 255 : 0); scheduleRender(); };
+        overlay.querySelector('#me-invert').onclick = () => { for (let i = 0; i < mask.length; i++) mask[i] = 255 - mask[i]; firstKeep = false; scheduleRender(); };
+        overlay.querySelector('#me-reset').onclick = () => { mask.fill(255); firstKeep = (mode === 'highlight'); scheduleRender(); };
         refreshToolButtons();
 
         // --- AI auto-segmentation (delegated to the shared GPU-accelerated engine) ---
@@ -335,6 +348,7 @@
                 const aiMask = await window.AIEngine.segmentSubject(opts.imageUrl, w, h, setStatus);
                 if (aiMask) {
                     for (let i = 0; i < w * h; i++) mask[i] = aiMask[i]; // keep soft alpha for smooth edges
+                    firstKeep = false; // AI already produced subject-vs-rest
                     scheduleRender();
                     setStatus('Segmentazione AI applicata — rifinisci con bacchetta/pennello se serve.');
                 } else {
