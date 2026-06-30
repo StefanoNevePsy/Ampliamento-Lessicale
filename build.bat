@@ -62,15 +62,29 @@ goto PAUSA
 :GIT_PULL
 echo.
 echo --- Aggiorno da GitHub (branch claude/psychology-app-setup-CmBhq) ---
-call git pull origin claude/psychology-app-setup-CmBhq
+call :DO_GIT
 goto PAUSA
 
 :GIT_PULL_SYNC
 echo.
 echo --- Aggiorno da GitHub + Capacitor Sync ---
-call git pull origin claude/psychology-app-setup-CmBhq
+call :DO_GIT
 call npm run cap:sync
 goto PAUSA
+
+:DO_GIT
+if not exist ".git" (
+    echo La cartella non e' un repository git. Inizializzo...
+    git init
+    git remote add origin https://github.com/StefanoNevePsy/Ampliamento-Lessicale.git 2>nul
+    git fetch origin claude/psychology-app-setup-CmBhq
+    git reset --hard FETCH_HEAD
+    git checkout -B claude/psychology-app-setup-CmBhq
+    git branch --set-upstream-to=origin/claude/psychology-app-setup-CmBhq claude/psychology-app-setup-CmBhq 2>nul
+) else (
+    git pull origin claude/psychology-app-setup-CmBhq
+)
+exit /b 0
 
 :CAP_ICONS
 echo.
