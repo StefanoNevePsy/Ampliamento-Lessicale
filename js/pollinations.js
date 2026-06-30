@@ -1298,6 +1298,33 @@ async function _aiStudioApplyFile(file, idx) {
 }
 window._aiStudioFile = (input, idx) => { if (input.files && input.files[0]) _aiStudioApplyFile(input.files[0], idx); };
 
+// Touch-only paste: read the image directly from the clipboard with the async
+// Clipboard API (works without a keyboard; the button tap is the user gesture
+// Android WebView requires). Falls back to the file picker if it isn't allowed.
+window._aiStudioPasteBtn = async (idx) => {
+    if (!(navigator.clipboard && navigator.clipboard.read)) {
+        _aiStudioStatus('Appunti non leggibili qui: usa "Carica file"', 'var(--warning-color)');
+        document.getElementById('aistudio-file').click();
+        return;
+    }
+    _aiStudioStatus('Lettura appunti...', '#aaa');
+    try {
+        const clipItems = await navigator.clipboard.read();
+        for (const ci of clipItems) {
+            const imgType = ci.types.find(t => t.startsWith('image/'));
+            if (imgType) {
+                const blob = await ci.getType(imgType);
+                await _aiStudioApplyFile(blob, idx);
+                return;
+            }
+        }
+        _aiStudioStatus('Nessuna immagine negli appunti. Copia prima l\'immagine, oppure usa "Carica file".', 'var(--warning-color)');
+    } catch (e) {
+        _aiStudioStatus('Permesso appunti negato: usa "Carica file"', 'var(--warning-color)');
+        document.getElementById('aistudio-file').click();
+    }
+};
+
 window.openAiStudioPrompt = async (itemIndex) => {
     const item = state.editingItems[itemIndex];
     if (!item) return;
@@ -1327,15 +1354,16 @@ window.openAiStudioPrompt = async (itemIndex) => {
                 <button class="btn btn-ghost" style="flex:1; padding:10px;" onclick="window.open('https://aistudio.google.com/','_blank')"><i class="fa-solid fa-up-right-from-square"></i> Apri AI Studio</button>
             </div>
             <label style="font-size:0.8rem; color:#aaa;">Riporta qui l'immagine generata</label>
-            <div id="aistudio-paste" style="border:2px dashed var(--glass-border); border-radius:10px; padding:16px; text-align:center; color:#888; font-size:0.82rem; cursor:pointer; margin:4px 0 8px;">
-                <i class="fa-solid fa-paste"></i> Incolla (Ctrl+V) o tocca per caricare il file salvato
+            <div style="display:flex; gap:8px; margin:4px 0 6px;">
+                <button class="btn btn-primary" style="flex:1; padding:12px;" onclick="_aiStudioPasteBtn(${itemIndex})"><i class="fa-solid fa-paste"></i> Incolla immagine</button>
+                <button class="btn btn-ghost" style="flex:1; padding:12px;" onclick="document.getElementById('aistudio-file').click()"><i class="fa-solid fa-folder-open"></i> Carica file</button>
             </div>
+            <div style="font-size:0.7rem; color:#777; text-align:center; margin-bottom:6px;">Con tastiera puoi anche premere Ctrl+V</div>
             <input type="file" id="aistudio-file" accept="image/*" style="display:none;" onchange="_aiStudioFile(this, ${itemIndex})">
             <div id="aistudio-status" style="font-size:0.78rem; text-align:center; min-height:16px; color:#aaa;"></div>
         </div>`;
     document.body.appendChild(modal);
 
-    document.getElementById('aistudio-paste').onclick = () => document.getElementById('aistudio-file').click();
     const onPaste = async (e) => {
         const items = (e.clipboardData && e.clipboardData.items) || [];
         for (const it of items) {
