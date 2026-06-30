@@ -12,6 +12,8 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.io.ByteArrayOutputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.util.Collections;
 import java.util.HashMap;
@@ -119,8 +121,14 @@ public class NpuCutoutPlugin extends Plugin {
 
             OrtSession sess = session(assetName);
             String inputName = sess.getInputNames().iterator().next();
+            // ORT requires a DIRECT buffer for tensor input (a heap FloatBuffer.wrap
+            // would throw at runtime).
+            FloatBuffer fb = ByteBuffer.allocateDirect(data.length * 4)
+                .order(ByteOrder.nativeOrder()).asFloatBuffer();
+            fb.put(data);
+            fb.rewind();
             OnnxTensor input = OnnxTensor.createTensor(
-                env(), FloatBuffer.wrap(data), new long[]{1, 3, size, size});
+                env(), fb, new long[]{1, 3, size, size});
             OrtSession.Result results = sess.run(Collections.singletonMap(inputName, input));
             float[] flat = flatten(results.get(0).getValue(), plane);
             input.close();
@@ -149,7 +157,8 @@ public class NpuCutoutPlugin extends Plugin {
             ret.put("accelerator", Boolean.TRUE.equals(nnapiUsed.get(assetName)) ? "nnapi" : "cpu");
             call.resolve(ret);
         } catch (Throwable e) {
-            call.reject("npu cutout failed: " + e.getMessage(), e);
+            // PluginCall.reject has no (String, Throwable) overload; pass the message only.
+            call.reject("npu cutout failed: " + e.getMessage());
         }
     }
 
