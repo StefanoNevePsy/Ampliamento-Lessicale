@@ -1298,32 +1298,49 @@ async function _aiStudioApplyFile(file, idx) {
 }
 window._aiStudioFile = (input, idx) => { if (input.files && input.files[0]) _aiStudioApplyFile(input.files[0], idx); };
 
-// Touch-only paste: read the image directly from the clipboard with the async
-// Clipboard API (works without a keyboard; the button tap is the user gesture
-// Android WebView requires). Falls back to the file picker if it isn't allowed.
+// Touch-only paste. The async Clipboard API (navigator.clipboard.read) is
+// blocked in the Android WebView, but a *trusted* paste event into an editable
+// field is allowed (that's why Ctrl+V works). So the paste zone is a
+// contenteditable element: the user long-presses it and taps "Incolla", which
+// fires a real paste we can read — no keyboard needed.
 window._aiStudioPasteBtn = async (idx) => {
-    if (!(navigator.clipboard && navigator.clipboard.read)) {
-        _aiStudioStatus('Appunti non leggibili qui: usa "Carica file"', 'var(--warning-color)');
-        document.getElementById('aistudio-file').click();
-        return;
-    }
-    _aiStudioStatus('Lettura appunti...', '#aaa');
-    try {
-        const clipItems = await navigator.clipboard.read();
-        for (const ci of clipItems) {
-            const imgType = ci.types.find(t => t.startsWith('image/'));
-            if (imgType) {
-                const blob = await ci.getType(imgType);
-                await _aiStudioApplyFile(blob, idx);
-                return;
+    // Best case: the async API is available (e.g. permission granted) — use it.
+    if (navigator.clipboard && navigator.clipboard.read) {
+        try {
+            const clipItems = await navigator.clipboard.read();
+            for (const ci of clipItems) {
+                const imgType = ci.types.find(t => t.startsWith('image/'));
+                if (imgType) { await _aiStudioApplyFile(await ci.getType(imgType), idx); return; }
             }
-        }
-        _aiStudioStatus('Nessuna immagine negli appunti. Copia prima l\'immagine, oppure usa "Carica file".', 'var(--warning-color)');
-    } catch (e) {
-        _aiStudioStatus('Permesso appunti negato: usa "Carica file"', 'var(--warning-color)');
-        document.getElementById('aistudio-file').click();
+        } catch (e) { /* blocked in WebView → fall through to the long-press box */ }
     }
+    // Touch path: focus the editable box and tell the user to long-press → Incolla.
+    const box = document.getElementById('aistudio-paste');
+    if (box) { box.focus(); }
+    _aiStudioStatus('Tieni premuto il riquadro qui sotto e tocca "Incolla"', '#8ab4f8');
 };
+
+// Read an image that the system pasted into the contenteditable box. Handles
+// both shapes: a paste event carrying an image File, or an <img> the WebView
+// injected into the box (data:/blob: src).
+async function _aiStudioReadPasteBox(idx) {
+    const box = document.getElementById('aistudio-paste');
+    if (!box) return;
+    const img = box.querySelector('img');
+    const src = img && img.getAttribute('src');
+    box.innerHTML = '';
+    if (src && /^(data:|blob:)/.test(src)) {
+        try {
+            const blob = await (await fetch(src)).blob();
+            await _aiStudioApplyFile(blob, idx);
+            return;
+        } catch (e) { /* fall through */ }
+    }
+    if (!state.editingItems[idx] || !state.editingItems[idx].url) {
+        _aiStudioStatus('Non sono riuscito a leggere l\'immagine incollata: usa "Carica file"', 'var(--warning-color)');
+    }
+}
+window._aiStudioReadPasteBox = _aiStudioReadPasteBox;
 
 window.openAiStudioPrompt = async (itemIndex) => {
     const item = state.editingItems[itemIndex];
@@ -1354,16 +1371,22 @@ window.openAiStudioPrompt = async (itemIndex) => {
                 <button class="btn btn-ghost" style="flex:1; padding:10px;" onclick="window.open('https://aistudio.google.com/','_blank')"><i class="fa-solid fa-up-right-from-square"></i> Apri AI Studio</button>
             </div>
             <label style="font-size:0.8rem; color:#aaa;">Riporta qui l'immagine generata</label>
-            <div style="display:flex; gap:8px; margin:4px 0 6px;">
-                <button class="btn btn-primary" style="flex:1; padding:12px;" onclick="_aiStudioPasteBtn(${itemIndex})"><i class="fa-solid fa-paste"></i> Incolla immagine</button>
-                <button class="btn btn-ghost" style="flex:1; padding:12px;" onclick="document.getElementById('aistudio-file').click()"><i class="fa-solid fa-folder-open"></i> Carica file</button>
+            <div id="aistudio-paste" contenteditable="true"
+                 style="border:2px dashed var(--glass-border); border-radius:10px; padding:18px 12px; text-align:center; color:#8ab4f8; font-size:0.85rem; min-height:30px; margin:4px 0 4px; outline:none; -webkit-user-select:text; user-select:text;">
+                <i class="fa-solid fa-paste"></i> Tieni premuto qui &rarr; <b>Incolla</b>
             </div>
-            <div style="font-size:0.7rem; color:#777; text-align:center; margin-bottom:6px;">Con tastiera puoi anche premere Ctrl+V</div>
+            <div style="font-size:0.7rem; color:#777; text-align:center; margin-bottom:8px;">Senza tastiera: tieni premuto il riquadro e tocca &laquo;Incolla&raquo;. Con tastiera: Ctrl+V.</div>
+            <button class="btn btn-ghost" style="width:100%; padding:11px;" onclick="document.getElementById('aistudio-file').click()"><i class="fa-solid fa-folder-open"></i> Oppure carica il file salvato</button>
             <input type="file" id="aistudio-file" accept="image/*" style="display:none;" onchange="_aiStudioFile(this, ${itemIndex})">
-            <div id="aistudio-status" style="font-size:0.78rem; text-align:center; min-height:16px; color:#aaa;"></div>
+            <div id="aistudio-status" style="font-size:0.78rem; text-align:center; min-height:16px; color:#aaa; margin-top:6px;"></div>
         </div>`;
     document.body.appendChild(modal);
 
+    // Clear the placeholder hint as soon as the box is focused/long-pressed.
+    const pasteBox = document.getElementById('aistudio-paste');
+    pasteBox.addEventListener('focus', () => { if (pasteBox.dataset.cleared !== '1') { pasteBox.innerHTML = ''; pasteBox.dataset.cleared = '1'; } });
+    // A trusted paste (Ctrl+V or long-press → Incolla) bubbles up to the
+    // document; read the image File directly when it carries one.
     const onPaste = async (e) => {
         const items = (e.clipboardData && e.clipboardData.items) || [];
         for (const it of items) {
@@ -1372,6 +1395,9 @@ window.openAiStudioPrompt = async (itemIndex) => {
     };
     modal._onPaste = onPaste;
     document.addEventListener('paste', onPaste);
+    // Fallback for WebViews that paste an <img> into the box instead of firing
+    // an image-bearing paste event: scan the box whenever its content changes.
+    pasteBox.addEventListener('input', () => setTimeout(() => _aiStudioReadPasteBox(itemIndex), 30));
 
     _aiStudioRefresh();
     document.getElementById('aistudio-style-info').textContent = 'Traduzione etichetta...';
