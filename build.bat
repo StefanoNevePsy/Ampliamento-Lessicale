@@ -20,6 +20,10 @@ echo  --- Scontorno NPU nativo (Tab S11) ---
 echo  8) Setup/aggiorna plugin nativo NPU
 echo  9) Capacitor Sync + plugin NPU
 echo 10) Build APK Android + NPU nativo (Release)
+echo.
+echo  --- Git ---
+echo 11) Aggiorna da GitHub (git pull)
+echo 12) Aggiorna da GitHub + Capacitor Sync
 echo  0) Esci
 echo.
 echo ============================================
@@ -35,6 +39,8 @@ if "%scelta%"=="7" goto NPM_INSTALL
 if "%scelta%"=="8" goto NPU_SETUP
 if "%scelta%"=="9" goto CAP_SYNC_NPU
 if "%scelta%"=="10" goto CAP_BUILD_NPU
+if "%scelta%"=="11" goto GIT_PULL
+if "%scelta%"=="12" goto GIT_PULL_SYNC
 if "%scelta%"=="0" goto FINE
 
 echo Opzione non valida.
@@ -50,6 +56,19 @@ goto PAUSA
 :CAP_SYNC
 echo.
 echo --- Capacitor Sync ---
+call npm run cap:sync
+goto PAUSA
+
+:GIT_PULL
+echo.
+echo --- Aggiorno da GitHub (branch claude/psychology-app-setup-CmBhq) ---
+call git pull origin claude/psychology-app-setup-CmBhq
+goto PAUSA
+
+:GIT_PULL_SYNC
+echo.
+echo --- Aggiorno da GitHub + Capacitor Sync ---
+call git pull origin claude/psychology-app-setup-CmBhq
 call npm run cap:sync
 goto PAUSA
 

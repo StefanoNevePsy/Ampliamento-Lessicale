@@ -16,8 +16,10 @@ window.AIEngine = (function () {
     // Segmentation model candidates, tried in order. RMBG-2.0 (BiRefNet) first,
     // RMBG-1.4 as a always-works fallback. needsSigmoid + mean/std differ.
     const SEG_MODELS = [
-        { id: 'briaai/RMBG-2.0',          sigmoid: true,  custom: false, size: 1024, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225] },
+        // onnx-community first: converted for transformers.js (handles the
+        // external-data weights + WebGPU); briaai/RMBG-2.0 often won't load there.
         { id: 'onnx-community/RMBG-2.0',  sigmoid: true,  custom: false, size: 1024, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225] },
+        { id: 'briaai/RMBG-2.0',          sigmoid: true,  custom: false, size: 1024, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225] },
         { id: 'briaai/RMBG-1.4',          sigmoid: false, custom: true,  size: 1024, mean: [0.5, 0.5, 0.5],        std: [1, 1, 1] }
     ];
 
@@ -471,10 +473,11 @@ window.AIEngine = (function () {
     }
 
     function _wantsOrtWeb() {
-        const cfg = getConfig();
-        const id = cfg.modelId || candidateList()[0].id;
-        // Big BiRefNet model that transformers.js can't reliably load -> use ORT-Web.
-        return capabilities().webgpu && /2\.?0|birefnet/i.test(id);
+        // Disabled by default: RMBG-2.0's fp16/fp32 ONNX use an EXTERNAL data file
+        // that ORT-Web can't fetch reliably. transformers.js handles external data
+        // and runs on WebGPU too, and auto-tries onnx-community/RMBG-2.0. ORT-Web
+        // stays available for self-contained .onnx via the explicit setting below.
+        return getConfig().useOrtWeb === true && capabilities().webgpu;
     }
 
     // ===== SAM-family click-to-segment (for the highlight/evidenzia editor) =====
@@ -514,7 +517,9 @@ window.AIEngine = (function () {
         const px = Math.round(pt.nx * image.width), py = Math.round(pt.ny * image.height);
 
         onStatus && onStatus('Segmentazione oggetto (qualche secondo)...');
-        const inputs = await processor(image, { input_points: [[[[px, py]]]], input_labels: [[[1]]] });
+        // input_points: [batch, nb_points, 2] (3 levels) — the 4-level nesting
+        // made the processor ignore the point (always the same mask).
+        const inputs = await processor(image, { input_points: [[[px, py]]], input_labels: [[1]] });
         const outputs = await model(inputs);
         const masks = await processor.post_process_masks(outputs.pred_masks, inputs.original_sizes, inputs.reshaped_input_sizes);
 
@@ -560,10 +565,11 @@ window.AIEngine = (function () {
 
         const pct = Math.round(100 * setCount / (H * W));
         const sc = (scores[best] != null) ? Number(scores[best]).toFixed(2) : '?';
+        const dbg = `[dims ${m0.dims.join('x')} ${planar ? 'planar' : 'interl'} n${nMasks}]`;
         if (setCount === 0) {
-            onStatus && onStatus(`Nessun oggetto trovato qui (punteggio ${sc}). Prova a cliccare più al centro dell'oggetto.`);
+            onStatus && onStatus(`Nessun oggetto trovato qui (punteggio ${sc}). ${dbg}`);
         } else {
-            onStatus && onStatus(`Oggetto selezionato (${pct}% area, punteggio ${sc}). Clicca altre parti o rifinisci col pennello.`);
+            onStatus && onStatus(`Oggetto selezionato (${pct}% area, punteggio ${sc}). ${dbg} Clicca altre parti o rifinisci col pennello.`);
         }
         return mask;
     }
