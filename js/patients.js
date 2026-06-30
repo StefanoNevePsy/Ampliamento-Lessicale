@@ -600,6 +600,9 @@ window.loadPatientData = (pid) => {
             <button class="report-tab" onclick="switchReportTab('activities', '${pid}')" data-tab="activities" style="flex:1; padding:8px; border:none; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.85rem; background:transparent; color:var(--text-secondary);">
                 <i class="fa-solid fa-list-check"></i> Attivit&agrave;
             </button>
+            <button class="report-tab" onclick="switchReportTab('viz', '${pid}')" data-tab="viz" style="flex:1; padding:8px; border:none; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.85rem; background:transparent; color:var(--text-secondary);">
+                <i class="fa-solid fa-shapes"></i> Visual
+            </button>
             <button class="report-tab" onclick="switchReportTab('diary', '${pid}')" data-tab="diary" style="flex:1; padding:8px; border:none; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.85rem; background:transparent; color:var(--text-secondary);">
                 <i class="fa-solid fa-book-medical"></i> Diario
             </button>
@@ -631,6 +634,7 @@ window.switchReportTab = (tab, pid) => {
     if (tab === 'overview') renderOverviewTab(p);
     else if (tab === 'dates') renderDatesTab(p);
     else if (tab === 'activities') renderActivitiesTab(p);
+    else if (tab === 'viz') renderVizTab(p);
     else if (tab === 'diary') renderDiaryTab(p);
 };
 
