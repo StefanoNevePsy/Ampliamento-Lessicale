@@ -610,11 +610,16 @@ window.AIEngine = (function () {
     async function _loadPanoptic(onStatus) {
         if (_pan) return _pan;
         const T = await loadTransformers(onStatus);
-        const { pipeline } = T;
+        const { pipeline, env } = T;
         if (!pipeline) throw new Error('pipeline non disponibile in transformers.js');
+        // Panoptic models are fetched from Hugging Face (never placed locally),
+        // so force REMOTE loading — otherwise the WebView blocks the local path
+        // ("unauthorized access to file").
+        try { env.allowRemoteModels = true; env.allowLocalModels = false; } catch (e) { /* ignore */ }
         const id = getConfig().panopticModelId || PANOPTIC_DEFAULT;
-        const device = capabilities().webgpu ? 'webgpu' : 'wasm';
-        onStatus && onStatus(`Caricamento modello panottico (${id})...`);
+        // WASM/CPU by default: WebGPU tends to crash the WebView with these models.
+        const device = getConfig().panopticDevice === 'gpu' && capabilities().webgpu ? 'webgpu' : 'wasm';
+        onStatus && onStatus(`Caricamento modello panottico (${id}, ${device})...`);
         _pan = await pipeline('image-segmentation', id, { device, progress_callback: _progress(onStatus) });
         _pan._id = id; _pan._device = device;
         return _pan;
