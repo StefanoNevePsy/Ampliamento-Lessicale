@@ -92,6 +92,7 @@
         let tool = 'wand';                                  // 'wand' | 'brush' | 'object' | 'pan'
         let effect = mode === 'cutout' ? 0 : 255;           // wand/brush sets mask to this (0 or 255)
         let hardness = 100;                                 // brush hardness 0..100
+        let wandSoftness = 0;                               // magic-wand edge feather (px)
         let straightLine = false;                           // straight-line (two-click) mode
         let lineAnchor = null;                              // first click of a two-click line
         let lastBrushPt = null;                             // anchor for shift-click lines
@@ -136,6 +137,7 @@
                     <button class="me-effect" data-effect="0" style="border:none; cursor:pointer; padding:7px 11px; border-radius:6px; font-size:0.78rem; color:#fff;">${effectRemLabel}</button>
                 </div>
                 <label id="me-tol-wrap" style="display:flex; align-items:center; gap:6px; color:#ccc; font-size:0.72rem;">Tolleranza <input id="me-tol" type="range" min="5" max="90" value="${tolerance}" style="width:80px; accent-color:var(--accent-color);"></label>
+                <label id="me-soft-wrap" style="display:none; align-items:center; gap:6px; color:#ccc; font-size:0.72rem;" title="Sfumatura dei bordi della selezione (regola prima di toccare)">Sfumatura <input id="me-soft" type="range" min="0" max="40" value="0" style="width:70px; accent-color:var(--accent-color);"></label>
                 <label id="me-brush-wrap" style="display:none; align-items:center; gap:6px; color:#ccc; font-size:0.72rem;">Dim. <input id="me-brush" type="range" min="3" max="${Math.round(Math.max(w, h) / 6)}" value="${brushSize}" style="width:80px; accent-color:var(--accent-color);"></label>
                 <label id="me-hard-wrap" style="display:none; align-items:center; gap:6px; color:#ccc; font-size:0.72rem;">Durezza <input id="me-hard" type="range" min="0" max="100" value="100" style="width:70px; accent-color:var(--accent-color);"></label>
                 <button id="me-line" class="btn btn-ghost me-toggle" style="display:none; padding:7px 9px; font-size:0.72rem;" title="Linea retta: tocca, poi tocca un altro punto"><i class="fa-solid fa-ruler"></i> Linea</button>
@@ -232,6 +234,25 @@
             if (firstKeep && mode === 'highlight' && effect === 255) { mask.fill(0); firstKeep = false; }
         }
 
+        // Feather a binary selection (0/255) by `r` px using a canvas blur, so the
+        // wand edges can be soft instead of jagged.
+        function featherSelection(sel, r) {
+            if (r < 1) return sel;
+            const c1 = document.createElement('canvas'); c1.width = w; c1.height = h;
+            const cx1 = c1.getContext('2d', { willReadFrequently: true });
+            const im = cx1.createImageData(w, h); const d = im.data;
+            for (let i = 0; i < w * h; i++) { const v = sel[i]; d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = v; d[i * 4 + 3] = 255; }
+            cx1.putImageData(im, 0, 0);
+            const c2 = document.createElement('canvas'); c2.width = w; c2.height = h;
+            const cx2 = c2.getContext('2d', { willReadFrequently: true });
+            cx2.filter = `blur(${r}px)`;
+            cx2.drawImage(c1, 0, 0);
+            const bd = cx2.getImageData(0, 0, w, h).data;
+            const out = new Uint8Array(w * h);
+            for (let i = 0; i < w * h; i++) out[i] = bd[i * 4];
+            return out;
+        }
+
         // --- Magic wand (flood fill by colour similarity from seed) ---
         function magicWand(sx, sy) {
             if (sx < 0 || sy < 0 || sx >= w || sy >= h) return;
@@ -239,18 +260,26 @@
             const seed = (sy * w + sx) * 4;
             const sr = base[seed], sg = base[seed + 1], sb = base[seed + 2];
             const visited = new Uint8Array(w * h);
+            const sel = new Uint8Array(w * h);          // the selected region (binary)
             const stack = [sy * w + sx];
             visited[sy * w + sx] = 1;
             const tol = tolerance;
             while (stack.length) {
                 const idx = stack.pop();
                 if (_colorDist(base, idx * 4, sr, sg, sb) > tol) continue;
-                mask[idx] = effect;
+                sel[idx] = 255;
                 const x = idx % w, y = (idx - x) / w;
                 if (x > 0 && !visited[idx - 1]) { visited[idx - 1] = 1; stack.push(idx - 1); }
                 if (x < w - 1 && !visited[idx + 1]) { visited[idx + 1] = 1; stack.push(idx + 1); }
                 if (y > 0 && !visited[idx - w]) { visited[idx - w] = 1; stack.push(idx - w); }
                 if (y < h - 1 && !visited[idx + w]) { visited[idx + w] = 1; stack.push(idx + w); }
+            }
+            // Soften the selection edges (read live so it can be changed per tap)
+            const soft = wandSoftness > 0 ? featherSelection(sel, wandSoftness) : sel;
+            for (let i = 0; i < w * h; i++) {
+                const a = soft[i];
+                if (a === 0) continue;
+                mask[i] = a === 255 ? effect : Math.round((mask[i] * (255 - a) + effect * a) / 255);
             }
             scheduleRender();
         }
@@ -415,6 +444,7 @@
             });
             const isBrush = tool === 'brush';
             overlay.querySelector('#me-tol-wrap').style.display = tool === 'wand' ? 'flex' : 'none';
+            overlay.querySelector('#me-soft-wrap').style.display = tool === 'wand' ? 'flex' : 'none';
             overlay.querySelector('#me-brush-wrap').style.display = isBrush ? 'flex' : 'none';
             overlay.querySelector('#me-hard-wrap').style.display = isBrush ? 'flex' : 'none';
             overlay.querySelector('#me-line').style.display = isBrush ? 'inline-flex' : 'none';
@@ -423,6 +453,7 @@
         overlay.querySelectorAll('.me-tool').forEach(b => b.onclick = () => { tool = b.dataset.tool; if (tool !== 'brush') hideBrushCursor(); if (tool === 'object') setStatus('Clicca su un oggetto per selezionarlo (la prima volta carica il modello).'); refreshToolButtons(); });
         overlay.querySelectorAll('.me-effect').forEach(b => b.onclick = () => { effect = parseInt(b.dataset.effect) ? 255 : 0; refreshToolButtons(); });
         overlay.querySelector('#me-tol').oninput = (e) => { tolerance = parseInt(e.target.value); };
+        overlay.querySelector('#me-soft').oninput = (e) => { wandSoftness = parseInt(e.target.value); };
         overlay.querySelector('#me-brush').oninput = (e) => {
             brushSize = parseInt(e.target.value);
             // Show a centered preview circle while adjusting so the size is visible
