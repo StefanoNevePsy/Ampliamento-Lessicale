@@ -33,6 +33,14 @@ for (const perm of permissions) {
     }
 }
 
+// Larger Java heap: helps transient allocations during native model load / NNAPI
+// compilation (the ONNX weights themselves are mmapped off-heap by ORT).
+if (!manifest.includes('android:largeHeap')) {
+    manifest = manifest.replace(/<application\b/, '<application android:largeHeap="true"');
+    changed = true;
+    console.log('Enabled android:largeHeap on <application>.');
+}
+
 // Prevent Activity restart on external keyboard connect/disconnect (Smart Book Cover etc.)
 // keyboard|keyboardHidden  — physical keyboard attached/detached
 // navigation — trackpad / pointing device on the cover

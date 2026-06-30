@@ -12,6 +12,10 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
@@ -49,7 +53,9 @@ public class NpuCutoutPlugin extends Plugin {
     private OrtSession session(String assetName) throws Exception {
         OrtSession s = sessions.get(assetName);
         if (s != null) return s;
-        byte[] bytes = readAsset(assetName);
+        // Load from a real file path so ORT memory-maps the weights OFF the Java
+        // heap. Reading the whole model into a byte[] would OOM the ~256MB heap.
+        String modelPath = ensureModelFile(assetName);
         OrtSession.SessionOptions opts = new OrtSession.SessionOptions();
         boolean nnapi = false;
         try {
@@ -59,20 +65,39 @@ public class NpuCutoutPlugin extends Plugin {
         } catch (Throwable t) {
             // NNAPI unavailable on this device/build: fall back to CPU (XNNPACK)
         }
-        s = env().createSession(bytes, opts);
+        s = env().createSession(modelPath, opts);
         sessions.put(assetName, s);
         nnapiUsed.put(assetName, nnapi);
         return s;
     }
 
-    private byte[] readAsset(String name) throws Exception {
-        java.io.InputStream is = getContext().getAssets().open(name);
-        ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        byte[] buf = new byte[16384];
-        int n;
-        while ((n = is.read(buf)) != -1) bos.write(buf, 0, n);
-        is.close();
-        return bos.toByteArray();
+    /**
+     * Copy a model from APK assets to a cache file (streamed, small buffer) and
+     * return its path. Cached between runs; re-copied only if missing/empty.
+     */
+    private String ensureModelFile(String assetName) throws Exception {
+        File dir = new File(getContext().getCacheDir(), "onnx-models");
+        if (!dir.exists()) dir.mkdirs();
+        File out = new File(dir, assetName);
+        if (out.exists() && out.length() > 0) return out.getAbsolutePath();
+
+        File tmp = new File(dir, assetName + ".tmp");
+        InputStream is = getContext().getAssets().open(assetName);
+        OutputStream os = new FileOutputStream(tmp);
+        try {
+            byte[] buf = new byte[1 << 16];
+            int n;
+            while ((n = is.read(buf)) != -1) os.write(buf, 0, n);
+            os.flush();
+        } finally {
+            try { is.close(); } catch (Exception ignored) {}
+            try { os.close(); } catch (Exception ignored) {}
+        }
+        if (!tmp.renameTo(out)) {
+            // rename can fail across some FS states; fall back to using the tmp file
+            return tmp.getAbsolutePath();
+        }
+        return out.getAbsolutePath();
     }
 
     @PluginMethod
