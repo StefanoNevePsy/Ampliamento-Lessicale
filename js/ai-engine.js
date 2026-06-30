@@ -370,10 +370,20 @@ window.AIEngine = (function () {
         const ort = await _loadOrt(onStatus);
         const tried = [];
         for (const { url, local } of _ortModelUrls(meta)) {
+            // Resolve local relative paths against the document so ORT (which may
+            // fetch from a worker/wasm context) finds them.
+            const abs = local ? new URL(url, window.location.href).href : url;
             const short = url.replace(/^https?:\/\/huggingface\.co\//, 'HF:').replace(/\?.*$/, '');
             try {
-                onStatus && onStatus(`${local ? 'Cerco in locale' : 'Scarico'}: ${short}...`);
-                const sess = await ort.InferenceSession.create(url, {
+                // Existence check (HEAD) so we know 404 vs found-but-failed, and
+                // never accidentally download a 500MB file just to test it.
+                if (local) {
+                    let head;
+                    try { head = await fetch(abs, { method: 'HEAD' }); } catch (he) { head = null; }
+                    if (head && !head.ok) { tried.push(`${short} [${head.status}]`); continue; }
+                }
+                onStatus && onStatus(`${local ? 'Carico locale' : 'Scarico'}: ${short}...`);
+                const sess = await ort.InferenceSession.create(abs, {
                     executionProviders: ['webgpu', 'wasm'],
                     graphOptimizationLevel: 'all'
                 });
@@ -381,13 +391,11 @@ window.AIEngine = (function () {
                 onStatus && onStatus(`Modello caricato: ${short}`);
                 return sess;
             } catch (e) {
-                tried.push(short);
-                console.warn('ORT-Web model load failed:', url, e);
+                tried.push(`${short} [${String(e && e.message || e).slice(0, 60)}]`);
+                console.warn('ORT-Web model load failed:', abs, e);
             }
         }
-        throw new Error('Modello non trovato. Tentati (in ordine): ' + tried.join('  •  ')
-            + '  — metti il file .onnx (fp16) in ' + (getConfig().localModelPath || './models/')
-            + ' rinominato ' + _assetNameFor(meta.id) + ' e fai cap:sync.');
+        throw new Error('Modello non caricabile. Tentativi: ' + tried.join('  •  '));
     }
 
     async function ortWebSegment(imageUrl, w, h, onStatus) {
@@ -511,15 +519,26 @@ window.AIEngine = (function () {
         const masks = await processor.post_process_masks(outputs.pred_masks, inputs.original_sizes, inputs.reshaped_input_sizes);
 
         const m0 = masks[0];
-        const dims = m0.dims;
-        // Spatial size = last two dims. The candidate masks are stored
-        // INTERLEAVED per pixel (data[i*nMasks + k]) — reading them as separate
-        // planes (data[k*H*W + i]) yields a garbage region (the earlier bug).
-        const H = dims[dims.length - 2], W = dims[dims.length - 1];
         const md = m0.data;
-        const nMasks = Math.max(1, Math.round(md.length / (H * W)));
         const scores = (outputs.iou_scores && outputs.iou_scores.data) || [1];
+        const nMasks = scores.length || 1;
         let best = 0; for (let i = 1; i < nMasks; i++) if ((scores[i] || 0) > (scores[best] || 0)) best = i;
+
+        // Figure out the layout from dims (drop the batch dim if present). The
+        // mask-count dim is the one equal to nMasks; the other two are H,W. It
+        // can be planar [nMasks,H,W] (index = best*H*W + i) or interleaved
+        // [H,W,nMasks] (index = i*nMasks + best). Getting this wrong gives a
+        // sheared/blocky mask, so detect it explicitly.
+        let d = Array.from(m0.dims);
+        if (d.length === 4) d = d.slice(1);          // [batch,...] -> [...]
+        let H, W, planar;
+        if (d.length === 3 && d[0] === nMasks) { planar = true; H = d[1]; W = d[2]; }
+        else if (d.length === 3 && d[2] === nMasks) { planar = false; H = d[0]; W = d[1]; }
+        else { // fallback: assume planar, spatial = largest two dims
+            const big = d.filter(x => x !== nMasks);
+            H = big[0] || d[d.length - 2]; W = big[1] || d[d.length - 1]; planar = true;
+        }
+        const at = (i) => planar ? md[best * H * W + i] : md[i * nMasks + best];
 
         // Rasterize the chosen mask, count pixels (diagnostics), resize to w*h
         const mc = document.createElement('canvas'); mc.width = W; mc.height = H;
@@ -527,7 +546,7 @@ window.AIEngine = (function () {
         const im = mctx.createImageData(W, H); const idata = im.data;
         let setCount = 0;
         for (let i = 0; i < H * W; i++) {
-            const on = md[i * nMasks + best] ? 255 : 0;
+            const on = at(i) ? 255 : 0;
             if (on) setCount++;
             idata[i * 4] = idata[i * 4 + 1] = idata[i * 4 + 2] = on; idata[i * 4 + 3] = 255;
         }
