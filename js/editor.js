@@ -528,6 +528,20 @@ window.aiBatchScontornoEditor = async () => {
     alert(`Scontorno AI completato: ${done - failed} riuscite${failed ? `, ${failed} fallite` : ''}.`);
 };
 
+// Remove every existing background-removal result in the set, so they can be
+// redone in bulk (e.g. with a different/AI model). Originals stay untouched.
+window.clearAllScontorni = async () => {
+    const items = state.editingItems.filter(i => i.maskedUrl);
+    if (items.length === 0) { alert('Nessuno scontorno da rimuovere.'); return; }
+    const proceed = (typeof themedConfirm === 'function')
+        ? await themedConfirm(`Rimuovere lo scontorno da ${items.length} immagini?\nLe immagini originali restano intatte; potrai rifare lo scontorno in bulk.`)
+        : confirm(`Rimuovere lo scontorno da ${items.length} immagini?`);
+    if (!proceed) return;
+    items.forEach(i => delete i.maskedUrl);
+    renderEditorList();
+    alert(`Scontorni rimossi da ${items.length} immagini. Ricorda di salvare il set (o rifai subito il bulk).`);
+};
+
 window.openScontornoSettings = async () => {
     const current = getScontornoTolerance();
     const val = await themedPrompt('Tolleranza scontorno (5-80).\nBassa = conservativo, Alta = aggressivo:', String(current));

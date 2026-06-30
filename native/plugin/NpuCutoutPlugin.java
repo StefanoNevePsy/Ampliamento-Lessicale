@@ -56,6 +56,18 @@ public class NpuCutoutPlugin extends Plugin {
         return env;
     }
 
+    // Reusable direct input buffer (reallocated only if a larger size is needed)
+    private FloatBuffer reusableInput;
+    private int reusableInputCap = -1;
+    private FloatBuffer inputBuffer(int floats) {
+        if (reusableInput == null || reusableInputCap < floats) {
+            reusableInput = ByteBuffer.allocateDirect(floats * 4)
+                .order(ByteOrder.nativeOrder()).asFloatBuffer();
+            reusableInputCap = floats;
+        }
+        return reusableInput;
+    }
+
     private OrtSession session(String assetName) throws Exception {
         OrtSession s = sessions.get(assetName);
         if (s != null) return s;
@@ -164,6 +176,10 @@ public class NpuCutoutPlugin extends Plugin {
             int plane = size * size;
             int[] px = new int[plane];
             scaled.getPixels(px, 0, size, 0, 0, size, size);
+            // The input bitmaps are no longer needed — free their native memory now.
+            if (scaled != src) scaled.recycle();
+            src.recycle();
+
             float[] data = new float[3 * plane];
             for (int i = 0; i < plane; i++) {
                 int p = px[i];
@@ -177,12 +193,13 @@ public class NpuCutoutPlugin extends Plugin {
 
             OrtSession sess = session(assetName);
             String inputName = sess.getInputNames().iterator().next();
-            // ORT requires a DIRECT buffer for tensor input (a heap FloatBuffer.wrap
-            // would throw at runtime).
-            FloatBuffer fb = ByteBuffer.allocateDirect(data.length * 4)
-                .order(ByteOrder.nativeOrder()).asFloatBuffer();
+            // Reuse ONE direct buffer across calls. ORT needs a DIRECT buffer, and
+            // allocating a new ~12MB direct buffer per image leaks off-heap memory
+            // (GC frees direct buffers lazily) -> eventual native OOM crash.
+            FloatBuffer fb = inputBuffer(data.length);
+            fb.clear();
             fb.put(data);
-            fb.rewind();
+            fb.flip(); // limit = data.length, position = 0 (exact slice even if buffer is larger)
             OnnxTensor input = OnnxTensor.createTensor(
                 env(), fb, new long[]{1, 3, size, size});
             OrtSession.Result results = sess.run(Collections.singletonMap(inputName, input));
@@ -215,6 +232,9 @@ public class NpuCutoutPlugin extends Plugin {
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             outBmp.compress(Bitmap.CompressFormat.PNG, 100, bos);
             String outB64 = Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP);
+            // Free the mask bitmaps' native memory immediately.
+            if (outBmp != maskBmp) outBmp.recycle();
+            maskBmp.recycle();
 
             JSObject ret = new JSObject();
             ret.put("mask", "data:image/png;base64," + outB64);
