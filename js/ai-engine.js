@@ -352,32 +352,42 @@ window.AIEngine = (function () {
     // Candidate model URLs for ORT-Web: local web folder first, then Hugging Face
     // (fp16 variant — good on WebGPU, with fp32 I/O so our float input works).
     function _ortModelUrls(meta) {
-        const cfg = getConfig();
+        const base = (getConfig().localModelPath || './models/').replace(/\/$/, '');
+        const asset = _assetNameFor(meta.id);                 // e.g. rmbg-2.0.onnx
+        // Try many local names/layouts first (404s fail instantly), then remote.
+        const localNames = [asset, 'model_fp16.onnx', 'model.onnx', 'model_quantized.onnx'];
         const urls = [];
-        if (cfg.localModelPath) {
-            urls.push(cfg.localModelPath.replace(/\/$/, '') + '/' + _assetNameFor(meta.id));
-        }
-        urls.push(`https://huggingface.co/${meta.id}/resolve/main/onnx/model_fp16.onnx`);
-        urls.push(`https://huggingface.co/${meta.id}/resolve/main/onnx/model.onnx`);
+        localNames.forEach(n => urls.push({ url: `${base}/${n}`, local: true }));
+        urls.push({ url: `${base}/${meta.id}/onnx/model_fp16.onnx`, local: true });
+        urls.push({ url: `${base}/${meta.id}/onnx/model.onnx`, local: true });
+        urls.push({ url: `https://huggingface.co/${meta.id}/resolve/main/onnx/model_fp16.onnx`, local: false });
+        urls.push({ url: `https://huggingface.co/${meta.id}/resolve/main/onnx/model.onnx`, local: false });
         return urls;
     }
 
     async function _ortGetSession(meta, onStatus) {
         if (_ortSessions[meta.id]) return _ortSessions[meta.id];
         const ort = await _loadOrt(onStatus);
-        let lastErr;
-        for (const url of _ortModelUrls(meta)) {
+        const tried = [];
+        for (const { url, local } of _ortModelUrls(meta)) {
+            const short = url.replace(/^https?:\/\/huggingface\.co\//, 'HF:').replace(/\?.*$/, '');
             try {
-                onStatus && onStatus('Caricamento modello su GPU (può richiedere tempo la prima volta)...');
+                onStatus && onStatus(`${local ? 'Cerco in locale' : 'Scarico'}: ${short}...`);
                 const sess = await ort.InferenceSession.create(url, {
                     executionProviders: ['webgpu', 'wasm'],
                     graphOptimizationLevel: 'all'
                 });
                 _ortSessions[meta.id] = sess;
+                onStatus && onStatus(`Modello caricato: ${short}`);
                 return sess;
-            } catch (e) { lastErr = e; console.warn('ORT-Web model load failed:', url, e); }
+            } catch (e) {
+                tried.push(short);
+                console.warn('ORT-Web model load failed:', url, e);
+            }
         }
-        throw new Error('Modello non caricabile via ORT-Web. ' + (lastErr && lastErr.message || ''));
+        throw new Error('Modello non trovato. Tentati (in ordine): ' + tried.join('  •  ')
+            + '  — metti il file .onnx (fp16) in ' + (getConfig().localModelPath || './models/')
+            + ' rinominato ' + _assetNameFor(meta.id) + ' e fai cap:sync.');
     }
 
     async function ortWebSegment(imageUrl, w, h, onStatus) {
@@ -502,13 +512,14 @@ window.AIEngine = (function () {
 
         const m0 = masks[0];
         const dims = m0.dims;
-        let nMasks, H, W;
-        if (dims.length === 4) { nMasks = dims[1]; H = dims[2]; W = dims[3]; }
-        else { nMasks = dims[0]; H = dims[1]; W = dims[2]; }
-        const scores = (outputs.iou_scores && outputs.iou_scores.data) || [1];
-        let best = 0; for (let i = 1; i < nMasks; i++) if (scores[i] > scores[best]) best = i;
+        // Spatial size = last two dims. The candidate masks are stored
+        // INTERLEAVED per pixel (data[i*nMasks + k]) — reading them as separate
+        // planes (data[k*H*W + i]) yields a garbage region (the earlier bug).
+        const H = dims[dims.length - 2], W = dims[dims.length - 1];
         const md = m0.data;
-        const off = best * H * W;
+        const nMasks = Math.max(1, Math.round(md.length / (H * W)));
+        const scores = (outputs.iou_scores && outputs.iou_scores.data) || [1];
+        let best = 0; for (let i = 1; i < nMasks; i++) if ((scores[i] || 0) > (scores[best] || 0)) best = i;
 
         // Rasterize the chosen mask, count pixels (diagnostics), resize to w*h
         const mc = document.createElement('canvas'); mc.width = W; mc.height = H;
@@ -516,7 +527,7 @@ window.AIEngine = (function () {
         const im = mctx.createImageData(W, H); const idata = im.data;
         let setCount = 0;
         for (let i = 0; i < H * W; i++) {
-            const on = md[off + i] ? 255 : 0;
+            const on = md[i * nMasks + best] ? 255 : 0;
             if (on) setCount++;
             idata[i * 4] = idata[i * 4 + 1] = idata[i * 4 + 2] = on; idata[i * 4 + 3] = 255;
         }
