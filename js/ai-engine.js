@@ -219,6 +219,31 @@ window.AIEngine = (function () {
         return !!nativePlugin();
     }
 
+    // Per-model accelerator memory: assetName -> 'nnapi' | 'cpu' (learned at runtime)
+    const _nativeAccel = {};
+
+    // Whether, in AUTO mode, the native (NNAPI) path is worth it for this model.
+    // The native path only wins when NNAPI actually accelerates; if it falls back
+    // to CPU it is slower than WebGPU, so we route those models to the web engine.
+    function autoPreferNative(assetName, modelId) {
+        if (_nativeAccel[assetName] === 'cpu') return false;   // proven CPU-bound -> web is faster
+        if (_nativeAccel[assetName] === 'nnapi') return true;  // proven accelerated -> native
+        // Unknown: RMBG-1.4 (opset 11) can't use NNAPI's NHWC kernels, so it would
+        // only run on native CPU -> prefer WebGPU. Heavier models (2.0) try native.
+        if (/1\.?4/.test(modelId)) return false;
+        return true;
+    }
+
+    // The engine that will actually be used for the current model ('native'|'web')
+    function effectiveEngine() {
+        const cfg = getConfig();
+        if (!nativePlugin() || cfg.engine === 'web') return 'web';
+        if (cfg.engine === 'native') return 'native';
+        const m = candidateList()[0];
+        const id = cfg.modelId || m.id;
+        return autoPreferNative(_assetNameFor(id), id) ? 'native' : 'web';
+    }
+
     // Native NPU/GPU segmentation via the Capacitor plugin (ONNX Runtime + NNAPI).
     // Returns a Uint8 mask (w*h) or null if the native path isn't usable.
     async function nativeSegment(imageUrl, w, h, onStatus) {
@@ -227,11 +252,12 @@ window.AIEngine = (function () {
         const cfg = getConfig();
         const m = candidateList()[0]; // honour configured/default model
         const id = cfg.modelId || m.id;
+        const assetName = _assetNameFor(id);
         onStatus && onStatus('Scontorno nativo su NPU/GPU...');
         let res;
         try {
             res = await P.removeBackground({
-                image: imageUrl, assetName: _assetNameFor(id),
+                image: imageUrl, assetName,
                 width: w, height: h, size: m.size,
                 mean: m.mean, std: m.std, sigmoid: m.sigmoid
             });
@@ -240,6 +266,7 @@ window.AIEngine = (function () {
             return null;
         }
         if (!res || !res.mask) return null;
+        if (res.accelerator) _nativeAccel[assetName] = res.accelerator; // learn for routing
         // Decode the returned grayscale PNG mask into a Uint8 array
         const img = await new Promise((resolve, reject) => {
             const im = new Image();
@@ -260,11 +287,11 @@ window.AIEngine = (function () {
 
     // Segment the subject. Returns a Uint8 grayscale mask (length w*h), 255=subject.
     async function segmentSubject(imageUrl, w, h, onStatus) {
-        // Prefer the native NPU/GPU plugin when running inside the Android app
-        if (nativeAvailable()) {
+        // Per-model routing: native only when it's actually the better path
+        if (effectiveEngine() === 'native') {
             const nm = await nativeSegment(imageUrl, w, h, onStatus);
             if (nm) return nm;
-            onStatus && onStatus('Motore nativo non disponibile, uso il motore web...');
+            onStatus && onStatus('Motore nativo non riuscito, uso il motore web...');
         } else if (getConfig().engine === 'native') {
             onStatus && onStatus('Plugin nativo NPU assente (build/app non nativa): uso il motore web.');
         }
@@ -309,7 +336,7 @@ window.AIEngine = (function () {
     function unload() { _seg = null; _segLoading = null; }
 
     return {
-        getConfig, setConfig, capabilities, deviceChain, nativeAvailable,
+        getConfig, setConfig, capabilities, deviceChain, nativeAvailable, effectiveEngine,
         loadTransformers, getSegmenter, segmentSubject, preload, preloadNative, status, unload,
         SEG_MODELS
     };
@@ -330,7 +357,7 @@ window.populateAiEngineSettings = function () {
     const capsEl = document.getElementById('ai-engine-caps');
     if (capsEl) {
         const st = AIEngine.status();
-        const activeEngine = AIEngine.nativeAvailable() ? 'Nativo NPU (NNAPI)' : 'Web (WebGPU/CPU)';
+        const activeEngine = AIEngine.effectiveEngine() === 'native' ? 'Nativo NPU (NNAPI)' : 'Web (WebGPU/CPU)';
         const nativeBadge = `Motore attivo: <b style="color:var(--success-color)">${activeEngine}</b> · ` +
             `Plugin nativo: <b style="color:${caps.native ? 'var(--success-color)' : 'var(--text-secondary)'}">${caps.native ? 'presente' : 'assente'}</b> · `;
         capsEl.innerHTML = `${nativeBadge}WebGPU (GPU): <b style="color:${caps.webgpu ? 'var(--success-color)' : 'var(--danger-color)'}">${caps.webgpu ? 'disponibile' : 'non disponibile'}</b> · WebNN (NPU): <b style="color:${caps.webnn ? 'var(--success-color)' : 'var(--text-secondary)'}">${caps.webnn ? 'sperimentale' : 'non disponibile'}</b>${st.loaded ? ` · <span style="color:var(--success-color);">Caricato: ${st.model} su ${st.device.toUpperCase()}</span>` : ''}`;
@@ -358,8 +385,8 @@ window.testAiEngine = async function () {
     const upd = (t) => { if (s) s.textContent = t; };
     AIEngine.unload();
     try {
-        // Test whichever engine is actually active: native (NNAPI) or web (WebGPU)
-        if (AIEngine.nativeAvailable()) {
+        // Test whichever engine will actually be used for the current model
+        if (AIEngine.effectiveEngine() === 'native') {
             const r = await AIEngine.preloadNative(upd);
             const accel = r.accelerator === 'nnapi'
                 ? '<b style="color:var(--success-color)">NPU/GPU (NNAPI)</b>'
@@ -371,7 +398,7 @@ window.testAiEngine = async function () {
         }
         if (window.populateAiEngineSettings) populateAiEngineSettings();
     } catch (e) {
-        const hint = AIEngine.nativeAvailable()
+        const hint = AIEngine.effectiveEngine() === 'native'
             ? 'Verifica che il file del modello sia in native-models\\ (rinominato rmbg-2.0.onnx / rmbg-1.4.onnx) e di aver eseguito "Setup plugin NPU" + rebuild.'
             : 'Prova il download manuale del modello (pulsante qui sopra).';
         if (s) s.innerHTML = `<span style="color:var(--danger-color);"><i class="fa-solid fa-xmark"></i> ${e.message || e}</span><br><span style="font-size:0.75rem;">${hint}</span>`;
