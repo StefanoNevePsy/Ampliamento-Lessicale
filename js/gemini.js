@@ -220,6 +220,7 @@ window.switchSettingsTab = (tab) => {
     });
     if (tab === 'theme') renderThemePicker();
     if (tab === 'images' && typeof populateAiEngineSettings === 'function') populateAiEngineSettings();
+    if (tab === 'images' && typeof populateAiStudioStyles === 'function') populateAiStudioStyles();
 };
 
 window.openSettings = () => {

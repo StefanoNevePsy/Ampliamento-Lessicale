@@ -1215,3 +1215,138 @@ window.showCloudflareInstructions = () => {
     `;
     document.body.appendChild(modal);
 };
+
+// ============================================================
+// AI STUDIO manual prompt helper (free image gen via the web UI)
+// ============================================================
+function getAiStudioStyles() {
+    try { const s = JSON.parse(localStorage.getItem('aistudio_styles') || 'null'); if (Array.isArray(s)) return s; } catch (e) { /* default */ }
+    return POLL_STYLES.map(s => s.id); // default: all styles in the random pool
+}
+function setAiStudioStyles(arr) { localStorage.setItem('aistudio_styles', JSON.stringify(arr || [])); }
+window.getAiStudioStyles = getAiStudioStyles;
+window.setAiStudioStyles = setAiStudioStyles;
+
+// Settings UI: the style pool checkboxes (called from switchSettingsTab('images'))
+window.populateAiStudioStyles = function () {
+    const c = document.getElementById('aistudio-styles-pool');
+    if (!c) return;
+    const sel = getAiStudioStyles();
+    c.innerHTML = POLL_STYLES.map(s => `
+        <label style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:#ddd; cursor:pointer; background:rgba(255,255,255,0.04); padding:5px 9px; border-radius:8px;">
+            <input type="checkbox" value="${s.id}" ${sel.includes(s.id) ? 'checked' : ''} onchange="_saveAiStudioStyles()" style="accent-color:var(--accent-color);">
+            <i class="fa-solid ${s.icon}" style="color:${s.color};"></i> ${s.label}
+        </label>`).join('');
+};
+window._saveAiStudioStyles = function () {
+    const ids = [...document.querySelectorAll('#aistudio-styles-pool input:checked')].map(i => i.value);
+    setAiStudioStyles(ids);
+};
+
+function _composeAiStudioPrompt(translatedLabel, styleId) {
+    let style = styleId;
+    if (!style || style === 'random') {
+        const pool = getAiStudioStyles().filter(id => POLL_STYLES.some(s => s.id === id));
+        const ids = pool.length ? pool : POLL_STYLES.map(s => s.id);
+        style = ids[Math.floor(Math.random() * ids.length)];
+    }
+    const s = POLL_STYLES.find(st => st.id === style);
+    const parts = [translatedLabel];
+    if (s) parts.push(s.prompt);
+    parts.push('single subject, centered, isolated on a pure white background, no shadow, 1:1 square aspect ratio');
+    return { prompt: parts.join(', '), styleLabel: s ? s.label : style };
+}
+
+let _aiStudioTranslated = '';
+window._aiStudioRefresh = function () {
+    const sel = document.getElementById('aistudio-style');
+    const ta = document.getElementById('aistudio-prompt-text');
+    if (!sel || !ta) return;
+    const { prompt, styleLabel } = _composeAiStudioPrompt(_aiStudioTranslated, sel.value);
+    ta.value = prompt;
+    const info = document.getElementById('aistudio-style-info');
+    if (info) info.textContent = sel.value === 'random' ? `Stile casuale scelto: ${styleLabel}` : '';
+};
+
+function _aiStudioStatus(msg, color) { const s = document.getElementById('aistudio-status'); if (s) { s.textContent = msg; s.style.color = color || '#aaa'; } }
+
+window._aiStudioCopy = async () => {
+    const ta = document.getElementById('aistudio-prompt-text');
+    if (!ta) return;
+    try { await navigator.clipboard.writeText(ta.value); }
+    catch (e) { ta.select(); try { document.execCommand('copy'); } catch (_) {} }
+    _aiStudioStatus('Prompt copiato negli appunti ✓', 'var(--success-color)');
+};
+
+window._aiStudioClose = () => {
+    const m = document.getElementById('modal-aistudio');
+    if (m && m._onPaste) document.removeEventListener('paste', m._onPaste);
+    if (m) m.remove();
+};
+
+async function _aiStudioApplyFile(file, idx) {
+    if (!file) return;
+    _aiStudioStatus('Importazione immagine...', '#aaa');
+    try {
+        const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = e => res(e.target.result); r.onerror = rej; r.readAsDataURL(file); });
+        const compressed = await compressDataUrl(dataUrl, getEditingImageQuality());
+        state.editingItems[idx].url = compressed;
+        if (typeof renderEditorList === 'function') renderEditorList();
+        _aiStudioStatus('Immagine importata ✓', 'var(--success-color)');
+        setTimeout(() => _aiStudioClose(), 700);
+    } catch (e) { _aiStudioStatus('Errore import: ' + e.message, 'var(--danger-color)'); }
+}
+window._aiStudioFile = (input, idx) => { if (input.files && input.files[0]) _aiStudioApplyFile(input.files[0], idx); };
+
+window.openAiStudioPrompt = async (itemIndex) => {
+    const item = state.editingItems[itemIndex];
+    if (!item) return;
+    _aiStudioClose();
+    _aiStudioTranslated = item.label;
+
+    const modal = document.createElement('div');
+    modal.id = 'modal-aistudio';
+    modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:21000; display:flex; align-items:center; justify-content:center; padding:20px; overflow-y:auto;';
+    modal.innerHTML = `
+        <div style="width:100%; max-width:480px; background:#1e1e2f; border-radius:16px; border:1px solid var(--glass-border); padding:20px; max-height:90vh; overflow-y:auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <h3 style="margin:0; color:white; font-size:1rem;"><i class="fa-solid fa-wand-magic-sparkles" style="color:#8ab4f8;"></i> Prompt per AI Studio (gratis)</h3>
+                <button class="btn btn-ghost" onclick="_aiStudioClose()" style="padding:6px 10px;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div style="font-size:0.8rem; color:#aaa; margin-bottom:8px;">Item: <b style="color:#fff;">${escapeHtml(item.label)}</b></div>
+            <label style="font-size:0.8rem; color:#aaa;">Stile</label>
+            <select id="aistudio-style" onchange="_aiStudioRefresh()" style="width:100%; padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; margin-bottom:4px;">
+                <option value="random">Casuale (dal pool nelle Impostazioni)</option>
+                ${POLL_STYLES.map(s => `<option value="${s.id}">${s.label}</option>`).join('')}
+            </select>
+            <div id="aistudio-style-info" style="font-size:0.7rem; color:#8ab4f8; margin-bottom:8px; min-height:14px;"></div>
+            <label style="font-size:0.8rem; color:#aaa;">Prompt (tradotto + 1:1 + sfondo bianco)</label>
+            <textarea id="aistudio-prompt-text" rows="4" style="width:100%; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.85rem; resize:vertical; font-family:inherit; margin-bottom:8px;"></textarea>
+            <div style="display:flex; gap:8px; margin-bottom:14px;">
+                <button class="btn btn-primary" style="flex:1; padding:10px;" onclick="_aiStudioCopy()"><i class="fa-solid fa-copy"></i> Copia prompt</button>
+                <button class="btn btn-ghost" style="flex:1; padding:10px;" onclick="window.open('https://aistudio.google.com/','_blank')"><i class="fa-solid fa-up-right-from-square"></i> Apri AI Studio</button>
+            </div>
+            <label style="font-size:0.8rem; color:#aaa;">Riporta qui l'immagine generata</label>
+            <div id="aistudio-paste" style="border:2px dashed var(--glass-border); border-radius:10px; padding:16px; text-align:center; color:#888; font-size:0.82rem; cursor:pointer; margin:4px 0 8px;">
+                <i class="fa-solid fa-paste"></i> Incolla (Ctrl+V) o tocca per caricare il file salvato
+            </div>
+            <input type="file" id="aistudio-file" accept="image/*" style="display:none;" onchange="_aiStudioFile(this, ${itemIndex})">
+            <div id="aistudio-status" style="font-size:0.78rem; text-align:center; min-height:16px; color:#aaa;"></div>
+        </div>`;
+    document.body.appendChild(modal);
+
+    document.getElementById('aistudio-paste').onclick = () => document.getElementById('aistudio-file').click();
+    const onPaste = async (e) => {
+        const items = (e.clipboardData && e.clipboardData.items) || [];
+        for (const it of items) {
+            if (it.type && it.type.startsWith('image/')) { e.preventDefault(); await _aiStudioApplyFile(it.getAsFile(), itemIndex); return; }
+        }
+    };
+    modal._onPaste = onPaste;
+    document.addEventListener('paste', onPaste);
+
+    _aiStudioRefresh();
+    document.getElementById('aistudio-style-info').textContent = 'Traduzione etichetta...';
+    try { _aiStudioTranslated = await translateSingleLabel(item.label); } catch (e) { /* keep original */ }
+    _aiStudioRefresh();
+};

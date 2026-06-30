@@ -312,6 +312,9 @@ function renderEditorList() {
             <button class="btn btn-ghost" style="padding:6px;" onclick="openPollinationsGenerator(${idx}); event.stopPropagation();" title="Cerca o genera immagine">
                 <i class="fa-solid fa-wand-magic-sparkles" style="font-size:0.8rem; ${item.url ? 'opacity:0.4' : 'color:var(--accent-color); opacity:0.8'}"></i>
             </button>
+            <button class="btn btn-ghost" style="padding:6px;" onclick="openAiStudioPrompt(${idx}); event.stopPropagation();" title="Prompt per AI Studio / Gemini (gratis)">
+                <i class="fa-solid fa-clipboard" style="font-size:0.8rem; color:#22d3ee; opacity:0.85;"></i>
+            </button>
             <button class="btn btn-ghost" style="padding:6px;" onclick="triggerAudioUpload(${idx}); event.stopPropagation();" title="Carica Audio">
                 <i class="fa-solid fa-music" style="font-size:0.8rem; ${item.audio ? 'color:var(--success-color)' : 'opacity:0.4'}"></i>
             </button>
