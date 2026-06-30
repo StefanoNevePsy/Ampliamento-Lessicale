@@ -96,6 +96,7 @@
         let lineAnchor = null;                              // first click of a two-click line
         let lastBrushPt = null;                             // anchor for shift-click lines
         let zoom = 1, panX = 0, panY = 0;                   // view transform
+        let samDebug = false;                               // show SAM candidate masks
         const undoStack = [];                               // mask snapshots
         // In highlight, the FIRST "keep" selection desaturates everything else,
         // so picking the subject leaves only it coloured.
@@ -128,6 +129,7 @@
                     <button class="me-tool" data-tool="wand" style="border:none; cursor:pointer; padding:7px 11px; border-radius:6px; font-size:0.78rem; color:#fff;"><i class="fa-solid fa-wand-magic-sparkles"></i> Bacchetta</button>
                     <button class="me-tool" data-tool="brush" style="border:none; cursor:pointer; padding:7px 11px; border-radius:6px; font-size:0.78rem; color:#fff;"><i class="fa-solid fa-paintbrush"></i> Pennello</button>
                     <button class="me-tool" data-tool="pan" style="border:none; cursor:pointer; padding:7px 11px; border-radius:6px; font-size:0.78rem; color:#fff;" title="Sposta l'immagine (quando ingrandita)"><i class="fa-solid fa-up-down-left-right"></i></button>
+                    <button id="me-samdbg" style="border:none; cursor:pointer; padding:7px 9px; border-radius:6px; font-size:0.78rem; color:#fff;" title="Debug: mostra le 3 maschere SAM colorate"><i class="fa-solid fa-bug"></i></button>
                 </div>
                 <div style="display:flex; gap:4px; background:rgba(255,255,255,0.06); border-radius:8px; padding:3px;">
                     <button class="me-effect" data-effect="1" style="border:none; cursor:pointer; padding:7px 11px; border-radius:6px; font-size:0.78rem; color:#fff;">${effectAddLabel}</button>
@@ -324,6 +326,23 @@
 
         let panning = false, panStart = null, pinchDist = 0, pinchZoom = 1;
 
+        // Debug: overlay SAM's candidate masks (R/G/B) on the colour image.
+        async function samDebugClick(p) {
+            if (!window.AIEngine || !window.AIEngine.samDebugMasks) { setStatus('Debug non disponibile.'); return; }
+            if (samBusy) return; samBusy = true;
+            try {
+                const res = await window.AIEngine.samDebugMasks(opts.imageUrl, { nx: p.x / w, ny: p.y / h }, w, h, setStatus);
+                const o = ctxWork.createImageData(w, h); const od = o.data;
+                for (let i = 0; i < w * h; i++) { const j = i * 4; od[j] = base[j]; od[j + 1] = base[j + 1]; od[j + 2] = base[j + 2]; od[j + 3] = 255; }
+                const cols = [[255, 40, 40], [40, 255, 40], [60, 140, 255]];
+                res.masks.forEach((m, k) => { const c = cols[k % 3]; for (let i = 0; i < w * h; i++) if (m.data[i] > 127) { const j = i * 4; od[j] = (od[j] + c[0] * 2) / 3; od[j + 1] = (od[j + 1] + c[1] * 2) / 3; od[j + 2] = (od[j + 2] + c[2] * 2) / 3; } });
+                ctxWork.putImageData(o, 0, 0);
+                ctxDisp.clearRect(0, 0, w, h); ctxDisp.drawImage(workCanvas, 0, 0);
+                const leg = res.masks.map((m, k) => `${['🔴', '🟢', '🔵'][k] || k}${m.area}%/${m.score}`).join('  ');
+                setStatus(`Debug ${res.dims} ${res.planar ? 'pl' : 'in'} — ${leg}. Tocca di nuovo (bug) per uscire.`);
+            } catch (e) { setStatus('Debug fallito: ' + (e.message || e)); }
+            finally { samBusy = false; }
+        }
         function onDown(ev) {
             if (ev.touches && ev.touches.length >= 2) { // pinch zoom
                 ev.preventDefault(); pinchDist = _pinchDist(ev.touches); pinchZoom = zoom; drawing = false; hideBrushCursor(); return;
@@ -331,7 +350,7 @@
             ev.preventDefault();
             if (tool === 'pan') { panning = true; const c = _cxy(ev); panStart = { x: c.x - panX, y: c.y - panY }; return; }
             const p = toWork(ev);
-            if (tool === 'object') { pushUndo(); samClick(p); return; }
+            if (tool === 'object') { if (samDebug) { samDebugClick(p); } else { pushUndo(); samClick(p); } return; }
             if (tool === 'wand') { pushUndo(); magicWand(p.x, p.y); return; }
             // brush
             if (straightLine) {
@@ -411,6 +430,12 @@
             b.style.background = straightLine ? 'var(--accent-color)' : '';
             lineAnchor = null;
             setStatus(straightLine ? 'Linea: tocca due punti per collegarli dritti (segmenti indipendenti).' : '');
+        };
+        overlay.querySelector('#me-samdbg').onclick = () => {
+            samDebug = !samDebug;
+            overlay.querySelector('#me-samdbg').style.background = samDebug ? 'var(--accent-color)' : 'transparent';
+            if (samDebug) { tool = 'object'; refreshToolButtons(); setStatus('Debug attivo: clicca per vedere le 3 maschere SAM (R/G/B).'); }
+            else { setStatus(''); scheduleRender(); }
         };
         overlay.querySelector('#me-undo').onclick = () => undo();
         overlay.querySelector('#me-zoom-in').onclick = () => setZoom(zoom * 1.3);

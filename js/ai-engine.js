@@ -599,6 +599,47 @@ window.AIEngine = (function () {
         return { model: s.id, device: s.device };
     }
 
+    // Debug: return ALL of SAM's candidate masks for a point, each resized to w*h.
+    // Lets the UI overlay them in different colours to see what the model produces.
+    async function samDebugMasks(imageUrl, pt, w, h, onStatus) {
+        const { model, processor } = await _loadSam(onStatus);
+        if (!_samImg || _samImg.url !== imageUrl) {
+            const { RawImage } = await loadTransformers(onStatus);
+            _samImg = { url: imageUrl, image: await RawImage.fromURL(imageUrl) };
+        }
+        const image = _samImg.image;
+        const px = Math.round(pt.nx * image.width), py = Math.round(pt.ny * image.height);
+        onStatus && onStatus('Debug SAM...');
+        const inputs = await processor(image, { input_points: [[[px, py]]], input_labels: [[1]] });
+        const outputs = await model(inputs);
+        const masks = await processor.post_process_masks(outputs.pred_masks, inputs.original_sizes, inputs.reshaped_input_sizes);
+        const m0 = masks[0], md = m0.data;
+        const scores = (outputs.iou_scores && outputs.iou_scores.data) || [1];
+        const nMasks = scores.length || 1;
+        let d = Array.from(m0.dims); if (d.length === 4) d = d.slice(1);
+        let H, W, planar;
+        if (d.length === 3 && d[0] === nMasks) { planar = true; H = d[1]; W = d[2]; }
+        else if (d.length === 3 && d[2] === nMasks) { planar = false; H = d[0]; W = d[1]; }
+        else { const big = d.filter(x => x !== nMasks); H = big[0] || d[d.length - 2]; W = big[1] || d[d.length - 1]; planar = true; }
+        const maskAt = (k, i) => planar ? md[k * H * W + i] : md[i * nMasks + k];
+
+        const result = [];
+        for (let k = 0; k < nMasks; k++) {
+            const mc = document.createElement('canvas'); mc.width = W; mc.height = H;
+            const mctx = mc.getContext('2d', { willReadFrequently: true });
+            const im = mctx.createImageData(W, H); const idata = im.data; let area = 0;
+            for (let i = 0; i < H * W; i++) { const on = maskAt(k, i) ? 255 : 0; if (on) area++; idata[i * 4] = idata[i * 4 + 1] = idata[i * 4 + 2] = on; idata[i * 4 + 3] = 255; }
+            mctx.putImageData(im, 0, 0);
+            const fc = document.createElement('canvas'); fc.width = w; fc.height = h;
+            const fctx = fc.getContext('2d', { willReadFrequently: true });
+            fctx.drawImage(mc, 0, 0, w, h);
+            const fd = fctx.getImageData(0, 0, w, h).data;
+            const out = new Uint8Array(w * h); for (let i = 0; i < w * h; i++) out[i] = fd[i * 4];
+            result.push({ data: out, area: Math.round(100 * area / (H * W)), score: Number(scores[k] || 0).toFixed(2) });
+        }
+        return { masks: result, dims: m0.dims.join('x'), planar };
+    }
+
     // Segment the subject. Returns a Uint8 grayscale mask (length w*h), 255=subject.
     async function segmentSubject(imageUrl, w, h, onStatus) {
         // Per-model routing: native only when it's actually the better path
@@ -674,7 +715,7 @@ window.AIEngine = (function () {
         getConfig, setConfig, capabilities, deviceChain, nativeAvailable,
         effectiveEngine, effectiveEngineLabel,
         loadTransformers, getSegmenter, segmentSubject, preload, preloadNative, preloadWeb, status, unload,
-        samPredict, preloadSam,
+        samPredict, samDebugMasks, preloadSam,
         SEG_MODELS
     };
 })();
