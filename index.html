@@ -503,6 +503,9 @@
                     <option value="Xenova/slimsam-77-uniform">SlimSAM 77 (uniform)</option>
                     <option value="Xenova/sam-vit-base">SAM ViT-Base — qualità, più pesante</option>
                 </select>
+                <div style="margin-top:8px;">
+                    <button class="btn btn-ghost" onclick="testSamEngine()" style="font-size:0.8rem; color:#a78bfa;"><i class="fa-solid fa-vial"></i> Carica/Test segmentazione</button>
+                </div>
                 <label class="modal-label" style="margin-top:10px;">Cartella modello locale <span class="modal-label-sm">(fallback se il download online fallisce)</span></label>
                 <input type="text" id="ai-engine-localpath" placeholder="./models/">
                 <label class="setting-option" style="margin-top:8px;">

@@ -464,8 +464,8 @@ window.AIEngine = (function () {
     // MobileSAM via transformers.js) that segments the object under a click.
     // The image is encoded once (cached) and each click runs the light decoder.
     const SAM_DEFAULT = 'Xenova/slimsam-77-uniform';
-    let _sam = null;            // { model, processor, id }
-    let _samImg = null;         // { url, image, inputs, embeddings }
+    let _sam = null;            // { model, processor, id, device }
+    let _samImg = null;         // { url, image }
 
     async function _loadSam(onStatus) {
         if (_sam) return _sam;
@@ -476,55 +476,50 @@ window.AIEngine = (function () {
         const device = capabilities().webgpu ? 'webgpu' : 'wasm';
         const dtype = device === 'webgpu' ? 'fp16' : 'q8';
         onStatus && onStatus(`Caricamento modello segmentazione (${id})...`);
-        const model = await SamModel.from_pretrained(id, { device, dtype });
+        const model = await SamModel.from_pretrained(id, { device, dtype, progress_callback: _progress(onStatus) });
         const processor = await AutoProcessor.from_pretrained(id);
         _sam = { model, processor, id, device };
+        onStatus && onStatus(`Modello segmentazione pronto (${id} su ${device}).`);
         return _sam;
     }
 
-    async function _samEmbed(imageUrl, onStatus) {
-        if (_samImg && _samImg.url === imageUrl) return _samImg;
-        const { model, processor } = await _loadSam(onStatus);
-        const { RawImage } = await loadTransformers(onStatus);
-        onStatus && onStatus('Analisi immagine (segmentazione)...');
-        const image = await RawImage.fromURL(imageUrl);
-        const inputs = await processor(image);
-        const embeddings = await model.get_image_embeddings(inputs);
-        _samImg = { url: imageUrl, image, inputs, embeddings };
-        return _samImg;
-    }
-
     // Segment the object under a point. `pt` is {nx, ny} normalized (0..1).
-    // Returns a Uint8 mask (length w*h), 255 = object.
+    // Returns a Uint8 mask (length w*h), 255 = object. Uses the simple full
+    // forward (encode+decode) each call — robust; the encoder dominates time.
     async function samPredict(imageUrl, pt, w, h, onStatus) {
         const { model, processor } = await _loadSam(onStatus);
-        const emb = await _samEmbed(imageUrl, onStatus);
-        const ow = emb.image.width, oh = emb.image.height;
-        const px = Math.round(pt.nx * ow), py = Math.round(pt.ny * oh);
+        if (!_samImg || _samImg.url !== imageUrl) {
+            const { RawImage } = await loadTransformers(onStatus);
+            _samImg = { url: imageUrl, image: await RawImage.fromURL(imageUrl) };
+        }
+        const image = _samImg.image;
+        const px = Math.round(pt.nx * image.width), py = Math.round(pt.ny * image.height);
 
-        onStatus && onStatus('Segmentazione oggetto...');
-        const dec = await processor(emb.image, { input_points: [[[px, py]]], input_labels: [[1]] });
-        const outputs = await model({
-            image_embeddings: emb.embeddings.image_embeddings,
-            image_positional_embeddings: emb.embeddings.image_positional_embeddings,
-            input_points: dec.input_points,
-            input_labels: dec.input_labels
-        });
-        const masks = await processor.post_process_masks(outputs.pred_masks, dec.original_sizes, dec.reshaped_input_sizes);
-        // masks[0]: dims [1, n_masks, H, W]; choose the highest-IoU candidate
+        onStatus && onStatus('Segmentazione oggetto (qualche secondo)...');
+        const inputs = await processor(image, { input_points: [[[[px, py]]]], input_labels: [[[1]]] });
+        const outputs = await model(inputs);
+        const masks = await processor.post_process_masks(outputs.pred_masks, inputs.original_sizes, inputs.reshaped_input_sizes);
+
         const m0 = masks[0];
-        const dims = m0.dims; // [1, n, H, W]
-        const nMasks = dims[1], H = dims[2], W = dims[3];
-        const scores = outputs.iou_scores.data;
+        const dims = m0.dims;
+        let nMasks, H, W;
+        if (dims.length === 4) { nMasks = dims[1]; H = dims[2]; W = dims[3]; }
+        else { nMasks = dims[0]; H = dims[1]; W = dims[2]; }
+        const scores = (outputs.iou_scores && outputs.iou_scores.data) || [1];
         let best = 0; for (let i = 1; i < nMasks; i++) if (scores[i] > scores[best]) best = i;
-        const md = m0.data; // boolean/uint8 flattened
+        const md = m0.data;
         const off = best * H * W;
 
-        // Rasterize the chosen mask to a canvas, then resize to w*h
+        // Rasterize the chosen mask, count pixels (diagnostics), resize to w*h
         const mc = document.createElement('canvas'); mc.width = W; mc.height = H;
         const mctx = mc.getContext('2d', { willReadFrequently: true });
-        const im = mctx.createImageData(W, H); const id = im.data;
-        for (let i = 0; i < H * W; i++) { const a = md[off + i] ? 255 : 0; id[i * 4] = id[i * 4 + 1] = id[i * 4 + 2] = a; id[i * 4 + 3] = 255; }
+        const im = mctx.createImageData(W, H); const idata = im.data;
+        let setCount = 0;
+        for (let i = 0; i < H * W; i++) {
+            const on = md[off + i] ? 255 : 0;
+            if (on) setCount++;
+            idata[i * 4] = idata[i * 4 + 1] = idata[i * 4 + 2] = on; idata[i * 4 + 3] = 255;
+        }
         mctx.putImageData(im, 0, 0);
         const fc = document.createElement('canvas'); fc.width = w; fc.height = h;
         const fctx = fc.getContext('2d', { willReadFrequently: true });
@@ -532,11 +527,19 @@ window.AIEngine = (function () {
         const fd = fctx.getImageData(0, 0, w, h).data;
         const mask = new Uint8Array(w * h);
         for (let i = 0; i < w * h; i++) mask[i] = fd[i * 4];
-        onStatus && onStatus('Oggetto selezionato — clicca altre parti o rifinisci col pennello.');
+
+        const pct = Math.round(100 * setCount / (H * W));
+        const sc = (scores[best] != null) ? Number(scores[best]).toFixed(2) : '?';
+        if (setCount === 0) {
+            onStatus && onStatus(`Nessun oggetto trovato qui (punteggio ${sc}). Prova a cliccare più al centro dell'oggetto.`);
+        } else {
+            onStatus && onStatus(`Oggetto selezionato (${pct}% area, punteggio ${sc}). Clicca altre parti o rifinisci col pennello.`);
+        }
         return mask;
     }
 
     async function preloadSam(onStatus) {
+        _sam = null; _samImg = null;
         const s = await _loadSam(onStatus);
         return { model: s.id, device: s.device };
     }
@@ -687,6 +690,20 @@ window.testAiEngine = async function () {
             ? 'Verifica che il file del modello sia in native-models\\ (rinominato rmbg-2.0.onnx / rmbg-1.4.onnx) e di aver eseguito "Setup plugin NPU" + rebuild.'
             : 'Prova il download manuale del modello (pulsante qui sopra).';
         if (s) s.innerHTML = `<span style="color:var(--danger-color);"><i class="fa-solid fa-xmark"></i> ${e.message || e}</span><br><span style="font-size:0.75rem;">${hint}</span>`;
+    }
+};
+
+window.testSamEngine = async function () {
+    if (!window.AIEngine) return;
+    saveAiEngineSettings();
+    const s = document.getElementById('ai-engine-status');
+    const upd = (t) => { if (s) s.textContent = t; };
+    try {
+        upd('Caricamento modello segmentazione (prima volta: download)...');
+        const r = await AIEngine.preloadSam(upd);
+        if (s) s.innerHTML = `<span style="color:var(--success-color);"><i class="fa-solid fa-check"></i> Segmentazione pronta: ${r.model} su ${r.device.toUpperCase()}.</span>`;
+    } catch (e) {
+        if (s) s.innerHTML = `<span style="color:var(--danger-color);"><i class="fa-solid fa-xmark"></i> Segmentazione: ${e.message || e}</span>`;
     }
 };
 
