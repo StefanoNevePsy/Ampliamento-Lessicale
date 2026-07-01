@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       native:
-        description: 'Includi i moduli nativi (ML Kit / ORT NPU)'
+        description: 'Includi i moduli nativi (ML Kit / ORT NPU) — sperimentale'
         type: boolean
-        default: true
+        default: false
   push:
     branches:
       - claude/psychology-app-setup-CmBhq
@@ -31,7 +31,7 @@ jobs:
     permissions:
       contents: write
     env:
-      NATIVE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.native || 'true' }}
+      NATIVE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.native || 'false' }}
     steps:
       - uses: actions/checkout@v4
 
