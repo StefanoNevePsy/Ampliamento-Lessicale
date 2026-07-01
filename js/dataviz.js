@@ -57,10 +57,15 @@ function svgRoot(container, w, h, opts) {
     opts = opts || {};
     const svg = svgEl('svg', {
         viewBox: `0 0 ${w} ${h}`,
-        preserveAspectRatio: opts.preserveAspectRatio || 'xMidYMid meet',
-        width: '100%', height: opts.cssHeight || h
+        preserveAspectRatio: opts.preserveAspectRatio || 'xMidYMid meet'
     });
+    // Fill the available width and derive height from the viewBox aspect ratio.
+    // A fixed pixel height (the old approach) letterboxed and downscaled wide
+    // charts (Fiume) or capped square ones (Rosa), which read as low resolution.
     svg.style.display = 'block';
+    svg.style.width = '100%';
+    svg.style.height = 'auto';
+    svg.style.aspectRatio = w + ' / ' + h;
     svg.style.maxWidth = (opts.maxWidth || w) + 'px';
     svg.style.margin = opts.center === false ? '0' : '0 auto';
     svg.style.overflow = 'visible';
@@ -721,7 +726,7 @@ function vizIndependenceStream(container, patient) {
     const pad = { l: 12, r: 12, t: 16, b: 30 };
     const plotW = Math.max(280, daily.length * 26), plotH = 180;
     const w = pad.l + plotW + pad.r, h = pad.t + plotH + pad.b;
-    const svg = svgRoot(container, w, h, { bg: s.bg, cssHeight: h, maxWidth: w, preserveAspectRatio: 'xMidYMid meet' });
+    const svg = svgRoot(container, w, h, { bg: s.bg, maxWidth: Math.max(w, 680) });
     const maxTot = Math.max(...daily.map(d => d.v + d.p + d.x), 1);
     const mid = pad.t + plotH / 2;
     const sc = (plotH * 0.86) / maxTot;
