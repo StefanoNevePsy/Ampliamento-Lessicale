@@ -567,8 +567,14 @@
         cx.drawImage(img, 0, 0, w, h);
         const im = cx.getImageData(0, 0, w, h);
         const d = im.data;
+        // Firm up the mask: the model rarely outputs a perfect 255 across the
+        // whole subject, so a plain multiply leaves the entire subject faintly
+        // transparent. Snap the confident interior to fully opaque and keep a
+        // soft alpha only in a narrow edge band (like the flood-fill cutout).
         for (let i = 0; i < w * h; i++) {
-            d[i * 4 + 3] = (d[i * 4 + 3] * mask[i] / 255) | 0; // soft alpha
+            const raw = mask[i];
+            const m = raw <= 50 ? 0 : raw >= 150 ? 255 : ((raw - 50) * 255 / 100) | 0;
+            d[i * 4 + 3] = (d[i * 4 + 3] * m / 255) | 0;
         }
         cx.putImageData(im, 0, 0);
         const url = c.toDataURL('image/png');
@@ -600,7 +606,8 @@
         const im = cx.getImageData(0, 0, w, h);
         const d = im.data;
         for (let i = 0; i < w * h; i++) {
-            const j = i * 4, m = mask[i];
+            const j = i * 4, raw = mask[i];
+            const m = raw <= 50 ? 0 : raw >= 150 ? 255 : ((raw - 50) * 255 / 100) | 0;
             const g = (d[j] * 0.299 + d[j + 1] * 0.587 + d[j + 2] * 0.114) | 0;
             d[j] = (d[j] * m + g * (255 - m)) / 255 | 0;
             d[j + 1] = (d[j + 1] * m + g * (255 - m)) / 255 | 0;
