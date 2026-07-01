@@ -151,27 +151,86 @@ function vizItemStats(patient) {
     });
 }
 
-// Cognitive domains: map each mode to a domain, average % per domain.
-const VIZ_DOMAINS = {
-    'Denominazione': ['ran', 'ran_intensivo', 'fluenza', 'tact'],
-    'Memoria': ['memory', 'ricorda', 'memoria_lavoro', 'sequenze'],
-    'Linguaggio': ['categorizzazione', 'intruso', 'singolare_plurale', 'pool_intraverbal', 'intraverbal_scenari', 'search_find', 'tombola', 'tombola_sonora', 'pool_random'],
-    'Inibizione': ['go_nogo', 'stroop_numerico', 'stroop_etichetta'],
-    'Spaziale': ['topologia', 'topologia_comp', 'zoom']
+// ---- CONSTRUCT TAXONOMY ----
+// Grounded in what each mode mechanically trains (ABA verbal operants, the
+// Miyake executive-function model, attention taxonomy, language domains).
+// Each construct aggregates the % of the modes that exercise it, weighted by
+// how central that mode is to the construct. Constructs roll up into macro-areas.
+const VIZ_MACROS = {
+    'Linguaggio': { icon: 'fa-comment-dots', color: '#6366f1', short: 'Linguaggio' },
+    'Comprensione': { icon: 'fa-ear-listen', color: '#0ea5e9', short: 'Compr.' },
+    'Funzioni esecutive': { icon: 'fa-brain', color: '#ec4899', short: 'Funz. esec.' },
+    'Memoria': { icon: 'fa-clock-rotate-left', color: '#8b5cf6', short: 'Memoria' },
+    'Attenzione': { icon: 'fa-crosshairs', color: '#f59e0b', short: 'Attenz.' },
+    'Percezione': { icon: 'fa-eye', color: '#14b8a6', short: 'Percez.' },
+    'Velocità': { icon: 'fa-bolt', color: '#ef4444', short: 'Velocità' }
 };
-function vizDomainStats(patient) {
-    const history = patient.history || [];
-    const dom2mode = {};
-    Object.keys(VIZ_DOMAINS).forEach(d => VIZ_DOMAINS[d].forEach(m => dom2mode[m] = d));
-    const agg = {};
-    history.forEach(h => {
-        const d = dom2mode[h.mode];
-        if (!d) return;
-        const a = agg[d] || (agg[d] = { sum: 0, n: 0 });
-        a.sum += (h.percentage != null ? h.percentage : (h.total ? h.correct / h.total * 100 : 0));
-        a.n++;
+const VIZ_CONSTRUCTS = [
+    // Linguaggio (espressivo)
+    { key: 'denominazione', label: 'Denominazione', short: 'Denom.', macro: 'Linguaggio', modes: { tact: 1, ran: 0.8, ran_intensivo: 0.8, fluenza: 0.7, zoom: 0.5 } },
+    { key: 'fluenza_verbale', label: 'Fluenza verbale', short: 'Fluenza', macro: 'Linguaggio', modes: { fluenza: 1 } },
+    { key: 'morfosintassi', label: 'Morfosintassi', short: 'Morfosint.', macro: 'Linguaggio', modes: { singolare_plurale: 1 } },
+    { key: 'intraverbale', label: 'Intraverbale', short: 'Intraverb.', macro: 'Linguaggio', modes: { pool_intraverbal: 1, intraverbal_scenari: 1 } },
+    { key: 'narrazione', label: 'Narrazione / discorso', short: 'Narraz.', macro: 'Linguaggio', modes: { sequenze: 0.6, quaderno: 0.5, quaderno_task: 0.4 } },
+    // Comprensione / semantica (ricettivo)
+    { key: 'compr_lessicale', label: 'Comprensione lessicale', short: 'Compr.', macro: 'Comprensione', modes: { tombola: 1, tombola_sonora: 1, pool_random: 0.4 } },
+    { key: 'categorizzazione', label: 'Categorizzazione', short: 'Categor.', macro: 'Comprensione', modes: { categorizzazione: 1, intruso: 0.8 } },
+    { key: 'concetti_spaziali', label: 'Concetti spaziali', short: 'Spaziali', macro: 'Comprensione', modes: { topologia: 0.8, topologia_comp: 1 } },
+    // Funzioni esecutive
+    { key: 'inibizione', label: 'Inibizione', short: 'Inibiz.', macro: 'Funzioni esecutive', modes: { go_nogo: 1, stroop_numerico: 1, stroop_etichetta: 1 } },
+    { key: 'memoria_lavoro', label: 'Memoria di lavoro', short: 'M. lavoro', macro: 'Funzioni esecutive', modes: { memoria_lavoro: 1 } },
+    { key: 'flessibilita', label: 'Flessibilità', short: 'Flessib.', macro: 'Funzioni esecutive', modes: { intruso: 0.7, categorizzazione: 0.5, go_nogo: 0.5 } },
+    { key: 'pianificazione', label: 'Pianificazione / sequenziamento', short: 'Pianif.', macro: 'Funzioni esecutive', modes: { sequenze: 1 } },
+    // Memoria
+    { key: 'memoria_visiva', label: 'Memoria visiva', short: 'M. visiva', macro: 'Memoria', modes: { memory: 1, ricorda: 1 } },
+    { key: 'span_mnestico', label: 'Span mnestico', short: 'Span', macro: 'Memoria', modes: { memoria_lavoro: 1 } },
+    { key: 'richiamo', label: 'Richiamo differito', short: 'Richiamo', macro: 'Memoria', modes: { ricorda: 1, zoom: 0.3 } },
+    // Attenzione
+    { key: 'att_sostenuta', label: 'Attenzione sostenuta', short: 'Att. sost.', macro: 'Attenzione', modes: { fluenza: 0.7, go_nogo: 0.8, ran: 0.5 } },
+    { key: 'att_selettiva', label: 'Attenzione selettiva', short: 'Att. selet.', macro: 'Attenzione', modes: { search_find: 1, stroop_numerico: 0.6, stroop_etichetta: 0.6, tombola_sonora: 0.5 } },
+    { key: 'ricerca_visiva', label: 'Ricerca visiva', short: 'Ric. visiva', macro: 'Attenzione', modes: { search_find: 1, tombola: 0.5, intruso: 0.5 } },
+    // Percezione
+    { key: 'discriminazione', label: 'Discriminazione visiva', short: 'Discrim.', macro: 'Percezione', modes: { zoom: 0.8, intruso: 0.6, memory: 0.4, singolare_plurale: 0.4 } },
+    { key: 'chiusura', label: 'Chiusura percettiva', short: 'Chiusura', macro: 'Percezione', modes: { zoom: 1 } },
+    { key: 'analisi_scena', label: 'Analisi di scena', short: 'Scena', macro: 'Percezione', modes: { search_find: 0.8, intraverbal_scenari: 0.7 } },
+    // Velocità di elaborazione
+    { key: 'denom_rapida', label: 'Denominazione rapida', short: 'RAN', macro: 'Velocità', modes: { ran: 1, ran_intensivo: 1, fluenza: 0.6 } },
+    { key: 'automatismo', label: 'Automatizzazione', short: 'Automat.', macro: 'Velocità', modes: { ran_intensivo: 1, fluenza: 0.5, tombola: 0.4 } }
+];
+
+// Compute per-construct scores (0-100) from a set of sessions.
+function vizConstructScores(sessions) {
+    const modeAgg = {};
+    (sessions || []).forEach(h => {
+        const pct = h.percentage != null ? h.percentage : (h.total ? h.correct / h.total * 100 : 0);
+        const a = modeAgg[h.mode] || (modeAgg[h.mode] = { sum: 0, n: 0 });
+        a.sum += pct; a.n++;
     });
-    return Object.keys(VIZ_DOMAINS).filter(d => agg[d]).map(d => ({ domain: d, pct: Math.round(agg[d].sum / agg[d].n), n: agg[d].n }));
+    const out = {};
+    VIZ_CONSTRUCTS.forEach(c => {
+        let wsum = 0, vsum = 0, nsum = 0;
+        for (const mode in c.modes) {
+            const a = modeAgg[mode];
+            if (!a) continue;
+            const w = c.modes[mode] * a.n;
+            wsum += w; vsum += w * (a.sum / a.n); nsum += a.n;
+        }
+        if (wsum > 0) out[c.key] = { key: c.key, label: c.label, short: c.short, macro: c.macro, score: Math.round(vsum / wsum), n: nsum };
+    });
+    return out;
+}
+function vizMacroScores(constructScores) {
+    const m = {};
+    Object.values(constructScores).forEach(c => { const a = m[c.macro] || (m[c.macro] = { sum: 0, n: 0, ses: 0 }); a.sum += c.score; a.n++; a.ses += c.n; });
+    const out = {};
+    Object.keys(m).forEach(k => out[k] = { macro: k, score: Math.round(m[k].sum / m[k].n), subs: m[k].n });
+    return out;
+}
+// Back-compat helper retained for the test API.
+function vizDomainStats(patient) {
+    const cs = vizConstructScores((patient.history || []));
+    const ms = vizMacroScores(cs);
+    return Object.keys(ms).map(k => ({ domain: k, pct: ms[k].score, n: ms[k].subs }));
 }
 
 // Time-delay fading series: timedelay sessions ordered, with delay seconds.
@@ -331,37 +390,100 @@ function vizTimeDelayFading(container, patient) {
     container.appendChild(cap);
 }
 
-// 4) DOMAIN RADAR — performance profile across cognitive domains
-function vizDomainRadar(container, patient) {
-    const s = skin();
-    const stats = vizDomainStats(patient);
-    if (stats.length < 3) { container.innerHTML = '<p style="color:var(--text-secondary); text-align:center; padding:20px;">Servono almeno 3 domini con dati per il profilo radar.</p>'; return; }
-    const size = 300, cx = size / 2, cy = size / 2 + 6, R = 105;
-    const svg = svgRoot(container, size, size, { bg: s.bg, cssHeight: size, maxWidth: size });
-    const n = stats.length;
+// Generic radar drawer. axes:[{label, sub}], polygons:[{values[], color, label, dots}]
+function _drawRadar(parentSvg, cx, cy, R, axes, polygons, s, opts) {
+    opts = opts || {};
+    const n = axes.length;
     const ang = i => -Math.PI / 2 + i * 2 * Math.PI / n;
-    // rings
     [0.25, 0.5, 0.75, 1].forEach(rr => {
         let p = '';
-        for (let i = 0; i < n; i++) { const a = ang(i); p += (i === 0 ? 'M' : 'L') + ` ${cx + Math.cos(a) * R * rr} ${cy + Math.sin(a) * R * rr} `; }
-        p += 'Z';
-        svgEl('path', { d: p, fill: 'none', stroke: s.grid, 'stroke-width': 1 }, svg);
+        for (let i = 0; i < n; i++) { const a = ang(i); p += (i === 0 ? 'M' : 'L') + ` ${(cx + Math.cos(a) * R * rr).toFixed(1)} ${(cy + Math.sin(a) * R * rr).toFixed(1)} `; }
+        svgEl('path', { d: p + 'Z', fill: 'none', stroke: s.grid, 'stroke-width': 1 }, parentSvg);
     });
-    // axes + labels
-    stats.forEach((st, i) => {
+    axes.forEach((ax, i) => {
         const a = ang(i);
-        svgEl('line', { x1: cx, y1: cy, x2: cx + Math.cos(a) * R, y2: cy + Math.sin(a) * R, stroke: s.grid }, svg);
-        const lx = cx + Math.cos(a) * (R + 16), ly = cy + Math.sin(a) * (R + 16);
-        const anchor = Math.abs(Math.cos(a)) < 0.3 ? 'middle' : (Math.cos(a) > 0 ? 'start' : 'end');
-        svgEl('text', { x: lx, y: ly + 3, 'text-anchor': anchor, 'font-size': 10, fill: s.text, text: st.domain }, svg);
-        svgEl('text', { x: lx, y: ly + 14, 'text-anchor': anchor, 'font-size': 8, fill: s.textDim, text: st.pct + '%' }, svg);
+        svgEl('line', { x1: cx, y1: cy, x2: cx + Math.cos(a) * R, y2: cy + Math.sin(a) * R, stroke: s.grid }, parentSvg);
+        const lx = cx + Math.cos(a) * (R + opts.labelPad || R + 15), ly = cy + Math.sin(a) * (R + (opts.labelPad || 15));
+        const anchor = Math.abs(Math.cos(a)) < 0.35 ? 'middle' : (Math.cos(a) > 0 ? 'start' : 'end');
+        const t = svgEl('text', { x: lx, y: ly + 3, 'text-anchor': anchor, 'font-size': opts.labelSize || 10, fill: s.text, 'font-weight': 600, text: ax.label }, parentSvg);
+        if (ax.sub != null) svgEl('text', { x: lx, y: ly + (opts.labelSize || 10) + 5, 'text-anchor': anchor, 'font-size': (opts.labelSize || 10) - 2, fill: s.textDim, text: ax.sub }, parentSvg);
     });
-    // data polygon
-    let dp = '';
-    stats.forEach((st, i) => { const a = ang(i); const rr = R * st.pct / 100; dp += (i === 0 ? 'M' : 'L') + ` ${cx + Math.cos(a) * rr} ${cy + Math.sin(a) * rr} `; });
-    dp += 'Z';
-    svgEl('path', { d: dp, fill: s.accent, 'fill-opacity': 0.25, stroke: s.accent, 'stroke-width': 2, 'stroke-linejoin': 'round' }, svg);
-    stats.forEach((st, i) => { const a = ang(i); const rr = R * st.pct / 100; const c = svgEl('circle', { cx: cx + Math.cos(a) * rr, cy: cy + Math.sin(a) * rr, r: 3.5, fill: pctSkinColor(st.pct, s) }, svg); _title(c, `${st.domain}: ${st.pct}% (${st.n} sedute)`); });
+    polygons.forEach(poly => {
+        let dp = '';
+        poly.values.forEach((v, i) => { const a = ang(i); const rr = R * Math.max(0, Math.min(100, v)) / 100; dp += (i === 0 ? 'M' : 'L') + ` ${(cx + Math.cos(a) * rr).toFixed(1)} ${(cy + Math.sin(a) * rr).toFixed(1)} `; });
+        svgEl('path', { d: dp + 'Z', fill: poly.color, 'fill-opacity': poly.fillOpacity != null ? poly.fillOpacity : 0.22, stroke: poly.color, 'stroke-width': 2, 'stroke-linejoin': 'round' }, parentSvg);
+        if (poly.dots !== false) poly.values.forEach((v, i) => {
+            const a = ang(i); const rr = R * Math.max(0, Math.min(100, v)) / 100;
+            const c = svgEl('circle', { cx: cx + Math.cos(a) * rr, cy: cy + Math.sin(a) * rr, r: opts.dotR || 3.2, fill: poly.dotColor || pctSkinColor(v, s) }, parentSvg);
+            _title(c, `${axes[i].label}: ${Math.round(v)}%`);
+        });
+    });
+}
+
+// 4) DOMAIN PROFILE — macro radar (with optional start→recent overlay) + sub-radars per area
+function vizDomainRadar(container, patient) {
+    const s = skin();
+    const sessions = patient.history || [];
+    const cs = vizConstructScores(sessions);
+    const ms = vizMacroScores(cs);
+    const macroKeys = Object.keys(VIZ_MACROS).filter(k => ms[k]);
+    if (macroKeys.length < 3) { container.innerHTML = '<p style="color:var(--text-secondary); text-align:center; padding:20px;">Servono attività in almeno 3 aree per il profilo. Continua a registrare sedute in modalità diverse.</p>'; return; }
+
+    const showProg = state._vizRadarProgress && sessions.length >= 6;
+    // control row
+    const ctrl = document.createElement('div');
+    ctrl.style.cssText = 'display:flex; justify-content:center; margin-bottom:8px;';
+    ctrl.innerHTML = `<button onclick="state._vizRadarProgress=${!showProg}; renderVizTab(state.patients.find(p=>p.id==='${patient.id}'))" style="padding:5px 12px; border-radius:8px; cursor:pointer; font-size:0.72rem; border:1px solid ${showProg ? 'var(--accent-color)' : 'rgba(255,255,255,0.12)'}; background:${showProg ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.03)'}; color:${showProg ? 'var(--accent-color)' : 'var(--text-secondary)'};"><i class="fa-solid fa-arrow-trend-up"></i> Progresso (inizio → recente)</button>`;
+    container.appendChild(ctrl);
+
+    // MAIN macro radar
+    const size = 340, cx = size / 2, cy = size / 2 + 4, R = size / 2 - 58;
+    const svg = svgRoot(container, size, size, { bg: s.bg, cssHeight: size, maxWidth: size });
+    const axes = macroKeys.map(k => ({ label: VIZ_MACROS[k].short || k, sub: showProg ? null : ms[k].score + '%' }));
+
+    let polygons;
+    if (showProg) {
+        const sorted = sessions.slice().sort((a, b) => new Date(a.date) - new Date(b.date));
+        const half = Math.floor(sorted.length / 2);
+        const early = vizMacroScores(vizConstructScores(sorted.slice(0, half)));
+        const recent = vizMacroScores(vizConstructScores(sorted.slice(half)));
+        polygons = [
+            { values: macroKeys.map(k => early[k] ? early[k].score : 0), color: s.textDim, fillOpacity: 0.10, dots: false, label: 'Inizio' },
+            { values: macroKeys.map(k => recent[k] ? recent[k].score : 0), color: s.accent, fillOpacity: 0.22, dotColor: s.accent, label: 'Recente' }
+        ];
+    } else {
+        polygons = [{ values: macroKeys.map(k => ms[k].score), color: s.accent, fillOpacity: 0.24 }];
+    }
+    _drawRadar(svg, cx, cy, R, axes, polygons, s, { labelPad: 16, labelSize: 10, dotR: 3.4 });
+    // macro icons at label anchors would overlap; keep textual.
+
+    if (showProg) _vizLegendChips(container, [['Inizio', s.textDim], ['Recente', s.accent]]);
+    _caption(container, showProg ? 'Confronto tra la prima e la seconda metà del periodo: più il poligono “Recente” è ampio, più il profilo cresce.' : 'Media per area cognitiva. Attiva “Progresso” per confrontare inizio e periodo recente.');
+
+    // SUB-RADARS per macro-area with ≥3 measured constructs
+    const bySub = {};
+    Object.values(cs).forEach(c => (bySub[c.macro] = bySub[c.macro] || []).push(c));
+    const richMacros = macroKeys.filter(k => (bySub[k] || []).length >= 3);
+    if (richMacros.length) {
+        const heading = document.createElement('div');
+        heading.style.cssText = 'margin:16px 0 8px; font-size:0.85rem; color:var(--text-secondary); text-align:center; font-weight:600;';
+        heading.innerHTML = '<i class="fa-solid fa-diagram-project"></i> Dettaglio per area';
+        container.appendChild(heading);
+        const grid = document.createElement('div');
+        grid.style.cssText = 'display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:10px; justify-items:center;';
+        container.appendChild(grid);
+        richMacros.forEach(mk => {
+            const subs = bySub[mk].slice().sort((a, b) => a.label.localeCompare(b.label));
+            const cell = document.createElement('div');
+            cell.style.cssText = `width:100%; max-width:230px; padding:8px; border-radius:12px; ${s.bg !== 'transparent' ? 'background:' + s.bg + ';' : 'background:rgba(255,255,255,0.02);'} border:1px solid ${VIZ_MACROS[mk].color}44;`;
+            cell.innerHTML = `<div style="text-align:center; font-size:0.78rem; font-weight:700; color:${VIZ_MACROS[mk].color}; margin-bottom:2px;"><i class="fa-solid ${VIZ_MACROS[mk].icon}"></i> ${mk} <span style="color:var(--text-secondary); font-weight:400;">${ms[mk].score}%</span></div>`;
+            grid.appendChild(cell);
+            const ssz = 190, scx = ssz / 2, scy = ssz / 2 + 2, sR = ssz / 2 - 44;
+            const ssvg = svgRoot(cell, ssz, ssz, { bg: 'transparent', cssHeight: ssz, maxWidth: ssz });
+            _drawRadar(ssvg, scx, scy, sR, subs.map(c => ({ label: c.short, sub: c.score + '%' })),
+                [{ values: subs.map(c => c.score), color: VIZ_MACROS[mk].color, fillOpacity: 0.2 }], s, { labelPad: 12, labelSize: 8, dotR: 2.6 });
+        });
+    }
 }
 
 // ============================================================
@@ -531,46 +653,197 @@ function vizGrowthTree(container, patient) {
 }
 
 // ============================================================
+// SHARED REFINEMENTS: smooth curves, soft caption
+// ============================================================
+// Catmull-Rom → cubic Bézier smoothing through points [[x,y],...].
+function _smooth(pts, cont) {
+    if (!pts.length) return '';
+    if (pts.length < 3) return (cont ? 'L' : 'M') + ` ${pts[0][0]} ${pts[0][1]}` + pts.slice(1).map(p => ` L ${p[0]} ${p[1]}`).join('');
+    let d = (cont ? 'L' : 'M') + ` ${pts[0][0]} ${pts[0][1]}`;
+    for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[i - 1] || pts[i], p1 = pts[i], p2 = pts[i + 1], p3 = pts[i + 2] || p2;
+        const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+        const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+        d += ` C ${c1x.toFixed(2)} ${c1y.toFixed(2)} ${c2x.toFixed(2)} ${c2y.toFixed(2)} ${p2[0].toFixed(2)} ${p2[1].toFixed(2)}`;
+    }
+    return d;
+}
+function _caption(container, text) {
+    const cap = document.createElement('div');
+    cap.style.cssText = 'text-align:center; margin-top:8px; font-size:0.7rem; color:var(--text-secondary); font-style:italic; opacity:0.85;';
+    cap.textContent = text;
+    container.appendChild(cap);
+}
+// A soft blur "glow" filter added to a given svg root; returns url ref.
+let _glowSeq = 0;
+function _glow(svg, blur) {
+    const id = 'vglow' + (_glowSeq++);
+    const defs = svgEl('defs', {}, svg);
+    const f = svgEl('filter', { id, x: '-40%', y: '-40%', width: '180%', height: '180%' }, defs);
+    svgEl('feGaussianBlur', { in: 'SourceGraphic', stdDeviation: blur || 2.2 }, f);
+    return `url(#${id})`;
+}
+
+// ============================================================
+// NEW ORGANIC ALTERNATIVES (same data, different form)
+// ============================================================
+// 8) DAILY ROSE — Nightingale coxcomb: each day a petal around a circle.
+function vizDailyRose(container, patient) {
+    const s = skin();
+    const daily = vizDailyData(patient);
+    if (!daily.length) { container.innerHTML = '<p style="color:var(--text-secondary); text-align:center; padding:20px;">Nessun dato.</p>'; return; }
+    const size = 340, cx = size / 2, cy = size / 2, Rmax = size / 2 - 30, Rmin = 14;
+    const svg = svgRoot(container, size, size, { bg: s.bg, cssHeight: size, maxWidth: size });
+    const glow = s.organic ? _glow(svg, 1.6) : null;
+    const maxLU = Math.max(...daily.map(d => d.totalLU), 1);
+    const n = daily.length;
+    const slice = 2 * Math.PI / n;
+    // guide rings
+    [0.5, 1].forEach(rr => svgEl('circle', { cx, cy, r: Rmin + (Rmax - Rmin) * rr, fill: 'none', stroke: s.grid, 'stroke-width': 1 }, svg));
+    daily.forEach((d, i) => {
+        const Ri = Rmin + (Rmax - Rmin) * Math.sqrt(d.totalLU / maxLU);
+        const a0 = -Math.PI / 2 + i * slice + slice * 0.08;
+        const a1 = -Math.PI / 2 + (i + 1) * slice - slice * 0.08;
+        const x0 = cx + Math.cos(a0) * Ri, y0 = cy + Math.sin(a0) * Ri;
+        const x1 = cx + Math.cos(a1) * Ri, y1 = cy + Math.sin(a1) * Ri;
+        const ix0 = cx + Math.cos(a0) * Rmin, iy0 = cy + Math.sin(a0) * Rmin;
+        const ix1 = cx + Math.cos(a1) * Rmin, iy1 = cy + Math.sin(a1) * Rmin;
+        const col = pctSkinColor(d.pct, s);
+        const large = (a1 - a0) > Math.PI ? 1 : 0;
+        const path = svgEl('path', {
+            d: `M ${ix0} ${iy0} L ${x0} ${y0} A ${Ri} ${Ri} 0 ${large} 1 ${x1} ${y1} L ${ix1} ${iy1} A ${Rmin} ${Rmin} 0 ${large} 0 ${ix0} ${iy0} Z`,
+            fill: col, opacity: 0.9, stroke: s.bg === 'transparent' ? '#1e1e2f' : s.bg, 'stroke-width': 0.8
+        }, svg);
+        if (glow) path.setAttribute('filter', glow);
+        _title(path, `${formatDateEU(d.date + 'T00:00:00')}\n${d.pct}% · ${d.sessions} sedute · ${d.totalLU} LU${d.tag ? '\n' + d.tag.symbol + ' ' + d.tag.label : ''}`);
+        const am = (a0 + a1) / 2;
+        if (d.tag) svgEl('circle', { cx: cx + Math.cos(am) * (Ri + 6), cy: cy + Math.sin(am) * (Ri + 6), r: 2.6, fill: d.tag.color }, svg);
+        if (d.hasNote) svgEl('circle', { cx: cx + Math.cos(am) * (Rmin + 4), cy: cy + Math.sin(am) * (Rmin + 4), r: 1.6, fill: s.accent }, svg);
+    });
+    svgEl('circle', { cx, cy, r: Rmin - 3, fill: 'none', stroke: s.axis, 'stroke-width': 1, opacity: 0.4 }, svg);
+    _caption(container, 'Ogni petalo è una giornata (in senso orario) · lunghezza = LU · colore = %');
+}
+
+// 9) INDEPENDENCE STREAM — flowing streamgraph of V/P/X (organic alt to bars).
+function vizIndependenceStream(container, patient) {
+    const s = skin();
+    const daily = vizDailyData(patient).filter(d => (d.v + d.p + d.x) > 0);
+    if (daily.length < 2) { container.innerHTML = '<p style="color:var(--text-secondary); text-align:center; padding:20px;">Servono almeno 2 giornate con dati V/P/X.</p>'; return; }
+    const pad = { l: 12, r: 12, t: 16, b: 30 };
+    const plotW = Math.max(280, daily.length * 26), plotH = 180;
+    const w = pad.l + plotW + pad.r, h = pad.t + plotH + pad.b;
+    const svg = svgRoot(container, w, h, { bg: s.bg, cssHeight: h, maxWidth: w, preserveAspectRatio: 'xMidYMid meet' });
+    const glow = s.organic ? _glow(svg, 2) : null;
+    const maxTot = Math.max(...daily.map(d => d.v + d.p + d.x), 1);
+    const mid = pad.t + plotH / 2;
+    const sc = (plotH * 0.86) / maxTot;
+    const stepX = daily.length > 1 ? plotW / (daily.length - 1) : 0;
+    const xAt = i => pad.l + (daily.length > 1 ? i * stepX : plotW / 2);
+    // layer order bottom→top: x (errors), p (prompt), v (independent), centered baseline
+    const layers = [['x', s.x], ['p', s.p], ['v', s.v]];
+    // baseline: centre the total stack
+    const base = daily.map(d => mid + (d.v + d.p + d.x) * sc / 2);
+    let cursor = base.slice();
+    layers.forEach(([key, col]) => {
+        const bot = daily.map((d, i) => [xAt(i), cursor[i]]);
+        const top = daily.map((d, i) => { cursor[i] -= d[key] * sc; return [xAt(i), cursor[i]]; });
+        const d = _smooth(top) + ' ' + _smooth(bot.slice().reverse(), true) + ' Z';
+        const area = svgEl('path', { d, fill: col, opacity: 0.88 }, svg);
+        if (glow) area.setAttribute('filter', glow);
+        _title(area, key === 'v' ? 'Indipendente (V)' : key === 'p' ? 'Con prompt (P)' : 'Errore (X)');
+    });
+    daily.forEach((d, i) => {
+        if (i % Math.ceil(daily.length / 10 || 1) === 0)
+            svgEl('text', { x: xAt(i), y: h - pad.b + 16, 'text-anchor': 'middle', 'font-size': 7.5, fill: s.textDim, text: d.date.slice(8) + '/' + d.date.slice(5, 7) }, svg);
+    });
+    _vizLegendChips(container, [['Indipendente', s.v], ['Con prompt', s.p], ['Errore', s.x]]);
+    _caption(container, 'Il flusso si allarga con il volume · lo strato verde che cresce = più autonomia');
+}
+
+// ============================================================
 // TAB RENDERER + sub-nav + skin selector
 // ============================================================
 const VIZ_VIEWS = [
     { id: 'calendar', label: 'Calendario', icon: 'fa-calendar', fn: vizCalendarHeatmap, group: 'Giornaliero' },
+    { id: 'rose', label: 'Rosa giornate', icon: 'fa-fan', fn: vizDailyRose, group: 'Giornaliero' },
     { id: 'glyphs', label: 'Glifi giornata', icon: 'fa-snowflake', fn: vizDayGlyphs, group: 'Narrativo' },
     { id: 'tree', label: 'Albero', icon: 'fa-tree', fn: vizGrowthTree, group: 'Narrativo' },
     { id: 'independence', label: 'Indipendenza V/P/X', icon: 'fa-layer-group', fn: vizIndependenceArea, group: 'Clinico' },
+    { id: 'stream', label: 'Fiume V/P/X', icon: 'fa-water', fn: vizIndependenceStream, group: 'Clinico' },
     { id: 'timedelay', label: 'Time-Delay fading', icon: 'fa-hourglass-half', fn: vizTimeDelayFading, group: 'Clinico' },
-    { id: 'radar', label: 'Profilo domini', icon: 'fa-chart-pie', fn: vizDomainRadar, group: 'Clinico' },
+    { id: 'radar', label: 'Profilo domini', icon: 'fa-chart-pie', fn: vizDomainRadar, group: 'Profilo' },
     { id: 'vocab', label: 'Vocabolario', icon: 'fa-spell-check', fn: vizVocabulary, group: 'Per-item' }
 ];
+
+// ---- Temporal filter shared by all viz ----
+function vizFilterRange() {
+    const f = state._vizFilter || 'all';
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    const back = d => new Date(now.getTime() - d * 86400000).toISOString().split('T')[0];
+    if (f === 'week') return { from: back(7), to: today };
+    if (f === 'month') return { from: back(30), to: today };
+    if (f === 'quarter') return { from: back(90), to: today };
+    if (f === 'year') return { from: back(365), to: today };
+    if (f === 'custom') return { from: state._vizFrom || '', to: state._vizTo || today };
+    return { from: '', to: '' };
+}
+function vizFilteredPatient(patient) {
+    const { from, to } = vizFilterRange();
+    if (!from && !to) return patient;
+    const history = (patient.history || []).filter(h => {
+        const dk = getDateKey(h.date);
+        return (!from || dk >= from) && (!to || dk <= to);
+    });
+    return Object.assign({}, patient, { history });
+}
+window.setVizFilter = (f, pid) => { state._vizFilter = f; const p = state.patients.find(x => x.id === pid); if (p) renderVizTab(p); };
 
 function renderVizTab(patient) {
     const content = document.getElementById('report-content');
     if (!content) return;
     const cur = state._vizView || 'calendar';
     const sk = getVizSkin();
+    const tf = state._vizFilter || 'all';
+    const rerender = `renderVizTab(state.patients.find(p=>p.id==='${patient.id}'))`;
 
     const skinBtns = Object.keys(VIZ_SKINS).map(k => {
         const sd = VIZ_SKINS[k];
         const on = k === sk;
-        return `<button onclick="setVizSkin('${k}'); renderVizTab(state.patients.find(p=>p.id==='${patient.id}'))" title="${sd.label}" style="padding:5px 10px; border-radius:8px; cursor:pointer; font-size:0.72rem; border:1px solid ${on ? 'var(--accent-color)' : 'rgba(255,255,255,0.12)'}; background:${on ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.03)'}; color:${on ? 'var(--accent-color)' : 'var(--text-secondary)'};"><i class="fa-solid ${sd.icon}"></i> ${sd.label}</button>`;
+        return `<button onclick="setVizSkin('${k}'); ${rerender}" title="${sd.label}" style="padding:5px 10px; border-radius:8px; cursor:pointer; font-size:0.72rem; border:1px solid ${on ? 'var(--accent-color)' : 'rgba(255,255,255,0.12)'}; background:${on ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.03)'}; color:${on ? 'var(--accent-color)' : 'var(--text-secondary)'};"><i class="fa-solid ${sd.icon}"></i> ${sd.label}</button>`;
     }).join('');
 
-    const viewBtns = VIZ_VIEWS.map(v => {
+    const _tf = (val, label) => `<button onclick="setVizFilter('${val}', '${patient.id}')" style="padding:4px 10px; border-radius:6px; font-size:0.7rem; cursor:pointer; border:1px solid ${tf === val ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)'}; background:${tf === val ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.03)'}; color:${tf === val ? 'var(--accent-color)' : 'var(--text-secondary)'}; font-weight:${tf === val ? '700' : '400'};">${label}</button>`;
+    const filterBar = `<div style="display:flex; gap:5px; align-items:center; flex-wrap:wrap; margin-bottom:10px; background:rgba(0,0,0,0.2); padding:6px 8px; border-radius:10px;">
+        <span style="font-size:0.7rem; color:var(--text-secondary);"><i class="fa-solid fa-filter"></i></span>
+        ${_tf('week', 'Sett.')}${_tf('month', 'Mese')}${_tf('quarter', '3 mesi')}${_tf('year', 'Anno')}${_tf('custom', 'Da-A')}${_tf('all', 'Tutto')}
+    </div>${tf === 'custom' ? `<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; font-size:0.72rem; color:var(--text-secondary);">
+        Da <input type="date" value="${state._vizFrom || ''}" onchange="state._vizFrom=this.value; ${rerender}" style="padding:4px; border-radius:6px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white;">
+        A <input type="date" value="${state._vizTo || ''}" onchange="state._vizTo=this.value; ${rerender}" style="padding:4px; border-radius:6px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white;">
+    </div>` : ''}`;
+
+    // Grouped view nav
+    let lastGroup = null, viewBtns = '';
+    VIZ_VIEWS.forEach(v => {
+        if (v.group !== lastGroup) { viewBtns += `<span style="font-size:0.62rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px; align-self:center; margin:0 2px 0 6px; opacity:0.6; white-space:nowrap;">${v.group}</span>`; lastGroup = v.group; }
         const on = v.id === cur;
-        return `<button onclick="selectVizView('${v.id}', '${patient.id}')" style="padding:6px 10px; border-radius:8px; cursor:pointer; font-size:0.74rem; white-space:nowrap; border:1px solid ${on ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)'}; background:${on ? 'var(--accent-color)' : 'rgba(255,255,255,0.03)'}; color:${on ? '#fff' : 'var(--text-secondary)'};"><i class="fa-solid ${v.icon}"></i> ${v.label}</button>`;
-    }).join('');
+        viewBtns += `<button onclick="selectVizView('${v.id}', '${patient.id}')" style="padding:6px 10px; border-radius:8px; cursor:pointer; font-size:0.74rem; white-space:nowrap; border:1px solid ${on ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)'}; background:${on ? 'var(--accent-color)' : 'rgba(255,255,255,0.03)'}; color:${on ? '#fff' : 'var(--text-secondary)'};"><i class="fa-solid ${v.icon}"></i> ${v.label}</button>`;
+    });
 
     content.innerHTML = `
         <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:10px;">
             <span style="font-size:0.72rem; color:var(--text-secondary);"><i class="fa-solid fa-palette"></i> Stile:</span>
             ${skinBtns}
         </div>
-        <div style="display:flex; gap:6px; overflow-x:auto; padding-bottom:6px; margin-bottom:14px; -webkit-overflow-scrolling:touch;">${viewBtns}</div>
+        ${filterBar}
+        <div style="display:flex; gap:6px; overflow-x:auto; padding-bottom:6px; margin-bottom:14px; -webkit-overflow-scrolling:touch; align-items:center;">${viewBtns}</div>
         <div id="viz-canvas" style="min-height:120px;"></div>`;
 
     const canvas = document.getElementById('viz-canvas');
     const view = VIZ_VIEWS.find(v => v.id === cur) || VIZ_VIEWS[0];
-    try { view.fn(canvas, patient); }
+    const fp = vizFilteredPatient(patient);
+    if (!(fp.history || []).length) { canvas.innerHTML = '<p style="color:var(--text-secondary); text-align:center; padding:24px;">Nessuna seduta nel periodo selezionato.</p>'; return; }
+    try { view.fn(canvas, fp); }
     catch (e) { canvas.innerHTML = `<p style="color:var(--danger-color); text-align:center; padding:20px;">Errore nel disegno: ${_esc(e.message)}</p>`; console.error('viz error', e); }
 }
 window.renderVizTab = renderVizTab;
