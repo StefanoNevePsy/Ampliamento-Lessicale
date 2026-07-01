@@ -1,0 +1,138 @@
+name: Build APK per tablet
+
+# Builds a signed-consistently debug APK on every push (and on demand) and
+# publishes it to a rolling pre-release ("tablet-latest") so it can be
+# downloaded and installed directly from the tablet. Because every build is
+# signed with the SAME key, installing a new APK over the app updates it in
+# place and PRESERVES all data (patients/sessions in IndexedDB, cached models).
+
+on:
+  workflow_dispatch:
+    inputs:
+      native:
+        description: 'Includi i moduli nativi (ML Kit / ORT NPU)'
+        type: boolean
+        default: true
+  push:
+    branches:
+      - claude/psychology-app-setup-CmBhq
+      - main
+    paths-ignore:
+      - '**.md'
+      - '.github/workflows/build.yml'
+
+concurrency:
+  group: android-tablet-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      NATIVE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.native || 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm install
+
+      # Consistent signing = updates preserve data. Prefer a user-provided
+      # keystore secret (e.g. your PC's Android Studio debug key, so even the
+      # FIRST switch keeps data); otherwise use the committed fixed debug key.
+      - name: Prepare signing key
+        run: |
+          mkdir -p ~/.android
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_B64 }}" ]; then
+            echo "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > ~/.android/debug.keystore
+            echo "Firma con keystore da secret ANDROID_KEYSTORE_B64."
+          else
+            cp ci/debug.keystore ~/.android/debug.keystore
+            echo "Firma con il keystore fisso committato (ci/debug.keystore)."
+          fi
+
+      - name: Build web assets
+        run: npm run build:web
+
+      - name: Add Capacitor Android project
+        run: npx cap add android
+
+      - name: Patch Android manifest permissions
+        run: node scripts/add-android-permissions.js
+
+      - name: Inject native modules (ML Kit / ORT)
+        if: env.NATIVE == 'true'
+        run: node scripts/add-native-npu.js
+
+      - name: Raise Gradle heap / resource settings
+        run: node scripts/fix-android-gradle.js
+
+      - name: Generate branded launcher icons
+        continue-on-error: true
+        run: |
+          npm install --no-save sharp-cli
+          for size_dpi in "48 mdpi" "72 hdpi" "96 xhdpi" "144 xxhdpi" "192 xxxhdpi"; do
+            set -- $size_dpi
+            npx sharp -i build/icon.svg -o android/app/src/main/res/mipmap-${2}/ic_launcher.png resize ${1} ${1} || true
+            cp android/app/src/main/res/mipmap-${2}/ic_launcher.png android/app/src/main/res/mipmap-${2}/ic_launcher_round.png || true
+          done
+
+      - name: Sync web assets
+        run: npx cap copy android
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Stage APK with stable + versioned names
+        run: |
+          mkdir -p out
+          SHORT=$(git rev-parse --short HEAD)
+          STAMP=$(date -u +%Y%m%d-%H%M)
+          cp android/app/build/outputs/apk/debug/app-debug.apk "out/terapia-attiva.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "out/terapia-attiva-${STAMP}-${SHORT}.apk"
+          echo "APK_STAMP=${STAMP}" >> $GITHUB_ENV
+          echo "APK_SHORT=${SHORT}" >> $GITHUB_ENV
+          ls -la out/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: terapia-attiva-apk
+          path: out/*.apk
+
+      - name: Publish to rolling release (tablet-latest)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: tablet-latest
+          name: 'App tablet — ultima build'
+          prerelease: true
+          body: |
+            APK aggiornato automaticamente.
+
+            - Build: ${{ env.APK_STAMP }} · commit `${{ env.APK_SHORT }}`
+            - Branch: `${{ github.ref_name }}`
+            - Moduli nativi: `${{ env.NATIVE }}`
+
+            **Scarica `terapia-attiva.apk`** qui sotto e installalo sul tablet:
+            aggiorna l'app conservando dati e modelli (stessa firma).
+          files: out/*.apk
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
