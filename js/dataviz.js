@@ -674,15 +674,6 @@ function _caption(container, text) {
     cap.textContent = text;
     container.appendChild(cap);
 }
-// A soft blur "glow" filter added to a given svg root; returns url ref.
-let _glowSeq = 0;
-function _glow(svg, blur) {
-    const id = 'vglow' + (_glowSeq++);
-    const defs = svgEl('defs', {}, svg);
-    const f = svgEl('filter', { id, x: '-40%', y: '-40%', width: '180%', height: '180%' }, defs);
-    svgEl('feGaussianBlur', { in: 'SourceGraphic', stdDeviation: blur || 2.2 }, f);
-    return `url(#${id})`;
-}
 
 // ============================================================
 // NEW ORGANIC ALTERNATIVES (same data, different form)
@@ -693,8 +684,7 @@ function vizDailyRose(container, patient) {
     const daily = vizDailyData(patient);
     if (!daily.length) { container.innerHTML = '<p style="color:var(--text-secondary); text-align:center; padding:20px;">Nessun dato.</p>'; return; }
     const size = 340, cx = size / 2, cy = size / 2, Rmax = size / 2 - 30, Rmin = 14;
-    const svg = svgRoot(container, size, size, { bg: s.bg, cssHeight: size, maxWidth: size });
-    const glow = s.organic ? _glow(svg, 1.6) : null;
+    const svg = svgRoot(container, size, size, { bg: s.bg, cssHeight: size, maxWidth: 520 });
     const maxLU = Math.max(...daily.map(d => d.totalLU), 1);
     const n = daily.length;
     const slice = 2 * Math.PI / n;
@@ -714,7 +704,6 @@ function vizDailyRose(container, patient) {
             d: `M ${ix0} ${iy0} L ${x0} ${y0} A ${Ri} ${Ri} 0 ${large} 1 ${x1} ${y1} L ${ix1} ${iy1} A ${Rmin} ${Rmin} 0 ${large} 0 ${ix0} ${iy0} Z`,
             fill: col, opacity: 0.9, stroke: s.bg === 'transparent' ? '#1e1e2f' : s.bg, 'stroke-width': 0.8
         }, svg);
-        if (glow) path.setAttribute('filter', glow);
         _title(path, `${formatDateEU(d.date + 'T00:00:00')}\n${d.pct}% · ${d.sessions} sedute · ${d.totalLU} LU${d.tag ? '\n' + d.tag.symbol + ' ' + d.tag.label : ''}`);
         const am = (a0 + a1) / 2;
         if (d.tag) svgEl('circle', { cx: cx + Math.cos(am) * (Ri + 6), cy: cy + Math.sin(am) * (Ri + 6), r: 2.6, fill: d.tag.color }, svg);
@@ -733,7 +722,6 @@ function vizIndependenceStream(container, patient) {
     const plotW = Math.max(280, daily.length * 26), plotH = 180;
     const w = pad.l + plotW + pad.r, h = pad.t + plotH + pad.b;
     const svg = svgRoot(container, w, h, { bg: s.bg, cssHeight: h, maxWidth: w, preserveAspectRatio: 'xMidYMid meet' });
-    const glow = s.organic ? _glow(svg, 2) : null;
     const maxTot = Math.max(...daily.map(d => d.v + d.p + d.x), 1);
     const mid = pad.t + plotH / 2;
     const sc = (plotH * 0.86) / maxTot;
@@ -748,8 +736,7 @@ function vizIndependenceStream(container, patient) {
         const bot = daily.map((d, i) => [xAt(i), cursor[i]]);
         const top = daily.map((d, i) => { cursor[i] -= d[key] * sc; return [xAt(i), cursor[i]]; });
         const d = _smooth(top) + ' ' + _smooth(bot.slice().reverse(), true) + ' Z';
-        const area = svgEl('path', { d, fill: col, opacity: 0.88 }, svg);
-        if (glow) area.setAttribute('filter', glow);
+        const area = svgEl('path', { d, fill: col, opacity: 0.9 }, svg);
         _title(area, key === 'v' ? 'Indipendente (V)' : key === 'p' ? 'Con prompt (P)' : 'Errore (X)');
     });
     daily.forEach((d, i) => {
