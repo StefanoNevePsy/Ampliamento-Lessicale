@@ -80,10 +80,16 @@
                 const mctx = mc.getContext('2d', { willReadFrequently: true });
                 mctx.drawImage(mImg, 0, 0, w, h);
                 const md = mctx.getImageData(0, 0, w, h).data;
+                // A cut-out PNG encodes the mask in its ALPHA channel; a plain
+                // grey mask image encodes it in luminance. Detect which we have
+                // (cut-outs contain transparent pixels) and read the whole mask
+                // from that one channel. The old per-pixel test read the RED
+                // value for opaque pixels, so any non-red subject came in wrongly
+                // (and unevenly) transparent.
+                let hasAlpha = false;
+                for (let i = 0; i < w * h; i++) { if (md[i * 4 + 3] < 250) { hasAlpha = true; break; } }
                 for (let i = 0; i < w * h; i++) {
-                    // Use alpha if present (cutout source), else luminance
-                    const a = md[i * 4 + 3];
-                    mask[i] = a < 255 ? a : md[i * 4];
+                    mask[i] = hasAlpha ? md[i * 4 + 3] : md[i * 4];
                 }
             } catch (e) { /* ignore seed failure */ }
         }
