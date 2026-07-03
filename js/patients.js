@@ -3190,10 +3190,10 @@ window.generateAIReport = async (pid) => {
     }
 
     const apiKey = getGeminiApiKey();
-    if (!apiKey) {
+    if (!apiKey && !(typeof nvidiaTextActive === 'function' && nvidiaTextActive())) {
         openSettings();
         setTimeout(() => {
-            alert('Per generare il report AI, inserisci prima la tua chiave API Gemini nelle Impostazioni.');
+            alert('Per generare il report AI, inserisci prima la tua chiave API Gemini nelle Impostazioni (oppure attiva il motore NVIDIA).');
         }, 300);
         return;
     }
@@ -3335,7 +3335,7 @@ window.askReportFollowUp = async () => {
     }
 
     const apiKey = getGeminiApiKey();
-    if (!apiKey) return;
+    if (!apiKey && !(typeof nvidiaTextActive === 'function' && nvidiaTextActive())) return;
 
     const fakeName = window._aiReportFakeName;
     const realName = window._aiReportRealName;
@@ -3430,6 +3430,10 @@ window.askReportFollowUp = async () => {
 
 // Gemini multi-turn conversation call
 async function _callGeminiConversation(contents, apiKey) {
+    // Provider routing: when the NVIDIA text engine is selected, use it instead.
+    if (typeof nvidiaTextActive === 'function' && nvidiaTextActive()) {
+        return await nvidiaConversation(contents);
+    }
     const MAX_RETRIES = 3;
     const BACKOFF_MS = [3000, 8000, 15000];
 
@@ -3821,6 +3825,10 @@ function _markdownToHtml(md) {
 
 // Gemini call that returns plain text (not JSON)
 async function _callGeminiText(prompt, apiKey) {
+    // Provider routing: when the NVIDIA text engine is selected, use it instead.
+    if (typeof nvidiaTextActive === 'function' && nvidiaTextActive()) {
+        return await nvidiaChatText(prompt, { maxTokens: 8192, temperature: 0.7 });
+    }
     const MAX_RETRIES = 3;
     const BACKOFF_MS = [3000, 8000, 15000];
 

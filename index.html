@@ -435,6 +435,41 @@
                 <p id="gemini-model-hint" class="modal-hint">
                     Premi aggiorna per caricare i modelli disponibili.
                 </p>
+
+                <h4 style="margin:18px 0 10px; color:#76b900;"><i class="fa-solid fa-microchip"></i> NVIDIA (build.nvidia.com)</h4>
+                <p style="color:var(--text-secondary); font-size:0.85rem; margin-bottom:10px;">Generazione immagini (FLUX.2, SD3&hellip;) e LLM gratuiti (~40 richieste/min, uso sviluppo/valutazione).<br>
+                <a href="https://build.nvidia.com" target="_blank" style="color:#76b900;">Ottieni la chiave gratuita (nvapi-...) &rarr;</a></p>
+                <input type="password" id="nvidia-api-key" placeholder="nvapi-..." onchange="setNvidiaApiKey(this.value)">
+
+                <label class="modal-label" style="margin-top:12px;">Modello immagini</label>
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <select id="nvidia-image-model" style="flex:1;" onchange="setNvidiaImageModel(this.value)"></select>
+                    <button class="btn-ghost" onclick="refreshNvidiaImageModels(true)" title="Rileva i modelli attivi sul catalogo NVIDIA" style="padding:8px 10px; font-size:0.9rem;">
+                        <i class="fa-solid fa-rotate" id="nvidia-img-refresh-icon"></i>
+                    </button>
+                </div>
+                <div style="display:flex; gap:6px; margin-top:6px;">
+                    <input type="text" id="nvidia-custom-model" placeholder="org/modello (slug da build.nvidia.com)" style="flex:1;">
+                    <button class="btn-ghost" onclick="addNvidiaCustomModel()" style="padding:8px 10px; font-size:0.9rem;" title="Aggiungi un modello per slug">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                </div>
+                <p class="modal-hint" id="nvidia-img-status">La lista si aggiorna da sola; con &laquo;+&raquo; puoi aggiungere nuovi modelli appena escono.</p>
+
+                <label class="modal-label" style="margin-top:12px;">Modello testo (LLM)</label>
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <select id="nvidia-llm-model" style="flex:1;" onchange="setNvidiaLlmModel(this.value)"></select>
+                    <button class="btn-ghost" onclick="refreshNvidiaLlmModels(true)" title="Aggiorna lista LLM dal catalogo NVIDIA" style="padding:8px 10px; font-size:0.9rem;">
+                        <i class="fa-solid fa-rotate" id="nvidia-llm-refresh-icon"></i>
+                    </button>
+                </div>
+
+                <label class="modal-label" style="margin-top:12px;">Motore per traduzioni &amp; testi AI</label>
+                <select id="text-provider-select" onchange="setTextProvider(this.value)">
+                    <option value="gemini">Gemini (default)</option>
+                    <option value="nvidia">NVIDIA LLM</option>
+                </select>
+                <p class="modal-hint">Usato per traduzione etichette, generazione set con AI e report clinico.</p>
             </div>
 
             <!-- TAB: IMAGES -->
@@ -1061,6 +1096,7 @@
     <script src="js/p2p-sync.js"></script>
     <script src="js/offline-share.js"></script>
     <script src="js/quick-share.js"></script>
+    <script src="js/nvidia.js"></script>
     <script src="js/gemini.js"></script>
     <script src="js/pollinations.js"></script>
     <script src="js/app.js"></script>

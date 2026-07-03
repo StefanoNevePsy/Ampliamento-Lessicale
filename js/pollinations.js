@@ -4,8 +4,7 @@
 const _translationCache = {};
 
 async function translateLabelsForImageGen(labels) {
-    const apiKey = typeof getGeminiApiKey === 'function' ? getGeminiApiKey() : '';
-    if (!apiKey) return {};
+    if (typeof canCallTextModel === 'function' ? !canCallTextModel() : !(typeof getGeminiApiKey === 'function' && getGeminiApiKey())) return {};
 
     const toTranslate = labels.filter(l => l && !_translationCache[l.toLowerCase().trim()]);
     if (toTranslate.length === 0) {
@@ -23,7 +22,7 @@ Input: ${JSON.stringify(toTranslate)}`;
 
     try {
         const transModel = typeof getEffectiveTranslationModel === 'function' ? getEffectiveTranslationModel() : undefined;
-        const map = await callGemini(prompt, apiKey, transModel);
+        const map = await callTextJSON(prompt, transModel);
         for (const [it, en] of Object.entries(map)) {
             _translationCache[it.toLowerCase().trim()] = en;
         }
@@ -151,8 +150,7 @@ async function searchArasaac(query, perPage = 16, lang) {
 
 // --- AI-powered ARASAAC query normalization via Gemini ---
 async function aiNormalizeArasaacQuery(query) {
-    const apiKey = typeof getGeminiApiKey === 'function' ? getGeminiApiKey() : '';
-    if (!apiKey) throw new Error('Chiave API Gemini non configurata. Vai in Impostazioni.');
+    if (typeof canCallTextModel === 'function' && !canCallTextModel()) throw new Error('Nessun motore testo configurato. Vai in Impostazioni > API.');
 
     const lang = getArasaacLang();
     const langName = {it:'italiano', en:'inglese', es:'spagnolo', fr:'francese', de:'tedesco'}[lang] || 'italiano';
@@ -174,7 +172,7 @@ Regole:
 - Mantieni la lingua ${langName}`;
 
     const transModel = typeof getEffectiveTranslationModel === 'function' ? getEffectiveTranslationModel() : undefined;
-    return await callGemini(prompt, apiKey, transModel);
+    return await callTextJSON(prompt, transModel);
 }
 
 window.aiArasaacSearch = async (itemIndex) => {
@@ -419,6 +417,7 @@ window.openPollinationsGenerator = (itemIndex) => {
     const hasPixabay = !!getPixabayApiKey();
     const hasCloudflare = !!getCloudflareWorkerUrl();
     const hasGeminiKey = typeof getGeminiApiKey === 'function' && !!getGeminiApiKey();
+    const hasNvidiaKey = typeof getNvidiaApiKey === 'function' && !!getNvidiaApiKey();
 
     modal.innerHTML = `
         <div style="width:100%; max-width:540px; background:#1e1e2f; border-radius:16px; border:1px solid var(--glass-border); padding:24px; max-height:90vh; overflow-y:auto;">
@@ -443,6 +442,9 @@ window.openPollinationsGenerator = (itemIndex) => {
                 </button>
                 <button class="img-src-tab ${_imgGenTab === 'gemini' ? 'active' : ''}" onclick="switchImgGenTab('gemini', ${itemIndex})" style="padding:6px 12px; border:none; border-radius:8px 8px 0 0; background:${_imgGenTab === 'gemini' ? 'rgba(99,102,241,0.2)' : 'transparent'}; color:${_imgGenTab === 'gemini' ? 'var(--accent-color)' : 'var(--text-secondary)'}; cursor:pointer; font-size:0.8rem; font-weight:600;">
                     <i class="fa-solid fa-wand-magic-sparkles"></i> Gemini ${!hasGeminiKey ? '<span style="font-size:0.6rem; opacity:0.5;">(no key)</span>' : ''}
+                </button>
+                <button class="img-src-tab ${_imgGenTab === 'nvidia' ? 'active' : ''}" onclick="switchImgGenTab('nvidia', ${itemIndex})" style="padding:6px 12px; border:none; border-radius:8px 8px 0 0; background:${_imgGenTab === 'nvidia' ? 'rgba(99,102,241,0.2)' : 'transparent'}; color:${_imgGenTab === 'nvidia' ? 'var(--accent-color)' : 'var(--text-secondary)'}; cursor:pointer; font-size:0.8rem; font-weight:600;">
+                    <i class="fa-solid fa-microchip"></i> NVIDIA ${!hasNvidiaKey ? '<span style="font-size:0.6rem; opacity:0.5;">(no key)</span>' : ''}
                 </button>
             </div>
 
@@ -544,6 +546,30 @@ window.openPollinationsGenerator = (itemIndex) => {
                 </div>
             </div>
 
+            <!-- NVIDIA tab -->
+            <div id="img-tab-nvidia" style="${_imgGenTab !== 'nvidia' ? 'display:none;' : ''}">
+                <div style="background:rgba(118,185,0,0.1); border:1px solid rgba(118,185,0,0.35); border-radius:10px; padding:6px 10px; margin-bottom:10px; font-size:0.74rem; color:#a3d55f;">
+                    <i class="fa-solid fa-microchip"></i> NVIDIA build.nvidia.com &mdash; gratis (~40 img/min). Modelli FLUX.2, SD3&hellip; selezionabili.
+                </div>
+                <label style="font-size:0.8rem; color:#aaa;">Modello</label>
+                ${typeof _nvImageModelSelectHtml === 'function' ? _nvImageModelSelectHtml('nvidia-model-single') : ''}
+                <label style="font-size:0.8rem; color:#aaa;">Prompt</label>
+                <textarea id="nvidia-prompt" rows="2" style="width:100%; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.95rem; resize:vertical; font-family:inherit; margin-bottom:6px;">${escapeHtml(item.label)}</textarea>
+                <label style="display:flex; align-items:center; gap:6px; font-size:0.78rem; color:#aaa; margin-bottom:10px; cursor:pointer;">
+                    <input type="checkbox" id="nvidia-autotranslate" checked style="width:15px; height:15px; accent-color:var(--accent-color);">
+                    Traduci automaticamente in inglese prima di generare
+                </label>
+                <label style="font-size:0.8rem; color:#aaa;">Stile</label>
+                <div id="nvidia-styles" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;">
+                    ${POLL_STYLES.map(s => `
+                        <div class="poll-style-btn" data-style-id="${s.id}" onclick="selectPollStyle(this)"
+                             style="border-color:${s.color}40;">
+                            <i class="fa-solid ${s.icon}" style="color:${s.color};"></i> ${s.label}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+
             <!-- Shared preview/status -->
             <div id="poll-preview" style="display:none; text-align:center; margin-bottom:12px;">
                 <img id="poll-preview-img" src="" style="max-width:100%; max-height:250px; border-radius:10px; border:2px solid var(--glass-border);">
@@ -584,7 +610,7 @@ window.openPollinationsGenerator = (itemIndex) => {
 
 window.switchImgGenTab = (tab, itemIndex) => {
     _imgGenTab = tab;
-    ['pixabay', 'arasaac', 'openverse', 'cloudflare', 'gemini'].forEach(t => {
+    ['pixabay', 'arasaac', 'openverse', 'cloudflare', 'gemini', 'nvidia'].forEach(t => {
         const el = document.getElementById('img-tab-' + t);
         if (el) el.style.display = t === tab ? '' : 'none';
     });
@@ -818,10 +844,11 @@ window.runImageGeneration = async (itemIndex) => {
     if (tab === 'pixabay') return;
 
     const isGemini = tab === 'gemini';
-    const promptEl = document.getElementById(isGemini ? 'gemini-prompt' : 'cloudflare-prompt');
+    const isNvidia = tab === 'nvidia';
+    const promptEl = document.getElementById(isGemini ? 'gemini-prompt' : isNvidia ? 'nvidia-prompt' : 'cloudflare-prompt');
     const prompt = promptEl?.value?.trim();
     if (!prompt) { alert('Inserisci un prompt.'); return; }
-    const autoTranslate = document.getElementById(isGemini ? 'gemini-autotranslate' : 'cf-autotranslate')?.checked !== false;
+    const autoTranslate = document.getElementById(isGemini ? 'gemini-autotranslate' : isNvidia ? 'nvidia-autotranslate' : 'cf-autotranslate')?.checked !== false;
 
     const genBtn = document.getElementById('poll-generate-btn');
     const status = document.getElementById('poll-status');
@@ -838,11 +865,13 @@ window.runImageGeneration = async (itemIndex) => {
 
     try {
         const finalPrompt = autoTranslate ? await translateSingleLabel(prompt) : prompt;
-        document.getElementById('poll-status-text').textContent = `Generazione in corso (${isGemini ? 'Nano Banana 2 Lite' : 'Cloudflare Flux'})...`;
+        document.getElementById('poll-status-text').textContent = `Generazione in corso (${isGemini ? 'Nano Banana 2 Lite' : isNvidia ? 'NVIDIA' : 'Cloudflare Flux'})...`;
 
         const imageUrl = isGemini
             ? await generateGeminiImage(finalPrompt, _pollSelectedStyle)
-            : await generateCloudflareImage(finalPrompt, _pollSelectedStyle);
+            : isNvidia
+                ? await generateNvidiaImage(finalPrompt, _pollSelectedStyle)
+                : await generateCloudflareImage(finalPrompt, _pollSelectedStyle);
         _pollLastImageUrl = imageUrl;
 
         document.getElementById('poll-preview-img').src = imageUrl;
@@ -909,6 +938,7 @@ window.openBulkPollinations = () => {
     const hasPixabay = !!getPixabayApiKey();
     const hasCloudflare = !!getCloudflareWorkerUrl();
     const hasGeminiKey = typeof getGeminiApiKey === 'function' && !!getGeminiApiKey();
+    const hasNvidiaKey = typeof getNvidiaApiKey === 'function' && !!getNvidiaApiKey();
 
     modal.innerHTML = `
         <div style="width:100%; max-width:500px; background:#1e1e2f; border-radius:16px; border:1px solid var(--glass-border); padding:24px; max-height:90vh; overflow-y:auto;">
@@ -921,6 +951,7 @@ window.openBulkPollinations = () => {
             <div style="display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;">
                 ${hasCloudflare ? `<button class="btn btn-ghost bulk-engine-btn selected" data-engine="cloudflare" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-cloud"></i> Cloudflare Flux</button>` : ''}
                 ${hasGeminiKey ? `<button class="btn btn-ghost bulk-engine-btn ${!hasCloudflare ? 'selected' : ''}" data-engine="gemini" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;" title="Gratis con i crediti di prova Google (~8.800 immagini). Vedi guida in Impostazioni > API."><i class="fa-solid fa-wand-magic-sparkles"></i> Nano Banana</button>` : ''}
+                ${hasNvidiaKey ? `<button class="btn btn-ghost bulk-engine-btn ${!hasCloudflare && !hasGeminiKey ? 'selected' : ''}" data-engine="nvidia" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;" title="NVIDIA build.nvidia.com — gratis, ~40 immagini/min. Modello scelto in Impostazioni > API."><i class="fa-solid fa-microchip"></i> NVIDIA</button>` : ''}
                 ${hasPixabay ? `<button class="btn btn-ghost bulk-engine-btn ${!hasCloudflare && !hasGeminiKey ? 'selected' : ''}" data-engine="pixabay" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-search"></i> Pixabay</button>` : ''}
                 <button class="btn btn-ghost bulk-engine-btn ${!hasCloudflare && !hasPixabay ? 'selected' : ''}" data-engine="arasaac" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-icons"></i> ARASAAC</button>
                 <button class="btn btn-ghost bulk-engine-btn" data-engine="openverse" onclick="selectBulkEngine(this)" style="flex:1; padding:6px; font-size:0.8rem;"><i class="fa-solid fa-images"></i> Openverse</button>
@@ -990,7 +1021,7 @@ window.selectBulkEngine = (el) => {
     el.classList.add('selected');
     const engine = el.dataset.engine;
     const isCf = engine === 'cloudflare';
-    const usesStyles = isCf || engine === 'gemini'; // AI generators use style prompts
+    const usesStyles = isCf || engine === 'gemini' || engine === 'nvidia'; // AI generators use style prompts
     const cfSection = document.getElementById('bulk-cf-model-section');
     if (cfSection) cfSection.style.display = isCf ? '' : 'none';
     const stylesSection = document.getElementById('bulk-styles-section');
@@ -1012,7 +1043,7 @@ window.runBulkPollGeneration = async () => {
     const engine = document.querySelector('.bulk-engine-btn.selected')?.dataset?.engine || (getCloudflareWorkerUrl() ? 'cloudflare' : 'pixabay');
 
     const selectedStyles = [];
-    if (engine === 'cloudflare' || engine === 'gemini') {
+    if (engine === 'cloudflare' || engine === 'gemini' || engine === 'nvidia') {
         document.querySelectorAll('#bulk-poll-styles .poll-style-btn.selected').forEach(btn => {
             selectedStyles.push(btn.dataset.styleId);
         });
@@ -1091,6 +1122,8 @@ window.runBulkPollGeneration = async () => {
                 }
             } else if (engine === 'gemini') {
                 imageUrl = await generateGeminiImage(translatedLabel, randomStyle);
+            } else if (engine === 'nvidia') {
+                imageUrl = await generateNvidiaImage(translatedLabel, randomStyle);
             } else {
                 imageUrl = await generateCloudflareImage(translatedLabel, randomStyle);
             }
@@ -1105,7 +1138,7 @@ window.runBulkPollGeneration = async () => {
         log.scrollTop = log.scrollHeight;
 
         if (_bulkPollGenerating && completed < items.length) {
-            const delay = (engine === 'cloudflare' || engine === 'gemini') ? 800 : 500;
+            const delay = engine === 'nvidia' ? 1800 : (engine === 'cloudflare' || engine === 'gemini') ? 800 : 500;
             await new Promise(r => setTimeout(r, delay));
         }
     }

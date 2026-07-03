@@ -219,6 +219,7 @@ window.switchSettingsTab = (tab) => {
         btn.classList.toggle('active', btn.dataset.tab === tab);
     });
     if (tab === 'theme') renderThemePicker();
+    if (tab === 'api' && typeof populateNvidiaSettings === 'function') populateNvidiaSettings();
     if (tab === 'images' && typeof populateAiEngineSettings === 'function') populateAiEngineSettings();
     if (tab === 'images' && typeof populateAiStudioStyles === 'function') populateAiStudioStyles();
 };
@@ -398,13 +399,14 @@ Regole:
 Richiesta dell'utente: `;
 
 async function generateSetWithGemini(userPrompt) {
+    const nvActive = typeof nvidiaTextActive === 'function' && nvidiaTextActive();
     const apiKey = getGeminiApiKey();
-    if (!apiKey) {
-        throw new Error('Inserisci la chiave API Gemini nelle Impostazioni (icona chiave in alto a destra).');
+    if (!apiKey && !nvActive) {
+        throw new Error('Inserisci la chiave API Gemini nelle Impostazioni (icona chiave in alto a destra), oppure attiva il motore NVIDIA.');
     }
 
     const fullPrompt = GEMINI_SET_PROMPT + userPrompt;
-    const result = await callGemini(fullPrompt, apiKey);
+    const result = nvActive ? await nvidiaChatJSON(fullPrompt, { maxTokens: 8192, temperature: 0.7 }) : await callGemini(fullPrompt, apiKey);
 
     // Validate structure
     if (!result.name || !result.items || !Array.isArray(result.items)) {
