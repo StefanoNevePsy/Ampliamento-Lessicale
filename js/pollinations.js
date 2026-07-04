@@ -191,7 +191,7 @@ window.aiArasaacSearch = async (itemIndex) => {
             const altContainer = document.getElementById('arasaac-ai-alternatives');
             if (altContainer && result.alternatives && result.alternatives.length > 0) {
                 altContainer.innerHTML = result.alternatives.map(alt =>
-                    `<button onclick="document.getElementById('arasaac-query').value='${alt.replace(/'/g, "\\'")}'; runArasaacSearch(${itemIndex})" style="padding:3px 10px; border-radius:12px; border:1px solid rgba(168,85,247,0.3); background:rgba(168,85,247,0.1); color:#a855f7; font-size:0.75rem; cursor:pointer;">${typeof escapeHtml === 'function' ? escapeHtml(alt) : alt}</button>`
+                    `<button onclick="document.getElementById('arasaac-query').value='${jsAttr(alt)}'; runArasaacSearch(${itemIndex})" style="padding:3px 10px; border-radius:12px; border:1px solid rgba(168,85,247,0.3); background:rgba(168,85,247,0.1); color:#a855f7; font-size:0.75rem; cursor:pointer;">${typeof escapeHtml === 'function' ? escapeHtml(alt) : alt}</button>`
                 ).join('');
             }
             runArasaacSearch(itemIndex);
@@ -661,8 +661,8 @@ window.runPixabaySearch = async (itemIndex) => {
         }
         container.innerHTML = `<div class="pixabay-results">
             ${results.map((r, i) => `
-                <div class="pixabay-result-item" onclick="selectPixabayImage(${itemIndex}, ${i})" data-url="${r.web}">
-                    <img src="${r.preview}" loading="lazy" alt="${r.tags}">
+                <div class="pixabay-result-item" onclick="selectPixabayImage(${itemIndex}, ${i})" data-url="${escapeHtml(r.web)}">
+                    <img src="${r.preview}" loading="lazy" alt="${escapeHtml(r.tags)}">
                 </div>
             `).join('')}
         </div>
@@ -891,10 +891,11 @@ window.runImageGeneration = async (itemIndex) => {
 window.runPollGeneration = window.runImageGeneration;
 
 function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    return String(text == null ? '' : text)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;'); // quote-safe: usable inside HTML attributes
 }
+window.escapeHtml = escapeHtml;
 
 window.closePollinationsGenerator = () => {
     const modal = document.getElementById('modal-pollinations');
@@ -1040,6 +1041,7 @@ window.selectBulkPollTarget = (el) => {
 };
 
 window.runBulkPollGeneration = async () => {
+    if (_bulkPollGenerating) return; // double-tap guard
     const engine = document.querySelector('.bulk-engine-btn.selected')?.dataset?.engine || (getCloudflareWorkerUrl() ? 'cloudflare' : 'pixabay');
 
     const selectedStyles = [];
@@ -1147,6 +1149,7 @@ window.runBulkPollGeneration = async () => {
     document.getElementById('bulk-poll-progress-count').textContent = `${completed}/${items.length}`;
     document.getElementById('bulk-poll-progress-bar').style.width = '100%';
     document.getElementById('bulk-poll-done').style.display = 'block';
+    _bulkPollGenerating = false;
 
     renderEditorList();
 };

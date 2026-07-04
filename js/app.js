@@ -1150,6 +1150,10 @@ document.addEventListener('DOMContentLoaded', _restoreSecondaryControls);
 window.startGame = () => {
     // Clean up any active fluenza timer
     if (state.fluenzaTimerInterval) { clearInterval(state.fluenzaTimerInterval); state.fluenzaTimerInterval = null; }
+    // ...and the Ricorda auto-flip countdown, which would otherwise fire later
+    // and overwrite the stage of whatever mode is running by then.
+    if (state._ricordaTimerInterval) { clearInterval(state._ricordaTimerInterval); state._ricordaTimerInterval = null; }
+    if (state.session) delete state.session._fluenzaDetails;
 
     const mode = document.getElementById('mode-select').value;
     const engine = getModeEngine(mode);
@@ -1917,8 +1921,12 @@ async function _doSaveSession(p, noteText) {
         }
 
         if (!p.history) p.history = [];
+        const _saveBtn = document.getElementById('btn-save-session');
+        if (_saveBtn?.disabled) return; // double-tap: a save is already in flight
+        if (_saveBtn) _saveBtn.disabled = true;
         p.history.push(sessionData);
-        await DB.savePatient(p);
+        try { await DB.savePatient(p); }
+        catch (e) { p.history.pop(); if (_saveBtn) _saveBtn.disabled = false; alert('Salvataggio non riuscito: ' + e.message); return; }
 
         const btn = document.getElementById('btn-save-session');
         btn.innerHTML = '<i class="fa-solid fa-check"></i>';
@@ -1934,6 +1942,7 @@ async function _doSaveSession(p, noteText) {
         setTimeout(() => {
             btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i>';
             btn.style.background = '#2563eb';
+            btn.disabled = false;
             state.session.active = false;
             document.getElementById('scoring-controls').classList.add('hidden');
             btn.classList.add('hidden');
@@ -2134,6 +2143,9 @@ async function _doSaveSession(p, noteText) {
         }));
         sessionData.spSubMode = state.spState?.subMode;
     } else {
+        if (state.session._fluenzaDetails && state.session._fluenzaDetails.length > 0) {
+            sessionData.itemDetails = state.session._fluenzaDetails;
+        } else {
         const playItems = state.session.playItems || [];
         if (playItems.length > 0 && Object.keys(state.session.itemResults).length > 0) {
             const itemDetails = [];
@@ -2149,11 +2161,16 @@ async function _doSaveSession(p, noteText) {
                 sessionData.itemDetails = itemDetails;
             }
         }
+        }
     }
 
     if (!p.history) p.history = [];
+    const _saveBtn = document.getElementById('btn-save-session');
+    if (_saveBtn?.disabled) return; // double-tap: a save is already in flight
+    if (_saveBtn) _saveBtn.disabled = true;
     p.history.push(sessionData);
-    await DB.savePatient(p);
+    try { await DB.savePatient(p); }
+    catch (e) { p.history.pop(); if (_saveBtn) _saveBtn.disabled = false; alert('Salvataggio non riuscito: ' + e.message); return; }
 
     const btn = document.getElementById('btn-save-session');
     btn.innerHTML = '<i class="fa-solid fa-check"></i>';
@@ -2166,6 +2183,7 @@ async function _doSaveSession(p, noteText) {
     setTimeout(() => {
         btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i>';
         btn.style.background = '#2563eb';
+        btn.disabled = false;
         state.session.active = false;
         document.getElementById('scoring-controls').classList.add('hidden');
         btn.classList.add('hidden');

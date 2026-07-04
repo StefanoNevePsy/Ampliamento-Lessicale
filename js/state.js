@@ -31,6 +31,14 @@ const BUILTIN_MODES = {
 
 // MODES_CONFIG: dynamic map of all modes (built-in + custom)
 // Rebuilt by rebuildModesConfig() on init and after edits
+// Make a string safe as a single-quoted JS literal inside a double-quoted
+// HTML attribute (labels like "L'ombrello" broke inline onclick handlers).
+window.jsAttr = function (s) {
+    return String(s == null ? '' : s)
+        .replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+        .replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/&(?!quot;|lt;|amp;)/g, '&amp;');
+};
+
 let MODES_CONFIG = {};
 
 function rebuildModesConfig() {

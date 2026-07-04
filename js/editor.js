@@ -253,6 +253,17 @@ window.saveEditorChanges = () => {
 };
 
 // --- RENDER EDITOR LIST ---
+// Delete an item keeping the active-item pointer consistent (a stale index
+// would silently attach the next pasted image to the wrong item).
+window.deleteEditorItem = (idx) => {
+    state.editingItems.splice(idx, 1);
+    if (state.activeEditorIndex != null) {
+        if (state.activeEditorIndex === idx) state.activeEditorIndex = null;
+        else if (state.activeEditorIndex > idx) state.activeEditorIndex--;
+    }
+    renderEditorList();
+};
+
 function renderEditorList() {
     const container = document.getElementById('editor-list');
     if (!container) return;
@@ -295,7 +306,7 @@ function renderEditorList() {
                 </div>
             </div>
             <div style="flex:1">
-                <input type="text" value="${item.label}"
+                <input type="text" value="${escapeHtml(item.label)}"
                     onchange="state.editingItems[${idx}].label=this.value"
                     onfocus="setActiveItem(${idx})"
                     onclick="event.stopPropagation()"
@@ -330,7 +341,7 @@ function renderEditorList() {
             <button class="btn btn-ghost" style="padding:6px;" onclick="toggleItemVisibility(${idx}); event.stopPropagation();" title="${item.hidden ? 'Mostra' : 'Nascondi'}">
                 <i class="fa-solid ${item.hidden ? 'fa-eye-slash' : 'fa-eye'}" style="${item.hidden ? 'color:#888' : 'color:var(--success-color)'}"></i>
             </button>
-            <button class="btn btn-danger" style="padding:6px;" onclick="state.editingItems.splice(${idx},1); renderEditorList(); event.stopPropagation();">
+            <button class="btn btn-danger" style="padding:6px;" onclick="deleteEditorItem(${idx}); event.stopPropagation();">
                 <i class="fa-solid fa-minus"></i>
             </button>
         </div>`;

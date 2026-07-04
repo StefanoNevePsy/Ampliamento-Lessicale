@@ -229,7 +229,8 @@ window.openSettings = () => {
     // API tab
     document.getElementById('api-key').value = getGeminiApiKey();
 
-    const cached = JSON.parse(localStorage.getItem('gemini_models_cache') || 'null');
+    let cached = null;
+    try { cached = JSON.parse(localStorage.getItem('gemini_models_cache') || 'null'); } catch (e) { /* cache corrotta: ignora */ }
     const ONE_DAY = 24 * 60 * 60 * 1000;
     if (cached && (Date.now() - cached.ts < ONE_DAY) && cached.models?.length) {
         populateModelSelect(cached.models);
@@ -538,13 +539,13 @@ window.runGeminiGeneration = async () => {
 
         // Show result
         const info = document.getElementById('gemini-result-info');
-        info.innerHTML = `<b>${_lastGeminiSet.name}</b> &mdash; ${_lastGeminiSet.items.length} stimoli, Categoria: ${_lastGeminiSet.category || 'Personale'}`;
+        info.innerHTML = `<b>${escapeHtml(_lastGeminiSet.name)}</b> &mdash; ${_lastGeminiSet.items.length} stimoli, Categoria: ${escapeHtml(_lastGeminiSet.category || 'Personale')}`;
 
         const preview = document.getElementById('gemini-result-preview');
         preview.innerHTML = _lastGeminiSet.items.map((item, i) =>
             `<div style="padding:6px 10px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; gap:8px;">
                 <span style="color:#666; font-size:0.75rem; width:24px;">${i + 1}.</span>
-                <span>${item.label}</span>
+                <span>${escapeHtml(item.label)}</span>
                 ${item.seqNumber ? `<span style="color:var(--accent-color); font-size:0.75rem;">#${item.seqNumber}</span>` : ''}
             </div>`
         ).join('');

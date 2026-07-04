@@ -68,7 +68,7 @@ function setupCustomAutocomplete(inputId, options) {
             panel.innerHTML = '<div class="custom-ac-empty">Nessun suggerimento</div>';
         } else {
             panel.innerHTML = filteredOptions.map(n =>
-                `<div class="custom-ac-item" data-value="${n.replace(/"/g, '&quot;')}">${n}</div>`
+                `<div class="custom-ac-item" data-value="${n.replace(/"/g, '&quot;')}">${escapeHtml(n)}</div>`
             ).join('');
         }
         highlighted = -1;
@@ -206,7 +206,7 @@ function renderTact(items, stage) {
                 <img src="${imgUrl(item)}"
                      class="${feedbackClass}"
                      style="transition:0.3s;"
-                     onerror="handleImgError(this, '${item.label}')">
+                     onerror="handleImgError(this, '${jsAttr(item.label)}')">
                 <div class="tact-title">${item.label}</div>
                 <div style="font-size:0.9rem; color:#888;">${state.tactIndex + 1} / ${items.length}</div>
             </div>
@@ -257,7 +257,7 @@ function updateRanContent() {
                     gap:10px; overflow-y:auto;">
             ${items.map(x => `
                 <div style="background:${showingScontorno(x) ? 'transparent' : 'white'}; border-radius:8px; padding:4px; display:flex; align-items:center; justify-content:center; min-height:0; min-width:0; overflow:hidden; ${showingScontorno(x) ? '' : 'box-shadow:0 2px 5px rgba(0,0,0,0.2);'}">
-                    <img src="${imgUrl(x)}" style="max-width:100%; max-height:100%; object-fit:contain;" onerror="handleImgError(this,'${x.label}')">
+                    <img src="${imgUrl(x)}" style="max-width:100%; max-height:100%; object-fit:contain;" onerror="handleImgError(this,'${jsAttr(x.label)}')">
                 </div>
             `).join('')}
         </div>`;
@@ -272,7 +272,7 @@ function updateRanContent() {
                 <img src="${imgUrl(x)}"
                      class="ran-main-img ${showingScontorno(x) ? 'cutout' : ''} ${feedbackClass}"
                      style="transition:0.3s;"
-                     onerror="handleImgError(this,'${x.label}')">
+                     onerror="handleImgError(this,'${jsAttr(x.label)}')">
                 <h2 style="text-align:center;">${x.label}</h2>
             </div>
             <div class="ran-controls-bar">
@@ -370,6 +370,7 @@ function renderFluenza(items, stage) {
     state.fluenzaFinished = false;
     state.fluenzaTimeLeft = state.fluenzaTimerDuration;
     state.fluenzaItemResults = {};
+    state.fluenzaItemLabels = {};
     if (state.fluenzaTimerInterval) { clearInterval(state.fluenzaTimerInterval); state.fluenzaTimerInterval = null; }
 
     // Calculate obiettivo from patient history
@@ -488,7 +489,7 @@ function renderFluenzaUI(stage) {
 
     // During game: show current image + timer + controls
     const currentItem = idx >= 0 && idx < items.length ? items[idx] : null;
-    const currentResult = state.fluenzaItemResults[idx];
+    const currentResult = state.fluenzaItemResults[state.fluenzaCount];
     const showBar = state.fluenzaShowBar;
 
     stage.innerHTML = `
@@ -557,9 +558,13 @@ window.fluenzaNext = () => {
         return;
     }
 
-    // Mark current as correct if not already marked
-    if (state.fluenzaItemResults[state.fluenzaIndex] === undefined) {
-        state.fluenzaItemResults[state.fluenzaIndex] = true;
+    // Mark current as correct if not already marked.
+    // Keyed by the running counter (not the deck index): after the deck wraps,
+    // index keys repeat and lap-1 results blocked lap-2 error marking.
+    if (state.fluenzaItemResults[state.fluenzaCount] === undefined) {
+        state.fluenzaItemResults[state.fluenzaCount] = true;
+        if (!state.fluenzaItemLabels) state.fluenzaItemLabels = {};
+        state.fluenzaItemLabels[state.fluenzaCount] = state.fluenzaDisplayItems?.[state.fluenzaIndex]?.label || '';
     }
 
     // Advance to next item
@@ -578,9 +583,11 @@ window.fluenzaNext = () => {
 window.fluenzaMarkError = () => {
     if (state.fluenzaFinished || !state.fluenzaStarted) return;
     if (state.fluenzaIndex < 0) return;
-    if (state.fluenzaItemResults[state.fluenzaIndex] !== undefined) return;
+    if (state.fluenzaItemResults[state.fluenzaCount] !== undefined) return;
 
-    state.fluenzaItemResults[state.fluenzaIndex] = false;
+    state.fluenzaItemResults[state.fluenzaCount] = false;
+    if (!state.fluenzaItemLabels) state.fluenzaItemLabels = {};
+    state.fluenzaItemLabels[state.fluenzaCount] = state.fluenzaDisplayItems?.[state.fluenzaIndex]?.label || '';
     state.fluenzaErrors++;
 
     // Update session
@@ -604,7 +611,7 @@ function fluenzaStop() {
 
     // Finalize: the last shown item counts only if user interacted (next or marked)
     // If current item has no result, it was shown but not advanced - don't count it
-    if (state.fluenzaIndex >= 0 && state.fluenzaItemResults[state.fluenzaIndex] === undefined) {
+    if (state.fluenzaIndex >= 0 && state.fluenzaItemResults[state.fluenzaCount] === undefined) {
         state.fluenzaCount--;
     }
 
@@ -616,9 +623,14 @@ function fluenzaStop() {
         state.session.incorrect = state.fluenzaErrors;
         state.session.total = state.fluenzaCount;
         state.session.itemResults = {};
-        // Store item results for per-item detail
+        // Store item results for per-item detail; labels are recorded at mark
+        // time (counter keys are NOT deck indexes, so the generic playItems[idx]
+        // mapping in the save path must not be used for fluenza).
+        state.session._fluenzaDetails = [];
         for (const [k, v] of Object.entries(state.fluenzaItemResults)) {
             state.session.itemResults[k] = v;
+            const lbl = state.fluenzaItemLabels?.[k];
+            if (lbl) state.session._fluenzaDetails.push({ label: lbl, result: v });
         }
         updateScoreUI();
         document.getElementById('btn-save-session').classList.remove('hidden');
@@ -655,11 +667,11 @@ function renderTombola(items, stage) {
                         gap:10px; overflow-y:auto;">
                 ${items.map((item, idx) => `
                     <div class="card-grid" id="slot-${idx}"
-                         onclick="handleMatchClick(${idx}, '${item.label}')"
+                         onclick="handleMatchClick(${idx}, '${jsAttr(item.label)}')"
                          style="aspect-ratio:unset; height:auto; min-height:0; min-width:0; overflow:hidden;">
                         <img src="${imgUrl(item)}"
                              style="max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain;"
-                             onerror="handleImgError(this, '${item.label}')">
+                             onerror="handleImgError(this, '${jsAttr(item.label)}')">
                     </div>
                 `).join('')}
             </div>
@@ -764,7 +776,7 @@ function renderMemory(items, stage) {
                         <div class="mem-content" style="display:none; width:100%; height:100%;">
                             <img src="${imgUrl(item)}"
                                  style="max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; background:white; border-radius:6px;"
-                                 onerror="handleImgError(this, '${item.label}')">
+                                 onerror="handleImgError(this, '${jsAttr(item.label)}')">
                         </div>
                         <i class="fa-solid fa-question icon-back" style="color:white; font-size:2rem;"></i>
                     </div>
@@ -996,7 +1008,7 @@ function showPoolBatch(stage) {
                 <div class="card-grid" style="aspect-ratio:unset; height:auto; min-height:0; min-width:0; overflow:hidden;">
                     <img src="${imgUrl(item)}"
                          style="max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain;"
-                         onerror="handleImgError(this, '${item.label}')">
+                         onerror="handleImgError(this, '${jsAttr(item.label)}')">
                 </div>
             `).join('')}
         </div>
@@ -1626,7 +1638,7 @@ function renderRaccontoUI(stage) {
                             transition:0.2s; box-shadow:${shadow}; ${scale} user-select:none; position:relative;">
                     <span style="width:28px; height:28px; border-radius:50%; background:rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:0.85rem; color:var(--text-secondary);">${idx + 1}</span>
                     <div style="background:white; border-radius:12px; padding:5px;">
-                        <img src="${imgUrl(item)}" style="width:120px; height:120px; object-fit:contain; border-radius:10px;" draggable="false" onerror="handleImgError(this, '${item.label}')">
+                        <img src="${imgUrl(item)}" style="width:120px; height:120px; object-fit:contain; border-radius:10px;" draggable="false" onerror="handleImgError(this, '${jsAttr(item.label)}')">
                     </div>
                     <span style="font-weight:bold; font-size:0.85rem; text-align:center; word-break:break-word; line-height:1.1;">${item.label}</span>
                     ${resultIcon ? `<div style="position:absolute; top:6px; right:6px;">${resultIcon}</div>` : ''}
@@ -1900,7 +1912,7 @@ function showCategorizzazioneItem(stage) {
             <div id="cat-card" style="background:white; border-radius:16px; padding:10px; max-width:300px; width:100%; max-height:55%; display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 10px 40px rgba(0,0,0,0.5); transition:0.3s;">
                 <img src="${imgUrl(item)}"
                      style="max-width:100%; max-height:85%; object-fit:contain; border-radius:8px;"
-                     onerror="handleImgError(this, '${item.label}')">
+                     onerror="handleImgError(this, '${jsAttr(item.label)}')">
                 <div style="font-size:1rem; color:#333; font-weight:800; margin-top:6px; text-transform:uppercase;">${item.label}</div>
             </div>
         </div>
@@ -2208,7 +2220,7 @@ window.undoLastAction = () => {
         }
     }
 
-    if (removedId && state.session.itemResults[removedId] !== undefined) {
+    if (removedId !== null && removedId !== undefined && state.session.itemResults[removedId] !== undefined) {
         delete state.session.itemResults[removedId];
     }
 
@@ -2292,7 +2304,7 @@ function renderTombolaSonora(items, stage) {
                          style="aspect-ratio:unset; height:auto; min-height:0; min-width:0; overflow:hidden;">
                         <img src="${imgUrl(item)}"
                              style="max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain;"
-                             onerror="handleImgError(this, '${item.label}')">
+                             onerror="handleImgError(this, '${jsAttr(item.label)}')">
                     </div>
                 `).join('')}
             </div>
@@ -2419,7 +2431,7 @@ function showZoomItem(stage) {
         </div>
         <div id="zoom-display" style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; min-height:0; cursor:pointer;" onclick="revealZoom()">
             <div id="zoom-image-container" style="position:relative; max-width:90%; max-height:70%; overflow:hidden; border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,0.5); background:white;">
-                <img id="zoom-img" src="${item.url}" style="display:block; width:100%; height:auto; transform-origin:${area.x + area.w / 2}% ${area.y + area.h / 2}%; transform:scale(${Math.round(100 / area.w * 2.5)}); transition:transform 0.8s ease;" onerror="handleImgError(this, '${item.label}')">
+                <img id="zoom-img" src="${item.url}" style="display:block; width:100%; height:auto; transform-origin:${area.x + area.w / 2}% ${area.y + area.h / 2}%; transform:scale(${Math.round(100 / area.w * 2.5)}); transition:transform 0.8s ease;" onerror="handleImgError(this, '${jsAttr(item.label)}')">
             </div>
             <div id="zoom-label" style="margin-top:15px; font-size:1.5rem; font-weight:800; color:white; text-transform:uppercase; opacity:0; transition:opacity 0.5s;">${item.label}</div>
             <div id="zoom-hint" style="margin-top:10px; color:var(--text-secondary); font-size:0.85rem;">

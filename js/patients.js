@@ -327,13 +327,18 @@ window.editSession = async (patientId, sessionIndex) => {
         newTDSeconds = parseInt(tdInput) || 5;
     }
 
+    const vCorrect = parseInt(newScore), vTotal = parseInt(newTotal);
+    if (!Number.isFinite(vCorrect) || !Number.isFinite(vTotal) || vTotal <= 0 || vCorrect < 0 || vCorrect > vTotal) {
+        alert('Valori non validi: il totale deve essere maggiore di 0 e i corretti compresi tra 0 e il totale.');
+        return;
+    }
     try {
         let d = new Date(newDateStr);
         if (isNaN(d.getTime())) throw "Data invalida";
         s.date = d.toISOString();
     } catch (e) { alert("Formato data errato. Usa AAAA-MM-GG"); return; }
-    s.correct = parseInt(newScore);
-    s.total = parseInt(newTotal);
+    s.correct = vCorrect;
+    s.total = vTotal;
     s.percentage = Math.round((s.correct / s.total) * 100);
     s.sessionType = newType;
     if (newType === 'timedelay') {
@@ -354,8 +359,13 @@ function formatDateEU(isoStr) {
 }
 
 function getDateKey(isoStr) {
-    return new Date(isoStr).toISOString().split('T')[0];
+    // Local calendar day, NOT UTC: with toISOString() a session at 00:30 local
+    // (UTC+2) was bucketed, charted and criterion-checked under the previous day.
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return String(isoStr).split('T')[0];
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+window.getDateKey = getDateKey;
 
 function getSessionTypeGroup(s) {
     if (s.sessionType === 'timedelay') return 'timedelay';
@@ -542,10 +552,10 @@ window.loadPatientData = (pid) => {
         <div style="display:flex; gap:15px; margin-bottom:15px; align-items:center;">
             ${photoHtml}
             <div style="flex:1;">
-                <div style="font-size:1.1rem; font-weight:700;">${p.name}</div>
+                <div style="font-size:1.1rem; font-weight:700;">${escapeHtml(p.name)}</div>
                 <div style="display:flex; gap:6px; align-items:center; margin-top:4px;">
                     <span onclick="editPatientCategory('${pid}')" style="font-size:0.75rem; padding:2px 8px; border-radius:6px; background:rgba(99,102,241,0.15); color:var(--accent-color); cursor:pointer;" title="Cambia categoria">
-                        <i class="fa-solid fa-tag" style="margin-right:3px;"></i>${p.category || 'Nessuna categoria'}
+                        <i class="fa-solid fa-tag" style="margin-right:3px;"></i>${escapeHtml(p.category || 'Nessuna categoria')}
                     </span>
                 </div>
             </div>
@@ -2132,8 +2142,16 @@ window.setDayTag = async (pid, dateKey, tagKey) => {
     }
     await DB.savePatient(p);
     document.querySelectorAll('.day-tag-popover').forEach(el => el.remove());
-    loadPatientData(pid);
+    _refreshActiveReportTab(pid);
 };
+
+// Re-render the tab the user is actually on (tagging a day from "Giornate"
+// used to bounce the view back to "Panoramica").
+function _refreshActiveReportTab(pid) {
+    const active = document.querySelector('.report-tab.active')?.dataset?.tab;
+    if (active && typeof switchReportTab === 'function') switchReportTab(active, pid);
+    else loadPatientData(pid);
+}
 
 window.openDayTagPicker = (pid, dateKey, anchorEl) => {
     document.querySelectorAll('.day-tag-popover').forEach(el => el.remove());
@@ -2179,7 +2197,7 @@ window.toggleOutlierDay = async (pid, dateKey) => {
         p.outlierDays[dateKey] = true;
     }
     await DB.savePatient(p);
-    loadPatientData(pid);
+    _refreshActiveReportTab(pid);
 };
 
 window.toggleActivityDetails = (btn) => {

@@ -280,7 +280,7 @@ function vizCalendarHeatmap(container, patient) {
             if (cur < first || cur > last) {
                 // still draw faint empty cell for grid continuity within range only
             }
-            const dk = cur.toISOString().split('T')[0];
+            const dk = getDateKey(cur);
             const x = leftPad + wi * (cell + gap);
             const y = topPad + di * (cell + gap);
             const rec = byDate[dk];
@@ -771,8 +771,8 @@ const VIZ_VIEWS = [
 function vizFilterRange() {
     const f = state._vizFilter || 'all';
     const now = new Date();
-    const today = now.toISOString().split('T')[0];
-    const back = d => new Date(now.getTime() - d * 86400000).toISOString().split('T')[0];
+    const today = getDateKey(now);
+    const back = d => getDateKey(new Date(now.getTime() - d * 86400000));
     if (f === 'week') return { from: back(7), to: today };
     if (f === 'month') return { from: back(30), to: today };
     if (f === 'quarter') return { from: back(90), to: today };
