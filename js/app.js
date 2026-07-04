@@ -3201,7 +3201,8 @@ window.openVisualPromptConfig = () => {
             <input type="color" value="${p.color}" onchange="vpbChangeColor(${i}, this.value)" style="width:30px; height:30px; border:none; border-radius:6px; cursor:pointer;">
             <button class="btn-icon" style="width:28px; height:28px; font-size:0.7rem; color:#10b981;" onclick="vpbSearchArasaac(${i})" title="Cerca pittogramma ARASAAC"><i class="fa-solid fa-icons"></i></button>
             <button class="btn-icon" style="width:28px; height:28px; font-size:0.7rem; color:var(--accent-color);" onclick="vpbUploadImage(${i})" title="Carica immagine"><i class="fa-solid fa-image"></i></button>
-            ${p.image ? `<button class="btn-icon" style="width:28px; height:28px; font-size:0.7rem; color:var(--danger-color);" onclick="vpbRemoveImage(${i})" title="Rimuovi immagine"><i class="fa-solid fa-xmark"></i></button>` : ''}
+            ${p.image ? `<button class="btn-icon" style="width:28px; height:28px; font-size:0.7rem; color:var(--warning-color);" onclick="vpbRemoveImage(${i})" title="Rimuovi immagine (torna all'icona)"><i class="fa-solid fa-eraser"></i></button>` : ''}
+            <button class="btn-icon" style="width:28px; height:28px; font-size:0.7rem; color:var(--danger-color);" onclick="vpbDeletePrompt(${i})" title="Elimina questo tasto"><i class="fa-solid fa-trash"></i></button>
         </div>`;
     }).join('');
 
@@ -3272,6 +3273,16 @@ window.vpbUploadImage = (idx) => {
 window.vpbRemoveImage = (idx) => {
     const prompts = getVisualPrompts();
     if (prompts[idx]) { prompts[idx].image = null; saveVisualPrompts(prompts); renderVisualPromptBar(); openVisualPromptConfig(); }
+};
+
+window.vpbDeletePrompt = (idx) => {
+    const prompts = getVisualPrompts();
+    if (!prompts[idx]) return;
+    if (!confirm(`Eliminare il tasto "${prompts[idx].label}"?`)) return;
+    prompts.splice(idx, 1);
+    saveVisualPrompts(prompts);
+    renderVisualPromptBar();
+    openVisualPromptConfig();
 };
 
 // Search ARASAAC pictograms for a visual prompt button
