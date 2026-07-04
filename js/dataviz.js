@@ -258,19 +258,30 @@ function vizCalendarHeatmap(container, patient) {
     const byDate = {}; daily.forEach(d => byDate[d.date] = d);
 
     const first = new Date(daily[0].date + 'T00:00:00');
-    const last = new Date(daily[daily.length - 1].date + 'T00:00:00');
+    // Extend the grid to TODAY (local), not just to the last recorded session:
+    // the current week must always be visible even before logging anything.
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    let last = new Date(daily[daily.length - 1].date + 'T00:00:00');
+    if (today > last) last = today;
     // Start grid on the Monday on/before first date.
     const start = new Date(first); const dow = (start.getDay() + 6) % 7; start.setDate(start.getDate() - dow);
     const cell = 15, gap = 3, leftPad = 28, topPad = 18;
     const totalDays = Math.round((last - start) / 86400000) + 1;
-    const weeks = Math.ceil((totalDays + ((start.getDay() + 6) % 7)) / 7) + 1;
+    const weeks = Math.ceil(totalDays / 7) + 1;
     const w = leftPad + weeks * (cell + gap) + 6;
     const h = topPad + 7 * (cell + gap) + 6;
-    const svg = svgRoot(container, w, h, { bg: s.bg, cssHeight: h, maxWidth: w });
+    // Native-size SVG inside a horizontal scroller (long histories must scroll,
+    // not shrink into unreadable cells), anchored to the most recent weeks.
+    const scroller = document.createElement('div');
+    scroller.style.cssText = 'overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:4px;';
+    container.appendChild(scroller);
+    const svg = svgRoot(scroller, w, h, { bg: s.bg, cssHeight: h, maxWidth: w });
+    svg.style.width = w + 'px';
+    svg.style.maxWidth = 'none';
 
     const dayLabels = ['L', 'M', 'M', 'G', 'V', 'S', 'D'];
     dayLabels.forEach((lb, i) => {
-        if (i % 2 === 0) svgEl('text', { x: leftPad - 6, y: topPad + i * (cell + gap) + cell - 3, 'text-anchor': 'end', 'font-size': 8, fill: s.textDim, text: lb }, svg);
+        svgEl('text', { x: leftPad - 6, y: topPad + i * (cell + gap) + cell - 4, 'text-anchor': 'end', 'font-size': 8, fill: s.textDim, text: lb }, svg);
     });
 
     let lastMonth = -1;
@@ -294,6 +305,10 @@ function vizCalendarHeatmap(container, patient) {
                 if (rec.hasNote) svgEl('circle', { cx: x + 3, cy: y + cell - 3, r: 1.6, fill: s.accent }, svg);
                 if (rec.outlier) svgEl('rect', { x, y, width: cell, height: cell, rx: s.organic ? cell / 2 : 3, fill: 'none', stroke: s.bad, 'stroke-width': 1, 'stroke-dasharray': '2,2' }, svg);
             }
+            // today: outlined for orientation
+            if (cur.getTime() === today.getTime()) {
+                svgEl('rect', { x: x - 1, y: y - 1, width: cell + 2, height: cell + 2, rx: s.organic ? cell / 2 : 4, fill: 'none', stroke: s.accent, 'stroke-width': 1.4 }, svg);
+            }
             // month label on first row when month changes
             if (di === 0 && cur.getMonth() !== lastMonth) {
                 lastMonth = cur.getMonth();
@@ -302,7 +317,41 @@ function vizCalendarHeatmap(container, patient) {
             }
         }
     }
+    // Land on the most recent weeks (the interesting end) by default.
+    requestAnimationFrame(() => { scroller.scrollLeft = scroller.scrollWidth; });
     _vizLegendGradient(container, s, 'Bassa', 'Alta % giornaliera');
+
+    // --- Weekday efficiency: is there a pattern tied to the day of the week? ---
+    const wd = Array.from({ length: 7 }, () => ({ pctSum: 0, luSum: 0, n: 0 }));
+    daily.forEach(d => {
+        const dayIdx = (new Date(d.date + 'T00:00:00').getDay() + 6) % 7; // 0 = Mon
+        wd[dayIdx].pctSum += d.pct; wd[dayIdx].luSum += d.totalLU; wd[dayIdx].n++;
+    });
+    const wdNames = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
+    const active = wd.map((a, i) => ({ ...a, i })).filter(a => a.n > 0);
+    if (active.length >= 2) {
+        const best = active.reduce((m, a) => (a.pctSum / a.n) > (m.pctSum / m.n) ? a : m);
+        const head = document.createElement('div');
+        head.style.cssText = 'margin:14px 0 6px; font-size:0.78rem; font-weight:600; color:var(--text-secondary); text-align:center;';
+        head.innerHTML = '<i class="fa-solid fa-calendar-week"></i> Media per giorno della settimana';
+        container.appendChild(head);
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex; gap:6px; justify-content:center; align-items:flex-end;';
+        row.innerHTML = wd.map((a, i) => {
+            if (a.n === 0) return `<div style="width:44px; text-align:center; opacity:0.35;"><div style="height:56px; display:flex; align-items:flex-end; justify-content:center;"><div style="width:22px; height:3px; border-radius:2px; background:${s.grid};"></div></div><div style="font-size:0.68rem; color:var(--text-secondary);">${wdNames[i]}</div><div style="font-size:0.6rem; color:var(--text-secondary);">—</div></div>`;
+            const avg = Math.round(a.pctSum / a.n);
+            const hgt = Math.max(6, Math.round(56 * avg / 100));
+            const isBest = a.i === best.i;
+            return `<div style="width:44px; text-align:center;" title="${wdNames[i]}: media ${avg}% su ${a.n} giornate · ${Math.round(a.luSum / a.n)} LU/giorno">
+                <div style="height:56px; display:flex; align-items:flex-end; justify-content:center;"><div style="width:22px; height:${hgt}px; border-radius:4px 4px 2px 2px; background:${pctSkinColor(avg, s)}; ${isBest ? 'outline:2px solid ' + s.accent + '; outline-offset:1px;' : ''}"></div></div>
+                <div style="font-size:0.68rem; color:var(--text-secondary); font-weight:${isBest ? '700' : '400'};">${wdNames[i]}</div>
+                <div style="font-size:0.62rem; color:${pctSkinColor(avg, s)}; font-weight:700;">${avg}%</div>
+                <div style="font-size:0.55rem; color:var(--text-secondary);">${a.n}g</div>
+            </div>`;
+        }).join('');
+        container.appendChild(row);
+        _caption(container, 'Barre = % media delle giornate cadute in quel giorno · bordo = giorno migliore · "g" = giornate osservate');
+    }
 }
 
 function _vizLegendGradient(container, s, lo, hi) {
@@ -551,12 +600,23 @@ function _vizVocabSky(container, items, s) {
             const star = svgEl('circle', { cx: x, cy: y, r: size, fill: col, opacity: bright }, svg);
             svgEl('circle', { cx: x, cy: y, r: size * 2.4, fill: col, opacity: bright * 0.18 }, svg); // glow
             _title(star, `${it.label}\n${Math.round(it.mastery * 100)}% · praticato ${it.total}×\nCategoria: ${it.cat}`);
+            it._sx = x; it._sy = y; it._ssize = size;
         });
     });
-    const cap = document.createElement('div');
-    cap.style.cssText = 'text-align:center; margin-top:6px; font-size:0.7rem; color:var(--text-secondary);';
-    cap.textContent = 'Ogni stella è uno stimolo · luminosità = acquisizione · grandezza = volte praticato';
-    container.appendChild(cap);
+    // Label the most-practiced words so the sky is anchored to real content.
+    items.slice().sort((a, b) => b.total - a.total).slice(0, 6).forEach(it => {
+        if (it._sx == null) return;
+        svgEl('text', { x: it._sx, y: it._sy - it._ssize - 3, 'text-anchor': 'middle', 'font-size': 7, fill: s.text, opacity: 0.85, text: it.label.length > 12 ? it.label.slice(0, 11) + '…' : it.label }, svg);
+    });
+    // Explicit how-to-read legend (the metaphor alone wasn't self-evident).
+    const leg = document.createElement('div');
+    leg.style.cssText = 'display:flex; gap:14px; justify-content:center; align-items:center; flex-wrap:wrap; margin-top:8px; font-size:0.68rem; color:var(--text-secondary);';
+    leg.innerHTML = `
+        <span style="display:inline-flex; align-items:center; gap:5px;"><span style="width:6px; height:6px; border-radius:50%; background:${s.bad}; opacity:0.45; display:inline-block;"></span> piccola e spenta = poco praticato / in difficoltà</span>
+        <span style="display:inline-flex; align-items:center; gap:5px;"><span style="width:12px; height:12px; border-radius:50%; background:${s.good}; box-shadow:0 0 6px ${s.good}; display:inline-block;"></span> grande e brillante = molto praticato e acquisito</span>
+        <span style="display:inline-flex; align-items:center; gap:5px;"><span style="display:inline-block; width:56px; height:7px; border-radius:4px; background:linear-gradient(90deg, ${s.bad}, ${s.mid}, ${s.good});"></span> colore = acquisizione</span>`;
+    container.appendChild(leg);
+    _caption(container, 'Ogni stella è una parola, raggruppata per set. Tocca una stella per i dettagli.');
 }
 
 // ============================================================
@@ -842,4 +902,8 @@ window.renderVizTab = renderVizTab;
 window.selectVizView = (id, pid) => { state._vizView = id; const p = state.patients.find(x => x.id === pid); if (p) renderVizTab(p); };
 
 // expose extractors for testing
-window._vizApi = { vizDailyData, vizItemStats, vizDomainStats, vizTimeDelaySeries, VIZ_VIEWS, VIZ_SKINS };
+window._vizApi = {
+    vizDailyData, vizItemStats, vizDomainStats, vizTimeDelaySeries, VIZ_VIEWS, VIZ_SKINS,
+    // drawing toolkit for add-on visualizations (js/dataviz-extra.js)
+    svgRoot, svgEl, skin, pctSkinColor, _smooth, _caption, _title, _vizLegendChips, _esc
+};
