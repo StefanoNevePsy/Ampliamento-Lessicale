@@ -1146,6 +1146,32 @@ document.addEventListener('DOMContentLoaded', _restoreSecondaryControls);
     window.addEventListener('resize', () => { if (penActive) resizeCanvas(); });
 })();
 
+// --- NEW ROUND, SAME SESSION ---
+// startGame() reshuffles but resets the session; here we carry the counters
+// (and previous per-item results, under round-prefixed keys) across the
+// re-init, so the therapist can chain randomized rounds and save ONCE.
+window.replayRound = () => {
+    const s0 = state.session;
+    const prev = (s0 && s0.active) ? {
+        v: s0.correct || 0, x: s0.incorrect || 0, p: s0.prompts || 0, t: s0.total || 0,
+        itemResults: s0.itemResults || {}, round: s0._round || 1
+    } : null;
+    startGame();
+    if (prev && state.session) {
+        const s = state.session;
+        s._carryV = prev.v; s._carryX = prev.x; s._carryP = prev.p; s._carryT = prev.t;
+        s.correct = prev.v; s.incorrect = prev.x; s.prompts = prev.p; s.total = prev.t;
+        Object.entries(prev.itemResults).forEach(([k, v]) => {
+            const key = /^r\d+_/.test(k) ? k : `r${prev.round}_${k}`;
+            s.itemResults[key] = v;
+        });
+        s._round = prev.round + 1;
+        if (typeof updateScoreUI === 'function') updateScoreUI();
+        const saveBtn = document.getElementById('btn-save-session');
+        if (saveBtn && prev.t > 0) saveBtn.classList.remove('hidden');
+    }
+};
+
 // --- START GAME ---
 window.startGame = () => {
     // Clean up any active fluenza timer

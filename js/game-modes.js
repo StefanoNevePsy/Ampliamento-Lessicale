@@ -592,9 +592,9 @@ window.fluenzaMarkError = () => {
 
     // Update session
     if (state.session.active) {
-        state.session.incorrect = state.fluenzaErrors;
-        state.session.correct = state.fluenzaCount - state.fluenzaErrors;
-        state.session.total = state.fluenzaCount;
+        state.session.incorrect = (state.session._carryX || 0) + state.fluenzaErrors;
+        state.session.correct = (state.session._carryV || 0) + state.fluenzaCount - state.fluenzaErrors;
+        state.session.total = (state.session._carryT || 0) + state.fluenzaCount;
         updateScoreUI();
     }
 
@@ -619,10 +619,11 @@ function fluenzaStop() {
 
     // Update session for saving
     if (state.session.active) {
-        state.session.correct = correct;
-        state.session.incorrect = state.fluenzaErrors;
-        state.session.total = state.fluenzaCount;
-        state.session.itemResults = {};
+        state.session.correct = (state.session._carryV || 0) + correct;
+        state.session.incorrect = (state.session._carryX || 0) + state.fluenzaErrors;
+        state.session.total = (state.session._carryT || 0) + state.fluenzaCount;
+        // Keep carried previous-round results (r<N>_ keys), wipe only current
+        Object.keys(state.session.itemResults).forEach(k => { if (!/^r\d+_/.test(k)) delete state.session.itemResults[k]; });
         // Store item results for per-item detail; labels are recorded at mark
         // time (counter keys are NOT deck indexes, so the generic playItems[idx]
         // mapping in the save path must not be used for fluenza).
@@ -679,7 +680,7 @@ function renderTombola(items, stage) {
 }
 
 function getDeckHtml() {
-    if (state.deck.length === 0) return `<span>FINITO!</span>`;
+    if (state.deck.length === 0) return `<span style="font-weight:bold;">FINITO!</span> <button class="btn btn-sm btn-primary" onclick="replayRound()" style="padding:4px 12px; margin-left:8px;"><i class="fa-solid fa-shuffle"></i> Nuovo giro</button>`;
     const c = state.deck[0];
     return `<img src="${imgUrl(c)}" style="width:40px; height:40px; object-fit:contain;"> <span style="color:#333; font-weight:bold; padding-right:10px;">${c.label}</span>`;
 }
@@ -807,9 +808,10 @@ function _memUpdateStats() {
 
     // Mirror into session state so updateScoreUI / save works seamlessly
     if (state.session) {
-        state.session.correct = m.matches;
-        state.session.incorrect = m.memoryErrors;
-        state.session.total = m.matches + m.memoryErrors;
+        // Additive with any carried previous rounds (replayRound)
+        state.session.correct = (state.session._carryV || 0) + m.matches;
+        state.session.incorrect = (state.session._carryX || 0) + m.memoryErrors;
+        state.session.total = (state.session._carryT || 0) + m.matches + m.memoryErrors;
         if (typeof updateScoreUI === 'function') updateScoreUI();
     }
 }
@@ -875,6 +877,7 @@ function _memShowSummary() {
                     <div style="font-size:1.5rem; font-weight:bold;">${mm}:${ss}</div>
                 </div>
             </div>
+            <button class="btn btn-primary" onclick="replayRound()" style="margin-bottom:16px; padding:12px 24px;"><i class="fa-solid fa-shuffle"></i> Nuovo giro (punteggio mantenuto)</button>
             ${pairList ? `<div style="width:100%; max-width:500px;">
                 <div style="font-size:0.75rem; color:var(--text-secondary); text-transform:uppercase; margin-bottom:6px; padding:0 8px;">Dettaglio coppie</div>
                 <table style="width:100%; border-collapse:collapse; background:rgba(255,255,255,0.03); border-radius:var(--radius-md); overflow:hidden; font-size:0.85rem;">
@@ -1888,6 +1891,8 @@ function showCategorizzazioneItem(stage) {
                 <h2 style="margin:10px 0;">Sessione Completata!</h2>
                 <p style="font-size:1.5rem; font-weight:bold; color:${pct >= 90 ? 'var(--success-color)' : 'white'};">${pct}%</p>
                 <p style="color:var(--text-secondary);">${state.session.correct} / ${state.session.total} corretti</p>
+                <button class="btn btn-primary" onclick="replayRound()" style="margin-top:14px; padding:12px 24px;"><i class="fa-solid fa-shuffle"></i> Nuovo giro</button>
+                <p style="color:var(--text-secondary); font-size:0.72rem; margin-top:6px;">Rimescola gli item mantenendo il punteggio della sessione.</p>
             </div>`;
         return;
     }
@@ -2300,7 +2305,7 @@ function renderTombolaSonora(items, stage) {
                         gap:10px; overflow-y:auto;">
                 ${audioItems.map((item, idx) => `
                     <div class="card-grid" id="audio-slot-${idx}"
-                         onclick="handleAudioMatchClick(${idx}, '${item.label.replace(/'/g, "\\'")}')"
+                         onclick="handleAudioMatchClick(${idx}, '${jsAttr(item.label)}')"
                          style="aspect-ratio:unset; height:auto; min-height:0; min-width:0; overflow:hidden;">
                         <img src="${imgUrl(item)}"
                              style="max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain;"
@@ -2343,7 +2348,10 @@ window.handleAudioMatchClick = (idx, label) => {
         cardEl.style.boxShadow = '0 0 15px rgba(16,185,129,0.4)';
         state.deck.shift();
         const remaining = document.getElementById('audio-remaining');
-        if (remaining) remaining.textContent = state.deck.length > 0 ? state.deck.length + ' rimasti' : 'FINITO!';
+        if (remaining) {
+            if (state.deck.length > 0) remaining.textContent = state.deck.length + ' rimasti';
+            else remaining.innerHTML = `<b>FINITO!</b> <button class="btn btn-sm btn-primary" onclick="replayRound()" style="padding:3px 10px; margin-left:6px;"><i class="fa-solid fa-shuffle"></i> Nuovo giro</button>`;
+        }
         if (state.deck.length > 0) {
             setTimeout(() => playCurrentAudio(), 800);
         }
@@ -2411,6 +2419,8 @@ function showZoomItem(stage) {
                 <h2 style="margin:10px 0;">Zoom Completato!</h2>
                 <p style="font-size:1.5rem; font-weight:bold; color:${pct >= 90 ? 'var(--success-color)' : 'white'};">${pct}%</p>
                 <p style="color:var(--text-secondary);">${state.session.correct} / ${state.session.total} corretti</p>
+                <button class="btn btn-primary" onclick="replayRound()" style="margin-top:14px; padding:12px 24px;"><i class="fa-solid fa-shuffle"></i> Nuovo giro</button>
+                <p style="color:var(--text-secondary); font-size:0.72rem; margin-top:6px;">Rimescola gli item mantenendo il punteggio della sessione.</p>
             </div>`;
         return;
     }
@@ -4879,13 +4889,14 @@ const MEM_LAV_THEMES = {
         icon: 'fa-burger',
         useSvg: true,
         items: [
-            { id: 'bread_top', label: 'Pane sopra', color: '#d9a066', svg: '<svg viewBox="0 0 120 34" style="width:100%;height:100%;display:block;"><path d="M6,32 Q6,3 60,3 Q114,3 114,32 Z" fill="#d9a066" stroke="#b87d3f" stroke-width="2"/><ellipse cx="40" cy="16" rx="2" ry="1.4" fill="#fff4d6"/><ellipse cx="60" cy="11" rx="2" ry="1.4" fill="#fff4d6"/><ellipse cx="80" cy="16" rx="2" ry="1.4" fill="#fff4d6"/><ellipse cx="50" cy="22" rx="2" ry="1.4" fill="#fff4d6"/><ellipse cx="70" cy="22" rx="2" ry="1.4" fill="#fff4d6"/></svg>' },
+            // ONE bread item: it renders as bottom slice, top bun or middle slice
+            // automatically, depending on where it sits in the sandwich.
+            { id: 'bread', label: 'Pane', color: '#d9a066', svg: '<svg viewBox="0 0 120 34" style="width:100%;height:100%;display:block;"><path d="M6,32 Q6,3 60,3 Q114,3 114,32 Z" fill="#d9a066" stroke="#b87d3f" stroke-width="2"/><ellipse cx="40" cy="16" rx="2" ry="1.4" fill="#fff4d6"/><ellipse cx="60" cy="11" rx="2" ry="1.4" fill="#fff4d6"/><ellipse cx="80" cy="16" rx="2" ry="1.4" fill="#fff4d6"/><ellipse cx="50" cy="22" rx="2" ry="1.4" fill="#fff4d6"/><ellipse cx="70" cy="22" rx="2" ry="1.4" fill="#fff4d6"/></svg>', svgTop: '<svg viewBox="0 0 120 34" style="width:100%;height:100%;display:block;"><path d="M6,32 Q6,3 60,3 Q114,3 114,32 Z" fill="#d9a066" stroke="#b87d3f" stroke-width="2"/><ellipse cx="40" cy="16" rx="2" ry="1.4" fill="#fff4d6"/><ellipse cx="60" cy="11" rx="2" ry="1.4" fill="#fff4d6"/><ellipse cx="80" cy="16" rx="2" ry="1.4" fill="#fff4d6"/><ellipse cx="50" cy="22" rx="2" ry="1.4" fill="#fff4d6"/><ellipse cx="70" cy="22" rx="2" ry="1.4" fill="#fff4d6"/></svg>', svgBottom: '<svg viewBox="0 0 120 34" style="width:100%;height:100%;display:block;"><path d="M6,6 L114,6 L114,20 Q114,30 60,30 Q6,30 6,20 Z" fill="#e0b070" stroke="#b87d3f" stroke-width="2"/></svg>', svgMid: '<svg viewBox="0 0 120 34" style="width:100%;height:100%;display:block;"><rect x="6" y="8" width="108" height="18" rx="8" fill="#e8c17e" stroke="#b87d3f" stroke-width="2"/><ellipse cx="45" cy="17" rx="2" ry="1.3" fill="#fff4d6"/><ellipse cx="75" cy="17" rx="2" ry="1.3" fill="#fff4d6"/></svg>' },
             { id: 'lettuce', label: 'Insalata', color: '#7cb342', svg: '<svg viewBox="0 0 120 34" style="width:100%;height:100%;display:block;"><path d="M3,18 Q12,3 21,15 Q30,1 39,15 Q48,3 57,15 Q66,1 75,15 Q84,3 93,15 Q102,1 117,18 L117,28 Q60,34 3,28 Z" fill="#8bc34a" stroke="#558b2f" stroke-width="1.5"/></svg>' },
             { id: 'tomato', label: 'Pomodoro', color: '#e74c3c', svg: '<svg viewBox="0 0 120 34" style="width:100%;height:100%;display:block;"><rect x="6" y="8" width="108" height="18" rx="9" fill="#e74c3c" stroke="#c0392b" stroke-width="1.5"/><circle cx="35" cy="17" r="2.2" fill="#ffcabf"/><circle cx="60" cy="17" r="2.2" fill="#ffcabf"/><circle cx="85" cy="17" r="2.2" fill="#ffcabf"/></svg>' },
             { id: 'cheese', label: 'Formaggio', color: '#f5c542', svg: '<svg viewBox="0 0 120 34" style="width:100%;height:100%;display:block;"><path d="M4,10 L116,10 L110,24 Q60,28 6,24 Z" fill="#f5c542" stroke="#d4a017" stroke-width="1.5"/><circle cx="30" cy="17" r="2.5" fill="#e0a800"/><circle cx="62" cy="16" r="3" fill="#e0a800"/><circle cx="90" cy="18" r="2" fill="#e0a800"/></svg>' },
             { id: 'ham', label: 'Prosciutto', color: '#f48fb1', svg: '<svg viewBox="0 0 120 34" style="width:100%;height:100%;display:block;"><path d="M5,14 Q60,5 115,14 L115,24 Q60,32 5,24 Z" fill="#f48fb1" stroke="#e91e63" stroke-width="1.3"/><path d="M18,19 Q60,14 102,19" stroke="#fce4ec" stroke-width="2" fill="none"/></svg>' },
             { id: 'egg', label: 'Uovo', color: '#fffaf0', svg: '<svg viewBox="0 0 120 34" style="width:100%;height:100%;display:block;"><path d="M14,18 Q8,8 22,9 Q30,2 44,9 Q60,4 78,9 Q96,5 104,12 Q116,16 104,24 Q60,30 16,24 Q8,22 14,18 Z" fill="#fffaf0" stroke="#f0e6d2" stroke-width="1"/><circle cx="62" cy="17" r="7" fill="#ffb300"/></svg>' },
-            { id: 'bread_bottom', label: 'Pane sotto', color: '#e0b070', svg: '<svg viewBox="0 0 120 34" style="width:100%;height:100%;display:block;"><path d="M6,6 L114,6 L114,20 Q114,30 60,30 Q6,30 6,20 Z" fill="#e0b070" stroke="#b87d3f" stroke-width="2"/></svg>' },
             { id: 'mayo', label: 'Maionese', color: '#fff8e1', svg: '<svg viewBox="0 0 120 34" style="width:100%;height:100%;display:block;"><path d="M5,16 Q14,9 23,16 Q32,9 41,16 Q50,9 59,16 Q68,9 77,16 Q86,9 95,16 Q104,9 115,16 L115,23 Q60,27 5,23 Z" fill="#fff8e1" stroke="#ffe082" stroke-width="1.2"/></svg>' },
             { id: 'cucumber', label: 'Cetriolo', color: '#aed581', svg: '<svg viewBox="0 0 120 34" style="width:100%;height:100%;display:block;"><circle cx="28" cy="17" r="9" fill="#c5e1a5" stroke="#7cb342" stroke-width="1.5"/><circle cx="60" cy="17" r="9" fill="#c5e1a5" stroke="#7cb342" stroke-width="1.5"/><circle cx="92" cy="17" r="9" fill="#c5e1a5" stroke="#7cb342" stroke-width="1.5"/><circle cx="28" cy="17" r="3" fill="#aed581"/><circle cx="60" cy="17" r="3" fill="#aed581"/><circle cx="92" cy="17" r="3" fill="#aed581"/></svg>' }
         ],
@@ -4893,10 +4904,20 @@ const MEM_LAV_THEMES = {
             container.innerHTML = '';
             const stack = document.createElement('div');
             stack.style.cssText = 'display:flex; flex-direction:column; align-items:center; transition:all 0.3s;';
-            sequence.forEach((item, i) => {
+            // Build bottom-up like a real sandwich: the first tapped item is the
+            // base, the last is on top (consistent with the cubetti tower).
+            const topFirst = [...sequence].reverse();
+            topFirst.forEach((item, vi) => {
+                const seqIdx = sequence.length - 1 - vi;
                 const layer = document.createElement('div');
-                layer.style.cssText = `width:130px; height:26px; margin-top:${i === 0 ? '0' : '-4px'}; filter:drop-shadow(0 1px 1px rgba(0,0,0,0.2)); animation:memLavSlideIn 0.3s ease ${i * 0.1}s both;`;
-                layer.innerHTML = item.svg || `<div style="width:100%;height:100%;background:${item.color};border-radius:4px;"></div>`;
+                layer.style.cssText = `width:130px; height:26px; margin-top:${vi === 0 ? '0' : '-4px'}; filter:drop-shadow(0 1px 1px rgba(0,0,0,0.2)); animation:memLavSlideIn 0.3s ease ${seqIdx * 0.1}s both;`;
+                let svg = item.svg;
+                if (item.id === 'bread') {
+                    svg = seqIdx === sequence.length - 1 ? item.svgTop
+                        : seqIdx === 0 ? item.svgBottom
+                        : item.svgMid;
+                }
+                layer.innerHTML = svg || `<div style="width:100%;height:100%;background:${item.color};border-radius:4px;"></div>`;
                 stack.appendChild(layer);
             });
             container.appendChild(stack);
