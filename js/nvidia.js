@@ -69,13 +69,14 @@ async function _nvFetch(url, opts) {
 // verified:true = endpoint confirmed live; verified:false = future candidate,
 // enabled automatically by "Aggiorna" the day NVIDIA publishes it.
 const NVIDIA_IMAGE_CANDIDATES = [
-    { id: 'black-forest-labs/flux.2-klein-4b', label: 'FLUX.2 Klein 4B — consigliato', family: 'flux', verified: true },
-    { id: 'google/diffusiongemma-26b-a4b-it', label: 'DiffusionGemma 26B — nuovo, veloce (Google)', family: 'chat-image', verified: true },
-    { id: 'black-forest-labs/flux.1-schnell', label: 'FLUX.1 Schnell — veloce', family: 'flux-schnell', verified: true },
-    { id: 'black-forest-labs/flux.1-dev', label: 'FLUX.1 Dev — dettagliato, lento', family: 'flux-dev', verified: true },
-    { id: 'stabilityai/stable-diffusion-3-medium', label: 'Stable Diffusion 3 Medium', family: 'sd3', verified: true },
-    { id: 'stabilityai/stable-diffusion-xl', label: 'SDXL', family: 'sdxl', verified: true },
-    { id: 'briaai/bria-2.3', label: 'Bria 2.3 — licenza commerciale', family: 'sd3', verified: true },
+    { id: 'black-forest-labs/flux.2-klein-4b', label: 'FLUX.2 Klein 4B — consigliato, ~3s', family: 'flux', verified: true },
+    { id: 'black-forest-labs/flux.1-schnell', label: 'FLUX.1 Schnell — rapido', family: 'flux-schnell', verified: true },
+    { id: 'black-forest-labs/flux.1-dev', label: 'FLUX.1 Dev — alta qualit\u00e0, lento (~1 min)', family: 'flux-dev', verified: true },
+    // Retired for new accounts (kept as probe candidates: the authenticated
+    // refresh re-enables them only where they still work)
+    { id: 'stabilityai/stable-diffusion-3-medium', label: 'Stable Diffusion 3 Medium', family: 'sd3', verified: false },
+    { id: 'stabilityai/stable-diffusion-xl', label: 'SDXL', family: 'sdxl', verified: false },
+    { id: 'briaai/bria-2.3', label: 'Bria 2.3 — licenza commerciale', family: 'sd3', verified: false },
     // --- futuri (si attivano da soli quando NVIDIA li pubblica) ---
     { id: 'black-forest-labs/flux.2-klein-9b', label: 'FLUX.2 Klein 9B', family: 'flux', verified: false },
     { id: 'black-forest-labs/flux.2-dev', label: 'FLUX.2 Dev — top', family: 'flux-dev', verified: false },
@@ -91,7 +92,7 @@ function _nvCustomModels() {
     catch (e) { return []; }
 }
 function _nvAvailableCache() {
-    try { return JSON.parse(localStorage.getItem('nvidia_img_available') || 'null'); }
+    try { return JSON.parse(localStorage.getItem('nvidia_img_available_v2') || 'null'); }
     catch (e) { return null; }
 }
 
@@ -121,11 +122,18 @@ window.setNvidiaImageModel = setNvidiaImageModel;
 async function _nvProbeModel(id) {
     const cand = NVIDIA_IMAGE_CANDIDATES.find(c => c.id === id);
     const isChat = !!(cand && cand.family === 'chat-image');
+    const key = getNvidiaApiKey();
+    const headers = { 'Content-Type': 'application/json' };
+    if (key) headers['Authorization'] = 'Bearer ' + key;
+    // Out-of-range steps: live models answer 422 (exists) WITHOUT generating;
+    // absent or account-retired functions answer 404 even when authenticated
+    // (unauthenticated probes can't see retirements, so use the key if set).
+    const body = isChat
+        ? { model: id, messages: [{ role: 'user', content: 'probe' }], max_tokens: 1 }
+        : { prompt: 'probe', steps: 99999 };
     try {
         const res = await _nvFetch(isChat ? (NVIDIA_LLM_BASE + '/chat/completions') : (NVIDIA_GENAI_BASE + id), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(isChat ? { model: id, messages: [{ role: 'user', content: 'probe' }] } : { prompt: 'probe' })
+            method: 'POST', headers, body: JSON.stringify(body)
         });
         return res.status !== 404;
     } catch (e) { return null; } // network/CORS failure: unknown
@@ -140,7 +148,7 @@ window.refreshNvidiaImageModels = async function (manual) {
         const results = await Promise.all(slugs.map(async id => ({ id, ok: await _nvProbeModel(id) })));
         if (results.every(r => r.ok === null)) throw new Error('verifica non riuscita (di solito serve l\'app Android: il browser blocca la richiesta)');
         const ids = results.filter(r => r.ok === true).map(r => r.id);
-        localStorage.setItem('nvidia_img_available', JSON.stringify({ ts: Date.now(), ids }));
+        localStorage.setItem('nvidia_img_available_v2', JSON.stringify({ ts: Date.now(), ids }));
         populateNvidiaImageSelect();
         if (status) status.textContent = `${ids.length} modelli attivi sul catalogo NVIDIA · aggiornato ${new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`;
     } catch (e) {
@@ -243,7 +251,8 @@ async function generateNvidiaImage(prompt, style) {
     } else if (family === 'flux-schnell') {
         body = { prompt: fullPrompt, width: 1024, height: 1024, seed, steps: 4 };
     } else { // flux.2 klein & default for unknown/custom slugs
-        body = { prompt: fullPrompt, width: 1024, height: 1024, seed, steps: 8 };
+        // NVIDIA's Klein endpoint validates steps <= 4
+        body = { prompt: fullPrompt, width: 1024, height: 1024, seed, steps: 4 };
     }
 
     let res;
