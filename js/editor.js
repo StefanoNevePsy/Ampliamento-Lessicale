@@ -287,6 +287,7 @@ function renderEditorList() {
         const hasAudio = item.audio ? '<i class="fa-solid fa-volume-high" style="color:var(--success-color); font-size:0.6rem;"></i>' : '';
         const hasZoom = item.zoomArea ? '<i class="fa-solid fa-crop" style="color:var(--warning-color); font-size:0.6rem;"></i>' : '';
         const hasSeq = item.seqNumber ? `<i class="fa-solid fa-arrow-down-1-9" style="color:var(--accent-color); font-size:0.6rem;" title="Seq: ${item.seqNumber}"></i>` : '';
+        const hasFront = item.frontMaskUrl ? '<i class="fa-solid fa-box-open" style="color:#f59e0b; font-size:0.6rem;" title="Contenitore (maschera davanti)"></i>' : '';
 
         // Resolve display URL based on active editing variant
         let displayUrl = getItemVariantUrl(item, editVariant);
@@ -312,7 +313,7 @@ function renderEditorList() {
                     onclick="event.stopPropagation()"
                     placeholder="Etichetta"
                     style="${item.hidden ? 'text-decoration:line-through; color:#888;' : ''}">
-                <div style="display:flex; gap:2px; margin-top:2px;">${hasAudio}${hasZoom}${hasSeq}</div>
+                <div style="display:flex; gap:2px; margin-top:2px;">${hasAudio}${hasZoom}${hasSeq}${hasFront}</div>
             </div>
             <input type="number" value="${item.seqNumber || ''}" min="1"
                 onchange="state.editingItems[${idx}].seqNumber=this.value?parseInt(this.value):null; renderEditorList();"
@@ -358,6 +359,28 @@ window.scontornaEditorItem = async (idx) => {
 
     // Open preview overlay with tolerance slider
     _openScontornoPreview(item, () => renderEditorList());
+};
+
+// "Front mask" editor: the user paints the FRONT part of a container object
+// (e.g. the near wall of a cup). Topologia dentro/fuori then uses the item as
+// a real container: full image behind, subject in the middle, painted front
+// part drawn on top so the subject sits INSIDE it.
+window.openFrontMaskEditor = (item, onDone) => {
+    if (typeof openMaskEditor !== 'function') { alert('Editor non disponibile.'); return; }
+    openMaskEditor({
+        imageUrl: item.url,
+        mode: 'cutout',
+        startEmpty: true,
+        title: 'Parte davanti — ' + (item.label || 'Item'),
+        hint: 'Dipingi SOLO la parte davanti del contenitore (quella che nasconde ci\u00f2 che c\u2019\u00e8 dentro).',
+        initialMaskUrl: item.frontMaskUrl || null,
+        onApply: (result) => {
+            if (result === null) delete item.frontMaskUrl;
+            else item.frontMaskUrl = result;
+            delete item._frontRimFrac; // rim cache: recompute from the new mask
+            if (onDone) onDone();
+        }
+    });
 };
 
 // Manual/AI cutout editor (used by the "advanced" button in the scontorno preview)
@@ -435,6 +458,7 @@ function _openScontornoPreview(item, onDone) {
             <div class="themed-dialog-btns">
                 <button class="btn btn-ghost" id="sc-btn-cancel">Annulla</button>
                 <button class="btn btn-ghost" id="sc-btn-clear" style="${item.maskedUrl ? '' : 'display:none;'} color:var(--danger-color);">Rimuovi scontorno</button>
+                <button class="btn btn-ghost" id="sc-btn-front" style="color:var(--warning-color);" title="Dipingi la parte davanti: l'oggetto diventa un contenitore per Topologia dentro/fuori"><i class="fa-solid fa-box-open"></i> Contenitore</button>
                 <button class="btn btn-ghost" id="sc-btn-manual" style="color:var(--accent-color);"><i class="fa-solid fa-hand-pointer"></i> Manuale / AI</button>
                 <button class="btn btn-primary" id="sc-btn-apply">Applica</button>
             </div>
@@ -480,6 +504,10 @@ function _openScontornoPreview(item, onDone) {
     overlay.querySelector('#sc-btn-manual').onclick = () => {
         close();
         window.openManualCutout(item, onDone);
+    };
+    overlay.querySelector('#sc-btn-front').onclick = () => {
+        close();
+        window.openFrontMaskEditor(item, onDone);
     };
     overlay.querySelector('#sc-btn-clear').onclick = () => {
         delete item.maskedUrl;

@@ -69,7 +69,7 @@
         // 0 = background (grey / transparent). Both modes start fully "kept"
         // (cutout: nothing removed yet; highlight: image fully coloured).
         const mask = new Uint8Array(w * h);
-        mask.fill(255);
+        mask.fill(opts.startEmpty ? 0 : 255);
 
         // Optionally seed from an existing alpha/grey mask image (keep soft values)
         if (opts.initialMaskUrl) {
@@ -96,7 +96,7 @@
 
         // --- Tool state ---
         let tool = 'wand';                                  // 'wand' | 'brush' | 'object' | 'pan'
-        let effect = mode === 'cutout' ? 0 : 255;           // wand/brush sets mask to this (0 or 255)
+        let effect = opts.startEmpty ? 255 : (mode === 'cutout' ? 0 : 255); // wand/brush sets mask to this (0 or 255)
         let hardness = 100;                                 // brush hardness 0..100
         let wandSoftness = 0;                               // magic-wand edge feather (px)
         let straightLine = false;                           // straight-line (two-click) mode
@@ -123,7 +123,7 @@
             <div style="display:flex; align-items:center; gap:10px; color:#fff; flex-shrink:0;">
                 <i class="fa-solid ${mode === 'cutout' ? 'fa-eraser' : 'fa-wand-magic-sparkles'}" style="color:var(--accent-color);"></i>
                 <b style="font-size:0.95rem;">${opts.title || (mode === 'cutout' ? 'Scontorno manuale' : 'Evidenzia soggetto')}</b>
-                <span style="font-size:0.72rem; color:#aaa; margin-left:auto;">${mode === 'cutout' ? 'Tocca lo sfondo per cancellarlo, poi rifinisci col pennello.' : 'Seleziona il soggetto da lasciare a colori.'}</span>
+                <span style="font-size:0.72rem; color:#aaa; margin-left:auto;">${opts.hint || (mode === 'cutout' ? 'Tocca lo sfondo per cancellarlo, poi rifinisci col pennello.' : 'Seleziona il soggetto da lasciare a colori.')}</span>
             </div>
 
             <div style="flex:1; min-height:0; display:flex; align-items:center; justify-content:center; background:repeating-conic-gradient(#3a3a44 0% 25%, #2a2a32 0% 50%) 50%/24px 24px; border-radius:10px; overflow:hidden;">

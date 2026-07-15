@@ -3567,14 +3567,6 @@ function _topoCompPrepareRound() {
 
     tc.currentPosition = tc.enabledPositions[Math.floor(Math.random() * tc.enabledPositions.length)];
 
-    // dentro/fuori: rotate the drawn container (scatola, casa, cesta, ...) so
-    // the concept generalizes instead of binding to a single object.
-    const posCfg = TOPO_POSITIONS[tc.currentPosition];
-    if (posCfg && posCfg.container) {
-        const ck = Object.keys(TOPO_CONTAINERS);
-        tc.currentContainer = ck[Math.floor(Math.random() * ck.length)];
-    }
-
     if (tc.subMode === 'template' && tc.personaggio) {
         tc.currentChar = tc.personaggio;
         const others = tc.items.filter(i => i.label !== tc.personaggio.label || i.url !== tc.personaggio.url);
@@ -3587,6 +3579,21 @@ function _topoCompPrepareRound() {
         if (i2 === i1) i2 = (i1 + 1) % tc.items.length;
         tc.currentChar = tc.items[i1];
         tc.currentRef = tc.items[i2];
+    }
+
+    // dentro/fuori: rotate the container so the concept generalizes. Pool =
+    // drawn shapes (scatola, casa, cesta...) + any set item whose "front mask"
+    // was painted in the editor (real-object containers).
+    const posCfg = TOPO_POSITIONS[tc.currentPosition];
+    if (posCfg && posCfg.container) {
+        const itemConts = tc.items.filter(i => i.frontMaskUrl && i.url &&
+            !(tc.currentChar && i.label === tc.currentChar.label && i.url === tc.currentChar.url));
+        if (itemConts.length && Math.random() < 0.5) {
+            tc.currentContainer = { type: 'item', item: itemConts[Math.floor(Math.random() * itemConts.length)] };
+        } else {
+            const ck = Object.keys(TOPO_CONTAINERS);
+            tc.currentContainer = ck[Math.floor(Math.random() * ck.length)];
+        }
     }
 }
 
@@ -3642,7 +3649,7 @@ function _topoCompRender(stage) {
         <div id="topo-comp-canvas-area" style="flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:10px; background:rgba(255,255,255,0.03);"></div>
         <div style="text-align:center; padding:6px; color:var(--text-secondary); font-size:0.7rem; opacity:0.6; border-top:1px solid #ffffff10; display:flex; gap:16px; justify-content:center;">
             <span><i class="fa-solid fa-child"></i> ${tc.currentChar.label || '?'}</span>
-            <span><i class="fa-solid ${posConfig.container ? 'fa-box' : 'fa-cube'}"></i> ${posConfig.container ? ((TOPO_CONTAINERS[tc.currentContainer] || {}).label || 'Scatola') : (tc.currentRef.label || '?')}</span>
+            <span><i class="fa-solid ${posConfig.container ? 'fa-box' : 'fa-cube'}"></i> ${posConfig.container ? ((tc.currentContainer && tc.currentContainer.type === 'item') ? (tc.currentContainer.item.label || 'Contenitore') : ((TOPO_CONTAINERS[tc.currentContainer] || {}).label || 'Scatola')) : (tc.currentRef.label || '?')}</span>
         </div>
     </div>`;
 
@@ -3695,62 +3702,131 @@ const TOPO_CONTAINERS = {
     cesta: {
         label: 'Cesta',
         draw(ctx, g, drawChar) {
-            const { cx, cy, w, h } = g; const x = cx - w / 2;
-            const topY = cy - h * 0.26, botY = cy + h * 0.42;
-            ctx.fillStyle = '#6e5330'; ctx.beginPath(); ctx.ellipse(cx, topY, w * 0.46, h * 0.14, 0, 0, Math.PI * 2); ctx.fill();
-            if (drawChar) drawChar(cx, topY - h * 0.2, 0.45);
-            ctx.fillStyle = '#c9974f'; ctx.beginPath();
-            ctx.moveTo(x + w * 0.04, topY); ctx.lineTo(x + w * 0.14, botY);
-            ctx.quadraticCurveTo(cx, botY + h * 0.12, x + w * 0.86, botY);
-            ctx.lineTo(x + w * 0.96, topY); ctx.closePath(); ctx.fill();
-            ctx.strokeStyle = 'rgba(110,83,48,0.6)'; ctx.lineWidth = 2;
+            const { cx, cy, w, h } = g;
+            const rimRx = w * 0.44, rimRy = h * 0.13, topY = cy - h * 0.24, botY = cy + h * 0.42;
+            // interior + thin back rim (behind the subject)
+            ctx.fillStyle = '#5f462a'; ctx.beginPath(); ctx.ellipse(cx, topY, rimRx, rimRy, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = '#8a6a3f'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.ellipse(cx, topY, rimRx, rimRy, 0, Math.PI, 0, false); ctx.stroke();
+            if (drawChar) drawChar(cx, topY - h * 0.09, 0.5);
+            // body: the top edge follows the FRONT rim arc, so the subject is
+            // occluded cleanly with no gaps.
+            ctx.fillStyle = '#c9974f';
+            ctx.beginPath();
+            ctx.ellipse(cx, topY, rimRx, rimRy, 0, Math.PI, 0, true);
+            ctx.lineTo(cx + w * 0.36, botY);
+            ctx.quadraticCurveTo(cx, botY + h * 0.1, cx - w * 0.36, botY);
+            ctx.closePath(); ctx.fill();
+            // weave lines
+            ctx.strokeStyle = 'rgba(110,83,48,0.6)'; ctx.lineWidth = 2.5;
             for (let i = 1; i < 4; i++) {
-                const yy = topY + (botY - topY) * i / 4;
-                ctx.beginPath(); ctx.moveTo(x + w * (0.06 + i * 0.02), yy);
-                ctx.quadraticCurveTo(cx, yy + h * 0.07, x + w * (0.94 - i * 0.02), yy); ctx.stroke();
+                const yy = topY + rimRy + (botY - topY - rimRy) * i / 4;
+                const inset = rimRx - (rimRx - w * 0.36) * i / 4 - 4;
+                ctx.beginPath(); ctx.moveTo(cx - inset, yy);
+                ctx.quadraticCurveTo(cx, yy + h * 0.05, cx + inset, yy); ctx.stroke();
             }
-            ctx.strokeStyle = '#8a6a3f'; ctx.lineWidth = 5;
-            ctx.beginPath(); ctx.ellipse(cx, topY, w * 0.46, h * 0.14, 0, 0, Math.PI * 2); ctx.stroke();
+            // front rim
+            ctx.strokeStyle = '#8a6a3f'; ctx.lineWidth = 6;
+            ctx.beginPath(); ctx.ellipse(cx, topY, rimRx, rimRy, 0, Math.PI, 0, true); ctx.stroke();
         }
     },
     tazza: {
         label: 'Tazza',
         draw(ctx, g, drawChar) {
             const { cx, cy, w, h } = g;
-            const cupW = w * 0.6, cupH = h * 0.75, x = cx - cupW / 2, topY = cy - cupH * 0.4;
-            const rr = (a, b, c, d, r) => { ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(a, b, c, d, r); else ctx.rect(a, b, c, d); };
-            ctx.fillStyle = '#37517a'; ctx.beginPath(); ctx.ellipse(cx, topY, cupW * 0.5, h * 0.11, 0, 0, Math.PI * 2); ctx.fill();
-            if (drawChar) drawChar(cx, topY - h * 0.16, 0.4);
-            // handle
-            ctx.strokeStyle = '#5b8dd9'; ctx.lineWidth = 9;
-            ctx.beginPath(); ctx.arc(x + cupW + 4, topY + cupH * 0.35, cupW * 0.22, -Math.PI / 2.4, Math.PI / 2.4); ctx.stroke();
-            // body
-            ctx.fillStyle = '#5b8dd9'; rr(x, topY, cupW, cupH * 0.8, 12); ctx.fill();
-            ctx.fillStyle = 'rgba(255,255,255,0.18)'; rr(x, topY + cupH * 0.28, cupW, cupH * 0.16, 4); ctx.fill();
-            ctx.strokeStyle = '#3d6cb0'; ctx.lineWidth = 4;
-            ctx.beginPath(); ctx.ellipse(cx, topY, cupW * 0.5, h * 0.11, 0, 0, Math.PI * 2); ctx.stroke();
+            const rimRx = w * 0.3, rimRy = h * 0.1, topY = cy - h * 0.26, botY = cy + h * 0.36;
+            // interior + back rim
+            ctx.fillStyle = '#2e4468'; ctx.beginPath(); ctx.ellipse(cx, topY, rimRx, rimRy, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = '#3d6cb0'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.ellipse(cx, topY, rimRx, rimRy, 0, Math.PI, 0, false); ctx.stroke();
+            if (drawChar) drawChar(cx, topY - h * 0.08, 0.44);
+            // handle (attached to the body side)
+            ctx.strokeStyle = '#4a7cc4'; ctx.lineWidth = 10; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.arc(cx + rimRx + 4, topY + (botY - topY) * 0.45, w * 0.13, -Math.PI / 2.6, Math.PI / 2.6); ctx.stroke();
+            ctx.lineCap = 'butt';
+            // body from the front rim arc down
+            ctx.fillStyle = '#5b8dd9';
+            ctx.beginPath();
+            ctx.ellipse(cx, topY, rimRx, rimRy, 0, Math.PI, 0, true);
+            ctx.lineTo(cx + rimRx * 0.92, botY - 10);
+            ctx.quadraticCurveTo(cx, botY + h * 0.08, cx - rimRx * 0.92, botY - 10);
+            ctx.closePath(); ctx.fill();
+            // decorative stripe, clipped to the body
+            ctx.save();
+            ctx.beginPath();
+            ctx.ellipse(cx, topY, rimRx, rimRy, 0, Math.PI, 0, true);
+            ctx.lineTo(cx + rimRx * 0.92, botY - 10);
+            ctx.quadraticCurveTo(cx, botY + h * 0.08, cx - rimRx * 0.92, botY - 10);
+            ctx.closePath(); ctx.clip();
+            ctx.fillStyle = 'rgba(255,255,255,0.22)';
+            ctx.fillRect(cx - rimRx, topY + (botY - topY) * 0.42, rimRx * 2, (botY - topY) * 0.18);
+            ctx.restore();
+            // front rim
+            ctx.strokeStyle = '#3d6cb0'; ctx.lineWidth = 5;
+            ctx.beginPath(); ctx.ellipse(cx, topY, rimRx, rimRy, 0, Math.PI, 0, true); ctx.stroke();
         }
     },
     pentola: {
         label: 'Pentola',
         draw(ctx, g, drawChar) {
             const { cx, cy, w, h } = g;
-            const potW = w * 0.72, potH = h * 0.62, x = cx - potW / 2, topY = cy - potH * 0.3;
-            const rr = (a, b, c, d, r) => { ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(a, b, c, d, r); else ctx.rect(a, b, c, d); };
-            ctx.fillStyle = '#55606c'; ctx.beginPath(); ctx.ellipse(cx, topY, potW * 0.5, h * 0.12, 0, 0, Math.PI * 2); ctx.fill();
-            if (drawChar) drawChar(cx, topY - h * 0.16, 0.42);
-            // handles
-            ctx.strokeStyle = '#6b7683'; ctx.lineWidth = 8;
-            ctx.beginPath(); ctx.arc(x - 4, topY + potH * 0.28, potW * 0.12, Math.PI * 0.6, Math.PI * 1.5); ctx.stroke();
-            ctx.beginPath(); ctx.arc(x + potW + 4, topY + potH * 0.28, potW * 0.12, -Math.PI * 0.5, Math.PI * 0.4); ctx.stroke();
-            // body
-            ctx.fillStyle = '#9aa5b1'; rr(x, topY, potW, potH, 10); ctx.fill();
-            ctx.fillStyle = 'rgba(0,0,0,0.15)'; rr(x, topY + potH * 0.7, potW, potH * 0.3, 8); ctx.fill();
-            ctx.strokeStyle = '#6b7683'; ctx.lineWidth = 4;
-            ctx.beginPath(); ctx.ellipse(cx, topY, potW * 0.5, h * 0.12, 0, 0, Math.PI * 2); ctx.stroke();
+            const rimRx = w * 0.37, rimRy = h * 0.11, topY = cy - h * 0.22, botY = cy + h * 0.38;
+            // interior + back rim
+            ctx.fillStyle = '#44505c'; ctx.beginPath(); ctx.ellipse(cx, topY, rimRx, rimRy, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = '#6b7683'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.ellipse(cx, topY, rimRx, rimRy, 0, Math.PI, 0, false); ctx.stroke();
+            if (drawChar) drawChar(cx, topY - h * 0.08, 0.46);
+            // side handles (attached at rim level, behind the body edge)
+            ctx.strokeStyle = '#6b7683'; ctx.lineWidth = 9; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.arc(cx - rimRx - 3, topY + h * 0.1, w * 0.09, Math.PI * 0.55, Math.PI * 1.45); ctx.stroke();
+            ctx.beginPath(); ctx.arc(cx + rimRx + 3, topY + h * 0.1, w * 0.09, -Math.PI * 0.45, Math.PI * 0.45); ctx.stroke();
+            ctx.lineCap = 'butt';
+            // body from the front rim arc down
+            ctx.fillStyle = '#9aa5b1';
+            ctx.beginPath();
+            ctx.ellipse(cx, topY, rimRx, rimRy, 0, Math.PI, 0, true);
+            ctx.lineTo(cx + rimRx * 0.96, botY - 8);
+            ctx.quadraticCurveTo(cx, botY + h * 0.07, cx - rimRx * 0.96, botY - 8);
+            ctx.closePath(); ctx.fill();
+            // darker base band, clipped to the body
+            ctx.save();
+            ctx.beginPath();
+            ctx.ellipse(cx, topY, rimRx, rimRy, 0, Math.PI, 0, true);
+            ctx.lineTo(cx + rimRx * 0.96, botY - 8);
+            ctx.quadraticCurveTo(cx, botY + h * 0.07, cx - rimRx * 0.96, botY - 8);
+            ctx.closePath(); ctx.clip();
+            ctx.fillStyle = 'rgba(0,0,0,0.16)';
+            ctx.fillRect(cx - rimRx, botY - (botY - topY) * 0.28, rimRx * 2, (botY - topY) * 0.3);
+            ctx.restore();
+            // front rim
+            ctx.strokeStyle = '#6b7683'; ctx.lineWidth = 5;
+            ctx.beginPath(); ctx.ellipse(cx, topY, rimRx, rimRy, 0, Math.PI, 0, true); ctx.stroke();
         }
     }
 };
+
+// Where does the painted "front part" begin? Scan the mask's central columns
+// top-down for the first opaque row: that's the container's opening edge, so
+// the subject can peek out above it regardless of the specific image.
+function _frontMaskTopFrac(img) {
+    try {
+        const iw = img.naturalWidth, ih = img.naturalHeight;
+        if (!iw || !ih) return 0.35;
+        const scale = Math.min(1, 256 / Math.max(iw, ih));
+        const w = Math.max(8, Math.round(iw * scale)), h = Math.max(8, Math.round(ih * scale));
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        const cx = c.getContext('2d', { willReadFrequently: true });
+        cx.drawImage(img, 0, 0, w, h);
+        const d = cx.getImageData(0, 0, w, h).data;
+        const x0 = Math.floor(w / 3), x1 = Math.ceil(w * 2 / 3);
+        for (let y = 0; y < h; y++) {
+            for (let x = x0; x < x1; x++) {
+                if (d[(y * w + x) * 4 + 3] > 40) return y / h;
+            }
+        }
+    } catch (e) { /* tainted or broken: fall through */ }
+    return 0.35;
+}
 
 function _topoCompDrawCanvas() {
     const tc = state._topoCompState;
@@ -3763,12 +3839,17 @@ function _topoCompDrawCanvas() {
     const refUrl = _topoCompGetImgUrl(tc.currentRef);
 
     const isContainer = !!posConfig.container;
+    const cc = tc.currentContainer;
+    const isItemCont = isContainer && cc && typeof cc === 'object' && cc.type === 'item';
     const charImg = new Image();
     const refImg = new Image();
+    const contBaseImg = new Image();
+    const contFrontImg = new Image();
     let loaded = 0;
+    const needed = isContainer ? (isItemCont ? (posConfig.inside ? 3 : 2) : 1) : 2;
 
     const onBothLoaded = () => {
-        if (++loaded < (isContainer ? 1 : 2)) return;
+        if (++loaded < needed) return;
         const areaRect = area.getBoundingClientRect();
         const cw = Math.round(areaRect.width) || 600;
         const ch = Math.round(areaRect.height) || 500;
@@ -3784,33 +3865,57 @@ function _topoCompDrawCanvas() {
         const refScale = posConfig.refScale || 1.0;
         const drawCharLast = posConfig.drawCharLast !== false;
 
-        const fitAndDraw = (img, cx, cy, scale) => {
-            const maxW = baseSize * scale;
-            const maxH = baseSize * scale;
-            let w = img.naturalWidth || img.width;
-            let h = img.naturalHeight || img.height;
+        const fitRect = (img, cx, cy, scale) => {
+            const maxW = baseSize * scale, maxH = baseSize * scale;
+            let w = img.naturalWidth || img.width || 1;
+            let h = img.naturalHeight || img.height || 1;
             const ratio = Math.min(maxW / w, maxH / h);
-            w = Math.round(w * ratio);
-            h = Math.round(h * ratio);
-            ctx.drawImage(img, Math.round(cx - w / 2), Math.round(cy - h / 2), w, h);
+            w = Math.round(w * ratio); h = Math.round(h * ratio);
+            return { x: Math.round(cx - w / 2), y: Math.round(cy - h / 2), w, h };
+        };
+        const fitAndDraw = (img, cx, cy, scale) => {
+            if (!img || !img.naturalWidth) return; // failed/absent image: skip
+            const r = fitRect(img, cx, cy, scale);
+            ctx.drawImage(img, r.x, r.y, r.w, r.h);
         };
 
         const charCx = posConfig.charPos[0] * cw;
         const charCy = posConfig.charPos[1] * ch;
 
         if (isContainer) {
-            const cont = TOPO_CONTAINERS[tc.currentContainer] || TOPO_CONTAINERS.scatola;
-            const g = {
-                cx: (posConfig.inside ? 0.5 : 0.64) * cw,
-                cy: 0.56 * ch,
-                w: baseSize * 1.3,
-                h: baseSize * 1.05
-            };
-            const drawChar = posConfig.inside
-                ? ((px, py, sc) => fitAndDraw(charImg, px, py, sc))
-                : null;
-            cont.draw(ctx, g, drawChar);
-            if (!posConfig.inside) fitAndDraw(charImg, charCx, charCy, charScale);
+            if (isItemCont) {
+                // Real-object container: full image behind, subject, then the
+                // painted "front part" overlay on top (same rect as the base).
+                const contScale = 1.2;
+                const ccx = (posConfig.inside ? 0.5 : 0.66) * cw;
+                const ccy = 0.55 * ch;
+                fitAndDraw(contBaseImg, ccx, ccy, contScale);
+                if (posConfig.inside) {
+                    // Anchor the subject to the painted front's top edge (the
+                    // opening): head above it, body occluded by the overlay.
+                    if (cc.item._frontRimFrac === undefined) cc.item._frontRimFrac = _frontMaskTopFrac(contFrontImg);
+                    const contRect = fitRect(contBaseImg, ccx, ccy, contScale);
+                    const rimY = contRect.y + contRect.h * cc.item._frontRimFrac;
+                    const charH = fitRect(charImg, 0, 0, 0.55).h;
+                    fitAndDraw(charImg, ccx, rimY - charH * 0.22, 0.55);
+                    fitAndDraw(contFrontImg, ccx, ccy, contScale);
+                } else {
+                    fitAndDraw(charImg, charCx, charCy, charScale);
+                }
+            } else {
+                const cont = TOPO_CONTAINERS[cc] || TOPO_CONTAINERS.scatola;
+                const g = {
+                    cx: (posConfig.inside ? 0.5 : 0.64) * cw,
+                    cy: 0.56 * ch,
+                    w: baseSize * 1.3,
+                    h: baseSize * 1.05
+                };
+                const drawChar = posConfig.inside
+                    ? ((px, py, sc) => fitAndDraw(charImg, px, py, sc))
+                    : null;
+                cont.draw(ctx, g, drawChar);
+                if (!posConfig.inside) fitAndDraw(charImg, charCx, charCy, charScale);
+            }
         } else {
             const refCx = posConfig.refPos[0] * cw;
             const refCy = posConfig.refPos[1] * ch;
@@ -3835,6 +3940,16 @@ function _topoCompDrawCanvas() {
     refImg.onerror = () => { refImg.src = getPlaceholderUrl(tc.currentRef.label); };
     charImg.src = charUrl;
     if (!isContainer) refImg.src = refUrl;
+    if (isItemCont) {
+        contBaseImg.crossOrigin = 'anonymous';
+        contFrontImg.crossOrigin = 'anonymous';
+        contBaseImg.onload = onBothLoaded;
+        contFrontImg.onload = onBothLoaded;
+        contBaseImg.onerror = onBothLoaded;  // count anyway; fitAndDraw skips broken images
+        contFrontImg.onerror = onBothLoaded;
+        contBaseImg.src = cc.item.url;
+        if (posConfig.inside) contFrontImg.src = cc.item.frontMaskUrl;
+    }
 }
 
 function _topoCompAdvance() {
