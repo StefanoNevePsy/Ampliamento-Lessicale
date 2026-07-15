@@ -924,6 +924,15 @@ function mergeSets(local, incoming) {
     if (incoming.sortOrder != null && merged.sortOrder == null) {
         merged.sortOrder = incoming.sortOrder;
     }
+    // Config fields previously dropped by the whitelist: adopt the backup's
+    // values where the local set never customized them; variant names are
+    // positional (they map to variantUrls indexes), so fill gaps slot by slot.
+    if (incoming.imageQuality && !merged.imageQuality) merged.imageQuality = incoming.imageQuality;
+    if (Array.isArray(incoming.variantNames) && incoming.variantNames.length) {
+        const names = [...(merged.variantNames || [])];
+        incoming.variantNames.forEach((n, i) => { if (n && !names[i]) names[i] = n; });
+        merged.variantNames = names;
+    }
     return merged;
 }
 
@@ -956,6 +965,12 @@ function mergePatients(local, incoming) {
         }
     });
     if (!merged.photo && incoming.photo) merged.photo = incoming.photo;
+    // criterionThreshold was previously dropped on merge: adopt the backup's
+    // custom value when the local patient is still at the default.
+    const defThr = (typeof DEFAULT_CRITERION !== 'undefined') ? DEFAULT_CRITERION : 90;
+    if (incoming.criterionThreshold != null && (merged.criterionThreshold == null || merged.criterionThreshold === defThr)) {
+        merged.criterionThreshold = incoming.criterionThreshold;
+    }
     return merged;
 }
 
