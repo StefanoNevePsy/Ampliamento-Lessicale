@@ -70,6 +70,7 @@ async function _nvFetch(url, opts) {
 // enabled automatically by "Aggiorna" the day NVIDIA publishes it.
 const NVIDIA_IMAGE_CANDIDATES = [
     { id: 'black-forest-labs/flux.2-klein-4b', label: 'FLUX.2 Klein 4B — consigliato', family: 'flux', verified: true },
+    { id: 'google/diffusiongemma-26b-a4b-it', label: 'DiffusionGemma 26B — nuovo, veloce (Google)', family: 'chat-image', verified: true },
     { id: 'black-forest-labs/flux.1-schnell', label: 'FLUX.1 Schnell — veloce', family: 'flux-schnell', verified: true },
     { id: 'black-forest-labs/flux.1-dev', label: 'FLUX.1 Dev — dettagliato, lento', family: 'flux-dev', verified: true },
     { id: 'stabilityai/stable-diffusion-3-medium', label: 'Stable Diffusion 3 Medium', family: 'sd3', verified: true },
@@ -118,11 +119,13 @@ window.setNvidiaImageModel = setNvidiaImageModel;
 
 // Probe one slug: 404 → does not exist; anything else (401/422/429...) → exists.
 async function _nvProbeModel(id) {
+    const cand = NVIDIA_IMAGE_CANDIDATES.find(c => c.id === id);
+    const isChat = !!(cand && cand.family === 'chat-image');
     try {
-        const res = await _nvFetch(NVIDIA_GENAI_BASE + id, {
+        const res = await _nvFetch(isChat ? (NVIDIA_LLM_BASE + '/chat/completions') : (NVIDIA_GENAI_BASE + id), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: 'probe' })
+            body: JSON.stringify(isChat ? { model: id, messages: [{ role: 'user', content: 'probe' }] } : { prompt: 'probe' })
         });
         return res.status !== 404;
     } catch (e) { return null; } // network/CORS failure: unknown
@@ -200,6 +203,35 @@ async function generateNvidiaImage(prompt, style) {
     parts.push('single subject, centered, isolated on a pure white background, no shadow');
     const fullPrompt = parts.join(', ');
     const seed = Math.floor(Math.random() * 4294967295);
+
+    if (family === 'chat-image') {
+        // Chat-completions image models (DiffusionGemma & co.): the image comes
+        // back base64-embedded in the assistant message; parse permissively.
+        let res;
+        try {
+            res = await _nvFetch(NVIDIA_LLM_BASE + '/chat/completions', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + key, 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model, messages: [{ role: 'user', content: fullPrompt }], max_tokens: 4096, stream: false })
+            });
+        } catch (e) {
+            throw new Error('Impossibile contattare l\'API NVIDIA (dal browser è bloccata: usa l\'app Android).');
+        }
+        if (!res.ok) {
+            let msg = ''; try { const d = await res.json(); msg = d.detail || (d.error && d.error.message) || JSON.stringify(d); } catch (e) {}
+            if (res.status === 401 || res.status === 403) throw new Error('Chiave NVIDIA non valida o scaduta. Controlla in Impostazioni > API.');
+            if (res.status === 404) throw new Error(`Il modello "${model}" non è più disponibile: premi Aggiorna nelle Impostazioni.`);
+            if (res.status === 429) throw new Error('Rate limit NVIDIA (~40 richieste/min). Riprova tra poco.');
+            throw new Error(`Errore NVIDIA (${res.status}): ${String(msg).slice(0, 250)}`);
+        }
+        const data = await res.json();
+        const message = data.choices && data.choices[0] && data.choices[0].message;
+        const blob = JSON.stringify(message || data);
+        const m = blob.match(new RegExp('data:image/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/=]+)'));
+        if (m) return `data:image/${m[1] === 'jpg' ? 'jpeg' : m[1]};base64,${m[2]}`;
+        if (message && message.b64_json) return 'data:image/png;base64,' + message.b64_json;
+        throw new Error('Il modello non ha restituito un\'immagine. Risposta: ' + blob.slice(0, 160) + '…');
+    }
 
     let body;
     if (family === 'sdxl') {
