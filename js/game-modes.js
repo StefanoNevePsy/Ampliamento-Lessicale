@@ -1212,10 +1212,14 @@ function renderTopologia(items, stage) {
             <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
                 <i class="fa-solid fa-up-down-left-right"></i> Topologia
             </span>
-            <span style="color:var(--text-secondary); font-size:0.75rem;">Trascina le immagini per disporle</span>
+            <span style="color:var(--text-secondary); font-size:0.75rem;">Trascina per disporre &middot; doppio tocco = grande/piccolo</span>
             <button class="btn btn-sm btn-ghost" onclick="shuffleTopologia()" style="padding:4px 10px; font-size:0.75rem;">
                 <i class="fa-solid fa-shuffle"></i> Mescola
             </button>
+            <button class="btn btn-sm btn-ghost" onclick="topoCycleCategory()" style="padding:4px 10px; font-size:0.75rem;" title="Suggerisce una categoria su cui lavorare (tocca per cambiarla)">
+                <i class="fa-solid fa-shapes"></i> Categoria
+            </button>
+            <span id="topo-cat-badge" style="font-size:0.78rem; font-weight:600; color:var(--warning-color);"></span>
         </div>
         <div id="topo-canvas" style="flex:1; position:relative; overflow:hidden; min-height:0; touch-action:none;"></div>
     </div>`;
@@ -1240,6 +1244,8 @@ function renderTopologia(items, stage) {
             const el = document.createElement('div');
             el.className = 'topo-item';
             el.dataset.idx = idx;
+            el.dataset.baseW = itemW;
+            el.dataset.scale = '1';
             el.style.cssText = `position:absolute; left:${left}px; top:${top}px; width:${itemW}px; height:${itemH}px;
                 background:white; border-radius:12px; padding:4px; cursor:grab; touch-action:none;
                 display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -1269,6 +1275,8 @@ function setupTopoDrag(canvasId) {
     if (!canvas) return;
     let activeEl = null;
     let offsetX = 0, offsetY = 0;
+    let startX = 0, startY = 0, movedFar = false;
+    let lastTapEl = null, lastTapTime = 0;
 
     const getPos = (e) => {
         const t = e.touches ? e.touches[0] : e;
@@ -1284,6 +1292,7 @@ function setupTopoDrag(canvasId) {
         activeEl.style.boxShadow = '0 8px 30px rgba(0,0,0,0.5)';
         activeEl.style.cursor = 'grabbing';
         const pos = getPos(e);
+        startX = pos.x; startY = pos.y; movedFar = false;
         const r = el.getBoundingClientRect();
         offsetX = pos.x - r.left;
         offsetY = pos.y - r.top;
@@ -1293,6 +1302,7 @@ function setupTopoDrag(canvasId) {
         if (!activeEl) return;
         e.preventDefault();
         const pos = getPos(e);
+        if (Math.abs(pos.x - startX) > 8 || Math.abs(pos.y - startY) > 8) movedFar = true;
         const cr = canvas.getBoundingClientRect();
         let newLeft = pos.x - cr.left - offsetX;
         let newTop = pos.y - cr.top - offsetY;
@@ -1304,10 +1314,24 @@ function setupTopoDrag(canvasId) {
 
     const onEnd = () => {
         if (activeEl) {
-            activeEl.style.zIndex = '1';
-            activeEl.style.boxShadow = '0 4px 15px rgba(0,0,0,0.3)';
-            activeEl.style.cursor = 'grab';
+            const el = activeEl;
+            el.style.zIndex = '1';
+            el.style.boxShadow = '0 4px 15px rgba(0,0,0,0.3)';
+            el.style.cursor = 'grab';
             activeEl = null;
+            // Double-tap (two clean taps within 350ms) cycles the card size:
+            // normale -> grande -> piccolo -> normale.
+            if (!movedFar) {
+                const now = Date.now();
+                if (lastTapEl === el && now - lastTapTime < 350) {
+                    _topoCycleSize(el, canvas);
+                    lastTapEl = null;
+                } else {
+                    lastTapEl = el; lastTapTime = now;
+                }
+            } else {
+                lastTapEl = null;
+            }
         }
     };
 
@@ -1326,6 +1350,38 @@ function setupTopoDrag(canvasId) {
         document.removeEventListener('touchend', onEnd);
     };
 }
+
+function _topoCycleSize(el, canvas) {
+    const scales = [1, 1.5, 0.6];
+    const cur = parseFloat(el.dataset.scale) || 1;
+    const next = scales[(scales.indexOf(cur) + 1) % scales.length];
+    el.dataset.scale = String(next);
+    const base = parseFloat(el.dataset.baseW) || el.offsetWidth;
+    const oldW = el.offsetWidth;
+    const newW = Math.round(base * next);
+    // keep the card centred where it was, clamped inside the canvas
+    const cr = canvas.getBoundingClientRect();
+    const left = Math.max(0, Math.min(cr.width - newW, el.offsetLeft + (oldW - newW) / 2));
+    const top = Math.max(0, Math.min(cr.height - newW, el.offsetTop + (oldW - newW) / 2));
+    el.style.transition = 'width 0.2s, height 0.2s, left 0.2s, top 0.2s, box-shadow 0.2s';
+    el.style.width = newW + 'px';
+    el.style.height = newW + 'px';
+    el.style.left = left + 'px';
+    el.style.top = top + 'px';
+    setTimeout(() => { el.style.transition = 'box-shadow 0.2s'; }, 250);
+}
+
+window.topoCycleCategory = () => {
+    const keys = Object.keys(TOPO_CATEGORIES);
+    let i = (typeof state._topoCatIdx === 'number') ? state._topoCatIdx : -1;
+    i = i >= keys.length - 1 ? -1 : i + 1; // ...ultima -> spento -> prima...
+    state._topoCatIdx = i;
+    const badge = document.getElementById('topo-cat-badge');
+    if (!badge) return;
+    if (i < 0) { badge.innerHTML = ''; return; }
+    const c = TOPO_CATEGORIES[keys[i]];
+    badge.innerHTML = `<i class="fa-solid ${c.icon}"></i> ${c.pair}`;
+};
 
 window.shuffleTopologia = () => {
     const canvas = document.getElementById('topo-canvas');
@@ -3414,22 +3470,44 @@ window.stroopEtSkip = () => {
 // Two objects composed on a canvas. Patient describes the spatial relation.
 // Sub-modes: template (fixed character) and random (both objects random).
 // ============================================================
+// Concept categories: the therapist hint shows the PAIR (never the answer),
+// so the child can't read the solution but the therapist knows what to score.
+const TOPO_CATEGORIES = {
+    vert: { pair: 'sopra / sotto',     icon: 'fa-arrows-up-down' },
+    lat:  { pair: 'destra / sinistra', icon: 'fa-arrows-left-right' },
+    dist: { pair: 'vicino / lontano',  icon: 'fa-ruler-horizontal' },
+    prof: { pair: 'davanti / dietro',  icon: 'fa-layer-group' },
+    cont: { pair: 'dentro / fuori',    icon: 'fa-box-open' },
+    dim:  { pair: 'grande / piccolo',  icon: 'fa-up-right-and-down-left-from-center' }
+};
 const TOPO_POSITIONS = {
-    'sopra':      { label: 'Sopra',      icon: 'fa-arrow-up',          charPos: [0.5, 0.18], refPos: [0.5, 0.68] },
-    'sotto':      { label: 'Sotto',      icon: 'fa-arrow-down',        charPos: [0.5, 0.78], refPos: [0.5, 0.28] },
-    'davanti':    { label: 'Davanti',    icon: 'fa-person-walking',    charPos: [0.5, 0.58], refPos: [0.5, 0.38], charScale: 1.1, refScale: 0.85, drawCharLast: true },
-    'dietro':     { label: 'Dietro',     icon: 'fa-eye-slash',         charPos: [0.5, 0.35], refPos: [0.5, 0.58], charScale: 0.8, refScale: 1.0, drawCharLast: false },
-    'vicino':     { label: 'Vicino',     icon: 'fa-arrows-left-right', charPos: [0.35, 0.5], refPos: [0.65, 0.5] },
-    'lontano':    { label: 'Lontano',    icon: 'fa-expand',            charPos: [0.12, 0.5], refPos: [0.88, 0.5], charScale: 0.65, refScale: 0.65 },
-    'dentro':     { label: 'Dentro',     icon: 'fa-box-open',          charPos: [0.5, 0.5],  refPos: [0.5, 0.5],  charScale: 0.4, refScale: 1.15, drawCharLast: true },
-    'a destra':   { label: 'A destra',   icon: 'fa-arrow-right',       charPos: [0.72, 0.5], refPos: [0.28, 0.5] },
-    'a sinistra': { label: 'A sinistra', icon: 'fa-arrow-left',        charPos: [0.28, 0.5], refPos: [0.72, 0.5] }
+    'sopra':      { label: 'Sopra',      cat: 'vert', icon: 'fa-arrow-up',          charPos: [0.5, 0.18], refPos: [0.5, 0.68] },
+    'sotto':      { label: 'Sotto',      cat: 'vert', icon: 'fa-arrow-down',        charPos: [0.5, 0.78], refPos: [0.5, 0.28] },
+    'davanti':    { label: 'Davanti',    cat: 'prof', icon: 'fa-person-walking',    charPos: [0.5, 0.58], refPos: [0.5, 0.38], charScale: 1.1, refScale: 0.85, drawCharLast: true },
+    'dietro':     { label: 'Dietro',     cat: 'prof', icon: 'fa-eye-slash',         charPos: [0.5, 0.35], refPos: [0.5, 0.58], charScale: 0.8, refScale: 1.0, drawCharLast: false },
+    'vicino':     { label: 'Vicino',     cat: 'dist', icon: 'fa-arrows-left-right', charPos: [0.35, 0.5], refPos: [0.65, 0.5] },
+    'lontano':    { label: 'Lontano',    cat: 'dist', icon: 'fa-expand',            charPos: [0.12, 0.5], refPos: [0.88, 0.5], charScale: 0.65, refScale: 0.65 },
+    // dentro/fuori use a DRAWN generic box as the container, so the relation is
+    // unambiguous with any image pool (a random ref image isn't a container).
+    'dentro':     { label: 'Dentro',     cat: 'cont', icon: 'fa-box-open',            charPos: [0.5, 0.45],  charScale: 0.45, container: true, inside: true },
+    'fuori':      { label: 'Fuori',      cat: 'cont', icon: 'fa-arrow-up-from-bracket', charPos: [0.2, 0.55], charScale: 0.7,  container: true, inside: false },
+    'a destra':   { label: 'A destra',   cat: 'lat', icon: 'fa-arrow-right',       charPos: [0.72, 0.5], refPos: [0.28, 0.5] },
+    'a sinistra': { label: 'A sinistra', cat: 'lat', icon: 'fa-arrow-left',        charPos: [0.28, 0.5], refPos: [0.72, 0.5] },
+    'grande':     { label: 'Grande',     cat: 'dim', icon: 'fa-up-right-and-down-left-from-center', charPos: [0.32, 0.5],  refPos: [0.74, 0.6], charScale: 1.45, refScale: 0.55 },
+    'piccolo':    { label: 'Piccolo',    cat: 'dim', icon: 'fa-down-left-and-up-right-to-center',   charPos: [0.28, 0.62], refPos: [0.7, 0.5],  charScale: 0.45, refScale: 1.35 }
 };
 
 function _topoCompGetEnabledPositions() {
     try {
-        const saved = localStorage.getItem('topo_comp_positions');
-        if (saved) return JSON.parse(saved);
+        const saved = JSON.parse(localStorage.getItem('topo_comp_positions') || 'null');
+        if (Array.isArray(saved)) {
+            // v1 list saved before grande/piccolo/fuori existed: enable the new
+            // positions too (the user never had a chance to opt out of them).
+            const merged = [...saved];
+            ['grande', 'piccolo', 'fuori'].forEach(k => { if (!merged.includes(k)) merged.push(k); });
+            return merged.filter(k => TOPO_POSITIONS[k]);
+        }
+        if (saved && Array.isArray(saved.enabled)) return saved.enabled.filter(k => TOPO_POSITIONS[k]);
     } catch(e) {}
     return Object.keys(TOPO_POSITIONS);
 }
@@ -3448,7 +3526,7 @@ function renderTopologiaComp(items, stage) {
     const prevSubMode = (prev && prev.subMode) || localStorage.getItem('topo_comp_submode') || 'random';
     const prevPersonaggio = prev ? prev.personaggio : null;
     const enabledPositions = _topoCompGetEnabledPositions();
-    const showAnswer = (prev && prev.showAnswer !== undefined) ? prev.showAnswer : false;
+    const hintMode = (prev && prev.hintMode) || localStorage.getItem('topo_comp_hint') || 'cat';
 
     const pool = [...items].sort(() => Math.random() - 0.5);
     state._topoCompState = {
@@ -3461,7 +3539,7 @@ function renderTopologiaComp(items, stage) {
         currentPosition: null,
         currentChar: null,
         currentRef: null,
-        showAnswer: showAnswer,
+        hintMode: hintMode,
         scontornoReady: {},
         positionStats: {}
     };
@@ -3516,9 +3594,14 @@ function _topoCompRender(stage) {
     const subModeLabel = tc.subMode === 'template' ? 'Template' : 'Random';
     const persLabel = tc.personaggio ? tc.personaggio.label : 'Nessuno';
 
-    const positionBadge = tc.showAnswer
+    const catCfg = TOPO_CATEGORIES[posConfig.cat] || { pair: '?', icon: 'fa-question' };
+    const positionBadge = tc.hintMode === 'full'
         ? `<span style="background:rgba(var(--accent-rgb),0.2); color:var(--accent-color); padding:3px 12px; border-radius:10px; font-size:0.85rem; font-weight:bold;">
             <i class="fa-solid ${posConfig.icon}"></i> ${posConfig.label}
+          </span>`
+        : tc.hintMode === 'cat'
+        ? `<span title="Categoria del round (la risposta esatta resta nascosta)" style="background:rgba(245,158,11,0.15); color:var(--warning-color); padding:3px 12px; border-radius:10px; font-size:0.82rem; font-weight:600;">
+            <i class="fa-solid ${catCfg.icon}"></i> ${catCfg.pair}
           </span>`
         : `<span style="background:rgba(255,255,255,0.08); color:var(--text-secondary); padding:3px 12px; border-radius:10px; font-size:0.85rem;">
             <i class="fa-solid fa-question"></i> ?
@@ -3532,8 +3615,8 @@ function _topoCompRender(stage) {
             </span>
             ${positionBadge}
             <span style="color:var(--text-secondary); font-size:0.75rem;">Round ${tc.round + 1}</span>
-            <button class="btn btn-sm btn-ghost" onclick="topoCompToggleAnswer()" title="${tc.showAnswer ? 'Nascondi' : 'Mostra'} risposta" style="padding:3px 10px; font-size:0.7rem;">
-                <i class="fa-solid ${tc.showAnswer ? 'fa-eye-slash' : 'fa-eye'}"></i>
+            <button class="btn btn-sm btn-ghost" onclick="topoCompToggleAnswer()" title="${tc.hintMode === 'off' ? 'Mostra categoria' : tc.hintMode === 'cat' ? 'Mostra risposta esatta' : 'Nascondi suggerimento'}" style="padding:3px 10px; font-size:0.7rem;">
+                <i class="fa-solid ${tc.hintMode === 'off' ? 'fa-eye' : tc.hintMode === 'cat' ? 'fa-shapes' : 'fa-eye-slash'}"></i>
             </button>
             <button class="btn btn-sm btn-ghost" onclick="topoCompToggleSubMode()" title="Modalit&agrave;: ${subModeLabel}" style="padding:3px 10px; font-size:0.7rem;">
                 <i class="fa-solid ${tc.subMode === 'template' ? 'fa-user-tag' : 'fa-shuffle'}"></i> ${subModeLabel}
@@ -3551,7 +3634,7 @@ function _topoCompRender(stage) {
         <div id="topo-comp-canvas-area" style="flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:10px; background:rgba(255,255,255,0.03);"></div>
         <div style="text-align:center; padding:6px; color:var(--text-secondary); font-size:0.7rem; opacity:0.6; border-top:1px solid #ffffff10; display:flex; gap:16px; justify-content:center;">
             <span><i class="fa-solid fa-child"></i> ${tc.currentChar.label || '?'}</span>
-            <span><i class="fa-solid fa-cube"></i> ${tc.currentRef.label || '?'}</span>
+            <span><i class="fa-solid ${posConfig.container ? 'fa-box' : 'fa-cube'}"></i> ${posConfig.container ? 'Scatola' : (tc.currentRef.label || '?')}</span>
         </div>
     </div>`;
 
@@ -3568,12 +3651,13 @@ function _topoCompDrawCanvas() {
     const charUrl = _topoCompGetImgUrl(tc.currentChar);
     const refUrl = _topoCompGetImgUrl(tc.currentRef);
 
+    const isContainer = !!posConfig.container;
     const charImg = new Image();
     const refImg = new Image();
     let loaded = 0;
 
     const onBothLoaded = () => {
-        if (++loaded < 2) return;
+        if (++loaded < (isContainer ? 1 : 2)) return;
         const areaRect = area.getBoundingClientRect();
         const cw = Math.round(areaRect.width) || 600;
         const ch = Math.round(areaRect.height) || 500;
@@ -3602,15 +3686,40 @@ function _topoCompDrawCanvas() {
 
         const charCx = posConfig.charPos[0] * cw;
         const charCy = posConfig.charPos[1] * ch;
-        const refCx = posConfig.refPos[0] * cw;
-        const refCy = posConfig.refPos[1] * ch;
 
-        if (drawCharLast) {
-            fitAndDraw(refImg, refCx, refCy, refScale);
-            fitAndDraw(charImg, charCx, charCy, charScale);
+        if (isContainer) {
+            // Generic open cardboard box: unambiguous "dentro/fuori" with any
+            // image pool. Inside = char occluded by the front panel; outside =
+            // char clearly standing beside the (empty) box.
+            const rr = (x, y, w, h, r) => {
+                ctx.beginPath();
+                if (ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h);
+            };
+            const boxW = baseSize * 1.3, boxH = baseSize * 1.0;
+            const boxCx = (posConfig.inside ? 0.5 : 0.64) * cw;
+            const boxCy = 0.56 * ch;
+            const bx = boxCx - boxW / 2, by = boxCy - boxH / 2;
+            // back wall + interior
+            ctx.fillStyle = '#8a6a3f'; rr(bx + boxW * 0.04, by, boxW * 0.92, boxH * 0.5, 6); ctx.fill();
+            ctx.fillStyle = '#6e5330'; rr(bx + boxW * 0.09, by + boxH * 0.07, boxW * 0.82, boxH * 0.4, 5); ctx.fill();
+            if (posConfig.inside) fitAndDraw(charImg, boxCx, boxCy - boxH * 0.16, charScale);
+            // front panel (draws OVER the char when inside)
+            ctx.fillStyle = '#c9974f'; rr(bx, by + boxH * 0.32, boxW, boxH * 0.62, 8); ctx.fill();
+            ctx.strokeStyle = '#8a6a3f'; ctx.lineWidth = 3; rr(bx, by + boxH * 0.32, boxW, boxH * 0.62, 8); ctx.stroke();
+            // tape stripe for a friendlier box
+            ctx.fillStyle = 'rgba(255,255,255,0.15)';
+            ctx.fillRect(boxCx - boxW * 0.06, by + boxH * 0.32, boxW * 0.12, boxH * 0.62);
+            if (!posConfig.inside) fitAndDraw(charImg, charCx, charCy, charScale);
         } else {
-            fitAndDraw(charImg, charCx, charCy, charScale);
-            fitAndDraw(refImg, refCx, refCy, refScale);
+            const refCx = posConfig.refPos[0] * cw;
+            const refCy = posConfig.refPos[1] * ch;
+            if (drawCharLast) {
+                fitAndDraw(refImg, refCx, refCy, refScale);
+                fitAndDraw(charImg, charCx, charCy, charScale);
+            } else {
+                fitAndDraw(charImg, charCx, charCy, charScale);
+                fitAndDraw(refImg, refCx, refCy, refScale);
+            }
         }
 
         area.innerHTML = '';
@@ -3624,7 +3733,7 @@ function _topoCompDrawCanvas() {
     charImg.onerror = () => { charImg.src = getPlaceholderUrl(tc.currentChar.label); };
     refImg.onerror = () => { refImg.src = getPlaceholderUrl(tc.currentRef.label); };
     charImg.src = charUrl;
-    refImg.src = refUrl;
+    if (!isContainer) refImg.src = refUrl;
 }
 
 function _topoCompAdvance() {
@@ -3680,7 +3789,9 @@ window.topoCompToggleSubMode = () => {
 window.topoCompToggleAnswer = () => {
     const tc = state._topoCompState;
     if (!tc) return;
-    tc.showAnswer = !tc.showAnswer;
+    const order = ['off', 'cat', 'full'];
+    tc.hintMode = order[(order.indexOf(tc.hintMode || 'off') + 1) % order.length];
+    try { localStorage.setItem('topo_comp_hint', tc.hintMode); } catch (e) {}
     _topoCompRender(document.getElementById('game-stage'));
 };
 
@@ -3689,7 +3800,12 @@ window.topoCompSelectPersonaggio = () => {
     if (!tc) return;
     const stage = document.getElementById('game-stage');
 
-    const gridHtml = tc.items.map((item, idx) => {
+    const noneCell = `<div onclick="topoCompPickPersonaggio(-1)" style="cursor:pointer; padding:6px; border:3px dashed ${tc.personaggio ? 'rgba(255,255,255,0.25)' : 'var(--accent-color)'}; border-radius:var(--radius-md); background:rgba(255,255,255,0.03); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; min-height:88px;">
+        <i class="fa-solid fa-shuffle" style="font-size:1.4rem; color:var(--text-secondary);"></i>
+        <div style="font-size:0.65rem; color:var(--text-secondary); text-align:center;">Nessuno<br>(full random)</div>
+    </div>`;
+
+    const gridHtml = noneCell + tc.items.map((item, idx) => {
         const url = item.maskedUrl || imgUrl(item);
         const isSelected = tc.personaggio && tc.personaggio.label === item.label && tc.personaggio.url === item.url;
         return `<div onclick="topoCompPickPersonaggio(${idx})" style="cursor:pointer; padding:6px; border:3px solid ${isSelected ? 'var(--accent-color)' : 'transparent'}; border-radius:var(--radius-md); background:rgba(255,255,255,0.05); display:flex; flex-direction:column; align-items:center; gap:4px;">
@@ -3702,6 +3818,7 @@ window.topoCompSelectPersonaggio = () => {
     <div style="height:100%; display:flex; flex-direction:column;">
         <div style="padding:12px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10;">
             <span style="font-size:0.9rem; font-weight:bold;"><i class="fa-solid fa-child"></i> Scegli Personaggio</span>
+            <span style="font-size:0.68rem; color:var(--text-secondary);">tocca di nuovo quello attivo per deselezionarlo</span>
             <button class="btn btn-sm btn-ghost" onclick="topoCompClosePersonaggio()" style="padding:3px 10px; font-size:0.7rem;">
                 <i class="fa-solid fa-xmark"></i> Chiudi
             </button>
@@ -3715,9 +3832,18 @@ window.topoCompSelectPersonaggio = () => {
 window.topoCompPickPersonaggio = (idx) => {
     const tc = state._topoCompState;
     if (!tc) return;
-    tc.personaggio = tc.items[idx];
-    tc.subMode = 'template';
-    try { localStorage.setItem('topo_comp_submode', 'template'); } catch(e) {}
+    const chosen = idx >= 0 ? tc.items[idx] : null;
+    const isSame = chosen && tc.personaggio && tc.personaggio.label === chosen.label && tc.personaggio.url === chosen.url;
+    if (!chosen || isSame) {
+        // "Nessuno" or tapping the active personaggio again: back to full random
+        tc.personaggio = null;
+        tc.subMode = 'random';
+        try { localStorage.setItem('topo_comp_submode', 'random'); } catch(e) {}
+    } else {
+        tc.personaggio = chosen;
+        tc.subMode = 'template';
+        try { localStorage.setItem('topo_comp_submode', 'template'); } catch(e) {}
+    }
     _topoCompPrepareRound();
     _topoCompRender(document.getElementById('game-stage'));
 };
@@ -3765,7 +3891,7 @@ window.topoCompOpenSettings = async () => {
             const checked = [...overlay.querySelectorAll('input[type=checkbox]:checked')].map(cb => cb.value);
             if (checked.length > 0) {
                 tc.enabledPositions = checked;
-                try { localStorage.setItem('topo_comp_positions', JSON.stringify(checked)); } catch(e) {}
+                try { localStorage.setItem('topo_comp_positions', JSON.stringify({ v: 2, enabled: checked })); } catch(e) {}
             }
         }
         overlay.classList.remove('open');
