@@ -389,6 +389,34 @@ function getFluenzaObiettivo() {
     return maxCorrect + 2;
 }
 
+// New fluency round in the SAME session: reshuffle the cards, keep the timer
+// duration and the running score, so the therapist can chain rounds and save
+// once at the end (instead of the old "Riprova" that reset everything and
+// re-served the identical, unshuffled deck).
+window.fluenzaReplay = () => {
+    const stage = document.getElementById('game-stage');
+    if (state.session && state.session.active) {
+        // Fold the finished round's cumulative totals into the carry baselines.
+        state.session._carryV = state.session.correct || 0;
+        state.session._carryX = state.session.incorrect || 0;
+        state.session._carryT = state.session.total || 0;
+        state.session._fluenzaDetailsCarry = (state.session._fluenzaDetailsCarry || [])
+            .concat(state.session._fluenzaDetails || []);
+    }
+    // Reset the per-round state and RESHUFFLE (same timer duration & obiettivo).
+    state.fluenzaDisplayItems = [...(state.fluenzaDisplayItems || [])].sort(() => Math.random() - 0.5);
+    state.fluenzaIndex = -1;
+    state.fluenzaCount = 0;
+    state.fluenzaErrors = 0;
+    state.fluenzaStarted = false;
+    state.fluenzaFinished = false;
+    state.fluenzaTimeLeft = state.fluenzaTimerDuration;
+    state.fluenzaItemResults = {};
+    state.fluenzaItemLabels = {};
+    if (state.fluenzaTimerInterval) { clearInterval(state.fluenzaTimerInterval); state.fluenzaTimerInterval = null; }
+    renderFluenzaUI(stage);
+};
+
 function renderFluenzaUI(stage) {
     const items = state.fluenzaDisplayItems;
     const started = state.fluenzaStarted;
@@ -480,8 +508,8 @@ function renderFluenzaUI(stage) {
                 <span style="font-size:0.8rem; color:var(--text-secondary);">Obiettivo prossima volta</span><br>
                 <span style="font-size:1.3rem; font-weight:bold; color:var(--accent-color);"><i class="fa-solid fa-bullseye"></i> ${correct + 2}</span>
             </div>`}
-            <button class="btn btn-ghost" onclick="renderFluenza(state.fluenzaDisplayItems, document.getElementById('game-stage'))" style="margin-top:10px;">
-                <i class="fa-solid fa-rotate-left"></i> Riprova
+            <button class="btn btn-primary" onclick="fluenzaReplay()" style="margin-top:10px;">
+                <i class="fa-solid fa-shuffle"></i> Nuovo giro (punteggio mantenuto)
             </button>
         </div>`;
         return;
@@ -627,7 +655,7 @@ function fluenzaStop() {
         // Store item results for per-item detail; labels are recorded at mark
         // time (counter keys are NOT deck indexes, so the generic playItems[idx]
         // mapping in the save path must not be used for fluenza).
-        state.session._fluenzaDetails = [];
+        state.session._fluenzaDetails = (state.session._fluenzaDetailsCarry || []).slice();
         for (const [k, v] of Object.entries(state.fluenzaItemResults)) {
             state.session.itemResults[k] = v;
             const lbl = state.fluenzaItemLabels?.[k];

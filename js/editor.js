@@ -245,6 +245,13 @@ window.saveEditorChanges = () => {
             }
             DB.saveSet(s).then(() => {
                 reloadLibrary();
+                // If the edited set is the one currently loaded for play, refresh
+                // the in-memory copy so image/label edits show in the modes
+                // immediately (no app restart needed).
+                if (state.activeSetId === s.id) {
+                    state.items = JSON.parse(JSON.stringify(s.items));
+                    if (typeof _updateVariantSelector === 'function') _updateVariantSelector();
+                }
                 document.getElementById('modal-editor').classList.remove('open');
                 document.getElementById('modal-library').classList.add('open');
             });
