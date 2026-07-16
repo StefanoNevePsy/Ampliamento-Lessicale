@@ -384,7 +384,7 @@ window.openFrontMaskEditor = (item, onDone) => {
         onApply: (result) => {
             if (result === null) delete item.frontMaskUrl;
             else item.frontMaskUrl = result;
-            delete item._frontRimFrac; // rim cache: recompute from the new mask
+            delete item._frontRimFrac; delete item._frontOpening; // recompute from the new mask
             if (onDone) onDone();
         }
     });

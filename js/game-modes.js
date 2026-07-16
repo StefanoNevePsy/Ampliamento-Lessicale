@@ -3617,7 +3617,9 @@ function _topoCompPrepareRound() {
         const itemConts = tc.items.filter(i => i.frontMaskUrl && i.url &&
             !(tc.currentChar && i.label === tc.currentChar.label && i.url === tc.currentChar.url));
         if (itemConts.length && Math.random() < 0.5) {
-            tc.currentContainer = { type: 'item', item: itemConts[Math.floor(Math.random() * itemConts.length)] };
+            const it = itemConts[Math.floor(Math.random() * itemConts.length)];
+            if (!it.maskedUrl) _topoCompPreScontorno([it]); // background cut-out for next rounds
+            tc.currentContainer = { type: 'item', item: it };
         } else {
             const ck = Object.keys(TOPO_CONTAINERS);
             tc.currentContainer = ck[Math.floor(Math.random() * ck.length)];
@@ -3836,24 +3838,40 @@ const TOPO_CONTAINERS = {
 // Where does the painted "front part" begin? Scan the mask's central columns
 // top-down for the first opaque row: that's the container's opening edge, so
 // the subject can peek out above it regardless of the specific image.
-function _frontMaskTopFrac(img) {
+// Analyze the painted "front part" mask: where its top edge sits (the
+// container's opening) and the horizontal centre/width of that opening — so
+// the subject can be sized and centred on the REAL container, wherever it
+// lies inside the photo. All values are fractions of the image.
+function _frontMaskOpening(img) {
+    const fallback = { top: 0.35, cx: 0.5, w: 0.55 };
     try {
         const iw = img.naturalWidth, ih = img.naturalHeight;
-        if (!iw || !ih) return 0.35;
+        if (!iw || !ih) return fallback;
         const scale = Math.min(1, 256 / Math.max(iw, ih));
         const w = Math.max(8, Math.round(iw * scale)), h = Math.max(8, Math.round(ih * scale));
         const c = document.createElement('canvas'); c.width = w; c.height = h;
-        const cx = c.getContext('2d', { willReadFrequently: true });
-        cx.drawImage(img, 0, 0, w, h);
-        const d = cx.getImageData(0, 0, w, h).data;
-        const x0 = Math.floor(w / 3), x1 = Math.ceil(w * 2 / 3);
-        for (let y = 0; y < h; y++) {
-            for (let x = x0; x < x1; x++) {
-                if (d[(y * w + x) * 4 + 3] > 40) return y / h;
+        const cx2 = c.getContext('2d', { willReadFrequently: true });
+        cx2.drawImage(img, 0, 0, w, h);
+        const d = cx2.getImageData(0, 0, w, h).data;
+        const alphaAt = (x, y) => d[(y * w + x) * 4 + 3] > 40;
+        // topmost painted row (any column: the front may be off-centre)
+        let topRow = -1;
+        for (let y = 0; y < h && topRow < 0; y++) {
+            for (let x = 0; x < w; x++) { if (alphaAt(x, y)) { topRow = y; break; } }
+        }
+        if (topRow < 0) return fallback;
+        // horizontal extent of the front in a band just under the opening edge
+        const band = Math.max(2, Math.round(h * 0.1));
+        let left = w, right = -1;
+        for (let y = topRow; y < Math.min(h, topRow + band); y++) {
+            for (let x = 0; x < w; x++) {
+                if (alphaAt(x, y)) { if (x < left) left = x; if (x > right) right = x; }
             }
         }
+        if (right <= left) return { top: topRow / h, cx: 0.5, w: 0.55 };
+        return { top: topRow / h, cx: (left + right) / 2 / w, w: (right - left) / w };
     } catch (e) { /* tainted or broken: fall through */ }
-    return 0.35;
+    return fallback;
 }
 
 function _topoCompDrawCanvas() {
@@ -3912,20 +3930,27 @@ function _topoCompDrawCanvas() {
 
         if (isContainer) {
             if (isItemCont) {
-                // Real-object container: full image behind, subject, then the
-                // painted "front part" overlay on top (same rect as the base).
+                // Real-object container: CUT-OUT image behind (no photo
+                // background), subject, then the painted "front part" overlay
+                // on top — drawn at the same rect so it aligns pixel-perfect.
                 const contScale = 1.2;
                 const ccx = (posConfig.inside ? 0.5 : 0.66) * cw;
                 const ccy = 0.55 * ch;
                 fitAndDraw(contBaseImg, ccx, ccy, contScale);
                 if (posConfig.inside) {
-                    // Anchor the subject to the painted front's top edge (the
-                    // opening): head above it, body occluded by the overlay.
-                    if (cc.item._frontRimFrac === undefined) cc.item._frontRimFrac = _frontMaskTopFrac(contFrontImg);
+                    if (!cc.item._frontOpening) cc.item._frontOpening = _frontMaskOpening(contFrontImg);
+                    const op = cc.item._frontOpening;
                     const contRect = fitRect(contBaseImg, ccx, ccy, contScale);
-                    const rimY = contRect.y + contRect.h * cc.item._frontRimFrac;
-                    const charH = fitRect(charImg, 0, 0, 0.55).h;
-                    fitAndDraw(charImg, ccx, rimY - charH * 0.22, 0.55);
+                    // real opening in canvas coords (from the painted mask)
+                    const rimY = contRect.y + contRect.h * op.top;
+                    const openCx = contRect.x + contRect.w * op.cx;
+                    const openW = Math.max(24, contRect.w * op.w);
+                    // size the subject to ~68% of the opening width
+                    const nw = charImg.naturalWidth || 1, nh = charImg.naturalHeight || 1;
+                    let chScale = (openW * 0.68) * Math.max(nw, nh) / (baseSize * nw);
+                    chScale = Math.max(0.25, Math.min(1.0, chScale));
+                    const charH = fitRect(charImg, 0, 0, chScale).h;
+                    fitAndDraw(charImg, openCx, rimY - charH * 0.28, chScale);
                     fitAndDraw(contFrontImg, ccx, ccy, contScale);
                 } else {
                     fitAndDraw(charImg, charCx, charCy, charScale);
@@ -3975,7 +4000,7 @@ function _topoCompDrawCanvas() {
         contFrontImg.onload = onBothLoaded;
         contBaseImg.onerror = onBothLoaded;  // count anyway; fitAndDraw skips broken images
         contFrontImg.onerror = onBothLoaded;
-        contBaseImg.src = cc.item.url;
+        contBaseImg.src = cc.item.maskedUrl || cc.item.url;
         if (posConfig.inside) contFrontImg.src = cc.item.frontMaskUrl;
     }
 }
