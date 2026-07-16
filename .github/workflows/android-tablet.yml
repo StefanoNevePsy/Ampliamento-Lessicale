@@ -83,15 +83,45 @@ jobs:
       - name: Raise Gradle heap / resource settings
         run: node scripts/fix-android-gradle.js
 
-      - name: Generate branded launcher icons
-        continue-on-error: true
+      - name: Generate full icon set (legacy + adaptive + Monet monochrome/themed)
         run: |
-          npm install --no-save sharp-cli
-          for size_dpi in "48 mdpi" "72 hdpi" "96 xhdpi" "144 xxhdpi" "192 xxxhdpi"; do
-            set -- $size_dpi
-            npx sharp -i build/icon.svg -o android/app/src/main/res/mipmap-${2}/ic_launcher.png resize ${1} ${1} || true
-            cp android/app/src/main/res/mipmap-${2}/ic_launcher.png android/app/src/main/res/mipmap-${2}/ic_launcher_round.png || true
-          done
+          set -e
+          npm install --no-save sharp
+          RES=android/app/src/main/res
+          node - <<'NODE'
+          const fs = require('fs');
+          const sharp = require('sharp');
+          const RES = 'android/app/src/main/res';
+          const svg = f => fs.readFileSync('build/' + f);
+          // 1) Legacy launcher bitmaps (square + round) — used pre-API26 and as
+          //    the task-switcher / recents bitmap fallback.
+          const legacy = [[48,'mdpi'],[72,'hdpi'],[96,'xhdpi'],[144,'xxhdpi'],[192,'xxxhdpi']];
+          // 2) Adaptive layers (foreground + monochrome) on the 108dp canvas.
+          const adaptive = [[108,'mdpi'],[162,'hdpi'],[216,'xhdpi'],[324,'xxhdpi'],[432,'xxxhdpi']];
+          (async () => {
+            for (const [sz, dpi] of legacy) {
+              const dir = `${RES}/mipmap-${dpi}`; fs.mkdirSync(dir, { recursive: true });
+              const buf = await sharp(svg('icon.svg')).resize(sz, sz).png().toBuffer();
+              fs.writeFileSync(`${dir}/ic_launcher.png`, buf);
+              fs.writeFileSync(`${dir}/ic_launcher_round.png`, buf);
+            }
+            for (const [sz, dpi] of adaptive) {
+              const dir = `${RES}/drawable-${dpi}`; fs.mkdirSync(dir, { recursive: true });
+              await sharp(svg('icon-foreground.svg')).resize(sz, sz).png().toFile(`${dir}/ic_launcher_foreground.png`);
+              await sharp(svg('icon-monochrome.svg')).resize(sz, sz).png().toFile(`${dir}/ic_launcher_monochrome.png`);
+            }
+            // 3) Adaptive-icon XMLs (background colour + foreground + Monet monochrome).
+            const anydpi = `${RES}/mipmap-anydpi-v26`; fs.mkdirSync(anydpi, { recursive: true });
+            const xml = `<?xml version="1.0" encoding="utf-8"?>\n<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n    <background android:drawable="@color/ic_launcher_background"/>\n    <foreground android:drawable="@drawable/ic_launcher_foreground"/>\n    <monochrome android:drawable="@drawable/ic_launcher_monochrome"/>\n</adaptive-icon>\n`;
+            fs.writeFileSync(`${anydpi}/ic_launcher.xml`, xml);
+            fs.writeFileSync(`${anydpi}/ic_launcher_round.xml`, xml);
+            console.log('base icons generated');
+          })();
+          NODE
+          # Canonical patch: background colour, themed (Monet) XML, foreground/monochrome padding.
+          node scripts/fix-adaptive-icons.js
+          echo "== generated icon resources =="
+          ls $RES/mipmap-anydpi-v26 $RES/drawable-xxxhdpi $RES/values/ic_launcher_background.xml
 
       - name: Sync web assets
         run: npx cap copy android
