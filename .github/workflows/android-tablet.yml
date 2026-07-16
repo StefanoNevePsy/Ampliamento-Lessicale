@@ -139,6 +139,25 @@ jobs:
       - name: Sync web assets
         run: npx cap copy android
 
+      # AGP on these runners ignores ~/.android/debug.keystore and auto-generates
+      # a fresh debug key each build (so the APK signature kept changing and
+      # couldn't update over the installed app). Force the debug signingConfig to
+      # OUR keystore at an explicit path — deterministic signature every build.
+      - name: Force debug signing to our keystore
+        run: |
+          cp ~/.android/debug.keystore android/app/ci-debug.keystore
+          cat >> android/app/build.gradle <<'GRADLE'
+
+          android.signingConfigs.debug {
+              storeFile file("ci-debug.keystore")
+              storePassword "android"
+              keyAlias "androiddebugkey"
+              keyPassword "android"
+          }
+          GRADLE
+          echo "Firma forzata su ci-debug.keystore — impronta:"
+          keytool -list -v -keystore android/app/ci-debug.keystore -storepass android 2>/dev/null | grep -E "SHA256:|Valid from" | head -2
+
       - name: Build debug APK
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
