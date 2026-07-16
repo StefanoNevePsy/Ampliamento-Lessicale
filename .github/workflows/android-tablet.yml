@@ -57,15 +57,28 @@ jobs:
       # keystore secret (e.g. your PC's Android Studio debug key, so even the
       # FIRST switch keeps data); otherwise use the committed fixed debug key.
       - name: Prepare signing key
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
         run: |
           mkdir -p ~/.android
-          if [ -n "${{ secrets.ANDROID_KEYSTORE_B64 }}" ]; then
-            echo "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > ~/.android/debug.keystore
-            echo "Firma con keystore da secret ANDROID_KEYSTORE_B64."
+          if [ -n "$KS_B64" ]; then
+            # Strip any whitespace/newlines the secret may carry, then decode.
+            printf '%s' "$KS_B64" | tr -d '[:space:]' | base64 -d > ~/.android/debug.keystore
+            echo "Keystore da secret ANDROID_KEYSTORE_B64 ($(wc -c < ~/.android/debug.keystore) byte)."
           else
             cp ci/debug.keystore ~/.android/debug.keystore
-            echo "Firma con il keystore fisso committato (ci/debug.keystore)."
+            echo "Keystore fisso committato (ci/debug.keystore)."
           fi
+          # It MUST load with the standard debug credentials (storepass 'android',
+          # alias 'androiddebugkey') — otherwise Gradle silently auto-generates a
+          # NEW debug key and the APK can't update over the installed app. Fail loud.
+          if ! keytool -list -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey >/tmp/ks.txt 2>&1; then
+            echo "::error::ANDROID_KEYSTORE_B64 non è un keystore debug valido (password/alias standard). Rigenera il secret."
+            cat /tmp/ks.txt
+            exit 1
+          fi
+          echo "Firma verificata — impronta usata:"
+          keytool -list -v -keystore ~/.android/debug.keystore -storepass android 2>/dev/null | grep -E "SHA256:|Valid from" | head -2
 
       - name: Build web assets
         run: npm run build:web
