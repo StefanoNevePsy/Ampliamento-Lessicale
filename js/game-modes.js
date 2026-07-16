@@ -5478,7 +5478,8 @@ function _renderMemLavClinicianPhase(stage) {
                 ${ml.clinicianSequence.length > 0 ? `<button onclick="_memLavUndoClinicianTap()" style="margin-left:auto; padding:4px 8px; border-radius:6px; border:1px solid rgba(239,68,68,0.3); background:transparent; color:var(--danger-color); cursor:pointer; font-size:0.7rem;"><i class="fa-solid fa-rotate-left"></i></button>` : ''}
             </div>
         </div>
-        <div style="flex:1; display:flex; flex-wrap:wrap; gap:10px; padding:20px; align-items:center; justify-content:center; align-content:center;">
+        <div id="memlav-clin-visual" style="flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:10px; overflow:hidden;"></div>
+        <div style="flex-shrink:0; display:flex; flex-wrap:wrap; gap:10px; padding:10px 16px 16px; justify-content:center; border-top:1px solid rgba(255,255,255,0.06);">
             ${itemsHtml}
         </div>
         ${ml.clinicianSequence.length === ml.span ? `
@@ -5492,6 +5493,15 @@ function _renderMemLavClinicianPhase(stage) {
         @keyframes memLavSlideIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
         .memlav-item-btn:active { transform:scale(0.92); }
     </style>`;
+
+    // Live large preview: the sequence being built renders centre-stage with
+    // the theme's own visual (sandwich stacking up, tower growing...), exactly
+    // like the child's phase — much clearer than the small chips alone.
+    const vc = document.getElementById('memlav-clin-visual');
+    if (vc) {
+        if (ml.clinicianSequence.length > 0) theme.buildVisual(ml.clinicianSequence, vc);
+        else vc.innerHTML = '<span style="font-size:0.85rem; color:var(--text-secondary); opacity:0.5;">La sequenza apparir\u00e0 qui man mano che la costruisci</span>';
+    }
 }
 
 window._memLavClinicianTap = (itemId) => {
