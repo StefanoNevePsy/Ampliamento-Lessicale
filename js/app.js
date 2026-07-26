@@ -543,8 +543,9 @@ function renderSetDropdownItem(s, status) {
     const isSelected = state.activeSetId === s.id;
     const missingCount = s.items.filter(i => !i.url).length;
 
+    // Custom cover first; otherwise fall back to the first item image.
     const firstImg = s.items.find(i => i.url);
-    const thumbSrc = firstImg ? firstImg.url : (s.coverImage || null);
+    const thumbSrc = s.coverImage || (firstImg ? firstImg.url : null);
     const thumbHtml = thumbSrc
         ? `<div class="set-item-thumb"><img src="${thumbSrc}" loading="lazy" alt=""></div>`
         : `<div class="set-item-thumb"><i class="fa-solid fa-images"></i></div>`;
@@ -2338,7 +2339,12 @@ function renderLibCard(s, idxInCat, catLength) {
     const previews = s.items.filter(i => i.url).slice(0, 4);
     let previewHtml = '';
 
-    if (previews.length > 0) {
+    if (s.coverImage) {
+        // A custom cover always wins over the auto-generated 4-image preview.
+        previewHtml = `<div style="height:120px; border-radius:8px; overflow:hidden; background:rgba(0,0,0,0.3); margin-bottom:8px;">
+            <img src="${s.coverImage}" loading="lazy" alt="" style="width:100%; height:100%; object-fit:cover;">
+        </div>`;
+    } else if (previews.length > 0) {
         previewHtml = `<div class="lib-preview-grid" style="display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:2px; height:120px; border-radius:8px; overflow:hidden; background:rgba(0,0,0,0.3); margin-bottom:8px;">
             ${previews.map(i => `<img src="${i.url}" style="width:100%; height:100%; object-fit:cover;">`).join('')}
             ${previews.length < 4 ? Array(4 - previews.length).fill('<div style="background:rgba(255,255,255,0.05);"></div>').join('') : ''}
@@ -2410,6 +2416,12 @@ function renderLibCard(s, idxInCat, catLength) {
             <button class="btn btn-ghost" style="padding:6px 12px;" onclick="scontornaSet('${s.id}')" title="Scontorna set (${maskedCount}/${imgCount})">
                 <i class="fa-solid fa-eraser" style="${scontornoIcon}"></i>
             </button>
+            <button class="btn btn-ghost" style="padding:6px 12px; ${s.coverImage ? 'color:var(--success-color); border-color:rgba(16,185,129,0.3);' : ''}" onclick="uploadSetCoverImage('${s.id}')" title="${s.coverImage ? 'Cambia copertina' : 'Immagine di copertina'}">
+                <i class="fa-solid fa-image"></i>
+            </button>
+            ${s.coverImage ? `<button class="btn btn-ghost" style="padding:6px 12px; color:var(--danger-color); border-color:rgba(239,68,68,0.3);" onclick="removeSetCoverImage('${s.id}')" title="Rimuovi copertina">
+                <i class="fa-solid fa-image-slash"></i>
+            </button>` : ''}
             <button class="btn btn-ghost" style="padding:6px 12px;" onclick="exportSingleSet('${s.id}')" title="Esporta file">
                 <i class="fa-solid fa-file-export"></i>
             </button>

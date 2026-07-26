@@ -2727,26 +2727,40 @@ th { background: #4472c4; color: white; font-weight: bold; }
 // TASK ANALYSIS - Per-step breakdown across sessions
 // ============================================================
 function renderTaskStepsAnalysis(sessions) {
-    // Get the template from the first session that has taskSteps
-    const template = sessions[0].taskSteps;
-    if (!template || template.length === 0) return '';
+    // Template = UNION of the step names seen across ALL sessions, ordered
+    // starting from the most recent session (so steps added to the list later
+    // appear, and steps only present in older sessions are still shown).
+    // Matching is BY NAME, never by index: inserting/reordering steps no longer
+    // mixes one step's data into another.
+    const byRecency = [...sessions].sort((a, b) => new Date(b.date) - new Date(a.date));
+    const names = [];
+    const seenNames = new Set();
+    byRecency.forEach(s => (s.taskSteps || []).forEach(st => {
+        if (st && st.name && !seenNames.has(st.name)) { seenNames.add(st.name); names.push(st.name); }
+    }));
+    if (names.length === 0) return '';
 
     // Aggregate per-step across ALL sessions (excluding N/A)
-    const stepAggregates = template.map((tmplStep, stepIdx) => {
+    const stepAggregates = names.map(name => {
         let totalV = 0, totalX = 0, totalP = 0, totalScored = 0;
         sessions.forEach(session => {
-            if (session.taskSteps && session.taskSteps[stepIdx]) {
-                const step = session.taskSteps[stepIdx];
-                (step.results || []).forEach(r => {
+            const step = (session.taskSteps || []).find(st => st && st.name === name);
+            if (!step) return;
+            if (step.results && step.results.length) {
+                step.results.forEach(r => {
                     if (r === true) { totalV++; totalScored++; }
                     else if (r === false) { totalX++; totalScored++; }
                     else if (r === 'prompt') { totalP++; totalScored++; }
                 });
+            } else {
+                // Legacy/merged records may carry only the counters
+                totalV += step.v || 0; totalX += step.x || 0; totalP += step.p || 0;
+                totalScored += (step.v || 0) + (step.x || 0) + (step.p || 0);
             }
         });
         const pctCorrect = totalScored > 0 ? Math.round((totalV / totalScored) * 100) : 0;
         const pctError = totalScored > 0 ? Math.round(((totalX + totalP) / totalScored) * 100) : 0;
-        return { name: tmplStep.name, totalV, totalX, totalP, totalScored, pctCorrect, pctError };
+        return { name, totalV, totalX, totalP, totalScored, pctCorrect, pctError };
     });
 
     // Find steps with lowest correct percentage (problem areas)

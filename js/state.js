@@ -298,7 +298,9 @@ function getSavedQuadernoLists() {
 function saveQuadernoList(list) {
     try {
         let lists = getSavedQuadernoLists();
-        const existingIdx = lists.findIndex(l => l.name === list.name);
+        // Same name AND same kind: a general quaderno and a task analysis may
+        // share a name without overwriting each other.
+        const existingIdx = lists.findIndex(l => l.name === list.name && (l.type || 'general') === (list.type || 'general'));
         if (existingIdx >= 0) lists[existingIdx] = list;
         else lists.unshift(list);
         localStorage.setItem('quadernoLists', JSON.stringify(lists));

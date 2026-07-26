@@ -4292,7 +4292,8 @@ function _populateQuadernoDropdown(quadernoSets, isTaskMode) {
                     <div class="set-item-name">${s.name}</div>
                     <div class="set-item-meta"><span class="set-item-count">${s.items.length} attivit&agrave;</span></div>
                 </div>
-                <button class="set-item-data-btn" onclick="event.stopPropagation(); uploadSetCoverImage('${s.id}')" title="Immagine copertina" style="color:var(--accent-color);"><i class="fa-solid fa-image"></i></button>
+                <button class="set-item-data-btn" onclick="event.stopPropagation(); uploadSetCoverImage('${s.id}')" title="${s.coverImage ? 'Cambia copertina' : 'Immagine copertina'}" style="color:${s.coverImage ? 'var(--success-color)' : 'var(--accent-color)'};"><i class="fa-solid fa-image"></i></button>
+                ${s.coverImage ? `<button class="set-item-data-btn" onclick="event.stopPropagation(); removeSetCoverImage('${s.id}')" title="Rimuovi copertina" style="color:var(--danger-color);"><i class="fa-solid fa-xmark"></i></button>` : ''}
             </div>`;
         });
     }
@@ -4309,7 +4310,8 @@ function _populateQuadernoDropdown(quadernoSets, isTaskMode) {
                     <div class="set-item-name">${s.name}</div>
                     <div class="set-item-meta"><span class="set-item-count">${s.items.length} passaggi</span></div>
                 </div>
-                <button class="set-item-data-btn" onclick="event.stopPropagation(); uploadSetCoverImage('${s.id}')" title="Immagine copertina" style="color:var(--warning-color);"><i class="fa-solid fa-image"></i></button>
+                <button class="set-item-data-btn" onclick="event.stopPropagation(); uploadSetCoverImage('${s.id}')" title="${s.coverImage ? 'Cambia copertina' : 'Immagine copertina'}" style="color:${s.coverImage ? 'var(--success-color)' : 'var(--warning-color)'};"><i class="fa-solid fa-image"></i></button>
+                ${s.coverImage ? `<button class="set-item-data-btn" onclick="event.stopPropagation(); removeSetCoverImage('${s.id}')" title="Rimuovi copertina" style="color:var(--danger-color);"><i class="fa-solid fa-xmark"></i></button>` : ''}
             </div>`;
         });
     }
@@ -4335,6 +4337,10 @@ window.uploadSetCoverImage = (setId) => {
             await DB.saveSet(s);
             state.savedSets = await DB.getAllSets();
             if (typeof filterSetsByMode === 'function') filterSetsByMode();
+            if (typeof renderLibList === 'function') renderLibList();
+            if (typeof _refreshQuadernoDropdown === 'function' && s.modes && s.modes.some(m => m.startsWith('quaderno'))) {
+                _refreshQuadernoDropdown(s.modes.includes('quaderno_task'));
+            }
         };
         reader.readAsDataURL(file);
     };
@@ -4348,6 +4354,10 @@ window.removeSetCoverImage = async (setId) => {
     await DB.saveSet(s);
     state.savedSets = await DB.getAllSets();
     if (typeof filterSetsByMode === 'function') filterSetsByMode();
+    if (typeof renderLibList === 'function') renderLibList();
+    if (typeof _refreshQuadernoDropdown === 'function' && s.modes && s.modes.some(m => m.startsWith('quaderno'))) {
+        _refreshQuadernoDropdown(s.modes.includes('quaderno_task'));
+    }
 };
 
 function _resizeCoverImage(dataUrl, maxSize) {
@@ -4437,7 +4447,11 @@ window.loadQuadernoList = (name) => {
 
     const content = document.getElementById('quaderno-content');
     state._quadernoName = list.name;
-    state._quadernoSetId = null;
+    // Adopt the matching IndexedDB set (same name + kind) so editing a legacy
+    // list and saving UPDATES that list instead of creating a duplicate.
+    const wantMode = list.type === 'task' ? 'quaderno_task' : 'quaderno';
+    const twin = state.savedSets.find(s => s.name === list.name && s.modes && s.modes.includes(wantMode));
+    state._quadernoSetId = twin ? twin.id : null;
 
     if (list.type === 'task') {
         state._quadernoType = 'task';
@@ -4817,17 +4831,26 @@ window.saveQuadernoSession = async () => {
         let merged = false;
         if (existingIdx >= 0) {
             const existing = p.history[existingIdx];
-            // Merge taskSteps: append new cycles' results to existing steps
-            if (existing.taskSteps && existing.taskSteps.length === taskSteps.length) {
-                // Same steps structure → merge results arrays
-                for (let i = 0; i < taskSteps.length; i++) {
-                    existing.taskSteps[i].results = existing.taskSteps[i].results.concat(taskSteps[i].results);
-                    existing.taskSteps[i].v += taskSteps[i].v;
-                    existing.taskSteps[i].p += taskSteps[i].p;
-                    existing.taskSteps[i].x += taskSteps[i].x;
-                    existing.taskSteps[i].na += taskSteps[i].na;
-                    existing.taskSteps[i].scored += taskSteps[i].scored;
-                }
+            // Merge taskSteps BY NAME (not by index/length): a list updated with
+            // new steps keeps merging into the same session — matching steps
+            // accumulate, steps added later are appended instead of forcing a
+            // separate, duplicated activity.
+            if (existing.taskSteps) {
+                const exByName = {};
+                existing.taskSteps.forEach(st => { if (st && st.name) exByName[st.name] = st; });
+                taskSteps.forEach(ns => {
+                    const ex = exByName[ns.name];
+                    if (ex) {
+                        ex.results = (ex.results || []).concat(ns.results || []);
+                        ex.v = (ex.v || 0) + ns.v;
+                        ex.p = (ex.p || 0) + ns.p;
+                        ex.x = (ex.x || 0) + ns.x;
+                        ex.na = (ex.na || 0) + ns.na;
+                        ex.scored = (ex.scored || 0) + ns.scored;
+                    } else {
+                        existing.taskSteps.push({ ...ns, results: [...(ns.results || [])] });
+                    }
+                });
                 existing.correct += totalCorrect;
                 existing.prompts += totalP;
                 existing.total += totalScored;
@@ -4945,6 +4968,7 @@ window.saveQuadernoTemplate = async () => {
         isClinical: false
     };
     if (existingSet && existingSet.coverImage) setData.coverImage = existingSet.coverImage;
+    if (existingSet && existingSet.sortOrder != null) setData.sortOrder = existingSet.sortOrder;
 
     await DB.saveSet(setData);
     state.savedSets = await DB.getAllSets();
