@@ -82,7 +82,24 @@ if not exist ".git" (
     git checkout -B claude/psychology-app-setup-CmBhq
     git branch --set-upstream-to=origin/claude/psychology-app-setup-CmBhq claude/psychology-app-setup-CmBhq 2>nul
 ) else (
-    git pull origin claude/psychology-app-setup-CmBhq
+    REM Questa cartella e' solo una COPIA di lavoro di GitHub: allineala sempre
+    REM esattamente al branch remoto. Eventuali modifiche locali (anche solo
+    REM differenze di fine riga fatte da editor/IDE) bloccavano "git pull":
+    REM ora vengono messe da parte in un backup recuperabile con "git stash pop".
+    git fetch origin claude/psychology-app-setup-CmBhq
+    if errorlevel 1 (
+        echo.
+        echo [ERRORE] Impossibile contattare GitHub. Controlla la connessione.
+        exit /b 1
+    )
+    git diff --quiet
+    if errorlevel 1 (
+        echo Modifiche locali rilevate: le salvo in un backup ^(git stash^) prima di aggiornare.
+        git stash push -m "backup automatico build.bat"
+    )
+    git reset --hard origin/claude/psychology-app-setup-CmBhq
+    git checkout -B claude/psychology-app-setup-CmBhq origin/claude/psychology-app-setup-CmBhq 2>nul
+    git branch --set-upstream-to=origin/claude/psychology-app-setup-CmBhq claude/psychology-app-setup-CmBhq 2>nul
 )
 exit /b 0
 
