@@ -6,6 +6,8 @@ window.editSet = async (id) => {
     state.editingItems = JSON.parse(JSON.stringify(set.items));
     state._editingVariantNames = set.variantNames ? [...set.variantNames] : [];
     state._editingVariant = 0; // Always start editing the base variant
+    state._editingCoverImage = set.coverImage || null;
+    state._coverPasteActive = false;
     document.getElementById('edit-set-name').value = set.name;
 
     // Mode checkboxes
@@ -27,6 +29,7 @@ window.editSet = async (id) => {
     renderImageQualitySelector();
 
     renderVariantEditor();
+    renderEditorCover();
     renderEditorList();
     document.getElementById('modal-library').classList.remove('open');
     document.getElementById('modal-editor').classList.add('open');
@@ -237,6 +240,8 @@ window.saveEditorChanges = () => {
             s.modes = modes;
             s.tags = [...editingTags]; // Save semantic tags
             s.imageQuality = state._editingImageQuality || 'media';
+            if (state._editingCoverImage) s.coverImage = state._editingCoverImage;
+            else delete s.coverImage;
             // Save variant names (only if variants exist)
             if (state._editingVariantNames && state._editingVariantNames.length > 0) {
                 s.variantNames = [...state._editingVariantNames];
@@ -702,6 +707,7 @@ window.toggleItemVisibility = (idx) => {
 };
 
 window.setActiveItem = (index) => {
+    if (state._coverPasteActive) { state._coverPasteActive = false; renderEditorCover(); }
     if (state.activeEditorIndex === index) return; // skip re-render if already active
     state.activeEditorIndex = index;
     renderEditorList();
@@ -936,6 +942,96 @@ window.onEditCategoryChange = (sel) => {
     else { custom.style.display = 'none'; }
 };
 
+// --- SET COVER (thumb beside the set name; paste target like the items) ---
+function renderEditorCover() {
+    const box = document.getElementById('edit-cover-slot');
+    if (!box) return;
+    const cover = state._editingCoverImage;
+    const active = !!state._coverPasteActive;
+    box.innerHTML = `
+        <div onclick="focusSetCover()" title="${cover ? 'Tocca, poi Ctrl+V per sostituire la copertina' : 'Tocca, poi Ctrl+V per incollare la copertina'}"
+             style="position:relative; width:62px; height:62px; border-radius:10px; overflow:hidden; cursor:pointer;
+                    border:2px ${active ? 'solid var(--accent-color)' : 'dashed rgba(255,255,255,0.22)'};
+                    background:rgba(0,0,0,0.25); display:flex; align-items:center; justify-content:center;
+                    ${active ? 'box-shadow:0 0 0 3px rgba(99,102,241,0.25);' : ''}">
+            ${cover
+                ? `<img src="${cover}" style="width:100%; height:100%; object-fit:cover;">`
+                : `<i class="fa-solid fa-image" style="font-size:1.1rem; opacity:0.35;"></i>`}
+            <span onclick="event.stopPropagation(); triggerSetCoverUpload();" title="Carica da file"
+                  style="position:absolute; left:2px; bottom:2px; width:20px; height:20px; border-radius:6px; background:rgba(0,0,0,0.6);
+                         display:flex; align-items:center; justify-content:center; font-size:0.6rem; color:#ddd;">
+                <i class="fa-solid fa-folder-open"></i>
+            </span>
+            ${cover ? `<span onclick="event.stopPropagation(); removeEditorCover();" title="Rimuovi copertina"
+                  style="position:absolute; right:2px; top:2px; width:20px; height:20px; border-radius:6px; background:rgba(0,0,0,0.6);
+                         display:flex; align-items:center; justify-content:center; font-size:0.6rem; color:var(--danger-color);">
+                <i class="fa-solid fa-xmark"></i>
+            </span>` : ''}
+        </div>`;
+    const hint = document.getElementById('edit-cover-hint');
+    if (hint) {
+        hint.innerHTML = active
+            ? '<span style="color:var(--accent-color);"><i class="fa-solid fa-paste"></i> Premi <b>Ctrl+V</b> per incollare la copertina</span>'
+            : (cover ? 'Copertina impostata &middot; tocca l\'anteprima per sostituirla' : 'Copertina del set &middot; tocca per incollare o carica un file');
+    }
+}
+window.renderEditorCover = renderEditorCover;
+
+// Make the cover the active paste target (and deselect any active item, so
+// Ctrl+V doesn't land on an item image instead).
+window.focusSetCover = () => {
+    state._coverPasteActive = true;
+    if (state.activeEditorIndex !== null && state.activeEditorIndex !== undefined) {
+        state.activeEditorIndex = null;
+        renderEditorList();
+    }
+    renderEditorCover();
+};
+
+window.setEditorCover = async (dataUrl) => {
+    state._editingCoverImage = await _resizeSetCover(dataUrl, 400);
+    renderEditorCover();
+};
+
+window.removeEditorCover = () => {
+    state._editingCoverImage = null;
+    renderEditorCover();
+};
+
+window.triggerSetCoverUpload = () => {
+    state._coverPasteActive = true;
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = 'image/*'; input.style.display = 'none';
+    input.onchange = (e) => {
+        const f = e.target.files[0];
+        if (!f) return;
+        const r = new FileReader();
+        r.onload = (ev) => setEditorCover(ev.target.result);
+        r.readAsDataURL(f);
+    };
+    document.body.appendChild(input);
+    input.click();
+    setTimeout(() => input.remove(), 1000);
+};
+
+// Covers are decorative: keep them small regardless of the set's image quality.
+function _resizeSetCover(dataUrl, maxSize) {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+            const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+            const w = Math.max(1, Math.round(img.width * scale));
+            const h = Math.max(1, Math.round(img.height * scale));
+            const c = document.createElement('canvas');
+            c.width = w; c.height = h;
+            c.getContext('2d').drawImage(img, 0, 0, w, h);
+            resolve(c.toDataURL('image/webp', 0.82));
+        };
+        img.onerror = () => resolve(dataUrl);
+        img.src = dataUrl;
+    });
+}
+
 // --- PASTE HANDLER ---
 async function handlePaste(e) {
     // Patient photo paste (when patient dropdown is open and a target is set)
@@ -958,6 +1054,21 @@ async function handlePaste(e) {
 
     // Editor paste (variant-aware)
     if (!document.getElementById('modal-editor').classList.contains('open')) return;
+
+    // Set cover paste (the cover slot beside the name is the active target)
+    if (state._coverPasteActive) {
+        const cItems = (e.clipboardData || e.originalEvent.clipboardData).items;
+        for (const it of cItems) {
+            if (it.type.indexOf('image') === 0) {
+                e.preventDefault();
+                const r = new FileReader();
+                r.onload = (ev) => setEditorCover(ev.target.result);
+                r.readAsDataURL(it.getAsFile());
+                return;
+            }
+        }
+    }
+
     if (state.activeEditorIndex === null || state.activeEditorIndex === undefined) return;
     const items = (e.clipboardData || e.originalEvent.clipboardData).items;
     const editVariant = state._editingVariant || 0;
