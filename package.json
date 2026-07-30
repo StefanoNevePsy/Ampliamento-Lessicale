@@ -9,9 +9,13 @@
     "electron:build:win": "electron-builder --win",
     "build:web": "node build.js",
     "cap:init": "npx cap init 'Terapia Attiva' 'com.stimolatore.clinico' --web-dir www",
-    "cap:add:android": "npm run build:web && npx cap add android && node scripts/add-android-permissions.js",
-    "cap:sync": "npm run build:web && npx cap sync && node scripts/add-android-permissions.js",
-    "cap:build:android": "cd android && ./gradlew assembleRelease"
+    "cap:add:android": "npm run build:web && npx cap add android && node scripts/add-android-permissions.js && node scripts/fix-android-gradle.js && node scripts/fix-adaptive-icons.js",
+    "cap:sync": "npm run build:web && npx cap sync && node scripts/add-android-permissions.js && node scripts/fix-android-gradle.js && node scripts/fix-adaptive-icons.js",
+    "cap:sync:native": "npm run build:web && npx cap sync && node scripts/add-android-permissions.js && node scripts/add-native-npu.js && node scripts/fix-android-gradle.js && node scripts/fix-adaptive-icons.js",
+    "cap:npu:setup": "node scripts/add-native-npu.js",
+    "cap:icons": "npx capacitor-assets generate --android && node scripts/fix-adaptive-icons.js",
+    "cap:build:android": "cd android && ./gradlew assembleRelease",
+    "cap:build:android:native": "npm run cap:sync:native && cd android && ./gradlew assembleRelease"
   },
   "build": {
     "appId": "com.stimolatore.clinico",
@@ -54,7 +58,8 @@
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",
     "electron": "^33.0.0",
-    "electron-builder": "^25.0.0"
+    "electron-builder": "^25.0.0",
+    "sharp": "^0.33.0"
   },
   "dependencies": {
     "@capacitor/android": "^6.0.0",
@@ -63,6 +68,7 @@
     "@capacitor/core": "^6.0.0",
     "@capacitor/filesystem": "^6.0.4",
     "@capacitor/share": "^6.0.4",
-    "@capacitor/status-bar": "^6.0.3"
+    "@capacitor/status-bar": "^6.0.3",
+    "send-intent": "^6.0.3"
   }
 }

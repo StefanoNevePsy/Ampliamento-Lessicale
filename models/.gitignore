@@ -1,0 +1,8 @@
+# Local AI model files are large and device-specific — never commit them.
+*.onnx
+*.onnx_data
+*.bin
+*.safetensors
+# Keep the folder structure and docs.
+!README.md
+!.gitignore

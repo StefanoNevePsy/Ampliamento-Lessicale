@@ -1,0 +1,9 @@
+# Model weights for the native NPU plugin are large — never commit them.
+# Place rmbg-2.0.onnx and/or rmbg-1.4.onnx here; the sync step copies them
+# into android/app/src/main/assets/ automatically.
+*.onnx
+*.onnx_data
+*.tflite
+*.dla
+!.gitignore
+!README.md

@@ -19,11 +19,26 @@ const BUILTIN_MODES = {
     'zoom': { label: 'Zoom', engine: 'zoom' },
     'ran_intensivo': { label: 'RAN Intensivo', engine: 'ran_intensivo' },
     'quaderno': { label: 'Quaderno', engine: 'quaderno' },
-    'quaderno_task': { label: 'Task Analysis', engine: 'quaderno_task' }
+    'quaderno_task': { label: 'Task Analysis', engine: 'quaderno_task' },
+    'ricorda': { label: 'Ricorda', engine: 'ricorda' },
+    'singolare_plurale': { label: 'Singolare/Plurale', engine: 'singolare_plurale' },
+    'stroop_numerico': { label: 'Stroop Numerico', engine: 'stroop_numerico' },
+    'go_nogo': { label: 'Go/No-Go', engine: 'go_nogo' },
+    'stroop_etichetta': { label: 'Stroop Etichetta', engine: 'stroop_etichetta' },
+    'topologia_comp': { label: 'Topologia Compositiva', engine: 'topologia_comp' },
+    'memoria_lavoro': { label: 'Memoria di Lavoro', engine: 'memoria_lavoro' }
 };
 
 // MODES_CONFIG: dynamic map of all modes (built-in + custom)
 // Rebuilt by rebuildModesConfig() on init and after edits
+// Make a string safe as a single-quoted JS literal inside a double-quoted
+// HTML attribute (labels like "L'ombrello" broke inline onclick handlers).
+window.jsAttr = function (s) {
+    return String(s == null ? '' : s)
+        .replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+        .replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/&(?!quot;|lt;|amp;)/g, '&amp;');
+};
+
 let MODES_CONFIG = {};
 
 function rebuildModesConfig() {
@@ -47,7 +62,10 @@ function getDefaultActivityLayout() {
         groups: [
             { name: '', modes: ['tact', 'ran', 'ran_intensivo', 'fluenza', 'tombola', 'tombola_sonora', 'memory', 'search_find', 'intraverbal_scenari', 'zoom', 'quaderno'] },
             { name: 'Avanzate', modes: ['topologia', 'sequenze', 'quaderno_task'] },
-            { name: 'Pool da Tag', modes: ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione'] }
+            { name: 'Pool da Tag', modes: ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione', 'ricorda', 'singolare_plurale'] },
+            { name: 'Inibizione', modes: ['stroop_numerico', 'go_nogo', 'stroop_etichetta'] },
+            { name: 'Composizione', modes: ['topologia_comp'] },
+            { name: 'Memoria', modes: ['memoria_lavoro'] }
         ],
         modeEmojis: {},
         customModes: {} // key -> { label, engine (built-in mode key used for logic) }
@@ -100,6 +118,57 @@ function getModeLabel(modeKey) {
     return emoji + (MODES_CONFIG[modeKey] || modeKey);
 }
 
+// --- CRITERION THRESHOLD SYSTEM ---
+const DEFAULT_CRITERION = 90;
+
+function getCriterionThreshold(patientId, mode, setName) {
+    const p = state.patients.find(x => x.id === patientId);
+    if (!p) return DEFAULT_CRITERION;
+    const ov = p.criterionOverrides || {};
+    if (setName && mode && ov[`${setName}::${mode}`] !== undefined) return ov[`${setName}::${mode}`];
+    if (mode && ov[`mode:${mode}`] !== undefined) return ov[`mode:${mode}`];
+    if (setName && ov[`set:${setName}`] !== undefined) return ov[`set:${setName}`];
+    return p.criterionThreshold || DEFAULT_CRITERION;
+}
+
+function setCriterionThreshold(patientId, value, mode, setName) {
+    const p = state.patients.find(x => x.id === patientId);
+    if (!p) return;
+    const val = Math.max(10, Math.min(100, parseInt(value) || DEFAULT_CRITERION));
+    if (!mode && !setName) {
+        p.criterionThreshold = val;
+    } else {
+        if (!p.criterionOverrides) p.criterionOverrides = {};
+        const key = setName && mode ? `${setName}::${mode}` : (mode ? `mode:${mode}` : `set:${setName}`);
+        if (val === (p.criterionThreshold || DEFAULT_CRITERION)) {
+            delete p.criterionOverrides[key];
+        } else {
+            p.criterionOverrides[key] = val;
+        }
+    }
+    DB.savePatient(p);
+}
+
+function pctColor(pct, threshold) {
+    if (threshold === undefined) threshold = DEFAULT_CRITERION;
+    const mid = Math.max(threshold - 20, 30);
+    return pct >= threshold ? 'var(--success-color)' : pct >= mid ? 'var(--warning-color)' : 'var(--danger-color)';
+}
+
+function pctColorHex(pct, threshold) {
+    if (threshold === undefined) threshold = DEFAULT_CRITERION;
+    const mid = Math.max(threshold - 20, 30);
+    return pct >= threshold ? '#10b981' : pct >= mid ? '#f59e0b' : '#ef4444';
+}
+
+function pctBg(pct, threshold) {
+    if (threshold === undefined) threshold = DEFAULT_CRITERION;
+    const mid = Math.max(threshold - 20, 30);
+    if (pct >= threshold) return { bg: 'rgba(16,185,129,0.1)', border: 'rgba(16,185,129,0.3)' };
+    if (pct >= mid) return { bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.3)' };
+    return { bg: 'rgba(239,68,68,0.1)', border: 'rgba(239,68,68,0.3)' };
+}
+
 let state = {
     items: [],
     deck: [],
@@ -149,7 +218,9 @@ let state = {
     fluenzaShowBar: true,
     // Multi-set session for search_find / intraverbal_scenari
     // Allows accumulating data across multiple sets, then saving one unified session
-    multiSetSession: null  // { sets: [ { setId, setName, setCat, itemResults, scoreHistory } ], active: false }
+    multiSetSession: null,  // { sets: [ { setId, setName, setCat, itemResults, scoreHistory } ], active: false }
+    // Singolare/Plurale state
+    spState: null  // { items, index, subMode, pairStep, pairOrder, currentForm, pluralCount, round }
 };
 
 // --- TAG IMAGE HELPERS (IndexedDB with in-memory cache) ---
@@ -227,7 +298,9 @@ function getSavedQuadernoLists() {
 function saveQuadernoList(list) {
     try {
         let lists = getSavedQuadernoLists();
-        const existingIdx = lists.findIndex(l => l.name === list.name);
+        // Same name AND same kind: a general quaderno and a task analysis may
+        // share a name without overwriting each other.
+        const existingIdx = lists.findIndex(l => l.name === list.name && (l.type || 'general') === (list.type || 'general'));
         if (existingIdx >= 0) lists[existingIdx] = list;
         else lists.unshift(list);
         localStorage.setItem('quadernoLists', JSON.stringify(lists));
@@ -266,6 +339,61 @@ function getItemsByTag(tag) {
         }
     });
     return items;
+}
+
+// === THEMED PROMPT & CONFIRM (cross-platform, replaces window.prompt/confirm) ===
+
+function themedPrompt(message, defaultValue = '') {
+    return new Promise(resolve => {
+        const overlay = document.createElement('div');
+        overlay.className = 'themed-dialog-overlay';
+        overlay.innerHTML = `
+            <div class="themed-dialog">
+                <div class="themed-dialog-msg">${message}</div>
+                <input class="themed-dialog-input" type="text" value="${defaultValue.replace(/"/g, '&quot;')}" />
+                <div class="themed-dialog-btns">
+                    <button class="btn btn-ghost themed-dialog-cancel">Annulla</button>
+                    <button class="btn btn-primary themed-dialog-ok">OK</button>
+                </div>
+            </div>`;
+        document.body.appendChild(overlay);
+        requestAnimationFrame(() => overlay.classList.add('open'));
+        const inp = overlay.querySelector('.themed-dialog-input');
+        const ok = overlay.querySelector('.themed-dialog-ok');
+        const cancel = overlay.querySelector('.themed-dialog-cancel');
+        inp.focus();
+        inp.select();
+        const close = val => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 200); resolve(val); };
+        ok.onclick = () => close(inp.value || null);
+        cancel.onclick = () => close(null);
+        inp.addEventListener('keydown', e => { if (e.key === 'Enter') ok.click(); if (e.key === 'Escape') cancel.click(); });
+        overlay.addEventListener('click', e => { if (e.target === overlay) cancel.click(); });
+    });
+}
+
+function themedConfirm(message) {
+    return new Promise(resolve => {
+        const overlay = document.createElement('div');
+        overlay.className = 'themed-dialog-overlay';
+        overlay.innerHTML = `
+            <div class="themed-dialog">
+                <div class="themed-dialog-msg">${message}</div>
+                <div class="themed-dialog-btns">
+                    <button class="btn btn-ghost themed-dialog-cancel">Annulla</button>
+                    <button class="btn btn-danger themed-dialog-ok">Conferma</button>
+                </div>
+            </div>`;
+        document.body.appendChild(overlay);
+        requestAnimationFrame(() => overlay.classList.add('open'));
+        const ok = overlay.querySelector('.themed-dialog-ok');
+        const cancel = overlay.querySelector('.themed-dialog-cancel');
+        ok.focus();
+        const close = val => { overlay.classList.remove('open'); setTimeout(() => overlay.remove(), 200); resolve(val); };
+        ok.onclick = () => close(true);
+        cancel.onclick = () => close(false);
+        overlay.addEventListener('keydown', e => { if (e.key === 'Enter') ok.click(); if (e.key === 'Escape') cancel.click(); });
+        overlay.addEventListener('click', e => { if (e.target === overlay) cancel.click(); });
+    });
 }
 
 // Get all items from sets matching ANY of the selected tags

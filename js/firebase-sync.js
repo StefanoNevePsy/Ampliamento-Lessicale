@@ -58,8 +58,8 @@ async function syncPatientToFirebase(patient) {
     if (!initFirebase()) return;
 
     try {
-        // Sync full patient data including session details
-        // (taskSteps, itemDetails, sessionType, setCat, etc.)
+        // Sync full patient data including session details, daily notes
+        // (taskSteps, itemDetails, sessionType, setCat, dailyNotes, etc.)
         const syncData = {
             id: patient.id,
             name: patient.name,
@@ -70,6 +70,7 @@ async function syncPatientToFirebase(patient) {
                 delete session.originalIndex;
                 return session;
             }),
+            dailyNotes: patient.dailyNotes || {},
             lastSync: new Date().toISOString(),
             deviceId: getDeviceId()
         };
@@ -148,6 +149,17 @@ window.syncWithFirebase = async () => {
                     }
                 }
 
+                // Merge dailyNotes: remote wins for missing keys, keep longer text for existing
+                if (remote.dailyNotes) {
+                    if (!local.dailyNotes) local.dailyNotes = {};
+                    for (const [dk, note] of Object.entries(remote.dailyNotes)) {
+                        if (!local.dailyNotes[dk] || (note && note.length > (local.dailyNotes[dk] || '').length)) {
+                            local.dailyNotes[dk] = note;
+                            changed = true;
+                        }
+                    }
+                }
+
                 if (changed) {
                     local.history.sort((a, b) => new Date(a.date) - new Date(b.date));
                     await DB.savePatient(local);
@@ -155,7 +167,7 @@ window.syncWithFirebase = async () => {
                 }
             } else {
                 // New patient from remote
-                await DB.savePatient({ id: remote.id, name: remote.name, history: remote.history || [] });
+                await DB.savePatient({ id: remote.id, name: remote.name, history: remote.history || [], dailyNotes: remote.dailyNotes || {} });
                 newCount++;
             }
         }

@@ -52,6 +52,7 @@ window.onload = async () => {
         if (badge) badge.innerText = state.savedSets.length;
 
         rebuildModesConfig();
+        await _migrateAggregatePoolSessions();
         renderModeSelect();
         refreshAllTags();
         filterSetsByMode();
@@ -61,13 +62,238 @@ window.onload = async () => {
         document.addEventListener('dragstart', (e) => e.preventDefault());
         document.addEventListener('keydown', handleShortcuts);
 
+        // --- Listen for shared files (Nearby Share / Quick Share) ---
+        _setupSharedFileReceiver();
+
     } catch (e) { console.error("Init Error", e); }
 };
 
+// === MIGRATION: unify legacy executive/cognitive pool sessions ===
+// Older sessions for aggregate pool modes were saved as "Pool: tag1, tag2".
+// Re-name them to the mode label so they aggregate, preserving the tags used
+// in `poolTags`. Idempotent and only touches auto-named pool sessions, so it
+// never overwrites custom session names or other data.
+async function _migrateAggregatePoolSessions() {
+    try {
+        if (!state.patients || !state.patients.length) return;
+        const aggModes = (typeof AGGREGATE_POOL_MODES !== 'undefined') ? AGGREGATE_POOL_MODES : [];
+        if (!aggModes.length) return;
+        for (const p of state.patients) {
+            if (!p.history || !p.history.length) continue;
+            let changed = false;
+            for (const s of p.history) {
+                const engine = (typeof getModeEngine === 'function') ? getModeEngine(s.mode) : s.mode;
+                if (!aggModes.includes(engine)) continue;
+                if (typeof s.setName === 'string' && s.setName.startsWith('Pool: ')) {
+                    if (!s.poolTags || !s.poolTags.length) {
+                        const tagStr = s.setName.slice(6).trim();
+                        if (tagStr) s.poolTags = tagStr.split(',').map(t => t.trim()).filter(Boolean);
+                    }
+                    s.setName = (typeof MODES_CONFIG !== 'undefined' && MODES_CONFIG[s.mode]) ? MODES_CONFIG[s.mode] : s.mode;
+                    changed = true;
+                }
+            }
+            if (changed) await DB.savePatient(p);
+        }
+    } catch (e) { console.warn('Migration aggregate pool sessions failed:', e); }
+}
+
+// === SHARED FILE RECEIVER ===
+// Handles files received via Android intent (Nearby Share, file manager, etc.)
+function _setupSharedFileReceiver() {
+    if (!window.Capacitor || !window.Capacitor.Plugins) return;
+
+    const App = window.Capacitor.Plugins.App;
+
+    // --- Method 1: App plugin (VIEW intents) ---
+    if (App) {
+        App.addListener('appUrlOpen', async (event) => {
+            console.log('[SharedFile] appUrlOpen:', event.url);
+            if (event.url) await _handleReceivedFileUrl(event.url);
+        });
+
+        App.getLaunchUrl().then(async (result) => {
+            if (result && result.url) {
+                console.log('[SharedFile] getLaunchUrl:', result.url);
+                await _handleReceivedFileUrl(result.url);
+            }
+        }).catch(e => console.warn('[SharedFile] getLaunchUrl error:', e));
+    }
+
+    // --- Method 2: SendIntent plugin (SEND intents from Nearby Share) ---
+    const SendIntent = window.Capacitor.Plugins.SendIntent;
+    if (SendIntent) {
+        const _processSendIntent = async (result) => {
+            if (!result) return;
+            // SendIntent may provide url directly or inside result.extras
+            const url = result.url || (result.extras && result.extras['android.intent.extra.STREAM']);
+            const title = result.title || '';
+            if (url) {
+                console.log('[SharedFile] SendIntent received:', url, result.type, 'title:', title);
+                // Pass title as hint for file type detection (may contain original filename)
+                await _handleReceivedFileUrl(url, title);
+            }
+        };
+
+        // Check if launched with a SEND intent
+        SendIntent.checkSendIntentReceived().then(_processSendIntent)
+            .catch(e => console.warn('[SharedFile] SendIntent check error:', e));
+
+        // Listen for subsequent SEND intents while app is running
+        if (App) {
+            App.addListener('resume', async () => {
+                try {
+                    const result = await SendIntent.checkSendIntentReceived();
+                    await _processSendIntent(result);
+                } catch (e) { /* no intent */ }
+            });
+        }
+    }
+}
+
+async function _handleReceivedFileUrl(url, filenameHint) {
+    try {
+        let fileData;
+
+        if (url.startsWith('content://') || url.startsWith('file://')) {
+            // Read file via Capacitor Filesystem
+            const FS = window.Capacitor.Plugins.Filesystem;
+            if (!FS) throw new Error('Filesystem plugin non disponibile.');
+
+            const result = await FS.readFile({ path: url });
+            const binary = atob(result.data);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            fileData = bytes;
+        } else {
+            // Try fetch for https:// or other schemes
+            const resp = await fetch(url);
+            const buffer = await resp.arrayBuffer();
+            fileData = new Uint8Array(buffer);
+        }
+
+        // Detect file type from URL, filename hint (from SendIntent title), or file signature
+        const combined = (url + '|' + (filenameHint || '')).toLowerCase();
+        const isTashare = combined.includes('.tashare');
+        const isZip = combined.includes('.zip') || _isZipSignature(fileData);
+
+        if (isTashare) {
+            await _importSharedTashare(fileData);
+        } else if (isZip) {
+            const blob = new Blob([fileData], { type: 'application/zip' });
+            const file = new File([blob], 'received.zip', { type: 'application/zip' });
+            await importFromZip(file);
+            _showImportToast('File ZIP importato con successo!');
+        } else {
+            // Try as tashare (compressed binary) - Nearby Share may strip the extension
+            try {
+                await _importSharedTashare(fileData);
+            } catch {
+                // Try as ZIP by signature (some providers don't include extension)
+                if (_isZipSignature(fileData)) {
+                    const blob = new Blob([fileData], { type: 'application/zip' });
+                    const file = new File([blob], 'received.zip', { type: 'application/zip' });
+                    await importFromZip(file);
+                    _showImportToast('File ZIP importato con successo!');
+                } else {
+                    // Try as JSON
+                    const text = new TextDecoder().decode(fileData);
+                    const blob = new Blob([text], { type: 'application/json' });
+                    const file = new File([blob], 'received.json', { type: 'application/json' });
+                    await importFromJSON(file);
+                    _showImportToast('File importato con successo!');
+                }
+            }
+        }
+    } catch (err) {
+        console.error('[SharedFile] Import error:', err);
+        alert('Errore importazione file ricevuto: ' + err.message);
+    }
+}
+
+async function _importSharedTashare(uint8) {
+    const jsonStr = pako.inflate(uint8, { to: 'string' });
+    const data = JSON.parse(jsonStr);
+
+    if (!data || data.type !== 'tashare' || !data.patient) {
+        throw new Error('Formato file .tashare non valido.');
+    }
+
+    const incoming = data.patient;
+    const localPatients = await DB.getAllPatients();
+    const existing = localPatients.find(p => p.id === incoming.id);
+
+    if (existing) {
+        const existingDates = new Set((existing.history || []).map(h => h.date));
+        let newSessions = 0;
+        (incoming.history || []).forEach(h => {
+            if (!existingDates.has(h.date)) {
+                if (!existing.history) existing.history = [];
+                existing.history.push(h);
+                newSessions++;
+            }
+        });
+        if (incoming.dailyNotes) {
+            if (!existing.dailyNotes) existing.dailyNotes = {};
+            Object.assign(existing.dailyNotes, incoming.dailyNotes);
+        }
+        if (!existing.photo && incoming.photo) existing.photo = incoming.photo;
+        await DB.savePatient(existing);
+        _showImportToast(`${incoming.name}: aggiornato (${newSessions} nuove sessioni)`);
+    } else {
+        const newPatient = {
+            id: incoming.id, name: incoming.name, category: incoming.category || '',
+            photo: incoming.photo || '', history: incoming.history || [],
+            dailyNotes: incoming.dailyNotes || {}
+        };
+        await DB.savePatient(newPatient);
+        _showImportToast(`${incoming.name}: aggiunto come nuovo paziente`);
+    }
+
+    // Import AI reports if included
+    if (data.reports && Array.isArray(data.reports)) {
+        try {
+            const key = 'ai_reports_' + incoming.id;
+            const existing = JSON.parse(localStorage.getItem(key) || '[]');
+            const existingTs = new Set(existing.map(r => r.timestamp || r.date));
+            const newReports = data.reports.filter(r => !existingTs.has(r.timestamp || r.date));
+            if (newReports.length > 0) {
+                localStorage.setItem(key, JSON.stringify([...existing, ...newReports]));
+            }
+        } catch (e) { /* ignore */ }
+    }
+
+    // Refresh state
+    state.patients = await DB.getAllPatients();
+    if (typeof populateGlobalPatientSelect === 'function') populateGlobalPatientSelect();
+}
+
+function _isZipSignature(data) {
+    return data.length >= 4 && data[0] === 0x50 && data[1] === 0x4B && data[2] === 0x03 && data[3] === 0x04;
+}
+
+function _showImportToast(message) {
+    // Create a toast notification
+    const toast = document.createElement('div');
+    toast.style.cssText = 'position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:var(--success-color, #22c55e); color:#fff; padding:12px 24px; border-radius:12px; font-size:0.9rem; font-weight:600; z-index:99999; box-shadow:0 4px 20px rgba(0,0,0,0.3); text-align:center; max-width:90vw; animation:slideUp 0.3s ease;';
+    toast.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${message}`;
+    document.body.appendChild(toast);
+
+    // Add animation
+    const style = document.createElement('style');
+    style.textContent = '@keyframes slideUp{from{opacity:0;transform:translateX(-50%) translateY(20px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}';
+    document.head.appendChild(style);
+
+    setTimeout(() => { toast.remove(); style.remove(); }, 4000);
+}
+
 // --- SET FILTERING & DROPDOWN ---
-const POOL_ENGINES = ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione'];
+const POOL_ENGINES = ['pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione', 'ricorda', 'singolare_plurale', 'stroop_numerico', 'go_nogo', 'stroop_etichetta', 'topologia_comp'];
 // Keep POOL_MODES as alias for backward compat
 const POOL_MODES = POOL_ENGINES;
+// Cognitive/executive pool modes: tags are interchangeable stimulus sources, so
+// data is aggregated per mode (stable setId) and the tags used are recorded per session.
+const AGGREGATE_POOL_MODES = ['ricorda', 'singolare_plurale', 'stroop_numerico', 'go_nogo', 'stroop_etichetta'];
 
 window.filterSetsByMode = function () {
     const currentMode = document.getElementById('mode-select').value;
@@ -194,9 +420,10 @@ function getSetStatus(s, activePatient, currentMode) {
     info.sessions = sessions.length;
     if (sessions.length === 0 && engine !== 'ran_intensivo') return info;
     if (sessions.length > 0) {
-        info.isMastered = typeof checkCriterion === 'function' && checkCriterion(sessions);
-        info.isRepertorio = typeof checkRepertorio === 'function' && checkRepertorio(sessions);
-        info.isNear = !info.isMastered && typeof isNearCriterion === 'function' && isNearCriterion(sessions);
+        const threshold = typeof getCriterionThreshold === 'function' ? getCriterionThreshold(activePatient.id, currentMode, s.name) : DEFAULT_CRITERION;
+        info.isMastered = typeof checkCriterion === 'function' && checkCriterion(sessions, threshold);
+        info.isRepertorio = typeof checkRepertorio === 'function' && checkRepertorio(sessions, threshold);
+        info.isNear = !info.isMastered && typeof isNearCriterion === 'function' && isNearCriterion(sessions, threshold);
         const sorted = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
         const last = sorted[sorted.length - 1];
         if (last) {
@@ -316,9 +543,11 @@ function renderSetDropdownItem(s, status) {
     const isSelected = state.activeSetId === s.id;
     const missingCount = s.items.filter(i => !i.url).length;
 
+    // Custom cover first; otherwise fall back to the first item image.
     const firstImg = s.items.find(i => i.url);
-    const thumbHtml = firstImg
-        ? `<div class="set-item-thumb"><img src="${firstImg.url}" loading="lazy" alt=""></div>`
+    const thumbSrc = s.coverImage || (firstImg ? firstImg.url : null);
+    const thumbHtml = thumbSrc
+        ? `<div class="set-item-thumb"><img src="${thumbSrc}" loading="lazy" alt=""></div>`
         : `<div class="set-item-thumb"><i class="fa-solid fa-images"></i></div>`;
 
     let badges = '';
@@ -331,8 +560,8 @@ function renderSetDropdownItem(s, status) {
         badges += '<span class="set-item-badge badge-near">\u2191 Vicino</span>';
     }
     if (status.lastPct != null) {
-        const pctColor = status.lastPct >= 90 ? '#10b981' : status.lastPct >= 70 ? '#f59e0b' : '#ef4444';
-        badges += `<span class="set-item-badge badge-pct" style="color:${pctColor}">${status.lastPct}%</span>`;
+        const _pctHex = typeof pctColorHex === 'function' ? pctColorHex(status.lastPct) : (status.lastPct >= 90 ? '#10b981' : status.lastPct >= 70 ? '#f59e0b' : '#ef4444');
+        badges += `<span class="set-item-badge badge-pct" style="color:${_pctHex}">${status.lastPct}%</span>`;
     }
     if (status.ranErrorCount != null) {
         if (status.ranErrorCount > 0) {
@@ -478,7 +707,18 @@ window.loadSelectedSet = async (setId) => {
             _updateMultiSetScoreUI();
             document.getElementById('btn-save-session').classList.remove('hidden');
             if (typeof showSessionNameInput === 'function') showSessionNameInput();
+            state._sfVariantIndex = 0; // Reset variant on set switch
             let playItems = state.items.filter(i => !i.hidden);
+            // Apply active variant URLs
+            const activeVariant = parseInt(document.getElementById('variant-select').value) || 0;
+            if (activeVariant > 0 && typeof getItemVariantUrl === 'function') {
+                playItems = playItems.map(item => {
+                    const varUrl = getItemVariantUrl(item, activeVariant);
+                    // Each variant carries its OWN cut-out (never the base one)
+                    if (varUrl && varUrl !== item.url) return { ...item, url: varUrl, maskedUrl: getItemVariantMasked(item, activeVariant) || undefined, _originalUrl: item.url };
+                    return item;
+                });
+            }
             state.session.playItems = playItems;
             renderGameMode(mode, playItems);
         } else {
@@ -507,7 +747,8 @@ function _snapshotCurrentSetData() {
         prompts: rawP,
         incorrect: rawX,
         total: total,
-        percentage: total > 0 ? Math.round((rawV / total) * 100) : 0
+        percentage: total > 0 ? Math.round((rawV / total) * 100) : 0,
+        variantIndex: state._sfVariantIndex || 0
     });
 }
 
@@ -549,9 +790,60 @@ window.toggleLabelsVisibility = () => {
     state._labelsHidden = isHidden;
 };
 
+window.toggleScoreButtonsVisibility = () => {
+    const sc = document.getElementById('scoring-controls');
+    const btn = document.getElementById('btn-toggle-score-buttons');
+    if (!sc) return;
+    const isHidden = sc.classList.toggle('score-btns-hidden');
+    if (btn) {
+        const icon = btn.querySelector('i');
+        if (icon) icon.className = isHidden ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash';
+        btn.title = isHidden ? 'Mostra V/X/P' : 'Nascondi V/X/P (mantieni contatore)';
+    }
+    try { localStorage.setItem('score_buttons_hidden', isHidden ? '1' : '0'); } catch(e) {}
+};
+
+// Restore score buttons visibility on load
+function _restoreScoreButtonsVisibility() {
+    try {
+        if (localStorage.getItem('score_buttons_hidden') === '1') {
+            const sc = document.getElementById('scoring-controls');
+            const btn = document.getElementById('btn-toggle-score-buttons');
+            if (sc) sc.classList.add('score-btns-hidden');
+            if (btn) {
+                const icon = btn.querySelector('i');
+                if (icon) icon.className = 'fa-solid fa-eye';
+                btn.title = 'Mostra V/X/P';
+            }
+        }
+    } catch(e) {}
+}
+document.addEventListener('DOMContentLoaded', _restoreScoreButtonsVisibility);
+
+window.toggleSecondaryControls = () => {
+    const sec = document.getElementById('controls-secondary');
+    const btn = sec ? sec.querySelector('.controls-toggle-btn') : null;
+    if (!sec) return;
+    const isCollapsed = sec.classList.toggle('collapsed');
+    if (btn) btn.classList.toggle('expanded', !isCollapsed);
+    try { localStorage.setItem('controls_secondary_collapsed', isCollapsed ? '1' : '0'); } catch(e) {}
+};
+function _restoreSecondaryControls() {
+    try {
+        if (localStorage.getItem('controls_secondary_collapsed') === '1') {
+            const sec = document.getElementById('controls-secondary');
+            if (sec) sec.classList.add('collapsed');
+        }
+    } catch(e) {}
+}
+document.addEventListener('DOMContentLoaded', _restoreSecondaryControls);
+
 // --- POINTER / PEN TOOL ---
 (function initPointerPen() {
     let penActive = false;
+    let sPenHolding = false; // S-Pen barrel button temporary activation
+    let manualActive = false; // User toggled via button
+    let sPenAutoActive = false; // Auto-activated by S-Pen touch (no barrel)
     let drawing = false;
     let strokes = []; // { points: [{x,y,t}], color }
     let currentStroke = null;
@@ -559,6 +851,7 @@ window.toggleLabelsVisibility = () => {
     const LINE_WIDTH = 4;
     const PEN_COLOR = '#ff4444';
     let animFrameId = null;
+    let sPenAutoDeactivateTimer = null;
 
     function getCanvas() { return document.getElementById('pointer-canvas'); }
 
@@ -576,6 +869,49 @@ window.toggleLabelsVisibility = () => {
             return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
         }
         return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    }
+
+    function activatePen() {
+        if (penActive) return;
+        const canvas = getCanvas();
+        if (!canvas) return;
+        penActive = true;
+        resizeCanvas();
+        canvas.classList.add('active');
+        const btn = document.getElementById('btn-pointer-pen');
+        if (btn) btn.classList.add('pen-active');
+        canvas.addEventListener('mousedown', startDraw);
+        canvas.addEventListener('mousemove', moveDraw);
+        canvas.addEventListener('mouseup', endDraw);
+        canvas.addEventListener('mouseleave', endDraw);
+        canvas.addEventListener('touchstart', startDraw, { passive: false });
+        canvas.addEventListener('touchmove', moveDraw, { passive: false });
+        canvas.addEventListener('touchend', endDraw);
+        canvas.addEventListener('touchcancel', endDraw);
+        if (!animFrameId) animFrameId = requestAnimationFrame(renderLoop);
+    }
+
+    function deactivatePen() {
+        if (!penActive) return;
+        const canvas = getCanvas();
+        if (!canvas) return;
+        penActive = false;
+        canvas.classList.remove('active');
+        const btn = document.getElementById('btn-pointer-pen');
+        if (btn) btn.classList.remove('pen-active');
+        canvas.removeEventListener('mousedown', startDraw);
+        canvas.removeEventListener('mousemove', moveDraw);
+        canvas.removeEventListener('mouseup', endDraw);
+        canvas.removeEventListener('mouseleave', endDraw);
+        canvas.removeEventListener('touchstart', startDraw);
+        canvas.removeEventListener('touchmove', moveDraw);
+        canvas.removeEventListener('touchend', endDraw);
+        canvas.removeEventListener('touchcancel', endDraw);
+        strokes = [];
+        currentStroke = null;
+        drawing = false;
+        const ctx = canvas.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
 
     function startDraw(e) {
@@ -654,47 +990,197 @@ window.toggleLabelsVisibility = () => {
     }
 
     window.togglePointerPen = () => {
-        const canvas = getCanvas();
-        const btn = document.getElementById('btn-pointer-pen');
-        if (!canvas) return;
-        penActive = !penActive;
-        canvas.classList.toggle('active', penActive);
-        if (btn) btn.classList.toggle('pen-active', penActive);
-        if (penActive) {
-            resizeCanvas();
-            canvas.addEventListener('mousedown', startDraw);
-            canvas.addEventListener('mousemove', moveDraw);
-            canvas.addEventListener('mouseup', endDraw);
-            canvas.addEventListener('mouseleave', endDraw);
-            canvas.addEventListener('touchstart', startDraw, { passive: false });
-            canvas.addEventListener('touchmove', moveDraw, { passive: false });
-            canvas.addEventListener('touchend', endDraw);
-            canvas.addEventListener('touchcancel', endDraw);
-            if (!animFrameId) animFrameId = requestAnimationFrame(renderLoop);
+        if (penActive && !sPenHolding) {
+            manualActive = false;
+            deactivatePen();
         } else {
-            canvas.removeEventListener('mousedown', startDraw);
-            canvas.removeEventListener('mousemove', moveDraw);
-            canvas.removeEventListener('mouseup', endDraw);
-            canvas.removeEventListener('mouseleave', endDraw);
-            canvas.removeEventListener('touchstart', startDraw);
-            canvas.removeEventListener('touchmove', moveDraw);
-            canvas.removeEventListener('touchend', endDraw);
-            canvas.removeEventListener('touchcancel', endDraw);
-            strokes = [];
-            currentStroke = null;
-            const ctx = canvas.getContext('2d');
-            if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+            manualActive = true;
+            sPenHolding = false;
+            activatePen();
         }
     };
+
+    // --- S-PEN BARREL BUTTON: auto-activate pointer while button is held ---
+    // Detection strategy (Samsung WebView quirks):
+    //   1. pointerdown with button=5 (W3C standard barrel button)
+    //   2. pointerdown with button=2 (Samsung WebView maps barrel → right-click)
+    //   3. pointermove with buttons bitmask containing bit 1 (=2, secondary)
+    //      while pointerType='pen' — some Samsung WebView versions never fire a
+    //      separate pointerdown for the barrel; the flag only appears mid-stroke.
+    function isSPenBarrelDown(e) {
+        if (e.pointerType !== 'pen') return false;
+        return e.button === 5 || (e.button === 2 && !e.ctrlKey);
+    }
+    function isSPenBarrelHeld(e) {
+        // Check buttons bitmask: bit 1 (value 2) = secondary button held
+        if (e.pointerType !== 'pen') return false;
+        return (e.buttons & 2) !== 0;
+    }
+
+    function startSPenStroke(e) {
+        sPenHolding = true;
+        activatePen();
+        const canvas = getCanvas();
+        if (canvas) {
+            const rect = canvas.getBoundingClientRect();
+            const pos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            drawing = true;
+            currentStroke = { points: [{ x: pos.x, y: pos.y, t: Date.now() }], color: PEN_COLOR };
+        }
+    }
+
+    function endSPenStroke() {
+        if (drawing && currentStroke) {
+            drawing = false;
+            if (currentStroke.points.length > 0) strokes.push(currentStroke);
+            currentStroke = null;
+        }
+        sPenHolding = false;
+        if (!manualActive) {
+            setTimeout(() => {
+                if (!sPenHolding && !manualActive) deactivatePen();
+            }, FADE_MS + 100);
+        }
+    }
+
+    // --- S-PEN AUTO-POINTER: auto-activate drawing when S Pen touches screen ---
+    function startSPenAutoStroke(e) {
+        if (sPenAutoDeactivateTimer) { clearTimeout(sPenAutoDeactivateTimer); sPenAutoDeactivateTimer = null; }
+        sPenAutoActive = true;
+        activatePen();
+        const canvas = getCanvas();
+        if (canvas) {
+            const rect = canvas.getBoundingClientRect();
+            const pos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            drawing = true;
+            currentStroke = { points: [{ x: pos.x, y: pos.y, t: Date.now() }], color: PEN_COLOR };
+        }
+    }
+
+    function endSPenAutoStroke() {
+        if (drawing && currentStroke) {
+            drawing = false;
+            if (currentStroke.points.length > 0) strokes.push(currentStroke);
+            currentStroke = null;
+        }
+        if (!manualActive && !sPenHolding) {
+            sPenAutoDeactivateTimer = setTimeout(() => {
+                if (!sPenAutoActive || manualActive || sPenHolding) return;
+                sPenAutoActive = false;
+                deactivatePen();
+            }, FADE_MS + 100);
+        }
+    }
+
+    document.addEventListener('pointerdown', (e) => {
+        // Barrel button detection (existing)
+        if (isSPenBarrelDown(e)) {
+            if (manualActive) return;
+            e.preventDefault();
+            startSPenStroke(e);
+            return;
+        }
+        // S-Pen auto-pointer: pen tip touches screen without barrel button
+        if (e.pointerType === 'pen' && !manualActive && !sPenHolding) {
+            startSPenAutoStroke(e);
+            return;
+        }
+    }, true);
+
+    document.addEventListener('pointermove', (e) => {
+        if (e.pointerType !== 'pen') return;
+
+        // In-flight barrel detection: barrel button pressed mid-stroke
+        if (!sPenHolding && !manualActive && !sPenAutoActive && isSPenBarrelHeld(e)) {
+            e.preventDefault();
+            startSPenStroke(e);
+            return;
+        }
+        // Barrel released mid-stroke → end immediately
+        if (sPenHolding && !isSPenBarrelHeld(e)) {
+            endSPenStroke();
+            return;
+        }
+        // S-Pen auto drawing in progress
+        if (sPenAutoActive && drawing && currentStroke) {
+            const canvas = getCanvas();
+            if (canvas) {
+                const rect = canvas.getBoundingClientRect();
+                const pos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+                currentStroke.points.push({ x: pos.x, y: pos.y, t: Date.now() });
+            }
+            return;
+        }
+        if (!sPenHolding) return;
+        if (!drawing || !currentStroke) return;
+        e.preventDefault();
+        const canvas = getCanvas();
+        if (canvas) {
+            const rect = canvas.getBoundingClientRect();
+            const pos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+            currentStroke.points.push({ x: pos.x, y: pos.y, t: Date.now() });
+        }
+    }, true);
+
+    document.addEventListener('pointerup', (e) => {
+        if (e.pointerType !== 'pen') return;
+        if (sPenAutoActive) { endSPenAutoStroke(); return; }
+        if (!sPenHolding) return;
+        endSPenStroke();
+    }, true);
+
+    document.addEventListener('pointercancel', (e) => {
+        if (e.pointerType !== 'pen') return;
+        if (sPenAutoActive) { endSPenAutoStroke(); return; }
+        if (!sPenHolding) return;
+        endSPenStroke();
+    }, true);
+
+    // Prevent context menu on S-Pen barrel button (often triggers right-click menu)
+    document.addEventListener('contextmenu', (e) => {
+        if (sPenHolding || (e.pointerType === 'pen' && (e.buttons & 2))) {
+            e.preventDefault();
+        }
+    });
 
     // Keep canvas sized on window resize
     window.addEventListener('resize', () => { if (penActive) resizeCanvas(); });
 })();
 
+// --- NEW ROUND, SAME SESSION ---
+// startGame() reshuffles but resets the session; here we carry the counters
+// (and previous per-item results, under round-prefixed keys) across the
+// re-init, so the therapist can chain randomized rounds and save ONCE.
+window.replayRound = () => {
+    const s0 = state.session;
+    const prev = (s0 && s0.active) ? {
+        v: s0.correct || 0, x: s0.incorrect || 0, p: s0.prompts || 0, t: s0.total || 0,
+        itemResults: s0.itemResults || {}, round: s0._round || 1
+    } : null;
+    startGame();
+    if (prev && state.session) {
+        const s = state.session;
+        s._carryV = prev.v; s._carryX = prev.x; s._carryP = prev.p; s._carryT = prev.t;
+        s.correct = prev.v; s.incorrect = prev.x; s.prompts = prev.p; s.total = prev.t;
+        Object.entries(prev.itemResults).forEach(([k, v]) => {
+            const key = /^r\d+_/.test(k) ? k : `r${prev.round}_${k}`;
+            s.itemResults[key] = v;
+        });
+        s._round = prev.round + 1;
+        if (typeof updateScoreUI === 'function') updateScoreUI();
+        const saveBtn = document.getElementById('btn-save-session');
+        if (saveBtn && prev.t > 0) saveBtn.classList.remove('hidden');
+    }
+};
+
 // --- START GAME ---
 window.startGame = () => {
     // Clean up any active fluenza timer
     if (state.fluenzaTimerInterval) { clearInterval(state.fluenzaTimerInterval); state.fluenzaTimerInterval = null; }
+    // ...and the Ricorda auto-flip countdown, which would otherwise fire later
+    // and overwrite the stage of whatever mode is running by then.
+    if (state._ricordaTimerInterval) { clearInterval(state._ricordaTimerInterval); state._ricordaTimerInterval = null; }
+    if (state.session) delete state.session._fluenzaDetails;
 
     const mode = document.getElementById('mode-select').value;
     const engine = getModeEngine(mode);
@@ -747,7 +1233,38 @@ window.startGame = () => {
         } else if (engine === 'categorizzazione') {
             state.activeSetId = 'cat_' + state.selectedPoolTags.join('_');
             renderGameMode(mode, []);
+        } else if (engine === 'ricorda') {
+            let poolItems = getItemsByTags(state.selectedPoolTags);
+            poolItems.sort(() => Math.random() - 0.5);
+            state.activeSetId = 'ricorda';
+            renderGameMode(mode, poolItems);
+        } else if (engine === 'singolare_plurale') {
+            let poolItems = getItemsByTags(state.selectedPoolTags);
+            poolItems.sort(() => Math.random() - 0.5);
+            state.activeSetId = 'sp';
+            renderGameMode(mode, poolItems);
+        } else if (engine === 'stroop_numerico') {
+            let poolItems = getItemsByTags(state.selectedPoolTags);
+            poolItems.sort(() => Math.random() - 0.5);
+            state.activeSetId = 'strnum';
+            renderGameMode(mode, poolItems);
+        } else if (engine === 'go_nogo') {
+            let poolItems = getItemsByTags(state.selectedPoolTags);
+            poolItems.sort(() => Math.random() - 0.5);
+            state.activeSetId = 'gonogo';
+            renderGameMode(mode, poolItems);
+        } else if (engine === 'stroop_etichetta') {
+            let poolItems = getItemsByTags(state.selectedPoolTags);
+            poolItems.sort(() => Math.random() - 0.5);
+            state.activeSetId = 'stret';
+            renderGameMode(mode, poolItems);
+        } else if (engine === 'topologia_comp') {
+            let poolItems = getItemsByTags(state.selectedPoolTags);
+            poolItems.sort(() => Math.random() - 0.5);
+            state.activeSetId = 'topocomp_' + state.selectedPoolTags.join('_');
+            renderGameMode(mode, poolItems);
         }
+        window._startTDCountdown();
         return;
     }
 
@@ -756,6 +1273,20 @@ window.startGame = () => {
         state.session = { correct: 0, incorrect: 0, total: 0, active: true, itemResults: {} };
         document.getElementById('scoring-controls').classList.add('hidden');
         document.getElementById('btn-save-session').classList.add('hidden');
+        document.getElementById('btn-undo-marker').classList.remove('hidden');
+        renderGameMode(mode, []);
+        return;
+    }
+
+    // Memoria di Lavoro: self-contained, no set or tags needed
+    if (engine === 'memoria_lavoro') {
+        state.session = { correct: 0, incorrect: 0, prompts: 0, total: 0, active: true, itemResults: {}, scoreHistory: [] };
+        state.activeSetId = 'memlav';
+        updateScoreUI();
+        document.getElementById('scoring-controls').classList.add('hidden');
+        document.getElementById('btn-save-session').classList.add('hidden');
+        const undoBtn = document.getElementById('btn-undo-marker');
+        if (undoBtn) undoBtn.classList.add('hidden');
         renderGameMode(mode, []);
         return;
     }
@@ -763,11 +1294,14 @@ window.startGame = () => {
     // Standard modes: require loaded items
     if (!state.items.length) return;
 
+    // Update variant selector based on current set
+    _updateVariantSelector();
+
     state.session = { correct: 0, incorrect: 0, total: 0, active: true, itemResults: {} };
     state._ranGridIndex = 0; // Reset RAN grid scoring index
     updateScoreUI();
-    // Fluenza has its own built-in controls
-    if (engine === 'fluenza') {
+    // Fluenza and Memory have their own built-in controls/scoring
+    if (engine === 'fluenza' || engine === 'memory') {
         document.getElementById('scoring-controls').classList.add('hidden');
     } else {
         document.getElementById('scoring-controls').classList.remove('hidden');
@@ -797,8 +1331,22 @@ window.startGame = () => {
         if (playItems.length > gridLimit) playItems = playItems.slice(0, gridLimit);
     }
 
+    // Apply active variant URLs to play items
+    const activeVariant = parseInt(document.getElementById('variant-select').value) || 0;
+    if (activeVariant > 0 && typeof getItemVariantUrl === 'function') {
+        playItems = playItems.map(item => {
+            const varUrl = getItemVariantUrl(item, activeVariant);
+            if (varUrl && varUrl !== item.url) {
+                // Each variant carries its OWN cut-out (never the base one)
+                return { ...item, url: varUrl, maskedUrl: getItemVariantMasked(item, activeVariant) || undefined, _originalUrl: item.url };
+            }
+            return item;
+        });
+    }
+
     state.tactIndex = 0;
     state.ranIndex = 0;
+    state._sfVariantIndex = 0; // Reset variant navigation for search_find/intraverbal
     state.session.playItems = playItems; // Store for per-item detail tracking
 
     // RAN Intensivo: build deck of exactly 20 stimuli from last session's errors
@@ -853,13 +1401,19 @@ window.startGame = () => {
     const undoBtn = document.getElementById('btn-undo-marker');
     if (undoBtn) undoBtn.classList.remove('hidden');
     renderGameMode(mode, playItems);
+    // Start TD countdown for all modes at session start
+    window._startTDCountdown();
 };
 
 // --- SCORING ---
 window.recordResponse = (result) => {
     if (!state.session.active) return;
+    window._stopTDCountdown();
     const mode = document.getElementById('mode-select').value;
     const engine = getModeEngine(mode);
+
+    // Memory uses its own internal scoring driven by card flips
+    if (engine === 'memory') return;
 
     if (!state.session.scoreHistory) state.session.scoreHistory = [];
 
@@ -930,6 +1484,7 @@ window.recordResponse = (result) => {
             updateScoreUI();
             document.getElementById('btn-save-session').classList.remove('hidden');
             if (typeof showSessionNameInput === 'function') showSessionNameInput();
+            window._startTDCountdown();
         }, 350);
         return;
     } else if (engine === 'tact' || (engine === 'ran' && state.ranMode === 'single')) {
@@ -954,6 +1509,7 @@ window.recordResponse = (result) => {
                 setTimeout(() => {
                     state.ranIndex++;
                     updateRanContent();
+                    window._startTDCountdown();
                 }, 350);
             }
         }
@@ -983,6 +1539,85 @@ window.recordResponse = (result) => {
         state.session.itemResults[currentIndex] = result;
         state.session.scoreHistory.push(currentIndex);
         state._ranGridIndex++;
+    } else if (engine === 'ricorda') {
+        // Ricorda: score the last revealed card via floating buttons, then auto-flip back
+        const idx = state._ricordaLastRevealed;
+        if (idx === null || idx === undefined) return;
+        const resultKey = 'ricorda_' + idx + '_' + Date.now();
+        state.session.itemResults[resultKey] = result;
+        state.session.scoreHistory.push(resultKey);
+        // Delegate visual feedback + auto-flip to game-modes handler
+        if (typeof window._ricordaHandleScore === 'function') window._ricordaHandleScore(result);
+    } else if (engine === 'singolare_plurale') {
+        if (typeof window._spHandleScore === 'function') {
+            window._spHandleScore(result);
+            const results0 = Object.values(state.session.itemResults);
+            state.session.correct = results0.filter(v => v === true).length;
+            state.session.incorrect = results0.filter(v => v === false).length;
+            state.session.prompts = results0.filter(v => v === 'prompt').length;
+            state.session.total = results0.length;
+            updateScoreUI();
+            document.getElementById('btn-save-session').classList.remove('hidden');
+            if (typeof showSessionNameInput === 'function') showSessionNameInput();
+            return;
+        }
+    } else if (engine === 'stroop_numerico') {
+        if (typeof window._stroopNumHandleScore === 'function') {
+            window._stroopNumHandleScore(result);
+            const results0 = Object.values(state.session.itemResults);
+            state.session.correct = results0.filter(v => v === true).length;
+            state.session.incorrect = results0.filter(v => v === false).length;
+            state.session.prompts = results0.filter(v => v === 'prompt').length;
+            state.session.total = results0.length;
+            updateScoreUI();
+            document.getElementById('btn-save-session').classList.remove('hidden');
+            if (typeof showSessionNameInput === 'function') showSessionNameInput();
+            return;
+        }
+    } else if (engine === 'go_nogo') {
+        if (typeof window._goNogoHandleScore === 'function') {
+            window._goNogoHandleScore(result);
+            const results0 = Object.values(state.session.itemResults);
+            state.session.correct = results0.filter(v => v === true).length;
+            state.session.incorrect = results0.filter(v => v === false).length;
+            state.session.prompts = results0.filter(v => v === 'prompt').length;
+            state.session.total = results0.length;
+            updateScoreUI();
+            document.getElementById('btn-save-session').classList.remove('hidden');
+            if (typeof showSessionNameInput === 'function') showSessionNameInput();
+            return;
+        }
+    } else if (engine === 'stroop_etichetta') {
+        if (typeof window._stroopEtHandleScore === 'function') {
+            window._stroopEtHandleScore(result);
+            const results0 = Object.values(state.session.itemResults);
+            state.session.correct = results0.filter(v => v === true).length;
+            state.session.incorrect = results0.filter(v => v === false).length;
+            state.session.prompts = results0.filter(v => v === 'prompt').length;
+            state.session.total = results0.length;
+            updateScoreUI();
+            document.getElementById('btn-save-session').classList.remove('hidden');
+            if (typeof showSessionNameInput === 'function') showSessionNameInput();
+            return;
+        }
+    } else if (engine === 'topologia_comp') {
+        if (typeof window._topoCompHandleScore === 'function') {
+            window._topoCompHandleScore(result);
+            const results0 = Object.values(state.session.itemResults);
+            state.session.correct = results0.filter(v => v === true).length;
+            state.session.incorrect = results0.filter(v => v === false).length;
+            state.session.prompts = results0.filter(v => v === 'prompt').length;
+            state.session.total = results0.length;
+            updateScoreUI();
+            document.getElementById('btn-save-session').classList.remove('hidden');
+            if (typeof showSessionNameInput === 'function') showSessionNameInput();
+            return;
+        }
+    } else if (engine === 'memoria_lavoro') {
+        if (typeof window._memLavHandleScore === 'function') {
+            window._memLavHandleScore(result);
+            return;
+        }
     } else {
         const id = Date.now().toString();
         state.session.itemResults[id] = result;
@@ -1003,6 +1638,9 @@ window.recordResponse = (result) => {
     }
     document.getElementById('btn-save-session').classList.remove('hidden');
     if (typeof showSessionNameInput === 'function') showSessionNameInput();
+
+    // Restart TD countdown after every response (for modes without auto-advance)
+    window._startTDCountdown();
 };
 
 function updateScoreUI() {
@@ -1030,18 +1668,19 @@ window.onSessionTypeChange = () => {
     const type = document.getElementById('session-type-select').value;
     const tdWrapper = document.getElementById('td-seconds-wrapper');
     const btnX = document.getElementById('btn-score-x');
-    const btnP = document.getElementById('btn-score-p');
+    const timerWrapper = document.getElementById('td-timer-wrapper');
 
     if (type === 'timedelay') {
         tdWrapper.style.display = '';
         // Time Delay: show P + V, hide X
         if (btnX) btnX.style.display = 'none';
-        if (btnP) btnP.style.display = '';
+        if (timerWrapper) timerWrapper.style.display = '';
     } else {
         tdWrapper.style.display = 'none';
         // Independent: show X + V, hide P
         if (btnX) btnX.style.display = '';
-        if (btnP) btnP.style.display = 'none';
+        if (timerWrapper) timerWrapper.style.display = 'none';
+        window._stopTDCountdown();
     }
 };
 
@@ -1055,11 +1694,68 @@ function getSelectedTDSeconds() {
     return input ? (parseInt(input.value) || 5) : 5;
 }
 
+// --- TIME-DELAY COUNTDOWN RING ---
+// A subtle SVG ring around the "P" prompt button that depletes over the configured seconds.
+// Visibility is controlled by the setting 'td_timer_visible' in localStorage.
+(function() {
+    let _tdTimerId = null;
+    let _tdStartTime = 0;
+    let _tdDuration = 0;
+
+    function isTDTimerVisible() {
+        return localStorage.getItem('td_timer_visible') !== 'false'; // default: visible
+    }
+
+    window._startTDCountdown = () => {
+        window._stopTDCountdown();
+        const type = getSelectedSessionType();
+        if (type !== 'timedelay') return;
+        if (!state.session.active) return;
+
+        const ring = document.getElementById('td-ring');
+        const progress = document.getElementById('td-ring-progress');
+        if (!ring || !progress) return;
+
+        // Show/hide based on setting
+        ring.style.opacity = isTDTimerVisible() ? '1' : '0';
+
+        _tdDuration = getSelectedTDSeconds() * 1000;
+        _tdStartTime = performance.now();
+        const circumference = 2 * Math.PI * 30; // r=30
+
+        const tick = () => {
+            const elapsed = performance.now() - _tdStartTime;
+            const remaining = Math.max(0, 1 - elapsed / _tdDuration);
+            progress.style.strokeDashoffset = String(circumference * (1 - remaining));
+
+            if (remaining > 0) {
+                _tdTimerId = requestAnimationFrame(tick);
+            } else {
+                // Timer expired — ring is fully depleted
+                _tdTimerId = null;
+            }
+        };
+        _tdTimerId = requestAnimationFrame(tick);
+    };
+
+    window._stopTDCountdown = () => {
+        if (_tdTimerId) {
+            cancelAnimationFrame(_tdTimerId);
+            _tdTimerId = null;
+        }
+        const progress = document.getElementById('td-ring-progress');
+        if (progress) progress.style.strokeDashoffset = '0';
+    };
+
+    // Expose visibility check for settings
+    window._isTDTimerVisible = isTDTimerVisible;
+})();
+
 // --- KEYBOARD SHORTCUTS ---
 function handleShortcuts(e) {
     const mode = document.getElementById('mode-select').value;
     const engine = getModeEngine(mode);
-    if (state.session.active && engine !== 'fluenza' && !['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
+    if (state.session.active && engine !== 'fluenza' && engine !== 'memory' && !['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
         const type = getSelectedSessionType();
         if (e.key.toLowerCase() === 'v') recordResponse(true);
         if (type === 'independent' && e.key.toLowerCase() === 'x') recordResponse(false);
@@ -1072,26 +1768,114 @@ function handleShortcuts(e) {
     if (engine === 'fluenza') {
         if (e.key === 'ArrowRight') fluenzaNext();
         if (e.key.toLowerCase() === 'x') fluenzaMarkError();
+        if (e.key.toLowerCase() === 'e') { state.fluenzaHideLabels = !state.fluenzaHideLabels; renderFluenzaUI(document.getElementById('game-stage')); }
     }
     if (engine === 'search_find' || engine === 'intraverbal_scenari') {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { if (typeof window.undoLastAction === 'function') window.undoLastAction(); }
         if (e.key === 'Delete' || e.key === 'Backspace') clearMarkers();
+        // Variant navigation (only when not in fullscreen)
+        const isFs = document.querySelector('.app-shell')?.classList.contains('game-fullscreen');
+        if (!isFs) {
+            if (e.key === 'ArrowRight' && typeof window.sfNextVariant === 'function') sfNextVariant();
+            if (e.key === 'ArrowLeft' && typeof window.sfPrevVariant === 'function') sfPrevVariant();
+        }
     }
     // Global undo fallback
     if (!(engine === 'search_find' || engine === 'intraverbal_scenari') && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         if (typeof window.undoLastAction === 'function') window.undoLastAction();
     }
+    // Pointer/pen toggle shortcut — "D" key (Draw) from anywhere
+    if (e.key.toLowerCase() === 'd' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        if (typeof window.togglePointerPen === 'function') window.togglePointerPen();
+    }
+    // Fullscreen game area shortcut — "F" key
+    if (e.key.toLowerCase() === 'f' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        if (typeof window.toggleGameFullscreen === 'function') window.toggleGameFullscreen();
+    }
+    // Child lock shortcut — "L" key
+    if (e.key.toLowerCase() === 'l' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        if (typeof window.toggleGlobalScrollLock === 'function') window.toggleGlobalScrollLock();
+    }
+    // Label toggle shortcut — "E" key (Etichette)
+    if (e.key.toLowerCase() === 'e' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        if (typeof window.toggleLabelsVisibility === 'function') window.toggleLabelsVisibility();
+    }
+    // Skip round shortcut — "S" key
+    if (e.key.toLowerCase() === 's' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        const skipEngine = (typeof getModeEngine === 'function') ? getModeEngine(document.getElementById('mode-select').value) : '';
+        if (skipEngine === 'intruso' && typeof window.skipIntrusoRound === 'function') window.skipIntrusoRound();
+        else if (skipEngine === 'categorizzazione' && typeof window.skipCatRound === 'function') window.skipCatRound();
+    }
 }
 
 // --- SAVE SESSION (uses dropdown type, no modal) ---
+// Shows a note prompt overlay, then saves when user confirms
 window.confirmSaveSession = async () => {
     if (!state.activePatientId) return alert("Seleziona prima un paziente in alto.");
-
     const p = state.patients.find(x => x.id === state.activePatientId);
+    if (!p) return;
+
+    // Quaderno/Task Analysis: delegate to their own save handler
+    const mode = document.getElementById('mode-select').value;
+    const engine = getModeEngine(mode);
+    if ((engine === 'quaderno' || engine === 'quaderno_task') && typeof window.saveQuadernoSession === 'function') {
+        return window.saveQuadernoSession();
+    }
+
+    // Show note prompt overlay
+    _showSessionNotePrompt(async (noteText) => {
+        await _doSaveSession(p, noteText);
+    });
+};
+
+// Note prompt overlay for session save
+function _showSessionNotePrompt(onConfirm) {
+    // Remove any existing overlay
+    const existing = document.getElementById('session-note-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'session-note-overlay';
+    overlay.className = 'session-note-overlay';
+    overlay.innerHTML = `
+        <div class="session-note-dialog">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <h4 style="margin:0; color:var(--accent-color); font-size:0.95rem;"><i class="fa-solid fa-sticky-note"></i> Nota sessione (opzionale)</h4>
+                <button onclick="this.closest('.session-note-overlay').remove()" style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:1.1rem;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="daily-note-toolbar" style="border-radius:8px 8px 0 0; margin-bottom:0;">${_noteToolbarHtml()}</div>
+            <div id="session-note-editable" class="note-wysiwyg note-wysiwyg-sm" contenteditable="true" data-placeholder="Aggiungi una nota per questa sessione..."></div>
+            <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:10px;">
+                <button id="session-note-cancel" class="btn btn-ghost" style="padding:6px 16px; font-size:0.85rem;">Annulla</button>
+                <button id="session-note-save" class="btn btn-primary" style="padding:6px 16px; font-size:0.85rem;"><i class="fa-solid fa-floppy-disk"></i> Salva</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const editable = document.getElementById('session-note-editable');
+    const saveBtn = document.getElementById('session-note-save');
+    const cancelBtn = document.getElementById('session-note-cancel');
+
+    saveBtn.onclick = () => {
+        const note = (typeof _editableHtmlToMarkup === 'function' ? _editableHtmlToMarkup(editable) : (editable.textContent || '')).trim();
+        overlay.remove();
+        onConfirm(note || '');
+    };
+    cancelBtn.onclick = () => overlay.remove();
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    editable.focus();
+}
+
+async function _doSaveSession(p, noteText) {
     const mode = document.getElementById('mode-select').value;
     const engine = getModeEngine(mode);
     const type = getSelectedSessionType();
-    if (!p) return;
 
     const isMultiSet = state.multiSetSession && state.multiSetSession.active &&
         (engine === 'search_find' || engine === 'intraverbal_scenari');
@@ -1124,6 +1908,10 @@ window.confirmSaveSession = async () => {
         const setName = customName || defaultName;
         if (customName) saveCustomSessionName(customName);
 
+        // Capture field size
+        const fieldVal = parseInt(document.getElementById('num-stimuli').value);
+        const fieldSize = fieldVal > 0 ? fieldVal : (state.session.playItems ? state.session.playItems.length : totalAll);
+
         const sessionData = {
             date: new Date().toISOString(),
             setId: 'multi_' + allSets.map(s => s.setId).join('_'),
@@ -1135,6 +1923,8 @@ window.confirmSaveSession = async () => {
             total: totalAll,
             percentage: Math.round((totalV / totalAll) * 100),
             sessionType: type,
+            fieldSize: fieldSize,
+            variant: parseInt(document.getElementById('variant-select').value) || 0,
             rawV: totalV,
             rawP: totalP,
             rawX: totalX,
@@ -1147,17 +1937,24 @@ window.confirmSaveSession = async () => {
                 prompts: s.prompts,
                 incorrect: s.incorrect,
                 total: s.total,
-                percentage: s.percentage
+                percentage: s.percentage,
+                variantIndex: s.variantIndex
             }))
         };
+
+        if (noteText) sessionData.note = noteText;
 
         if (type === 'timedelay') {
             sessionData.timeDelaySeconds = getSelectedTDSeconds();
         }
 
         if (!p.history) p.history = [];
+        const _saveBtn = document.getElementById('btn-save-session');
+        if (_saveBtn?.disabled) return; // double-tap: a save is already in flight
+        if (_saveBtn) _saveBtn.disabled = true;
         p.history.push(sessionData);
-        await DB.savePatient(p);
+        try { await DB.savePatient(p); }
+        catch (e) { p.history.pop(); if (_saveBtn) _saveBtn.disabled = false; alert('Salvataggio non riuscito: ' + e.message); return; }
 
         const btn = document.getElementById('btn-save-session');
         btn.innerHTML = '<i class="fa-solid fa-check"></i>';
@@ -1167,9 +1964,13 @@ window.confirmSaveSession = async () => {
         // Reset multi-set session
         state.multiSetSession = null;
 
+        // Refresh set dropdown so last-run % updates immediately
+        if (typeof filterSetsByMode === 'function') filterSetsByMode();
+
         setTimeout(() => {
             btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i>';
             btn.style.background = '#2563eb';
+            btn.disabled = false;
             state.session.active = false;
             document.getElementById('scoring-controls').classList.add('hidden');
             btn.classList.add('hidden');
@@ -1191,8 +1992,15 @@ window.confirmSaveSession = async () => {
 
     let defaultName;
     let setCat = '';
-    if (POOL_ENGINES.includes(engine)) {
+    if (AGGREGATE_POOL_MODES.includes(engine)) {
+        // Aggregate per mode regardless of tags; the tags used are recorded per session
+        defaultName = MODES_CONFIG[mode] || getModeLabel(mode);
+    } else if (POOL_ENGINES.includes(engine)) {
         defaultName = 'Pool: ' + state.selectedPoolTags.join(', ');
+    } else if (engine === 'memoria_lavoro') {
+        const themeLabel = (state._memLavState && typeof MEM_LAV_THEMES !== 'undefined' && MEM_LAV_THEMES[state._memLavState.theme])
+            ? MEM_LAV_THEMES[state._memLavState.theme].label : 'Memoria';
+        defaultName = 'Memoria di Lavoro: ' + themeLabel;
     } else {
         const activeSet = state.savedSets.find(ss => ss.id === state.activeSetId);
         defaultName = activeSet?.name || "Set Rimosso";
@@ -1206,6 +2014,10 @@ window.confirmSaveSession = async () => {
 
     const correct = rawV; // In both modes, only V = correct
 
+    // Capture field size
+    const fieldVal = parseInt(document.getElementById('num-stimuli').value);
+    const fieldSize = fieldVal > 0 ? fieldVal : (state.session.playItems ? state.session.playItems.length : rawTotal);
+
     const sessionData = {
         date: new Date().toISOString(),
         setId: state.activeSetId,
@@ -1217,10 +2029,20 @@ window.confirmSaveSession = async () => {
         total: rawTotal,
         percentage: Math.round((correct / rawTotal) * 100),
         sessionType: type,
+        fieldSize: fieldSize,
+        variant: parseInt(document.getElementById('variant-select').value) || 0,
         rawV: rawV,
         rawP: rawP,
         rawX: rawX
     };
+
+    if (noteText) sessionData.note = noteText;
+
+    // Record which tags were used (for pool modes), so aggregated activities still
+    // show the stimulus source per session.
+    if (POOL_ENGINES.includes(engine) && state.selectedPoolTags && state.selectedPoolTags.length > 0) {
+        sessionData.poolTags = [...state.selectedPoolTags];
+    }
 
     if (type === 'timedelay') {
         sessionData.timeDelaySeconds = getSelectedTDSeconds();
@@ -1246,10 +2068,112 @@ window.confirmSaveSession = async () => {
         sessionData.setName = setName + ` [${phaseLabel} ${stimCount}]`;
     }
 
+    // Memory: efficiency-based scoring + completion metrics
+    if (engine === 'memory' && state.memory) {
+        const m = state.memory;
+        const scored = m.matches + m.memoryErrors;
+        sessionData.correct = m.matches;
+        sessionData.rawV = m.matches;
+        sessionData.rawX = m.memoryErrors;
+        sessionData.rawP = 0;
+        sessionData.prompts = 0;
+        sessionData.total = scored;
+        sessionData.percentage = scored > 0 ? Math.round((m.matches / scored) * 100) : 0;
+        sessionData.memoryStats = {
+            totalPairs: m.totalPairs,
+            matches: m.matches,
+            pairAttempts: m.pairAttempts,
+            memoryErrors: m.memoryErrors,
+            discoveries: m.discoveries,
+            efficiency: sessionData.percentage,
+            durationSeconds: m.endTime && m.startTime ? Math.round((m.endTime - m.startTime) / 1000) : 0,
+            completed: m.completed
+        };
+    }
+
+    // Topologia Compositiva: personaggio, positions, per-position breakdown
+    if (engine === 'topologia_comp' && state._topoCompState) {
+        const tc = state._topoCompState;
+        sessionData.topoSubMode = tc.subMode;
+        if (tc.personaggio) {
+            sessionData.topoPersonaggio = tc.personaggio.label || null;
+        }
+        sessionData.topoEnabledPositions = [...tc.enabledPositions];
+        const breakdown = [];
+        for (const pos of tc.enabledPositions) {
+            const ps = tc.positionStats[pos];
+            if (!ps || ps.total === 0) continue;
+            breakdown.push({
+                position: pos,
+                label: (typeof TOPO_POSITIONS !== 'undefined' && TOPO_POSITIONS[pos]) ? TOPO_POSITIONS[pos].label : pos,
+                correct: ps.correct,
+                prompts: ps.prompts,
+                incorrect: ps.incorrect,
+                total: ps.total,
+                percentage: Math.round((ps.correct / ps.total) * 100)
+            });
+        }
+        if (breakdown.length > 0) sessionData.topoBreakdown = breakdown;
+    }
+
+    // Memoria di Lavoro: theme, span, trial results with per-position detail
+    if (engine === 'memoria_lavoro' && state._memLavState) {
+        const ml = state._memLavState;
+        sessionData.memLavTheme = ml.theme;
+        sessionData.memLavSpan = ml.span;
+        if (ml.trials && ml.trials.length > 0) {
+            sessionData.memLavTrials = ml.trials.map(t => ({
+                sequence: t.sequence,
+                response: t.response,
+                result: t.result,
+                span: t.span,
+                positionAttempts: t.positionAttempts,
+                positionErrors: t.positionErrors,
+                positionResults: t.positionResults,
+                totalErrors: t.totalErrors
+            }));
+        }
+    }
+
+    // Go/No-Go: breakdown of correct/incorrect/prompt split by Go vs No-Go stimuli
+    if (engine === 'go_nogo') {
+        const gn = { go: { correct: 0, incorrect: 0, prompts: 0 }, nogo: { correct: 0, incorrect: 0, prompts: 0 } };
+        Object.entries(state.session.itemResults).forEach(([key, res]) => {
+            const cat = key.includes('_nogo_') ? 'nogo' : (key.includes('_go_') ? 'go' : null);
+            if (!cat) return;
+            if (res === true) gn[cat].correct++;
+            else if (res === 'prompt') gn[cat].prompts++;
+            else if (res === false) gn[cat].incorrect++;
+        });
+        const goTotal = gn.go.correct + gn.go.incorrect + gn.go.prompts;
+        const nogoTotal = gn.nogo.correct + gn.nogo.incorrect + gn.nogo.prompts;
+        sessionData.goNogoBreakdown = {
+            go: { ...gn.go, total: goTotal, percentage: goTotal > 0 ? Math.round((gn.go.correct / goTotal) * 100) : 0 },
+            nogo: { ...gn.nogo, total: nogoTotal, percentage: nogoTotal > 0 ? Math.round((gn.nogo.correct / nogoTotal) * 100) : 0 }
+        };
+        if (state._goNogoState && state._goNogoState.noGoTag) sessionData.goNogoTag = state._goNogoState.noGoTag;
+    }
+
     // Save per-item details for modes with labeled items
-    if (engine === 'ran_intensivo' && state.session._riDetails && state.session._riDetails.length > 0) {
+    if (engine === 'memory' && state.memory) {
+        sessionData.itemDetails = Object.entries(state.memory.pairDetails).map(([label, d]) => ({
+            label: label,
+            attempts: d.attempts,
+            errors: Math.max(0, d.attempts - 1),
+            result: d.attempts === 1
+        }));
+    } else if (engine === 'ran_intensivo' && state.session._riDetails && state.session._riDetails.length > 0) {
         sessionData.itemDetails = state.session._riDetails;
+    } else if (engine === 'singolare_plurale' && state.session._spDetails && state.session._spDetails.length > 0) {
+        sessionData.itemDetails = state.session._spDetails.map(d => ({
+            label: d.form === 'plural' ? `${d.label} (${d.count})` : `${d.label} (sing.)`,
+            result: d.result
+        }));
+        sessionData.spSubMode = state.spState?.subMode;
     } else {
+        if (state.session._fluenzaDetails && state.session._fluenzaDetails.length > 0) {
+            sessionData.itemDetails = state.session._fluenzaDetails;
+        } else {
         const playItems = state.session.playItems || [];
         if (playItems.length > 0 && Object.keys(state.session.itemResults).length > 0) {
             const itemDetails = [];
@@ -1258,33 +2182,46 @@ window.confirmSaveSession = async () => {
                 const item = !isNaN(idx) ? playItems[idx] : null;
                 const label = item ? (item.label || item.l || `Item ${idx + 1}`) : null;
                 if (label) {
-                    itemDetails.push({ label, result });
+                    // Tag the variant so the per-word analysis can compare
+                    // the same word across different picture variants.
+                    const _v = sessionData.variant || 0;
+                    itemDetails.push(_v ? { label, result, variant: _v } : { label, result });
                 }
             }
             if (itemDetails.length > 0) {
                 sessionData.itemDetails = itemDetails;
             }
         }
+        }
     }
 
     if (!p.history) p.history = [];
+    const _saveBtn = document.getElementById('btn-save-session');
+    if (_saveBtn?.disabled) return; // double-tap: a save is already in flight
+    if (_saveBtn) _saveBtn.disabled = true;
     p.history.push(sessionData);
-    await DB.savePatient(p);
+    try { await DB.savePatient(p); }
+    catch (e) { p.history.pop(); if (_saveBtn) _saveBtn.disabled = false; alert('Salvataggio non riuscito: ' + e.message); return; }
 
     const btn = document.getElementById('btn-save-session');
     btn.innerHTML = '<i class="fa-solid fa-check"></i>';
     btn.style.background = 'var(--success-color)';
     if (nameInput) nameInput.value = '';
+
+    // Refresh set dropdown so last-run % updates immediately
+    if (typeof filterSetsByMode === 'function') filterSetsByMode();
+
     setTimeout(() => {
         btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i>';
         btn.style.background = '#2563eb';
+        btn.disabled = false;
         state.session.active = false;
         document.getElementById('scoring-controls').classList.add('hidden');
         btn.classList.add('hidden');
         const sessionNameWrapper = document.getElementById('session-name-wrapper');
         if (sessionNameWrapper) sessionNameWrapper.classList.add('hidden');
     }, 1000);
-};
+}
 
 // Show session name input when session becomes saveable
 window.showSessionNameInput = () => {
@@ -1326,7 +2263,7 @@ function renderLibSortBar() {
         { key: 'category', icon: 'fa-folder', label: 'Categoria' },
         { key: 'name', icon: 'fa-font', label: 'Nome' },
         { key: 'recent', icon: 'fa-clock', label: 'Recenti' },
-        { key: 'items-desc', icon: 'fa-arrow-down-9-1', label: 'N. stimoli' },
+        { key: 'items-desc', icon: 'fa-arrow-down-9-1', label: 'Field' },
         { key: 'modes', icon: 'fa-gamepad', label: 'Modalit\u00E0' }
     ];
     bar.innerHTML = opts.map(o =>
@@ -1406,7 +2343,12 @@ function renderLibCard(s, idxInCat, catLength) {
     const previews = s.items.filter(i => i.url).slice(0, 4);
     let previewHtml = '';
 
-    if (previews.length > 0) {
+    if (s.coverImage) {
+        // A custom cover always wins over the auto-generated 4-image preview.
+        previewHtml = `<div style="height:120px; border-radius:8px; overflow:hidden; background:rgba(0,0,0,0.3); margin-bottom:8px;">
+            <img src="${s.coverImage}" loading="lazy" alt="" style="width:100%; height:100%; object-fit:cover;">
+        </div>`;
+    } else if (previews.length > 0) {
         previewHtml = `<div class="lib-preview-grid" style="display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:2px; height:120px; border-radius:8px; overflow:hidden; background:rgba(0,0,0,0.3); margin-bottom:8px;">
             ${previews.map(i => `<img src="${i.url}" style="width:100%; height:100%; object-fit:cover;">`).join('')}
             ${previews.length < 4 ? Array(4 - previews.length).fill('<div style="background:rgba(255,255,255,0.05);"></div>').join('') : ''}
@@ -1451,6 +2393,22 @@ function renderLibCard(s, idxInCat, catLength) {
         </div>`;
     }
 
+    // Count across base + variants: a set with variants has several pictures
+    // per item, each with its own cut-out.
+    const _vCount = (s.variantNames || []).length;
+    let imgCount = 0, maskedCount = 0;
+    s.items.forEach(i => {
+        if (i.url) imgCount++;
+        if (i.maskedUrl) maskedCount++;
+        for (let v = 1; v <= _vCount; v++) {
+            if (i.variantUrls && i.variantUrls[v]) imgCount++;
+            if (i.variantMaskedUrls && i.variantMaskedUrls[v]) maskedCount++;
+        }
+    });
+    const scontornoIcon = maskedCount === imgCount && imgCount > 0
+        ? 'color:var(--success-color)'
+        : (maskedCount > 0 ? 'color:var(--warning-color)' : 'opacity:0.4');
+
     return `
     <div class="lib-card ${s.isClinical ? 'clinical' : ''}">
         ${reorderHtml}
@@ -1469,8 +2427,20 @@ function renderLibCard(s, idxInCat, catLength) {
             <button class="btn btn-ghost" style="padding:6px 12px;" onclick="editSet('${s.id}')" title="Modifica">
                 <i class="fa-solid fa-pen"></i>
             </button>
+            <button class="btn btn-ghost" style="padding:6px 12px;" onclick="scontornaSet('${s.id}')" title="Scontorna set (${maskedCount}/${imgCount})">
+                <i class="fa-solid fa-eraser" style="${scontornoIcon}"></i>
+            </button>
+            <button class="btn btn-ghost" style="padding:6px 12px; ${s.coverImage ? 'color:var(--success-color); border-color:rgba(16,185,129,0.3);' : ''}" onclick="uploadSetCoverImage('${s.id}')" title="${s.coverImage ? 'Cambia copertina' : 'Immagine di copertina'}">
+                <i class="fa-solid fa-image"></i>
+            </button>
+            ${s.coverImage ? `<button class="btn btn-ghost" style="padding:6px 12px; color:var(--danger-color); border-color:rgba(239,68,68,0.3);" onclick="removeSetCoverImage('${s.id}')" title="Rimuovi copertina">
+                <i class="fa-solid fa-image-slash"></i>
+            </button>` : ''}
             <button class="btn btn-ghost" style="padding:6px 12px;" onclick="exportSingleSet('${s.id}')" title="Esporta file">
                 <i class="fa-solid fa-file-export"></i>
+            </button>
+            <button class="btn btn-ghost" style="padding:6px 12px; color:#fbbf24; border-color:rgba(251,191,36,0.3);" onclick="quickShareSetDirect('${s.id}')" title="Quick Share">
+                <i class="fa-solid fa-share-from-square"></i>
             </button>
             <button class="btn btn-ghost" style="padding:6px 12px; color:var(--accent-color); border-color:rgba(99,102,241,0.3);" onclick="p2pSendSet('${s.id}')" title="Invia via P2P">
                 <i class="fa-solid fa-wifi"></i>
@@ -1481,6 +2451,40 @@ function renderLibCard(s, idxInCat, catLength) {
         </div>
     </div>`;
 }
+
+window.scontornaSet = async (setId) => {
+    if (typeof removeBackground !== 'function') return;
+    const s = state.savedSets.find(x => x.id === setId);
+    if (!s) return;
+
+    const items = s.items.filter(i => i.url && !i.maskedUrl);
+    if (items.length === 0) {
+        const allMasked = s.items.filter(i => i.maskedUrl).length;
+        if (allMasked > 0) {
+            const redo = await themedConfirm(`Tutte le ${allMasked} immagini sono già scontornate. Vuoi rifare lo scontorno?`);
+            if (!redo) return;
+            s.items.forEach(i => { if (i.maskedUrl) delete i.maskedUrl; });
+            return scontornaSet(setId);
+        }
+        return;
+    }
+
+    const btn = document.querySelector(`[onclick*="scontornaSet('${setId}')"]`);
+    const originalHtml = btn ? btn.innerHTML : '';
+    const tolerance = typeof getScontornoTolerance === 'function' ? getScontornoTolerance() : 35;
+    let done = 0;
+
+    for (const item of items) {
+        const result = await removeBackground(item.url, tolerance);
+        if (result) item.maskedUrl = result;
+        done++;
+        if (btn) btn.innerHTML = `<span style="font-size:0.6rem;">${done}/${items.length}</span>`;
+    }
+
+    await DB.saveSet(s);
+    if (btn) btn.innerHTML = originalHtml;
+    renderLibList();
+};
 
 // Move set position within its category
 window.moveSetInCategory = async (setId, dir) => {
@@ -1529,7 +2533,7 @@ window.loadSet = async (id) => {
 
 // FIX: No more page reload for create/delete
 window.createEmptySet = async () => {
-    const name = prompt("Nome del nuovo Set?");
+    const name = await themedPrompt("Nome del nuovo Set?");
     if (!name) return;
     const newSet = {
         id: Date.now().toString(),
@@ -1546,7 +2550,7 @@ window.createEmptySet = async () => {
 };
 
 window.deleteSet = async (id) => {
-    if (confirm("Eliminare definitivamente?")) {
+    if (await themedConfirm("Eliminare definitivamente?")) {
         await DB.deleteSet(id);
         await reloadLibrary();
     }
@@ -1559,7 +2563,11 @@ const MODE_ICONS = {
     search_find: 'fa-magnifying-glass', intraverbal_scenari: 'fa-comments',
     pool_random: 'fa-shuffle', pool_intraverbal: 'fa-random', intruso: 'fa-ban',
     topologia: 'fa-map-pin', sequenze: 'fa-arrow-right-arrow-left', categorizzazione: 'fa-sitemap',
-    zoom: 'fa-search-plus', quaderno: 'fa-book-open', quaderno_task: 'fa-list-check'
+    zoom: 'fa-search-plus', quaderno: 'fa-book-open', quaderno_task: 'fa-list-check',
+    ricorda: 'fa-brain', singolare_plurale: 'fa-1',
+    stroop_numerico: 'fa-hashtag', go_nogo: 'fa-traffic-light', stroop_etichetta: 'fa-font',
+    topologia_comp: 'fa-layer-group',
+    memoria_lavoro: 'fa-cubes-stacked'
 };
 
 // Curated FA icon list for icon picker
@@ -1589,7 +2597,12 @@ function getModeIcon(modeKey) {
     if (layout.modeIcons && layout.modeIcons[modeKey]) return layout.modeIcons[modeKey];
     return MODE_ICONS[getModeEngine(modeKey)] || 'fa-puzzle-piece';
 }
-const DEFAULT_GROUP_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899'];
+const DEFAULT_GROUP_COLORS_FALLBACK = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6', '#ec4899'];
+function getThemeGroupColors() {
+    const s = getComputedStyle(document.documentElement);
+    return [1,2,3,4,5,6].map(i => s.getPropertyValue('--cat-' + i).trim() || DEFAULT_GROUP_COLORS_FALLBACK[i - 1]);
+}
+const DEFAULT_GROUP_COLORS = DEFAULT_GROUP_COLORS_FALLBACK;
 
 // --- RENDER MODE SELECT (custom dropdown + hidden select sync) ---
 function renderModeSelect() {
@@ -1617,9 +2630,10 @@ function renderModeSelect() {
     const label = document.getElementById('mode-dropdown-label');
     if (!panel) return;
 
+    const _themeColors = getThemeGroupColors();
     let html = '';
     layout.groups.forEach((group, gi) => {
-        const color = (layout.groupColors && layout.groupColors[gi]) || DEFAULT_GROUP_COLORS[gi % DEFAULT_GROUP_COLORS.length];
+        const color = (layout.groupColors && layout.groupColors[gi]) || _themeColors[gi % _themeColors.length];
         if (group.name) {
             html += `<div class="mode-group-header" style="color:${color};">
                 <span class="mode-group-dot" style="background:${color};"></span>${group.name}
@@ -1764,7 +2778,8 @@ function renderActivityLayoutBody() {
 
     groups.forEach((group, gi) => {
         const groupName = group.name || '(Principale)';
-        const groupColor = (_editingLayout.groupColors[gi]) || DEFAULT_GROUP_COLORS[gi % DEFAULT_GROUP_COLORS.length];
+        const _tc = getThemeGroupColors();
+        const groupColor = (_editingLayout.groupColors[gi]) || _tc[gi % _tc.length];
         html += `
         <div style="background:rgba(0,0,0,0.2); border-radius:12px; padding:12px; margin-bottom:10px; border:1px solid rgba(255,255,255,0.08); border-left:3px solid ${groupColor};">
             <div style="display:flex; gap:6px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">
@@ -1898,8 +2913,8 @@ window.confirmAddCustomMode = () => {
     renderActivityLayoutBody();
 };
 
-window.deleteCustomMode = (modeKey, gi, mi) => {
-    if (!confirm('Eliminare questa attivit\u00e0 personalizzata?')) return;
+window.deleteCustomMode = async (modeKey, gi, mi) => {
+    if (!await themedConfirm('Eliminare questa attività personalizzata?')) return;
     _editingLayout.groups[gi].modes.splice(mi, 1);
     if (_editingLayout.customModes) delete _editingLayout.customModes[modeKey];
     if (_editingLayout.modeEmojis) delete _editingLayout.modeEmojis[modeKey];
@@ -2067,14 +3082,14 @@ document.addEventListener('DOMContentLoaded', () => {
     overrideModalOpen('openFirebaseSettings', 'firebase');
 
     // Funzione globale che prova a chiudere l'ultima cosa aperta
-    const goBackOrClose = () => {
+    const goBackOrClose = async () => {
         const openModals = Array.from(document.querySelectorAll('.modal-fs.open, .modal.open, .modal-small.open'));
         if (openModals.length > 0) {
             const topModal = openModals[openModals.length - 1];
             topModal.classList.remove('open');
             return true;
         } else if (typeof state !== 'undefined' && state.session && state.session.active) {
-            if (confirm("Attività in corso. Vuoi tornare al menu e azzerare i dati correnti?")) {
+            if (await themedConfirm("Attività in corso. Vuoi tornare al menu e azzerare i dati correnti?")) {
                 window.location.reload();
             }
             return true; // We handled it
@@ -2102,6 +3117,50 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// --- VARIANT SELECTOR ---
+function _updateVariantSelector() {
+    const wrapper = document.getElementById('variant-selector-wrapper');
+    const select = document.getElementById('variant-select');
+    if (!wrapper || !select) return;
+
+    const activeSet = state.activeSetId ? state.savedSets.find(s => s.id === state.activeSetId) : null;
+    const variantNames = activeSet?.variantNames;
+
+    if (variantNames && variantNames.length > 0) {
+        wrapper.classList.remove('hidden');
+        select.innerHTML = '<option value="0">Base</option>';
+        variantNames.forEach((name, i) => {
+            const opt = document.createElement('option');
+            opt.value = i + 1;
+            opt.textContent = name;
+            select.appendChild(opt);
+        });
+    } else {
+        wrapper.classList.add('hidden');
+        select.innerHTML = '<option value="0">Base</option>';
+        select.value = '0';
+    }
+}
+
+window.onVariantChange = () => {
+    window.startGame();
+};
+
+// --- GAME AREA FULLSCREEN ---
+window.toggleGameFullscreen = () => {
+    const shell = document.querySelector('.app-shell');
+    if (!shell) return;
+    const isFs = shell.classList.toggle('game-fullscreen');
+    const icon = document.getElementById('game-fs-icon');
+    if (icon) {
+        icon.className = isFs
+            ? 'fa-solid fa-down-left-and-up-right-to-center'
+            : 'fa-solid fa-up-right-and-down-left-from-center';
+    }
+    const btn = document.getElementById('btn-game-fullscreen');
+    if (btn) btn.classList.toggle('pen-active', isFs);
+};
+
 // === FAB MENU (collapsible floating tools) ===
 window.toggleFabMenu = () => {
     const items = document.getElementById('fab-menu-items');
@@ -2114,5 +3173,638 @@ window.toggleFabMenu = () => {
     const icon = document.getElementById('fab-toggle-icon');
     if (icon) {
         icon.className = isCollapsed ? 'fa-solid fa-xmark' : 'fa-solid fa-wrench';
+    }
+};
+
+// ============================================================
+// VISUAL PROMPT BUTTONS (touchable by children during activities)
+// ============================================================
+
+const DEFAULT_VISUAL_PROMPTS = [
+    { id: 'aiuto', label: 'Aiuto', icon: 'fa-circle-question', image: null, color: '#3b82f6', enabled: true },
+    { id: 'stop', label: 'Stop', icon: 'fa-hand', image: null, color: '#ef4444', enabled: true },
+    { id: 'ancora', label: 'Ancora', icon: 'fa-rotate-right', image: null, color: '#10b981', enabled: true },
+    { id: 'si', label: 'Sì', icon: 'fa-thumbs-up', image: null, color: '#22c55e', enabled: true },
+    { id: 'no', label: 'No', icon: 'fa-thumbs-down', image: null, color: '#f97316', enabled: true }
+];
+
+function getVisualPrompts() {
+    try {
+        const saved = localStorage.getItem('visualPromptButtons');
+        if (saved) return JSON.parse(saved);
+    } catch {}
+    return DEFAULT_VISUAL_PROMPTS.map(p => ({ ...p }));
+}
+
+function saveVisualPrompts(prompts) {
+    localStorage.setItem('visualPromptButtons', JSON.stringify(prompts));
+}
+
+function isVisualPromptBarVisible() {
+    return localStorage.getItem('vpb_visible') === 'true';
+}
+
+function setVisualPromptBarVisible(visible) {
+    localStorage.setItem('vpb_visible', visible ? 'true' : 'false');
+}
+
+window.toggleVisualPromptBar = () => {
+    const bar = document.getElementById('visual-prompt-bar');
+    if (!bar) return;
+    const isVisible = !bar.classList.contains('hidden');
+    if (isVisible) {
+        bar.classList.add('hidden');
+        setVisualPromptBarVisible(false);
+        document.getElementById('btn-visual-prompts')?.classList.remove('pen-active');
+    } else {
+        renderVisualPromptBar();
+        bar.classList.remove('hidden');
+        setVisualPromptBarVisible(true);
+        document.getElementById('btn-visual-prompts')?.classList.add('pen-active');
+    }
+};
+
+function renderVisualPromptBar() {
+    const bar = document.getElementById('visual-prompt-bar');
+    if (!bar) return;
+    const prompts = getVisualPrompts().filter(p => p.enabled);
+
+    let html = '';
+    prompts.forEach(p => {
+        const content = p.image
+            ? `<img src="${p.image}" alt="${p.label}" draggable="false">`
+            : `<i class="fa-solid ${p.icon}"></i>`;
+        html += `<button class="vpb-btn" data-vpb-id="${p.id}" style="--vpb-color:${p.color};" ontouchstart="vpbTap(this)" onmousedown="vpbTap(this)">
+            <div class="vpb-content">${content}</div>
+            <span class="vpb-label">${p.label}</span>
+        </button>`;
+    });
+
+    html += `<button class="vpb-config-btn" onclick="openVisualPromptConfig()" title="Configura"><i class="fa-solid fa-gear"></i></button>`;
+    bar.innerHTML = html;
+}
+
+window.vpbTap = (btn) => {
+    btn.classList.remove('vpb-active');
+    void btn.offsetWidth;
+    btn.classList.add('vpb-active');
+    setTimeout(() => btn.classList.remove('vpb-active'), 2500);
+};
+
+window.openVisualPromptConfig = () => {
+    const prompts = getVisualPrompts();
+    const existing = document.getElementById('vpb-config-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'vpb-config-modal';
+    modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:25000; display:flex; align-items:center; justify-content:center; padding:20px;';
+
+    let itemsHtml = prompts.map((p, i) => {
+        const preview = p.image
+            ? `<img src="${p.image}" style="width:36px;height:36px;border-radius:8px;object-fit:cover;" alt="">`
+            : `<div style="width:36px;height:36px;border-radius:8px;background:${p.color}20;display:flex;align-items:center;justify-content:center;"><i class="fa-solid ${p.icon}" style="color:${p.color};font-size:1rem;"></i></div>`;
+        return `<div style="display:flex; align-items:center; gap:10px; padding:8px; background:rgba(255,255,255,0.03); border-radius:8px; margin-bottom:6px;">
+            <label style="display:flex; align-items:center;"><input type="checkbox" ${p.enabled ? 'checked' : ''} onchange="vpbToggleEnabled(${i}, this.checked)"></label>
+            ${preview}
+            <input type="text" value="${p.label}" onchange="vpbChangeLabel(${i}, this.value)" style="flex:1; padding:4px 8px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.3); color:white; font-size:0.85rem;">
+            <input type="color" value="${p.color}" onchange="vpbChangeColor(${i}, this.value)" style="width:30px; height:30px; border:none; border-radius:6px; cursor:pointer;">
+            <button class="btn-icon" style="width:28px; height:28px; font-size:0.7rem; color:#10b981;" onclick="vpbSearchArasaac(${i})" title="Cerca pittogramma ARASAAC"><i class="fa-solid fa-icons"></i></button>
+            <button class="btn-icon" style="width:28px; height:28px; font-size:0.7rem; color:var(--accent-color);" onclick="vpbUploadImage(${i})" title="Carica immagine"><i class="fa-solid fa-image"></i></button>
+            ${p.image ? `<button class="btn-icon" style="width:28px; height:28px; font-size:0.7rem; color:var(--warning-color);" onclick="vpbRemoveImage(${i})" title="Rimuovi immagine (torna all'icona)"><i class="fa-solid fa-eraser"></i></button>` : ''}
+            <button class="btn-icon" style="width:28px; height:28px; font-size:0.7rem; color:var(--danger-color);" onclick="vpbDeletePrompt(${i})" title="Elimina questo tasto"><i class="fa-solid fa-trash"></i></button>
+        </div>`;
+    }).join('');
+
+    modal.innerHTML = `
+    <div style="width:100%; max-width:500px; background:#1e1e2f; border-radius:16px; border:1px solid var(--glass-border); padding:22px; max-height:90vh; overflow-y:auto;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+            <h3 style="margin:0; color:var(--accent-color);"><i class="fa-solid fa-hand-pointer"></i> Prompt Visivi</h3>
+            <button class="btn btn-ghost" onclick="document.getElementById('vpb-config-modal').remove()" style="padding:6px 10px;"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <p style="font-size:0.8rem; color:var(--text-secondary); margin:0 0 16px;">Tasti toccabili dal bambino durante le attività. Seleziona quali mostrare e personalizza immagini e colori.</p>
+        <div id="vpb-config-items">${itemsHtml}</div>
+        <div style="margin-top:12px; display:flex; gap:8px;">
+            <button class="btn btn-ghost" onclick="vpbAddPrompt()" style="padding:6px 14px; font-size:0.8rem;"><i class="fa-solid fa-plus"></i> Aggiungi</button>
+            <button class="btn btn-ghost" onclick="vpbResetDefaults()" style="padding:6px 14px; font-size:0.8rem; color:var(--warning-color); border-color:rgba(245,158,11,0.3);"><i class="fa-solid fa-rotate-left"></i> Ripristina</button>
+        </div>
+    </div>`;
+
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    document.body.appendChild(modal);
+};
+
+window.vpbToggleEnabled = (idx, enabled) => {
+    const prompts = getVisualPrompts();
+    if (prompts[idx]) { prompts[idx].enabled = enabled; saveVisualPrompts(prompts); renderVisualPromptBar(); }
+};
+
+window.vpbChangeLabel = (idx, label) => {
+    const prompts = getVisualPrompts();
+    if (prompts[idx]) { prompts[idx].label = label; saveVisualPrompts(prompts); renderVisualPromptBar(); }
+};
+
+window.vpbChangeColor = (idx, color) => {
+    const prompts = getVisualPrompts();
+    if (prompts[idx]) { prompts[idx].color = color; saveVisualPrompts(prompts); renderVisualPromptBar(); }
+};
+
+window.vpbUploadImage = (idx) => {
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = 'image/*';
+    input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const size = Math.min(img.width, img.height, 200);
+                canvas.width = size; canvas.height = size;
+                const ctx = canvas.getContext('2d');
+                const sx = (img.width - size) / 2, sy = (img.height - size) / 2;
+                ctx.drawImage(img, sx, sy, size, size, 0, 0, size, size);
+                const prompts = getVisualPrompts();
+                if (prompts[idx]) {
+                    prompts[idx].image = canvas.toDataURL('image/jpeg', 0.85);
+                    saveVisualPrompts(prompts);
+                    renderVisualPromptBar();
+                    openVisualPromptConfig();
+                }
+            };
+            img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+    };
+    input.click();
+};
+
+window.vpbRemoveImage = (idx) => {
+    const prompts = getVisualPrompts();
+    if (prompts[idx]) { prompts[idx].image = null; saveVisualPrompts(prompts); renderVisualPromptBar(); openVisualPromptConfig(); }
+};
+
+window.vpbDeletePrompt = (idx) => {
+    const prompts = getVisualPrompts();
+    if (!prompts[idx]) return;
+    if (!confirm(`Eliminare il tasto "${prompts[idx].label}"?`)) return;
+    prompts.splice(idx, 1);
+    saveVisualPrompts(prompts);
+    renderVisualPromptBar();
+    openVisualPromptConfig();
+};
+
+// Search ARASAAC pictograms for a visual prompt button
+window.vpbSearchArasaac = (idx) => {
+    if (typeof searchArasaac !== 'function') { alert('Ricerca ARASAAC non disponibile.'); return; }
+    const prompts = getVisualPrompts();
+    const defaultQuery = prompts[idx]?.label || '';
+
+    const existing = document.getElementById('vpb-arasaac-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'vpb-arasaac-modal';
+    modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:26000; display:flex; align-items:center; justify-content:center; padding:20px;';
+    modal.innerHTML = `
+    <div style="width:100%; max-width:460px; background:#1e1e2f; border-radius:16px; border:1px solid var(--glass-border); padding:20px; max-height:85vh; overflow-y:auto;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <h3 style="margin:0; color:#10b981; font-size:1rem;"><i class="fa-solid fa-icons"></i> Pittogramma ARASAAC</h3>
+            <button class="btn btn-ghost" onclick="document.getElementById('vpb-arasaac-modal').remove()" style="padding:6px 10px;"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div style="display:flex; gap:6px; margin-bottom:10px;">
+            <input type="text" id="vpb-arasaac-query" value="${(defaultQuery || '').replace(/"/g, '&quot;')}" placeholder="Cerca..." onkeydown="if(event.key==='Enter')vpbRunArasaacSearch(${idx})" style="flex:1; padding:9px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white;">
+            <button class="btn ai-arasaac-btn" onclick="vpbAiArasaacSearch(${idx})" style="padding:9px 12px; background:rgba(168,85,247,0.15); border:1px solid rgba(168,85,247,0.4); border-radius:8px; color:#a855f7; cursor:pointer;" title="Ottimizza con AI"><i class="fa-solid fa-wand-magic-sparkles"></i></button>
+            <button class="btn btn-primary" onclick="vpbRunArasaacSearch(${idx})" style="padding:9px 14px;"><i class="fa-solid fa-search"></i></button>
+        </div>
+        <div id="vpb-arasaac-results"></div>
+    </div>`;
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    document.body.appendChild(modal);
+    if (defaultQuery) vpbRunArasaacSearch(idx);
+};
+
+window.vpbRunArasaacSearch = async (idx) => {
+    const query = document.getElementById('vpb-arasaac-query')?.value?.trim();
+    const container = document.getElementById('vpb-arasaac-results');
+    if (!query || !container) return;
+    container.innerHTML = '<div style="text-align:center; padding:20px;"><div class="loading-spinner" style="margin:0 auto;"></div></div>';
+    try {
+        const results = await searchArasaac(query, 16);
+        if (results.length === 0) {
+            container.innerHTML = '<div style="text-align:center; padding:15px; color:var(--text-secondary); font-size:0.85rem;">Nessun pittogramma trovato.</div>';
+            return;
+        }
+        window._vpbArasaacResults = results;
+        container.innerHTML = `<div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px;">
+            ${results.map((r, i) => `<div onclick="vpbPickArasaac(${idx}, ${i})" style="cursor:pointer; background:#fff; border-radius:8px; padding:4px; border:2px solid transparent;" onmouseover="this.style.borderColor='#10b981'" onmouseout="this.style.borderColor='transparent'">
+                <img src="${r.preview}" loading="lazy" alt="${(r.tags || '').replace(/"/g, '&quot;')}" style="width:100%; aspect-ratio:1; object-fit:contain;">
+            </div>`).join('')}
+        </div>`;
+    } catch (err) {
+        container.innerHTML = `<div style="text-align:center; padding:15px; color:var(--danger-color); font-size:0.85rem;">${err.message}</div>`;
+    }
+};
+
+window.vpbAiArasaacSearch = async (idx) => {
+    const input = document.getElementById('vpb-arasaac-query');
+    const query = input?.value?.trim();
+    if (!query) return;
+
+    const btn = document.querySelector('#vpb-arasaac-modal .ai-arasaac-btn');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles fa-spin"></i>'; }
+
+    try {
+        const result = await aiNormalizeArasaacQuery(query);
+        if (result && result.query) {
+            input.value = result.query;
+            vpbRunArasaacSearch(idx);
+        }
+    } catch (err) {
+        alert('Errore AI: ' + err.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i>'; }
+    }
+};
+
+window.vpbPickArasaac = async (idx, resultIndex) => {
+    const results = window._vpbArasaacResults;
+    if (!results || !results[resultIndex]) return;
+    const container = document.getElementById('vpb-arasaac-results');
+    if (container) container.innerHTML = '<div style="text-align:center; padding:20px;"><div class="loading-spinner" style="margin:0 auto;"></div><p style="color:#a5b4fc; font-size:0.8rem;">Download...</p></div>';
+    try {
+        const dataUrl = await fetchPixabayAsDataUrl(results[resultIndex].web);
+        const prompts = getVisualPrompts();
+        if (prompts[idx]) {
+            prompts[idx].image = dataUrl;
+            saveVisualPrompts(prompts);
+            renderVisualPromptBar();
+        }
+        document.getElementById('vpb-arasaac-modal')?.remove();
+        openVisualPromptConfig();
+    } catch (err) {
+        alert('Errore download: ' + err.message);
+    }
+};
+
+window.vpbAddPrompt = () => {
+    const prompts = getVisualPrompts();
+    prompts.push({ id: 'custom_' + Date.now(), label: 'Nuovo', icon: 'fa-star', image: null, color: '#a78bfa', enabled: true });
+    saveVisualPrompts(prompts);
+    openVisualPromptConfig();
+    renderVisualPromptBar();
+};
+
+window.vpbResetDefaults = () => {
+    saveVisualPrompts(DEFAULT_VISUAL_PROMPTS.map(p => ({ ...p })));
+    renderVisualPromptBar();
+    openVisualPromptConfig();
+};
+
+// Auto-show prompt bar if it was visible in previous session
+if (isVisualPromptBarVisible()) {
+    document.addEventListener('DOMContentLoaded', () => {
+        const bar = document.getElementById('visual-prompt-bar');
+        if (bar) { renderVisualPromptBar(); bar.classList.remove('hidden'); }
+        document.getElementById('btn-visual-prompts')?.classList.add('pen-active');
+    });
+}
+
+// ============================================================
+// NOTEBOOK SIDE PANEL (accessible during activities)
+// ============================================================
+
+// The side panel hosts an independent "Quaderno" (scorable item lists). It is
+// fully isolated from the main activity: it uses its own state object
+// (_sideQuaderno) and its own save routine, so it never touches state.session
+// or state._quaderno*. On save it appends 'quaderno' sessions to the active
+// patient's history — operating on the same in-memory patient object the main
+// save uses — so its LUs count in the day's totals with no data conflict.
+
+let _notebookPanelOpen = false;
+let _notebookHandleVisible = false;
+
+function _sideQuadernoStorageKey() {
+    const pid = state.activePatientId || 'guest';
+    return `side_quaderno_${pid}`;
+}
+
+function _loadSideQuaderno() {
+    try {
+        const raw = localStorage.getItem(_sideQuadernoStorageKey());
+        if (raw) {
+            const data = JSON.parse(raw);
+            // Stale data from a previous day is discarded (LUs are per-day)
+            if (data.date === new Date().toISOString().split('T')[0]) {
+                return data;
+            }
+        }
+    } catch {}
+    return { date: new Date().toISOString().split('T')[0], rows: [], sessionType: 'independent', tdSeconds: 5 };
+}
+
+function _saveSideQuaderno() {
+    if (!state._sideQuaderno) return;
+    try { localStorage.setItem(_sideQuadernoStorageKey(), JSON.stringify(state._sideQuaderno)); } catch {}
+}
+
+window.toggleNotebookHandle = () => {
+    const handle = document.getElementById('notebook-tab-handle');
+    const btn = document.getElementById('btn-notebook-panel');
+    if (!handle) return;
+    _notebookHandleVisible = !_notebookHandleVisible;
+    handle.classList.toggle('hidden', !_notebookHandleVisible);
+    if (btn) btn.classList.toggle('pen-active', _notebookHandleVisible);
+    if (!_notebookHandleVisible && _notebookPanelOpen) {
+        toggleNotebookPanel();
+    }
+};
+
+window.toggleNotebookPanel = () => {
+    const panel = document.getElementById('notebook-side-panel');
+    if (!panel) return;
+    _notebookPanelOpen = !_notebookPanelOpen;
+    panel.classList.toggle('open', _notebookPanelOpen);
+    if (_notebookPanelOpen) renderNotebookPanel();
+};
+
+function renderNotebookPanel() {
+    const body = document.getElementById('notebook-panel-body');
+    if (!body) return;
+
+    // (Re)load isolated side-quaderno state
+    if (!state._sideQuaderno) state._sideQuaderno = _loadSideQuaderno();
+    const sq = state._sideQuaderno;
+
+    const patientName = state.activePatientId
+        ? (state.patients.find(p => p.id === state.activePatientId)?.name || 'Paziente')
+        : null;
+
+    const isTD = sq.sessionType === 'timedelay';
+    const totalLU = sq.rows.reduce((sum, r) => sum + (r.results ? r.results.length : 0), 0);
+
+    // Activity name suggestions (reuse the same source as the main quaderno)
+    const activityNames = (typeof getUsedActivityNames === 'function') ? getUsedActivityNames() : [];
+    const datalistOpts = activityNames.map(n => `<option value="${n.replace(/"/g, '&quot;')}">`).join('');
+
+    // Saved quaderno lists available to preload (general lists only)
+    const savedLists = _getSideQuadernoLists();
+    const loadOptsHtml = savedLists.map(l =>
+        `<option value="${l.key.replace(/"/g, '&quot;')}">${(l.name || '').replace(/</g, '&lt;')} (${l.count})</option>`
+    ).join('');
+
+    let html = `
+    <div style="margin-bottom:10px; padding:8px 10px; background:rgba(99,102,241,0.08); border-radius:10px; font-size:0.78rem; color:var(--text-secondary); display:flex; justify-content:space-between; align-items:center;">
+        <span><i class="fa-solid fa-user" style="margin-right:4px;"></i> ${patientName || '<span style="color:var(--warning-color);">Nessun paziente</span>'}</span>
+        ${totalLU > 0 ? `<span style="background:rgba(99,102,241,0.2); color:var(--accent-color); padding:2px 8px; border-radius:6px; font-weight:bold; font-size:0.7rem;">${totalLU} LU</span>` : ''}
+    </div>
+
+    <div style="font-size:0.72rem; color:var(--text-secondary); margin-bottom:10px; line-height:1.4;">
+        Registra item extra che esulano dall'attività corrente. I LU vengono salvati come sessioni "Quaderno" e rientrano nei totali del giorno.
+    </div>
+
+    ${savedLists.length > 0 ? `
+    <div style="display:flex; gap:6px; margin-bottom:10px; align-items:center;">
+        <i class="fa-solid fa-folder-open" style="color:var(--accent-color); font-size:0.8rem;"></i>
+        <select id="side-q-load" onchange="loadSideQuadernoList(this.value); this.value='';" style="flex:1; padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.8rem;" title="Carica gli item di una lista salvata (i duplicati vengono saltati)">
+            <option value="">Carica lista salvata...</option>
+            ${loadOptsHtml}
+        </select>
+    </div>` : ''}
+
+    <datalist id="side-q-names">${datalistOpts}</datalist>
+
+    <div id="side-q-rows">
+        ${sq.rows.length === 0
+            ? `<div style="text-align:center; padding:20px; color:var(--text-secondary); font-size:0.8rem; opacity:0.6;"><i class="fa-solid fa-clipboard-list fa-2x" style="margin-bottom:8px; display:block;"></i>Aggiungi un item da punteggiare</div>`
+            : sq.rows.map((row, i) => _renderSideQuadernoRow(row, i, isTD)).join('')}
+    </div>
+
+    <div style="display:flex; gap:6px; margin-top:10px; align-items:center; flex-wrap:wrap;">
+        <input list="side-q-names" type="text" id="side-q-new" placeholder="Nome item..." onkeydown="if(event.key==='Enter')addSideQuadernoRow()" autocomplete="off" style="flex:1; min-width:100px; padding:9px 10px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.85rem;">
+        <button class="btn btn-primary" onclick="addSideQuadernoRow()" style="padding:9px 14px;"><i class="fa-solid fa-plus"></i></button>
+    </div>
+
+    <div style="display:flex; gap:6px; margin-top:8px; align-items:center; flex-wrap:wrap;">
+        <span style="font-size:0.7rem; color:var(--text-secondary);">Tipo predefinito:</span>
+        <select id="side-q-type" onchange="setSideQuadernoType(this.value)" style="flex:1; padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.8rem;" title="Tipo predefinito per nuovi item">
+            <option value="independent" ${!isTD ? 'selected' : ''}>Indipendente</option>
+            <option value="timedelay" ${isTD ? 'selected' : ''}>Time Delay</option>
+        </select>
+        ${isTD ? `<input type="number" id="side-q-td" value="${sq.tdSeconds || 5}" min="1" max="30" onchange="state._sideQuaderno.tdSeconds=parseInt(this.value)||5; _saveSideQuaderno();" style="width:55px; padding:8px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.8rem; text-align:center;">` : ''}
+    </div>
+
+    <div style="display:flex; gap:6px; margin-top:14px;">
+        <button class="btn btn-success" onclick="saveSideQuadernoSession()" style="flex:1; padding:10px;" ${totalLU === 0 ? 'disabled style="flex:1; padding:10px; opacity:0.4;"' : ''}>
+            <i class="fa-solid fa-floppy-disk"></i> Salva nei dati
+        </button>
+        ${sq.rows.length > 0 ? `<button class="btn btn-ghost" onclick="clearSideQuaderno()" style="padding:10px 12px; color:var(--danger-color); border-color:rgba(239,68,68,0.3);" title="Svuota"><i class="fa-solid fa-eraser"></i></button>` : ''}
+    </div>`;
+
+    body.innerHTML = html;
+}
+
+function _renderSideQuadernoRow(row, idx, isTD) {
+    const res = row.results || [];
+    const vCount = res.filter(r => r === true).length;
+    const pCount = res.filter(r => r === 'prompt').length;
+    const xCount = res.filter(r => r === false).length;
+    const total = res.length;
+    const rowIsTD = (row.sessionType || (isTD ? 'timedelay' : 'independent')) === 'timedelay';
+
+    const leftBtn = rowIsTD
+        ? `<div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
+                <span style="font-size:0.65rem; font-weight:bold; color:var(--warning-color);">${pCount}</span>
+                <button onclick="sideQuadernoAddLU(${idx}, 'prompt')" style="width:40px; height:40px; border-radius:50%; border:2px solid var(--warning-color); background:rgba(245,158,11,0.15); color:var(--warning-color); cursor:pointer; font-size:0.9rem; font-weight:800; display:flex; align-items:center; justify-content:center;">P</button>
+            </div>`
+        : `<div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
+                <span style="font-size:0.65rem; font-weight:bold; color:var(--danger-color);">${xCount}</span>
+                <button onclick="sideQuadernoAddLU(${idx}, false)" style="width:40px; height:40px; border-radius:50%; border:2px solid var(--danger-color); background:rgba(239,68,68,0.15); color:var(--danger-color); cursor:pointer; font-size:1rem; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-xmark"></i></button>
+            </div>`;
+
+    return `
+    <div style="display:flex; flex-direction:column; gap:6px; padding:10px; margin-bottom:7px; background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); border-radius:12px;">
+        <div style="display:flex; align-items:center; gap:6px;">
+            <span style="flex:1; font-size:0.9rem; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${row.name}</span>
+            <button onclick="toggleSideQuadernoRowType(${idx})" style="padding:2px 8px; border-radius:6px; border:1px solid ${rowIsTD ? 'var(--warning-color)' : 'rgba(99,102,241,0.5)'}; background:${rowIsTD ? 'rgba(245,158,11,0.15)' : 'rgba(99,102,241,0.1)'}; color:${rowIsTD ? 'var(--warning-color)' : 'var(--accent-color)'}; font-size:0.65rem; font-weight:bold; cursor:pointer; white-space:nowrap;" title="Cambia tipo sessione">${rowIsTD ? 'TD' : 'IND'}</button>
+            <span style="background:rgba(99,102,241,0.2); color:var(--accent-color); padding:2px 8px; border-radius:6px; font-size:0.75rem; font-weight:bold;" title="Totale LU">${total}</span>
+            <button onclick="sideQuadernoUndo(${idx})" style="width:28px; height:28px; border-radius:8px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.05); color:var(--text-secondary); cursor:pointer; font-size:0.7rem;" title="Annulla ultimo" ${total === 0 ? 'disabled' : ''}><i class="fa-solid fa-rotate-left"></i></button>
+            <button onclick="sideQuadernoRemoveRow(${idx})" style="width:28px; height:28px; border-radius:8px; border:none; background:transparent; color:#666; cursor:pointer; font-size:0.75rem;" title="Rimuovi"><i class="fa-solid fa-trash"></i></button>
+        </div>
+        <div style="display:flex; gap:10px; justify-content:center;">
+            ${leftBtn}
+            <div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
+                <span style="font-size:0.65rem; font-weight:bold; color:var(--success-color);">${vCount}</span>
+                <button onclick="sideQuadernoAddLU(${idx}, true)" style="width:40px; height:40px; border-radius:50%; border:2px solid var(--success-color); background:rgba(16,185,129,0.15); color:var(--success-color); cursor:pointer; font-size:1rem; display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-check"></i></button>
+            </div>
+        </div>
+    </div>`;
+}
+
+window.addSideQuadernoRow = () => {
+    if (!state._sideQuaderno) state._sideQuaderno = _loadSideQuaderno();
+    const input = document.getElementById('side-q-new');
+    const name = input ? input.value.trim() : '';
+    if (!name) return;
+    state._sideQuaderno.rows.push({ name, results: [], sessionType: state._sideQuaderno.sessionType || 'independent' });
+    _saveSideQuaderno();
+    renderNotebookPanel();
+    setTimeout(() => { const el = document.getElementById('side-q-new'); if (el) el.focus(); }, 0);
+};
+
+// Saved general quaderno lists for the side panel: same sources and dedup
+// rules as the main quaderno's in-sheet loader (Task Analysis excluded).
+function _getSideQuadernoLists() {
+    return (typeof getQuadernoListChoices === 'function') ? getQuadernoListChoices(false) : [];
+}
+
+// Preload the items of a saved list as side-quaderno rows. Items whose name
+// already exists are skipped, so live (already-scored) rows keep their data —
+// the clinician only needs to add the items not yet present.
+window.loadSideQuadernoList = (key) => {
+    if (!key) return;
+    if (!state._sideQuaderno) state._sideQuaderno = _loadSideQuaderno();
+
+    let items = [];
+    if (key.startsWith('set:')) {
+        const id = key.slice(4);
+        const s = (state.savedSets || []).find(x => String(x.id) === id);
+        items = s ? (s.items || []) : [];
+    } else if (key.startsWith('local:')) {
+        const name = key.slice(6);
+        const list = (typeof getSavedQuadernoLists === 'function' ? getSavedQuadernoLists() : []).find(l => l.name === name);
+        items = list ? (list.items || []) : [];
+    }
+    items = items
+        .map(it => ({ name: it.name || it.label || it.l || '', sessionType: it.sessionType }))
+        .filter(it => it.name);
+    if (items.length === 0) return;
+
+    const defType = state._sideQuaderno.sessionType || 'independent';
+    const existing = new Set(state._sideQuaderno.rows.map(r => (r.name || '').toLowerCase().trim()));
+    let added = 0;
+    items.forEach(item => {
+        const nm = item.name.toLowerCase().trim();
+        if (existing.has(nm)) return;
+        state._sideQuaderno.rows.push({ name: item.name, results: [], sessionType: item.sessionType || defType });
+        existing.add(nm);
+        added++;
+    });
+
+    _saveSideQuaderno();
+    renderNotebookPanel();
+
+    if (added === 0) {
+        const sel = document.getElementById('side-q-load');
+        if (sel) {
+            const orig = sel.style.borderColor;
+            sel.style.borderColor = 'var(--warning-color)';
+            setTimeout(() => { if (sel.isConnected) sel.style.borderColor = orig; }, 1200);
+        }
+    }
+};
+
+window.sideQuadernoAddLU = (idx, result) => {
+    if (!state._sideQuaderno || !state._sideQuaderno.rows[idx]) return;
+    if (!state._sideQuaderno.rows[idx].results) state._sideQuaderno.rows[idx].results = [];
+    state._sideQuaderno.rows[idx].results.push(result);
+    _saveSideQuaderno();
+    renderNotebookPanel();
+};
+
+window.sideQuadernoUndo = (idx) => {
+    if (!state._sideQuaderno || !state._sideQuaderno.rows[idx]) return;
+    const res = state._sideQuaderno.rows[idx].results;
+    if (res && res.length > 0) { res.pop(); _saveSideQuaderno(); renderNotebookPanel(); }
+};
+
+window.sideQuadernoRemoveRow = (idx) => {
+    if (!state._sideQuaderno) return;
+    state._sideQuaderno.rows.splice(idx, 1);
+    _saveSideQuaderno();
+    renderNotebookPanel();
+};
+
+window.toggleSideQuadernoRowType = (idx) => {
+    if (!state._sideQuaderno || !state._sideQuaderno.rows[idx]) return;
+    const row = state._sideQuaderno.rows[idx];
+    row.sessionType = (row.sessionType || 'independent') === 'independent' ? 'timedelay' : 'independent';
+    _saveSideQuaderno();
+    renderNotebookPanel();
+};
+
+window.setSideQuadernoType = (type) => {
+    if (!state._sideQuaderno) return;
+    state._sideQuaderno.sessionType = type;
+    _saveSideQuaderno();
+    renderNotebookPanel();
+};
+
+window.clearSideQuaderno = async () => {
+    if (typeof themedConfirm === 'function' && !await themedConfirm("Svuotare il quaderno laterale? I dati non salvati andranno persi.")) return;
+    state._sideQuaderno = { date: new Date().toISOString().split('T')[0], rows: [], sessionType: 'independent', tdSeconds: 5 };
+    _saveSideQuaderno();
+    renderNotebookPanel();
+};
+
+window.saveSideQuadernoSession = async () => {
+    if (!state.activePatientId) return alert("Seleziona prima un paziente in alto.");
+    // Operate on the SAME in-memory patient object the main save uses to avoid conflicts
+    const p = state.patients.find(x => x.id === state.activePatientId);
+    if (!p) return;
+    if (!state._sideQuaderno) return;
+
+    const sq = state._sideQuaderno;
+    const type = sq.sessionType || 'independent';
+    const tdSeconds = sq.tdSeconds || 5;
+    const scoredRows = sq.rows.filter(r => r.results && r.results.length > 0);
+    if (scoredRows.length === 0) return alert("Nessun LU registrato.");
+
+    if (!p.history) p.history = [];
+    const now = new Date().toISOString();
+    let totalLU = 0, totalCorrect = 0;
+
+    scoredRows.forEach(row => {
+        const res = row.results;
+        const rawV = res.filter(v => v === true).length;
+        const rawP = res.filter(v => v === 'prompt').length;
+        const rawX = res.filter(v => v === false).length;
+        const total = rawV + rawP + rawX;
+        if (total === 0) return;
+        totalLU += total;
+        totalCorrect += rawV;
+
+        const rowType = row.sessionType || type;
+        const sessionData = {
+            date: now,
+            setId: 'quaderno_' + row.name.replace(/\s+/g, '_').toLowerCase() + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+            setName: row.name,
+            mode: 'quaderno',
+            correct: rawV,
+            prompts: rawP,
+            total: total,
+            percentage: Math.round((rawV / total) * 100),
+            sessionType: rowType,
+            rawV, rawP, rawX
+        };
+        if (rowType === 'timedelay') sessionData.timeDelaySeconds = tdSeconds;
+        p.history.push(sessionData);
+    });
+
+    await DB.savePatient(p);
+
+    // Clear the side quaderno after a successful save
+    state._sideQuaderno = { date: new Date().toISOString().split('T')[0], rows: [], sessionType: type, tdSeconds };
+    _saveSideQuaderno();
+    renderNotebookPanel();
+    if (typeof filterSetsByMode === 'function') filterSetsByMode();
+
+    // Brief confirmation on the save button
+    const btn = document.querySelector('#notebook-panel-body .btn-success');
+    if (btn) {
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-check"></i> Salvato!';
+        setTimeout(() => { if (btn.isConnected) btn.innerHTML = orig; }, 1800);
     }
 };

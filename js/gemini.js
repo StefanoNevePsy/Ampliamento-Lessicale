@@ -11,8 +11,22 @@ function saveGeminiModel(model) {
     localStorage.setItem('gemini_model', model);
 }
 
-function getGeminiApiUrl() {
-    return `${GEMINI_API_BASE}models/${getGeminiModel()}:generateContent`;
+// Optional separate, lighter model for translations. Empty = use main model.
+function getTranslationModel() {
+    return localStorage.getItem('gemini_translation_model') || '';
+}
+
+function saveTranslationModel(model) {
+    localStorage.setItem('gemini_translation_model', model || '');
+}
+
+// Effective model used for translation calls (falls back to main model)
+function getEffectiveTranslationModel() {
+    return getTranslationModel() || getGeminiModel();
+}
+
+function getGeminiApiUrl(model) {
+    return `${GEMINI_API_BASE}models/${model || getGeminiModel()}:generateContent`;
 }
 
 // --- DYNAMIC MODEL LISTING ---
@@ -73,6 +87,34 @@ function populateModelSelect(models) {
 
     const hint = document.getElementById('gemini-model-hint');
     if (hint) hint.textContent = `${models.length} modelli disponibili. I modelli "gratuito" non hanno costi.`;
+
+    populateTranslationModelSelect(models);
+}
+
+function populateTranslationModelSelect(models) {
+    const select = document.getElementById('translation-model');
+    if (!select) return;
+    const current = getTranslationModel();
+    select.innerHTML = '';
+
+    // First option: follow the main model
+    const mainOpt = document.createElement('option');
+    mainOpt.value = '';
+    mainOpt.textContent = 'Come modello principale';
+    select.appendChild(mainOpt);
+
+    for (const m of models) {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = m.name + (m.free ? ' (gratuito)' : ' (a pagamento)');
+        select.appendChild(opt);
+    }
+
+    if (current && models.some(m => m.id === current)) {
+        select.value = current;
+    } else {
+        select.value = '';
+    }
 }
 
 window.refreshGeminiModels = async () => {
@@ -112,12 +154,19 @@ function saveGeminiApiKey(key) {
 
 // --- THEME SYSTEM ---
 const APP_THEMES = [
-    { id: 'default', name: 'Indigo', colors: ['#1e1e2f', '#2d2b55', '#6366f1', '#10b981'] },
-    { id: 'ocean', name: 'Oceano', colors: ['#0f172a', '#1e3a5f', '#38bdf8', '#34d399'] },
-    { id: 'forest', name: 'Foresta', colors: ['#1a2e1a', '#2d4a2d', '#4ade80', '#34d399'] },
-    { id: 'sunset', name: 'Tramonto', colors: ['#2d1b2e', '#4a2040', '#f472b6', '#34d399'] },
-    { id: 'midnight', name: 'Mezzanotte', colors: ['#0a0a0a', '#1a1a2e', '#8b5cf6', '#10b981'] },
-    { id: 'light', name: 'Chiaro', colors: ['#f1f5f9', '#e2e8f0', '#6366f1', '#059669'] },
+    { id: 'default', name: 'Indigo', icon: 'fa-gem', colors: ['#1e1e2f', '#2d2b55', '#6366f1', '#10b981'] },
+    { id: 'ocean', name: 'Oceano', icon: 'fa-water', colors: ['#0f172a', '#1e3a5f', '#38bdf8', '#34d399'] },
+    { id: 'forest', name: 'Foresta', icon: 'fa-tree', colors: ['#1a2e1a', '#2d4a2d', '#4ade80', '#34d399'] },
+    { id: 'sunset', name: 'Tramonto', icon: 'fa-sun', colors: ['#2d1b2e', '#4a2040', '#f472b6', '#34d399'] },
+    { id: 'midnight', name: 'Mezzanotte', icon: 'fa-moon', colors: ['#0a0a0a', '#1a1a2e', '#8b5cf6', '#10b981'] },
+    { id: 'light', name: 'Chiaro', icon: 'fa-cloud-sun', colors: ['#f1f5f9', '#e2e8f0', '#6366f1', '#059669'] },
+    { id: 'arcraiders', name: 'Arc Raiders', icon: 'fa-satellite-dish', colors: ['#0d0d1a', '#151528', '#e8a020', '#3dbb5e'], badge: 'NEW' },
+    { id: 'sakura', name: 'Sakura', icon: 'fa-fan', colors: ['#2e1a2a', '#3d2040', '#f06292', '#81c784'] },
+    { id: 'arctic', name: 'Artico', icon: 'fa-snowflake', colors: ['#e8f0f8', '#d0dde8', '#4a90d9', '#3dae8f'] },
+    { id: 'volcano', name: 'Vulcano', icon: 'fa-fire', colors: ['#1a0a0a', '#2e1510', '#e8603c', '#50b080'] },
+    { id: 'cyberpunk', name: 'Cyberpunk', icon: 'fa-bolt', colors: ['#0a0014', '#1a0030', '#00e0a0', '#ff3060'] },
+    { id: 'sand', name: 'Sabbia', icon: 'fa-umbrella-beach', colors: ['#f5f0e0', '#e8dcc8', '#b08840', '#6a9a50'] },
+    { id: 'deepspace', name: 'Spazio', icon: 'fa-star', colors: ['#050510', '#0a0a2e', '#7c6cf0', '#40c090'] },
 ];
 
 function getCurrentTheme() {
@@ -146,7 +195,8 @@ function renderThemePicker() {
             <div class="theme-preview">
                 ${t.colors.map(c => `<span style="background:${c};"></span>`).join('')}
             </div>
-            <div class="theme-name">${t.name}</div>
+            <div class="theme-name"><i class="fa-solid ${t.icon || 'fa-palette'}" style="margin-right:4px; opacity:0.7;"></i>${t.name}</div>
+            ${t.badge ? `<span style="position:absolute;top:4px;left:6px;font-size:0.55rem;background:rgba(191,120,42,0.3);color:#bf782a;padding:1px 5px;border-radius:3px;font-weight:700;letter-spacing:1px;font-family:monospace;">${t.badge}</span>` : ''}
             <i class="fa-solid fa-check theme-check"></i>
         </div>
     `).join('');
@@ -155,11 +205,13 @@ function renderThemePicker() {
 window.selectTheme = (themeId) => {
     applyTheme(themeId);
     renderThemePicker();
+    // Re-render mode dropdown with new theme colors
+    if (typeof renderModeSelect === 'function') renderModeSelect();
 };
 
 // --- SETTINGS TABS ---
 window.switchSettingsTab = (tab) => {
-    ['api', 'images', 'theme'].forEach(t => {
+    ['api', 'images', 'theme', 'session'].forEach(t => {
         const el = document.getElementById('settings-tab-' + t);
         if (el) el.style.display = t === tab ? '' : 'none';
     });
@@ -167,6 +219,9 @@ window.switchSettingsTab = (tab) => {
         btn.classList.toggle('active', btn.dataset.tab === tab);
     });
     if (tab === 'theme') renderThemePicker();
+    if (tab === 'api' && typeof populateNvidiaSettings === 'function') populateNvidiaSettings();
+    if (tab === 'images' && typeof populateAiEngineSettings === 'function') populateAiEngineSettings();
+    if (tab === 'images' && typeof populateAiStudioStyles === 'function') populateAiStudioStyles();
 };
 
 window.openSettings = () => {
@@ -174,7 +229,8 @@ window.openSettings = () => {
     // API tab
     document.getElementById('api-key').value = getGeminiApiKey();
 
-    const cached = JSON.parse(localStorage.getItem('gemini_models_cache') || 'null');
+    let cached = null;
+    try { cached = JSON.parse(localStorage.getItem('gemini_models_cache') || 'null'); } catch (e) { /* cache corrotta: ignora */ }
     const ONE_DAY = 24 * 60 * 60 * 1000;
     if (cached && (Date.now() - cached.ts < ONE_DAY) && cached.models?.length) {
         populateModelSelect(cached.models);
@@ -186,9 +242,20 @@ window.openSettings = () => {
 
     // Images tab
     const pixabayInput = document.getElementById('pixabay-api-key');
-    const togetherInput = document.getElementById('together-api-key');
     if (pixabayInput) pixabayInput.value = getPixabayApiKey();
-    if (togetherInput) togetherInput.value = getTogetherApiKey();
+    const cfUrlInput = document.getElementById('cloudflare-worker-url');
+    const cfTokenInput = document.getElementById('cloudflare-auth-token');
+    if (cfUrlInput && typeof getCloudflareWorkerUrl === 'function') cfUrlInput.value = getCloudflareWorkerUrl();
+    if (cfTokenInput && typeof getCloudflareAuthToken === 'function') cfTokenInput.value = getCloudflareAuthToken();
+    const cfModelInput = document.getElementById('cloudflare-model');
+    if (cfModelInput && typeof getCloudflareModel === 'function') cfModelInput.value = getCloudflareModel();
+
+    const whiteBgCb = document.getElementById('pixabay-white-bg');
+    if (whiteBgCb && typeof getPixabayWhiteBg === 'function') whiteBgCb.checked = getPixabayWhiteBg();
+
+    // Session tab
+    const tdTimerCb = document.getElementById('setting-td-timer');
+    if (tdTimerCb) tdTimerCb.checked = localStorage.getItem('td_timer_visible') !== 'false';
 
     // Reset to first tab
     switchSettingsTab('api');
@@ -206,14 +273,27 @@ window.saveAllSettings = () => {
     saveGeminiApiKey(key);
     const model = document.getElementById('gemini-model').value;
     saveGeminiModel(model);
+    const translationModel = document.getElementById('translation-model')?.value;
+    if (translationModel !== undefined) saveTranslationModel(translationModel);
 
     // Save image API keys
     const pixabayKey = document.getElementById('pixabay-api-key')?.value?.trim();
     if (pixabayKey !== undefined) savePixabayApiKey(pixabayKey);
-    const togetherKey = document.getElementById('together-api-key')?.value?.trim();
-    if (togetherKey !== undefined) saveTogetherApiKey(togetherKey);
+    const whiteBgCb = document.getElementById('pixabay-white-bg');
+    if (whiteBgCb && typeof setPixabayWhiteBg === 'function') setPixabayWhiteBg(whiteBgCb.checked);
+
+    const cfUrl = document.getElementById('cloudflare-worker-url')?.value?.trim();
+    if (cfUrl !== undefined && typeof setCloudflareWorkerUrl === 'function') setCloudflareWorkerUrl(cfUrl);
+    const cfToken = document.getElementById('cloudflare-auth-token')?.value?.trim();
+    if (cfToken !== undefined && typeof setCloudflareAuthToken === 'function') setCloudflareAuthToken(cfToken);
+    const cfModel = document.getElementById('cloudflare-model')?.value;
+    if (cfModel && typeof setCloudflareModel === 'function') setCloudflareModel(cfModel);
 
     // Theme is saved live on selection
+
+    // Save session settings
+    const tdTimerCb = document.getElementById('setting-td-timer');
+    if (tdTimerCb) localStorage.setItem('td_timer_visible', tdTimerCb.checked ? 'true' : 'false');
 
     closeSettings();
 };
@@ -241,12 +321,13 @@ function _parse429Error(errBody) {
     return { retryable: true, message: msg || 'Limite richieste raggiunto.' };
 }
 
-async function callGemini(prompt, apiKey) {
+async function callGemini(prompt, apiKey, modelOverride) {
     const MAX_RETRIES = 3;
     const BACKOFF_MS = [3000, 8000, 15000]; // 3s, 8s, 15s
+    const model = modelOverride || getGeminiModel();
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        const response = await fetch(`${getGeminiApiUrl()}?key=${apiKey}`, {
+        const response = await fetch(`${getGeminiApiUrl(model)}?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -284,7 +365,7 @@ async function callGemini(prompt, apiKey) {
         if (response.status === 400) throw new Error('Chiave API non valida. Controlla nelle Impostazioni.');
         if (response.status === 404) {
             localStorage.removeItem('gemini_models_cache');
-            throw new Error(`Il modello "${getGeminiModel()}" non è più disponibile. Apri Impostazioni e scegline un altro.`);
+            throw new Error(`Il modello "${model}" non è più disponibile. Apri Impostazioni e scegline un altro.`);
         }
         throw new Error(err.error?.message || `Errore API (${response.status})`);
     }
@@ -319,13 +400,14 @@ Regole:
 Richiesta dell'utente: `;
 
 async function generateSetWithGemini(userPrompt) {
+    const nvActive = typeof nvidiaTextActive === 'function' && nvidiaTextActive();
     const apiKey = getGeminiApiKey();
-    if (!apiKey) {
-        throw new Error('Inserisci la chiave API Gemini nelle Impostazioni (icona chiave in alto a destra).');
+    if (!apiKey && !nvActive) {
+        throw new Error('Inserisci la chiave API Gemini nelle Impostazioni (icona chiave in alto a destra), oppure attiva il motore NVIDIA.');
     }
 
     const fullPrompt = GEMINI_SET_PROMPT + userPrompt;
-    const result = await callGemini(fullPrompt, apiKey);
+    const result = nvActive ? await nvidiaChatJSON(fullPrompt, { maxTokens: 8192, temperature: 0.7 }) : await callGemini(fullPrompt, apiKey);
 
     // Validate structure
     if (!result.name || !result.items || !Array.isArray(result.items)) {
@@ -457,13 +539,13 @@ window.runGeminiGeneration = async () => {
 
         // Show result
         const info = document.getElementById('gemini-result-info');
-        info.innerHTML = `<b>${_lastGeminiSet.name}</b> &mdash; ${_lastGeminiSet.items.length} stimoli, Categoria: ${_lastGeminiSet.category || 'Personale'}`;
+        info.innerHTML = `<b>${escapeHtml(_lastGeminiSet.name)}</b> &mdash; ${_lastGeminiSet.items.length} stimoli, Categoria: ${escapeHtml(_lastGeminiSet.category || 'Personale')}`;
 
         const preview = document.getElementById('gemini-result-preview');
         preview.innerHTML = _lastGeminiSet.items.map((item, i) =>
             `<div style="padding:6px 10px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; gap:8px;">
                 <span style="color:#666; font-size:0.75rem; width:24px;">${i + 1}.</span>
-                <span>${item.label}</span>
+                <span>${escapeHtml(item.label)}</span>
                 ${item.seqNumber ? `<span style="color:var(--accent-color); font-size:0.75rem;">#${item.seqNumber}</span>` : ''}
             </div>`
         ).join('');

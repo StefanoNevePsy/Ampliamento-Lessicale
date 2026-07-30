@@ -54,19 +54,25 @@ async function downloadFile(blob, filename, title) {
         const FS = window.Capacitor.Plugins.Filesystem;
         if (FS) {
             try {
-                // For ZIP files, write as base64
                 const isZip = filename.endsWith('.zip');
-                let writeData;
+                let written;
                 if (isZip) {
-                    const arrayBuffer = await blob.arrayBuffer();
-                    const bytes = new Uint8Array(arrayBuffer);
-                    let binary = '';
-                    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-                    writeData = { path: filename, data: btoa(binary), directory: 'CACHE' };
+                    // Write in slices so a large ZIP never needs a single giant
+                    // base64 string. 3MB is a multiple of 3 bytes, so the
+                    // base64 of each slice concatenates into valid base64.
+                    const SLICE = 3 * 1024 * 1024;
+                    for (let pos = 0; pos < blob.size; pos += SLICE) {
+                        const b64chunk = await _blobToBase64(blob.slice(pos, pos + SLICE));
+                        if (pos === 0) {
+                            await FS.writeFile({ path: filename, data: b64chunk, directory: 'CACHE' });
+                        } else {
+                            await FS.appendFile({ path: filename, data: b64chunk, directory: 'CACHE' });
+                        }
+                    }
+                    written = await FS.getUri({ path: filename, directory: 'CACHE' });
                 } else {
-                    writeData = { path: filename, data: await blob.text(), directory: 'CACHE', encoding: 'utf8' };
+                    written = await FS.writeFile({ path: filename, data: await blob.text(), directory: 'CACHE', encoding: 'utf8' });
                 }
-                const written = await FS.writeFile(writeData);
                 const SharePlugin = window.Capacitor.Plugins.Share;
                 if (SharePlugin) {
                     await SharePlugin.share({
@@ -100,6 +106,20 @@ async function downloadFile(blob, filename, title) {
     }
 }
 
+// --- Chunked base64 conversion (avoids OOM on large files) ---
+function _blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const dataUrl = reader.result;
+            const commaIdx = dataUrl.indexOf(',');
+            resolve(commaIdx >= 0 ? dataUrl.substring(commaIdx + 1) : dataUrl);
+        };
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+    });
+}
+
 // --- IMAGE HELPERS for ZIP ---
 
 // Extract extension and raw data from a dataURL
@@ -130,18 +150,58 @@ function base64ToUint8(base64) {
     return arr;
 }
 
-// Create a dataURL from a file's binary content and known extension
-function binaryToDataUrl(uint8, ext) {
-    const mimeMap = {
-        'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
-        'webp': 'image/webp', 'gif': 'image/gif', 'svg': 'image/svg+xml',
-        'mp3': 'audio/mpeg', 'wav': 'audio/wav', 'ogg': 'audio/ogg',
-        'aac': 'audio/aac', 'audio': 'audio/mpeg'
-    };
-    const mime = mimeMap[ext] || 'application/octet-stream';
-    let binary = '';
-    for (let i = 0; i < uint8.length; i++) binary += String.fromCharCode(uint8[i]);
-    return `data:${mime};base64,${btoa(binary)}`;
+const _EXT_MIME_MAP = {
+    'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+    'webp': 'image/webp', 'gif': 'image/gif', 'svg': 'image/svg+xml',
+    'mp3': 'audio/mpeg', 'wav': 'audio/wav', 'ogg': 'audio/ogg',
+    'aac': 'audio/aac', 'audio': 'audio/mpeg'
+};
+
+function extToMime(ext) {
+    return _EXT_MIME_MAP[ext] || 'application/octet-stream';
+}
+
+// Rehydrate a ZIP entry to a dataURL without binary->string->btoa round trips:
+// JSZip can return base64 directly, avoiding huge intermediate strings.
+async function zipEntryToDataUrl(zip, path) {
+    const entry = zip.file(path);
+    if (!entry) return null;
+    const ext = path.split('.').pop().toLowerCase();
+    const b64 = await entry.async('base64');
+    return `data:${extToMime(ext)};base64,${b64}`;
+}
+
+// Yield to the event loop so the UI stays responsive and GC can reclaim
+// memory between heavy per-item operations.
+function _yieldToUI() {
+    return new Promise(r => setTimeout(r, 0));
+}
+
+// --- Progress overlay (shared by export/import) ---
+function showBackupProgress(text, pct) {
+    let el = document.getElementById('backup-progress-overlay');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'backup-progress-overlay';
+        el.style.cssText = 'position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.75); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;';
+        el.innerHTML = `
+            <i class="fa-solid fa-box-archive" style="font-size:2rem; color:var(--accent-color);"></i>
+            <div id="backup-progress-text" style="color:#fff; font-size:0.95rem; text-align:center; padding:0 20px;"></div>
+            <div style="width:min(280px, 70vw); height:8px; background:rgba(255,255,255,0.15); border-radius:4px; overflow:hidden;">
+                <div id="backup-progress-bar" style="height:100%; width:0%; background:var(--accent-color); border-radius:4px; transition:width 0.2s;"></div>
+            </div>`;
+        document.body.appendChild(el);
+    }
+    el.style.display = 'flex';
+    const txtEl = document.getElementById('backup-progress-text');
+    if (txtEl && text != null) txtEl.textContent = text;
+    const barEl = document.getElementById('backup-progress-bar');
+    if (barEl && pct != null) barEl.style.width = Math.max(0, Math.min(100, pct)) + '%';
+}
+
+function hideBackupProgress() {
+    const el = document.getElementById('backup-progress-overlay');
+    if (el) el.style.display = 'none';
 }
 
 // Sanitize a string for use as a filename
@@ -151,10 +211,78 @@ function sanitizeFilename(str) {
 
 // --- ZIP EXPORT ---
 
+// Extract a set's media (item images, variants, audio) into the ZIP and return
+// a lightweight copy of the set with media replaced by ZIP paths.
+// Uses shallow clones + base64 passed straight to JSZip ({base64:true}) so the
+// large base64 strings are never duplicated or re-decoded by us.
+function _addSetToZip(zip, set) {
+    const setSlug = sanitizeFilename(set.id);
+    const itemImagesFolder = zip.folder('images/items');
+    const audioFolder = zip.folder('audio');
+
+    const setClone = { ...set, items: [] };
+
+    for (let i = 0; i < (set.items || []).length; i++) {
+        const item = { ...set.items[i] };
+
+        // Extract item image
+        if (item.url && item.url.startsWith('data:')) {
+            const parsed = parseDataUrl(item.url);
+            if (parsed) {
+                const imgName = `${setSlug}_${i}_${sanitizeFilename(item.label)}.${parsed.ext}`;
+                itemImagesFolder.file(imgName, parsed.base64, { base64: true });
+                item.url = `images/items/${imgName}`;
+            }
+        }
+
+        // Extract variant images
+        if (item.variantUrls && typeof item.variantUrls === 'object') {
+            item.variantUrls = { ...item.variantUrls };
+            for (const [vIdx, vUrl] of Object.entries(item.variantUrls)) {
+                if (vUrl && vUrl.startsWith('data:')) {
+                    const parsed = parseDataUrl(vUrl);
+                    if (parsed) {
+                        const vImgName = `${setSlug}_${i}_${sanitizeFilename(item.label)}_v${vIdx}.${parsed.ext}`;
+                        itemImagesFolder.file(vImgName, parsed.base64, { base64: true });
+                        item.variantUrls[vIdx] = `images/items/${vImgName}`;
+                    }
+                }
+            }
+        }
+
+        // Extract audio
+        if (item.audio && item.audio.startsWith('data:')) {
+            const parsed = parseDataUrl(item.audio);
+            if (parsed) {
+                const audioName = `${setSlug}_${i}_${sanitizeFilename(item.label)}.${parsed.ext}`;
+                audioFolder.file(audioName, parsed.base64, { base64: true });
+                item.audio = `audio/${audioName}`;
+            }
+        }
+
+        // Extract derived images (scontorno result + highlight original) so they
+        // aren't carried as fat base64 inside the set JSON.
+        ['maskedUrl', 'originalUrl'].forEach(field => {
+            if (item[field] && item[field].startsWith('data:')) {
+                const parsed = parseDataUrl(item[field]);
+                if (parsed) {
+                    const name = `${setSlug}_${i}_${sanitizeFilename(item.label)}_${field}.${parsed.ext}`;
+                    itemImagesFolder.file(name, parsed.base64, { base64: true });
+                    item[field] = `images/items/${name}`;
+                }
+            }
+        });
+
+        setClone.items.push(item);
+    }
+
+    zip.folder('sets').file(`${setSlug}.json`, JSON.stringify(setClone, null, 2));
+    return setClone;
+}
+
 // Build a ZIP blob from backup data, extracting images as separate files
 async function buildBackupZip(sets, patients, includeConfig, includeReports = true) {
     const zip = new JSZip();
-    let imageIndex = 0;
 
     // Manifest
     const manifest = {
@@ -167,64 +295,37 @@ async function buildBackupZip(sets, patients, includeConfig, includeReports = tr
         includesConfig: includeConfig
     };
 
-    // --- Process sets: extract images to files ---
-    const processedSets = [];
-    const setsFolder = zip.folder('sets');
-    const itemImagesFolder = zip.folder('images/items');
-    const audioFolder = zip.folder('audio');
-
+    // --- Process sets: extract images to files (one at a time, yielding) ---
+    const prepTotal = sets.length + patients.length;
+    let prepDone = 0;
     for (const set of sets) {
-        const setClone = JSON.parse(JSON.stringify(set));
-        const setSlug = sanitizeFilename(set.id);
-
-        for (let i = 0; i < setClone.items.length; i++) {
-            const item = setClone.items[i];
-
-            // Extract item image
-            if (item.url && item.url.startsWith('data:')) {
-                const parsed = parseDataUrl(item.url);
-                if (parsed) {
-                    const imgName = `${setSlug}_${i}_${sanitizeFilename(item.label)}.${parsed.ext}`;
-                    itemImagesFolder.file(imgName, base64ToUint8(parsed.base64));
-                    item.url = `images/items/${imgName}`;
-                }
-            }
-
-            // Extract audio
-            if (item.audio && item.audio.startsWith('data:')) {
-                const parsed = parseDataUrl(item.audio);
-                if (parsed) {
-                    const audioName = `${setSlug}_${i}_${sanitizeFilename(item.label)}.${parsed.ext}`;
-                    audioFolder.file(audioName, base64ToUint8(parsed.base64));
-                    item.audio = `audio/${audioName}`;
-                }
-            }
-        }
-
-        processedSets.push(setClone);
-        setsFolder.file(`${setSlug}.json`, JSON.stringify(setClone, null, 2));
+        showBackupProgress(`Preparazione set: ${set.name || set.id}`, (prepDone / Math.max(1, prepTotal)) * 50);
+        _addSetToZip(zip, set);
+        prepDone++;
+        await _yieldToUI();
     }
 
     // --- Process patients: extract photos ---
-    const processedPatients = [];
     const patientsFolder = zip.folder('patients');
     const patientPhotosFolder = zip.folder('images/patients');
 
     for (const patient of patients) {
-        const pClone = JSON.parse(JSON.stringify(patient));
+        showBackupProgress(`Preparazione paziente: ${patient.name || patient.id}`, (prepDone / Math.max(1, prepTotal)) * 50);
+        const pClone = { ...patient };
         const pSlug = sanitizeFilename(patient.id);
 
         if (pClone.photo && pClone.photo.startsWith('data:')) {
             const parsed = parseDataUrl(pClone.photo);
             if (parsed) {
                 const photoName = `${pSlug}.${parsed.ext}`;
-                patientPhotosFolder.file(photoName, base64ToUint8(parsed.base64));
+                patientPhotosFolder.file(photoName, parsed.base64, { base64: true });
                 pClone.photo = `images/patients/${photoName}`;
             }
         }
 
-        processedPatients.push(pClone);
         patientsFolder.file(`${pSlug}.json`, JSON.stringify(pClone, null, 2));
+        prepDone++;
+        await _yieldToUI();
     }
 
     // --- AI Reports ---
@@ -251,7 +352,7 @@ async function buildBackupZip(sets, patients, includeConfig, includeReports = tr
             const parsed = parseDataUrl(dataUrl);
             if (parsed) {
                 const tagFileName = `${sanitizeFilename(tag)}.${parsed.ext}`;
-                tagImagesFolder.file(tagFileName, base64ToUint8(parsed.base64));
+                tagImagesFolder.file(tagFileName, parsed.base64, { base64: true });
                 tagImageMap[tag] = `images/tags/${tagFileName}`;
             }
         }
@@ -266,15 +367,25 @@ async function buildBackupZip(sets, patients, includeConfig, includeReports = tr
     // Write manifest last (after we know counts)
     zip.file('manifest.json', JSON.stringify(manifest, null, 2));
 
-    return await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+    // streamFiles processes entries one at a time instead of holding the whole
+    // archive uncompressed in memory; level 1 is much faster and base64 image
+    // data barely compresses better at higher levels.
+    return await zip.generateAsync(
+        { type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 1 }, streamFiles: true },
+        (meta) => {
+            showBackupProgress(`Compressione backup... ${Math.round(meta.percent)}%`, 50 + meta.percent / 2);
+        }
+    );
 }
 
 
 // --- Full backup: opens selective export modal ---
 window.exportAllSets = async () => {
     try {
-        const sets = await DB.getAllSets();
-        const patients = await DB.getAllPatients();
+        // Reuse in-memory state when available: DB.getAllSets() would create a
+        // second full copy of every (image-heavy) set in memory.
+        const sets = (state.savedSets && state.savedSets.length) ? state.savedSets : await DB.getAllSets();
+        const patients = (state.patients && state.patients.length) ? state.patients : await DB.getAllPatients();
 
         if ((!sets || sets.length === 0) && (!patients || patients.length === 0)) {
             alert("Nessun dato da esportare.");
@@ -409,12 +520,15 @@ window.executeSelectiveExport = async () => {
         const timeStr = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }).replace(/:/g, '-');
         const filename = `Backup_TerapiaAttiva_${dateStr}_${timeStr}.zip`;
 
+        showBackupProgress('Preparazione backup...', 0);
         const zipBlob = await buildBackupZip(sets, patients, includeConfig, includeReports);
+        hideBackupProgress();
         await downloadFile(zipBlob, filename, 'Backup Terapia Attiva');
 
         document.getElementById('modal-export-select').classList.remove('open');
         window._exportData = null;
     } catch (e) {
+        hideBackupProgress();
         console.error("Errore export:", e);
         alert("Errore durante l'esportazione: " + e.message);
     }
@@ -431,32 +545,7 @@ window.exportSingleSet = async (id) => {
 
     // Build a mini ZIP with just this set + its tag images
     const zip = new JSZip();
-    const setClone = JSON.parse(JSON.stringify(set));
-    const setSlug = sanitizeFilename(set.id);
-    const itemImagesFolder = zip.folder('images/items');
-    const audioFolder = zip.folder('audio');
-
-    for (let i = 0; i < setClone.items.length; i++) {
-        const item = setClone.items[i];
-        if (item.url && item.url.startsWith('data:')) {
-            const parsed = parseDataUrl(item.url);
-            if (parsed) {
-                const imgName = `${setSlug}_${i}_${sanitizeFilename(item.label)}.${parsed.ext}`;
-                itemImagesFolder.file(imgName, base64ToUint8(parsed.base64));
-                item.url = `images/items/${imgName}`;
-            }
-        }
-        if (item.audio && item.audio.startsWith('data:')) {
-            const parsed = parseDataUrl(item.audio);
-            if (parsed) {
-                const audioName = `${setSlug}_${i}_${sanitizeFilename(item.label)}.${parsed.ext}`;
-                audioFolder.file(audioName, base64ToUint8(parsed.base64));
-                item.audio = `audio/${audioName}`;
-            }
-        }
-    }
-
-    zip.folder('sets').file(`${setSlug}.json`, JSON.stringify(setClone, null, 2));
+    _addSetToZip(zip, set);
 
     // Tag images for this set
     if (set.tags && set.tags.length > 0) {
@@ -469,7 +558,7 @@ window.exportSingleSet = async (id) => {
                 const parsed = parseDataUrl(allImgs[key]);
                 if (parsed) {
                     const tagFileName = `${sanitizeFilename(key)}.${parsed.ext}`;
-                    tagImagesFolder.file(tagFileName, base64ToUint8(parsed.base64));
+                    tagImagesFolder.file(tagFileName, parsed.base64, { base64: true });
                     tagImageMap[key] = `images/tags/${tagFileName}`;
                 }
             }
@@ -488,7 +577,7 @@ window.exportSingleSet = async (id) => {
     };
     zip.file('manifest.json', JSON.stringify(manifest, null, 2));
 
-    const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+    const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 1 }, streamFiles: true });
     await downloadFile(zipBlob, filename, `Set: ${set.name}`);
 };
 
@@ -508,6 +597,7 @@ window.importSets = async (input) => {
             await importFromJSON(file);
         }
     } catch (err) {
+        hideBackupProgress();
         console.error(err);
         alert("Errore importazione: " + err.message);
     }
@@ -515,6 +605,7 @@ window.importSets = async (input) => {
 
 // Import from ZIP file
 async function importFromZip(file) {
+    showBackupProgress('Lettura archivio...', 0);
     const zip = await JSZip.loadAsync(file);
 
     // Read manifest
@@ -538,41 +629,6 @@ async function importFromZip(file) {
         if (relativePath.endsWith('.json')) setFiles.push(zipEntry);
     });
 
-    for (const entry of setFiles) {
-        const setData = JSON.parse(await entry.async('text'));
-
-        // Rehydrate item images from ZIP
-        for (const item of setData.items) {
-            if (item.url && !item.url.startsWith('data:') && !item.url.startsWith('http')) {
-                const imgFile = zip.file(item.url);
-                if (imgFile) {
-                    const ext = item.url.split('.').pop();
-                    const uint8 = await imgFile.async('uint8array');
-                    item.url = binaryToDataUrl(uint8, ext);
-                }
-            }
-            if (item.audio && !item.audio.startsWith('data:')) {
-                const audioFile = zip.file(item.audio);
-                if (audioFile) {
-                    const ext = item.audio.split('.').pop();
-                    const uint8 = await audioFile.async('uint8array');
-                    item.audio = binaryToDataUrl(uint8, ext);
-                }
-            }
-        }
-
-        if (!setData.id) continue;
-        if (localSetsMap[setData.id]) {
-            const merged = mergeSets(localSetsMap[setData.id], setData);
-            await DB.saveSet(merged);
-            setsUpdated++;
-        } else {
-            await DB.saveSet(setData);
-            setsAdded++;
-        }
-    }
-
-    // --- Import patients ---
     const patientFiles = [];
     const patientsDir = zip.folder('patients');
     if (patientsDir) {
@@ -581,31 +637,83 @@ async function importFromZip(file) {
         });
     }
 
+    const importTotal = setFiles.length + patientFiles.length;
+    let importDone = 0;
+
+    // Sets are processed and saved one at a time so only a single set's images
+    // are ever held decompressed in memory.
+    for (const entry of setFiles) {
+        showBackupProgress(`Importazione set ${importDone + 1}/${importTotal}...`, (importDone / Math.max(1, importTotal)) * 100);
+        const setData = JSON.parse(await entry.async('text'));
+
+        // Rehydrate item images from ZIP (base64 straight from JSZip, no binary round trips)
+        for (const item of setData.items) {
+            if (item.url && !item.url.startsWith('data:') && !item.url.startsWith('http')) {
+                item.url = (await zipEntryToDataUrl(zip, item.url)) || item.url;
+            }
+            if (item.audio && !item.audio.startsWith('data:')) {
+                item.audio = (await zipEntryToDataUrl(zip, item.audio)) || item.audio;
+            }
+            // Rehydrate derived images
+            for (const field of ['maskedUrl', 'originalUrl']) {
+                if (item[field] && !item[field].startsWith('data:') && !item[field].startsWith('http')) {
+                    item[field] = (await zipEntryToDataUrl(zip, item[field])) || item[field];
+                }
+            }
+            // Rehydrate variant images
+            if (item.variantUrls && typeof item.variantUrls === 'object') {
+                for (const [vIdx, vPath] of Object.entries(item.variantUrls)) {
+                    if (vPath && !vPath.startsWith('data:') && !vPath.startsWith('http')) {
+                        item.variantUrls[vIdx] = (await zipEntryToDataUrl(zip, vPath)) || vPath;
+                    }
+                }
+            }
+        }
+
+        if (setData.id) {
+            if (localSetsMap[setData.id]) {
+                const merged = mergeSets(localSetsMap[setData.id], setData);
+                await DB.saveSet(merged);
+                // Replace the in-memory reference so subsequent merges don't
+                // keep the old (image-heavy) version alive.
+                localSetsMap[setData.id] = merged;
+                setsUpdated++;
+            } else {
+                await DB.saveSet(setData);
+                setsAdded++;
+            }
+        }
+        importDone++;
+        await _yieldToUI();
+    }
+
+    // --- Import patients ---
     for (const entry of patientFiles) {
+        showBackupProgress(`Importazione pazienti ${importDone + 1}/${importTotal}...`, (importDone / Math.max(1, importTotal)) * 100);
         const pData = JSON.parse(await entry.async('text'));
 
         // Rehydrate patient photo
         if (pData.photo && !pData.photo.startsWith('data:') && !pData.photo.startsWith('http')) {
-            const photoFile = zip.file(pData.photo);
-            if (photoFile) {
-                const ext = pData.photo.split('.').pop();
-                const uint8 = await photoFile.async('uint8array');
-                pData.photo = binaryToDataUrl(uint8, ext);
-            }
+            pData.photo = (await zipEntryToDataUrl(zip, pData.photo)) || pData.photo;
         }
 
-        if (!pData.id) continue;
-        if (localPatientsMap[pData.id]) {
-            const merged = mergePatients(localPatientsMap[pData.id], pData);
-            await DB.savePatient(merged);
-            patientsUpdated++;
-        } else {
-            await DB.savePatient(pData);
-            patientsAdded++;
+        if (pData.id) {
+            if (localPatientsMap[pData.id]) {
+                const merged = mergePatients(localPatientsMap[pData.id], pData);
+                await DB.savePatient(merged);
+                localPatientsMap[pData.id] = merged;
+                patientsUpdated++;
+            } else {
+                await DB.savePatient(pData);
+                patientsAdded++;
+            }
         }
+        importDone++;
+        await _yieldToUI();
     }
 
     // --- Import config ---
+    showBackupProgress('Importazione configurazione...', 95);
     const configDir = zip.folder('config');
 
     // Tag images
@@ -614,12 +722,8 @@ async function importFromZip(file) {
         const tagImageMap = JSON.parse(await tagMapFile.async('text'));
         const existing = getAllTagImages();
         for (const [tag, path] of Object.entries(tagImageMap)) {
-            const imgFile = zip.file(path);
-            if (imgFile) {
-                const ext = path.split('.').pop();
-                const uint8 = await imgFile.async('uint8array');
-                existing[tag] = binaryToDataUrl(uint8, ext);
-            }
+            const dataUrl = await zipEntryToDataUrl(zip, path);
+            if (dataUrl) existing[tag] = dataUrl;
         }
         await DB.importAllTagImages(existing);
         Object.assign(_tagImageCache, existing);
@@ -685,6 +789,7 @@ async function importFromZip(file) {
     }
 
     // Summary
+    hideBackupProgress();
     const parts = [];
     if (setsAdded > 0) parts.push(`${setsAdded} set aggiunti`);
     if (setsUpdated > 0) parts.push(`${setsUpdated} set aggiornati`);
@@ -794,7 +899,9 @@ async function importFromJSON(file) {
 // --- MERGE HELPERS ---
 
 function mergeSets(local, incoming) {
-    const merged = JSON.parse(JSON.stringify(local));
+    // Shallow clone: item objects are replaced (not mutated) below, so sharing
+    // references with `local` is safe and avoids duplicating base64 images.
+    const merged = { ...local, items: [...(local.items || [])], tags: [...(local.tags || [])], modes: [...(local.modes || [])] };
     const localByLabel = {};
     merged.items.forEach((item, i) => { localByLabel[item.label || item.l || ''] = i; });
 
@@ -817,11 +924,20 @@ function mergeSets(local, incoming) {
     if (incoming.sortOrder != null && merged.sortOrder == null) {
         merged.sortOrder = incoming.sortOrder;
     }
+    // Config fields previously dropped by the whitelist: adopt the backup's
+    // values where the local set never customized them; variant names are
+    // positional (they map to variantUrls indexes), so fill gaps slot by slot.
+    if (incoming.imageQuality && !merged.imageQuality) merged.imageQuality = incoming.imageQuality;
+    if (Array.isArray(incoming.variantNames) && incoming.variantNames.length) {
+        const names = [...(merged.variantNames || [])];
+        incoming.variantNames.forEach((n, i) => { if (n && !names[i]) names[i] = n; });
+        merged.variantNames = names;
+    }
     return merged;
 }
 
 function mergePatients(local, incoming) {
-    const merged = JSON.parse(JSON.stringify(local));
+    const merged = { ...local, history: [...(local.history || [])] };
     if (incoming.history && Array.isArray(incoming.history)) {
         if (!merged.history) merged.history = [];
         const existingByKey = {};
@@ -841,34 +957,48 @@ function mergePatients(local, incoming) {
     }
     if (incoming.name && !merged.name) merged.name = incoming.name;
     if (incoming.notes && !merged.notes) merged.notes = incoming.notes;
+
+    // Merge date-keyed maps (existing local entries win on conflict)
+    ['dailyNotes', 'outlierDays', 'dayTags', 'criterionOverrides'].forEach(field => {
+        if (incoming[field] && typeof incoming[field] === 'object') {
+            merged[field] = { ...incoming[field], ...(merged[field] || {}) };
+        }
+    });
+    if (!merged.photo && incoming.photo) merged.photo = incoming.photo;
+    // criterionThreshold was previously dropped on merge: adopt the backup's
+    // custom value when the local patient is still at the default.
+    const defThr = (typeof DEFAULT_CRITERION !== 'undefined') ? DEFAULT_CRITERION : 90;
+    if (incoming.criterionThreshold != null && (merged.criterionThreshold == null || merged.criterionThreshold === defThr)) {
+        merged.criterionThreshold = incoming.criterionThreshold;
+    }
     return merged;
 }
 
 function mergeActivityLayout(incoming) {
+    // Full replace: restore the exact layout structure (groups, ordering, icons, colors)
+    // from the backup, preserving any local custom modes not present in backup
     const local = getActivityLayout();
-    if (incoming.customModes) {
-        if (!local.customModes) local.customModes = {};
-        for (const [k, v] of Object.entries(incoming.customModes)) {
-            if (!local.customModes[k]) {
-                local.customModes[k] = v;
-                const inAnyGroup = local.groups.some(g => g.modes.includes(k));
-                if (!inAnyGroup && local.groups.length > 0) local.groups[0].modes.push(k);
+    const result = JSON.parse(JSON.stringify(incoming));
+
+    // Ensure required fields exist
+    if (!result.groups) result.groups = local.groups;
+    if (!result.customModes) result.customModes = {};
+    if (!result.modeEmojis) result.modeEmojis = {};
+
+    // Preserve local custom modes not in backup
+    if (local.customModes) {
+        for (const [k, v] of Object.entries(local.customModes)) {
+            if (!result.customModes[k]) {
+                result.customModes[k] = v;
+                const inAnyGroup = (result.groups || []).some(g => (g.modes || []).includes(k));
+                if (!inAnyGroup && result.groups && result.groups.length > 0) {
+                    result.groups[0].modes.push(k);
+                }
             }
         }
     }
-    if (incoming.modeEmojis) {
-        if (!local.modeEmojis) local.modeEmojis = {};
-        Object.assign(local.modeEmojis, incoming.modeEmojis);
-    }
-    if (incoming.modeIcons) {
-        if (!local.modeIcons) local.modeIcons = {};
-        Object.assign(local.modeIcons, incoming.modeIcons);
-    }
-    if (incoming.groupColors) {
-        if (!local.groupColors) local.groupColors = {};
-        Object.assign(local.groupColors, incoming.groupColors);
-    }
-    saveActivityLayout(local);
+
+    saveActivityLayout(result);
     renderModeSelect();
 }
 

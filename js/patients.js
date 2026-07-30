@@ -92,6 +92,10 @@ window.selectPatientFromDropdown = (pid) => {
 
 window.setGlobalPatient = (pid) => {
     state.activePatientId = pid || null;
+    // Side quaderno is per-patient: drop the cached copy so it reloads for the new patient
+    state._sideQuaderno = null;
+    const nbPanel = document.getElementById('notebook-side-panel');
+    if (nbPanel && nbPanel.classList.contains('open') && typeof renderNotebookPanel === 'function') renderNotebookPanel();
     if (typeof filterSetsByMode === 'function') filterSetsByMode();
 };
 
@@ -238,7 +242,7 @@ window.openPatients = async () => {
 window.closePatients = () => document.getElementById('modal-patients').classList.remove('open');
 
 window.createNewPatient = async () => {
-    const name = prompt("Nome:");
+    const name = await themedPrompt("Nome:");
     if (name) {
         const newPatient = { id: Date.now().toString(), name: name, history: [] };
         await DB.savePatient(newPatient);
@@ -253,7 +257,7 @@ window.createNewPatient = async () => {
 window.renamePatient = async (patientId) => {
     const p = state.patients.find(x => x.id === patientId);
     if (!p) return;
-    const newName = prompt("Nuovo nome:", p.name);
+    const newName = await themedPrompt("Nuovo nome:", p.name);
     if (!newName || newName.trim() === '' || newName.trim() === p.name) return;
     p.name = newName.trim();
     await DB.savePatient(p);
@@ -270,7 +274,7 @@ window.editPatientCategory = async (patientId) => {
     // Gather existing categories for suggestions
     const existingCats = [...new Set(state.patients.map(x => x.category).filter(Boolean))];
     const suggestion = existingCats.length > 0 ? `\n\nCategorie esistenti: ${existingCats.join(', ')}` : '';
-    const newCat = prompt(`Categoria per ${p.name}:${suggestion}`, p.category || '');
+    const newCat = await themedPrompt(`Categoria per ${p.name}:${suggestion}`, p.category || '');
     if (newCat === null) return;
     p.category = newCat.trim();
     await DB.savePatient(p);
@@ -281,7 +285,7 @@ window.editPatientCategory = async (patientId) => {
 
 // --- DELETE PATIENT ---
 window.deletePatient = async (patientId) => {
-    if (!confirm("Eliminare definitivamente questo paziente e tutti i suoi dati?")) return;
+    if (!await themedConfirm("Eliminare definitivamente questo paziente e tutti i suoi dati?")) return;
     await DB.deletePatient(patientId);
     state.patients = await DB.getAllPatients();
     if (state.activePatientId === patientId) state.activePatientId = null;
@@ -292,7 +296,7 @@ window.deletePatient = async (patientId) => {
 
 // --- SESSION MANAGEMENT ---
 window.deleteSession = async (patientId, sessionIndex) => {
-    if (!confirm("Eliminare questa sessione dai dati?")) return;
+    if (!await themedConfirm("Eliminare questa sessione dai dati?")) return;
     const p = state.patients.find(x => x.id === patientId);
     p.history.splice(sessionIndex, 1);
     await DB.savePatient(p);
@@ -303,33 +307,38 @@ window.editSession = async (patientId, sessionIndex) => {
     const p = state.patients.find(x => x.id === patientId);
     const s = p.history[sessionIndex];
     const currentDateStr = s.date.substring(0, 10);
-    const newDateStr = prompt("Data (AAAA-MM-GG):", currentDateStr);
+    const newDateStr = await themedPrompt("Data (AAAA-MM-GG):", currentDateStr);
     if (newDateStr === null) return;
-    const newScore = prompt("Punteggio Corretti:", s.correct);
+    const newScore = await themedPrompt("Punteggio Corretti:", s.correct);
     if (newScore === null) return;
-    const newTotal = prompt("Totale Item:", s.total);
+    const newTotal = await themedPrompt("Totale Item:", s.total);
     if (newTotal === null) return;
 
     // Session type selection
     const currentType = s.sessionType || 'independent';
-    const typeChoice = prompt("Tipo sessione (1 = Indipendente, 2 = Time Delay):", currentType === 'timedelay' ? '2' : '1');
+    const typeChoice = await themedPrompt("Tipo sessione (1 = Indipendente, 2 = Time Delay):", currentType === 'timedelay' ? '2' : '1');
     if (typeChoice === null) return;
     const newType = typeChoice.trim() === '2' ? 'timedelay' : 'independent';
 
     let newTDSeconds = s.timeDelaySeconds || 5;
     if (newType === 'timedelay') {
-        const tdInput = prompt("Secondi Time Delay:", newTDSeconds);
+        const tdInput = await themedPrompt("Secondi Time Delay:", newTDSeconds);
         if (tdInput === null) return;
         newTDSeconds = parseInt(tdInput) || 5;
     }
 
+    const vCorrect = parseInt(newScore), vTotal = parseInt(newTotal);
+    if (!Number.isFinite(vCorrect) || !Number.isFinite(vTotal) || vTotal <= 0 || vCorrect < 0 || vCorrect > vTotal) {
+        alert('Valori non validi: il totale deve essere maggiore di 0 e i corretti compresi tra 0 e il totale.');
+        return;
+    }
     try {
         let d = new Date(newDateStr);
         if (isNaN(d.getTime())) throw "Data invalida";
         s.date = d.toISOString();
     } catch (e) { alert("Formato data errato. Usa AAAA-MM-GG"); return; }
-    s.correct = parseInt(newScore);
-    s.total = parseInt(newTotal);
+    s.correct = vCorrect;
+    s.total = vTotal;
     s.percentage = Math.round((s.correct / s.total) * 100);
     s.sessionType = newType;
     if (newType === 'timedelay') {
@@ -350,8 +359,13 @@ function formatDateEU(isoStr) {
 }
 
 function getDateKey(isoStr) {
-    return new Date(isoStr).toISOString().split('T')[0];
+    // Local calendar day, NOT UTC: with toISOString() a session at 00:30 local
+    // (UTC+2) was bucketed, charted and criterion-checked under the previous day.
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return String(isoStr).split('T')[0];
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+window.getDateKey = getDateKey;
 
 function getSessionTypeGroup(s) {
     if (s.sessionType === 'timedelay') return 'timedelay';
@@ -365,13 +379,14 @@ function getSessionTypeLabel(typeGroup) {
 }
 
 // --- CRITERION CHECK ---
-function checkCriterion(sessions) {
+function checkCriterion(sessions, threshold) {
     if (sessions.length < 2) return false;
+    if (threshold === undefined) threshold = DEFAULT_CRITERION;
     const sorted = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
     let consecutive = 0, lastDateStr = null;
     for (const s of sorted) {
         const currentDateStr = getDateKey(s.date);
-        if (s.percentage >= 90) {
+        if (s.percentage >= threshold) {
             if (lastDateStr && currentDateStr !== lastDateStr) consecutive++;
             else if (!lastDateStr) consecutive = 1;
             lastDateStr = currentDateStr;
@@ -381,20 +396,137 @@ function checkCriterion(sessions) {
     return false;
 }
 
-// --- REPERTORIO CHECK (>= 90% on first session) ---
-function checkRepertorio(sessions) {
+function checkRepertorio(sessions, threshold) {
     if (sessions.length === 0) return false;
+    if (threshold === undefined) threshold = DEFAULT_CRITERION;
     const sorted = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
-    return sorted[0].percentage >= 90;
+    return sorted[0].percentage >= threshold;
 }
 
-// --- NEAR CRITERION CHECK (last session >= 90%) ---
-function isNearCriterion(sessions) {
+function isNearCriterion(sessions, threshold) {
     if (sessions.length === 0) return false;
+    if (threshold === undefined) threshold = DEFAULT_CRITERION;
     const sorted = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
     const last = sorted[sorted.length - 1];
-    return last.percentage >= 90;
+    return last.percentage >= threshold;
 }
+
+// --- THRESHOLD EDITOR ---
+function _criterionOverrideLabel(key) {
+    if (key.startsWith('mode:')) {
+        const m = key.slice(5);
+        return `Modalità: ${MODES_CONFIG[m] || m}`;
+    } else if (key.startsWith('set:')) {
+        return `Set: ${key.slice(4)}`;
+    } else if (key.includes('::')) {
+        const [sn, m] = key.split('::');
+        return `${sn} (${MODES_CONFIG[m] || m})`;
+    }
+    return key;
+}
+
+window.openThresholdEditor = (pid) => {
+    const p = state.patients.find(x => x.id === pid);
+    if (!p) return;
+    const globalThreshold = p.criterionThreshold || DEFAULT_CRITERION;
+    const overrides = p.criterionOverrides || {};
+
+    const history = p.history || [];
+    const activities = {};
+    history.forEach(h => {
+        const key = `${h.setName}::${h.mode}`;
+        if (!activities[key]) activities[key] = { setName: h.setName, mode: h.mode };
+    });
+
+    let overrideRows = '';
+    Object.entries(overrides).sort().forEach(([key, val]) => {
+        const label = _criterionOverrideLabel(key);
+        overrideRows += `<div style="display:flex; align-items:center; gap:8px; padding:6px 8px; background:rgba(255,255,255,0.03); border-radius:6px; margin-bottom:4px;">
+            <span style="flex:1; font-size:0.85rem; overflow:hidden; text-overflow:ellipsis;">${label}</span>
+            <input type="number" min="10" max="100" value="${val}" style="width:60px; padding:4px; border-radius:4px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.3); color:white; text-align:center; font-size:0.85rem;" onchange="_setCriterionOverrideRaw('${pid}', '${key.replace(/'/g, "\\'")}', this.value)">
+            <span style="font-size:0.8rem; color:var(--text-secondary);">%</span>
+            <button class="btn-icon" style="width:24px; height:24px; color:var(--danger-color);" onclick="deleteCriterionOverride('${pid}', '${key.replace(/'/g, "\\'")}'); openThresholdEditor('${pid}');"><i class="fa-solid fa-xmark"></i></button>
+        </div>`;
+    });
+
+    const modeOptions = Object.entries(MODES_CONFIG).map(([k, v]) => `<option value="mode:${k}">${v}</option>`).join('');
+    const setNames = [...new Set(history.map(h => h.setName))].sort();
+    const setOptions = setNames.map(n => `<option value="set:${n}">${n}</option>`).join('');
+    const actOptions = Object.values(activities).map(a => `<option value="${a.setName}::${a.mode}">${a.setName} (${MODES_CONFIG[a.mode] || a.mode})</option>`).join('');
+
+    const existing = document.getElementById('modal-threshold-editor');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'modal-threshold-editor';
+    modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:25000; display:flex; align-items:center; justify-content:center; padding:20px; overflow-y:auto;';
+
+    modal.innerHTML = `
+        <div style="width:100%; max-width:480px; background:#1e1e2f; border-radius:16px; border:1px solid var(--glass-border); padding:22px; max-height:90vh; overflow-y:auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                <h3 style="margin:0; color:var(--accent-color);"><i class="fa-solid fa-sliders"></i> Soglie Criterio</h3>
+                <button class="btn btn-ghost" onclick="document.getElementById('modal-threshold-editor').remove()" style="padding:6px 10px;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <p style="font-size:0.8rem; color:var(--text-secondary); margin:0 0 16px;">Soglia % di risposte corrette per considerare il criterio raggiunto. Default: ${DEFAULT_CRITERION}%. Le soglie più specifiche (set+modalità) prevalgono su modalità e set.</p>
+            <div style="margin-bottom:16px; padding:12px; background:rgba(139,92,246,0.08); border:1px solid rgba(139,92,246,0.2); border-radius:10px;">
+                <div style="font-size:0.85rem; font-weight:bold; margin-bottom:8px; color:#8b5cf6;"><i class="fa-solid fa-user"></i> Soglia Globale Paziente</div>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <input type="range" min="10" max="100" step="5" value="${globalThreshold}" id="threshold-global-range" oninput="document.getElementById('threshold-global-val').value=this.value" style="flex:1;">
+                    <input type="number" min="10" max="100" value="${globalThreshold}" id="threshold-global-val" style="width:55px; padding:4px; border-radius:4px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.3); color:white; text-align:center; font-size:0.9rem; font-weight:bold;" oninput="document.getElementById('threshold-global-range').value=this.value">
+                    <span style="font-size:0.85rem; color:var(--text-secondary);">%</span>
+                </div>
+                <button class="btn btn-primary" style="margin-top:8px; padding:6px 16px; font-size:0.8rem;" onclick="setCriterionThreshold('${pid}', document.getElementById('threshold-global-val').value); this.textContent='Salvato ✓'; setTimeout(()=>{this.textContent='Salva';},1500);">Salva</button>
+            </div>
+            ${overrideRows ? `<div style="margin-bottom:16px;"><div style="font-size:0.85rem; font-weight:bold; margin-bottom:8px; color:var(--text-secondary);"><i class="fa-solid fa-list"></i> Override Attivi</div>${overrideRows}</div>` : ''}
+            <div style="padding:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px;">
+                <div style="font-size:0.85rem; font-weight:bold; margin-bottom:8px; color:var(--text-secondary);"><i class="fa-solid fa-plus"></i> Aggiungi Override</div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:end;">
+                    <div style="flex:1; min-width:150px;">
+                        <label style="font-size:0.7rem; color:var(--text-secondary);">Ambito</label>
+                        <select id="threshold-new-scope" style="width:100%; padding:6px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.3); color:white; font-size:0.8rem;">
+                            <optgroup label="Modalità">${modeOptions}</optgroup>
+                            ${setOptions ? `<optgroup label="Set">${setOptions}</optgroup>` : ''}
+                            ${actOptions ? `<optgroup label="Set + Modalità">${actOptions}</optgroup>` : ''}
+                        </select>
+                    </div>
+                    <div style="width:70px;">
+                        <label style="font-size:0.7rem; color:var(--text-secondary);">Soglia %</label>
+                        <input type="number" min="10" max="100" value="80" id="threshold-new-val" style="width:100%; padding:6px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.3); color:white; text-align:center; font-size:0.85rem;">
+                    </div>
+                    <button class="btn btn-primary" style="padding:6px 14px; font-size:0.8rem;" onclick="addCriterionOverride('${pid}')"><i class="fa-solid fa-plus"></i></button>
+                </div>
+            </div>
+        </div>`;
+
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    document.body.appendChild(modal);
+};
+
+window._setCriterionOverrideRaw = (pid, key, value) => {
+    const p = state.patients.find(x => x.id === pid);
+    if (!p) return;
+    if (!p.criterionOverrides) p.criterionOverrides = {};
+    p.criterionOverrides[key] = Math.max(10, Math.min(100, parseInt(value) || DEFAULT_CRITERION));
+    DB.savePatient(p);
+};
+
+window.addCriterionOverride = (pid) => {
+    const scope = document.getElementById('threshold-new-scope').value;
+    const val = parseInt(document.getElementById('threshold-new-val').value) || DEFAULT_CRITERION;
+    const p = state.patients.find(x => x.id === pid);
+    if (!p) return;
+    if (!p.criterionOverrides) p.criterionOverrides = {};
+    p.criterionOverrides[scope] = Math.max(10, Math.min(100, val));
+    DB.savePatient(p);
+    openThresholdEditor(pid);
+};
+
+window.deleteCriterionOverride = (pid, key) => {
+    const p = state.patients.find(x => x.id === pid);
+    if (!p || !p.criterionOverrides) return;
+    delete p.criterionOverrides[key];
+    DB.savePatient(p);
+};
 
 // ============================================================
 // --- LOAD PATIENT DATA (New Dashboard) ---
@@ -420,10 +552,10 @@ window.loadPatientData = (pid) => {
         <div style="display:flex; gap:15px; margin-bottom:15px; align-items:center;">
             ${photoHtml}
             <div style="flex:1;">
-                <div style="font-size:1.1rem; font-weight:700;">${p.name}</div>
+                <div style="font-size:1.1rem; font-weight:700;">${escapeHtml(p.name)}</div>
                 <div style="display:flex; gap:6px; align-items:center; margin-top:4px;">
                     <span onclick="editPatientCategory('${pid}')" style="font-size:0.75rem; padding:2px 8px; border-radius:6px; background:rgba(99,102,241,0.15); color:var(--accent-color); cursor:pointer;" title="Cambia categoria">
-                        <i class="fa-solid fa-tag" style="margin-right:3px;"></i>${p.category || 'Nessuna categoria'}
+                        <i class="fa-solid fa-tag" style="margin-right:3px;"></i>${escapeHtml(p.category || 'Nessuna categoria')}
                     </span>
                 </div>
             </div>
@@ -431,11 +563,26 @@ window.loadPatientData = (pid) => {
                 <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem;" onclick="renamePatient('${pid}')">
                     <i class="fa-solid fa-pen"></i>
                 </button>
+                <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(234,179,8,0.3); color:#eab308;" onclick="openDailyNoteEditor('${pid}')" title="Nota Giornata">
+                    <i class="fa-solid fa-book-medical"></i>
+                </button>
                 <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(99,102,241,0.3); color:var(--accent-color);" onclick="generateAIReport('${pid}')" title="Report AI">
                     <i class="fa-solid fa-wand-magic-sparkles"></i>
                 </button>
+                <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(168,85,247,0.3); color:#a855f7;" onclick="openReportHistoryStandalone('${pid}')" title="Storico Report AI">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                </button>
                 <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(16,185,129,0.3); color:var(--success-color);" onclick="exportPatientExcel('${pid}')">
                     <i class="fa-solid fa-file-excel"></i>
+                </button>
+                <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(251,191,36,0.3); color:#fbbf24;" onclick="quickSharePatientDirect('${pid}')" title="Quick Share">
+                    <i class="fa-solid fa-share-from-square"></i>
+                </button>
+                <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(6,182,212,0.3); color:#06b6d4;" onclick="offlineSharePatient('${pid}')" title="Condividi Offline">
+                    <i class="fa-solid fa-tower-broadcast"></i>
+                </button>
+                <button class="btn btn-ghost" style="padding:6px 12px; font-size:0.85rem; border-color:rgba(139,92,246,0.3); color:#8b5cf6;" onclick="openThresholdEditor('${pid}')" title="Soglie Criterio">
+                    <i class="fa-solid fa-sliders"></i>
                 </button>
                 <button class="btn btn-danger" style="padding:6px 12px; font-size:0.85rem;" onclick="deletePatient('${pid}')">
                     <i class="fa-solid fa-user-minus"></i>
@@ -444,7 +591,8 @@ window.loadPatientData = (pid) => {
         </div>
     `;
 
-    if (!p.history || p.history.length === 0) {
+    const hasDailyNotes = p.dailyNotes && Object.keys(p.dailyNotes).length > 0;
+    if ((!p.history || p.history.length === 0) && !hasDailyNotes) {
         container.innerHTML += '<p style="text-align:center; opacity:0.5; padding:20px;">Nessun dato registrato.</p>';
         document.getElementById('patient-dashboard').classList.remove('hidden');
         return;
@@ -461,6 +609,12 @@ window.loadPatientData = (pid) => {
             </button>
             <button class="report-tab" onclick="switchReportTab('activities', '${pid}')" data-tab="activities" style="flex:1; padding:8px; border:none; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.85rem; background:transparent; color:var(--text-secondary);">
                 <i class="fa-solid fa-list-check"></i> Attivit&agrave;
+            </button>
+            <button class="report-tab" onclick="switchReportTab('viz', '${pid}')" data-tab="viz" style="flex:1; padding:8px; border:none; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.85rem; background:transparent; color:var(--text-secondary);">
+                <i class="fa-solid fa-shapes"></i> Visual
+            </button>
+            <button class="report-tab" onclick="switchReportTab('diary', '${pid}')" data-tab="diary" style="flex:1; padding:8px; border:none; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.85rem; background:transparent; color:var(--text-secondary);">
+                <i class="fa-solid fa-book-medical"></i> Diario
             </button>
         </div>
         <div id="report-content"></div>
@@ -490,6 +644,8 @@ window.switchReportTab = (tab, pid) => {
     if (tab === 'overview') renderOverviewTab(p);
     else if (tab === 'dates') renderDatesTab(p);
     else if (tab === 'activities') renderActivitiesTab(p);
+    else if (tab === 'viz') renderVizTab(p);
+    else if (tab === 'diary') renderDiaryTab(p);
 };
 
 // ============================================================
@@ -499,7 +655,7 @@ function renderOverviewTab(patient) {
     const content = document.getElementById('report-content');
     if (!content) return;
 
-    const history = patient.history;
+    const history = patient.history || [];
     const byDate = {};
     history.forEach(h => {
         const dk = getDateKey(h.date);
@@ -508,27 +664,87 @@ function renderOverviewTab(patient) {
     });
 
     const dates = Object.keys(byDate).sort();
+    // Check which days have notes (daily notes or activity notes)
+    const dailyNotes = patient.dailyNotes || {};
     const dailyData = dates.map(dk => {
         const sessions = byDate[dk];
         const totalLU = sessions.reduce((sum, s) => sum + s.total, 0);
         const correctLU = sessions.reduce((sum, s) => sum + s.correct, 0);
-        return { date: dk, totalLU, correctLU, incorrectLU: totalLU - correctLU, sessions: sessions.length };
+        const hasDailyNote = !!dailyNotes[dk];
+        const hasActivityNotes = sessions.some(s => s.note);
+        return { date: dk, totalLU, correctLU, incorrectLU: totalLU - correctLU, sessions: sessions.length, hasNote: hasDailyNote || hasActivityNotes };
+    });
+
+    // --- Time filtering & outliers ---
+    const timeFilter = state._overviewFilter || 'all';
+    const excludeOutliers = state._overviewExcludeOutliers || false;
+    const chartType = state._overviewChartType || 'bar';
+    const outlierDays = patient.outlierDays || {};
+    const outlierCount = Object.keys(outlierDays).length;
+
+    let filteredDaily = [...dailyData];
+    const nowDate = new Date();
+    const todayStr = nowDate.toISOString().split('T')[0];
+
+    if (timeFilter === 'week') {
+        const from = new Date(nowDate.getTime() - 7 * 86400000).toISOString().split('T')[0];
+        filteredDaily = filteredDaily.filter(d => d.date >= from);
+    } else if (timeFilter === 'month') {
+        const from = new Date(nowDate.getTime() - 30 * 86400000).toISOString().split('T')[0];
+        filteredDaily = filteredDaily.filter(d => d.date >= from);
+    } else if (timeFilter === 'year') {
+        const from = new Date(nowDate.getTime() - 365 * 86400000).toISOString().split('T')[0];
+        filteredDaily = filteredDaily.filter(d => d.date >= from);
+    } else if (timeFilter === 'custom') {
+        const from = state._overviewFilterFrom || '';
+        const to = state._overviewFilterTo || todayStr;
+        if (from) filteredDaily = filteredDaily.filter(d => d.date >= from);
+        if (to) filteredDaily = filteredDaily.filter(d => d.date <= to);
+    }
+
+    const filteredDateSet = new Set(filteredDaily.map(d => d.date));
+    let metricsDaily = excludeOutliers ? filteredDaily.filter(d => !outlierDays[d.date]) : filteredDaily;
+
+    const filteredHistory = history.filter(h => {
+        const dk = getDateKey(h.date);
+        if (!filteredDateSet.has(dk)) return false;
+        if (excludeOutliers && outlierDays[dk]) return false;
+        return true;
     });
 
     const lastSession = [...history].sort((a, b) => new Date(b.date) - new Date(a.date))[0];
-    const numDays = dates.length;
-    const totalSessions = history.length;
-    const totalLUAll = history.reduce((sum, s) => sum + s.total, 0);
-    const correctLUAll = history.reduce((sum, s) => sum + s.correct, 0);
+    const numDays = metricsDaily.length;
+    const totalSessions = filteredHistory.length;
+    const totalLUAll = filteredHistory.reduce((sum, s) => sum + s.total, 0);
+    const correctLUAll = filteredHistory.reduce((sum, s) => sum + s.correct, 0);
 
-    // Daily averages
     const avgSessionsPerDay = numDays > 0 ? (totalSessions / numDays).toFixed(1) : 0;
     const avgCorrectPerDay = numDays > 0 ? Math.round(correctLUAll / numDays) : 0;
     const avgTotalPerDay = numDays > 0 ? Math.round(totalLUAll / numDays) : 0;
-    const dailyPcts = dailyData.map(d => d.totalLU > 0 ? (d.correctLU / d.totalLU) * 100 : 0);
+    const dailyPcts = metricsDaily.map(d => d.totalLU > 0 ? (d.correctLU / d.totalLU) * 100 : 0);
     const avgDailyPct = dailyPcts.length > 0 ? Math.round(dailyPcts.reduce((a, b) => a + b, 0) / dailyPcts.length) : 0;
 
+    const _fBtn = (val, label) => `<button onclick="changeOverviewFilter('${val}', '${patient.id}')" style="padding:4px 10px; border-radius:6px; font-size:0.7rem; border:1px solid ${timeFilter === val ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)'}; background:${timeFilter === val ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.03)'}; color:${timeFilter === val ? 'var(--accent-color)' : 'var(--text-secondary)'}; cursor:pointer; font-weight:${timeFilter === val ? 'bold' : 'normal'};">${label}</button>`;
+
     let html = `
+    <div style="display:flex; gap:6px; margin-bottom:12px; align-items:center; flex-wrap:wrap; background:rgba(0,0,0,0.2); padding:8px; border-radius:10px;">
+        <span style="font-size:0.75rem; color:var(--text-secondary); margin-right:2px;"><i class="fa-solid fa-filter"></i></span>
+        ${_fBtn('week', 'Sett.')}
+        ${_fBtn('month', 'Mese')}
+        ${_fBtn('year', 'Anno')}
+        ${_fBtn('custom', 'Da-A')}
+        ${_fBtn('all', 'Tutto')}
+        ${outlierCount > 0 ? `<label style="font-size:0.7rem; color:var(--text-secondary); display:flex; align-items:center; gap:4px; margin-left:auto; cursor:pointer;"><input type="checkbox" ${excludeOutliers ? 'checked' : ''} onchange="toggleOverviewOutliers('${patient.id}')"> <i class="fa-solid fa-triangle-exclamation" style="color:var(--warning-color); font-size:0.6rem;"></i> Escludi outlier (${outlierCount})</label>` : ''}
+        <button onclick="toggleOverviewChartType('${patient.id}')" style="padding:4px 8px; border-radius:6px; font-size:0.7rem; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.03); color:var(--text-secondary); cursor:pointer; margin-left:${outlierCount > 0 ? '0' : 'auto'};" title="Cambia visualizzazione"><i class="fa-solid ${chartType === 'bar' ? 'fa-chart-line' : 'fa-chart-bar'}"></i></button>
+    </div>
+    ${timeFilter === 'custom' ? `
+    <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
+        <label style="font-size:0.75rem; color:var(--text-secondary);">Da:</label>
+        <input type="date" value="${state._overviewFilterFrom || ''}" onchange="state._overviewFilterFrom=this.value; renderOverviewTab(state.patients.find(p=>p.id==='${patient.id}'))" style="padding:4px 8px; border-radius:6px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.8rem;">
+        <label style="font-size:0.75rem; color:var(--text-secondary);">A:</label>
+        <input type="date" value="${state._overviewFilterTo || todayStr}" onchange="state._overviewFilterTo=this.value; renderOverviewTab(state.patients.find(p=>p.id==='${patient.id}'))" style="padding:4px 8px; border-radius:6px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.8rem;">
+    </div>` : ''}
+
     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:10px; margin-bottom:20px;">
         <div style="background:rgba(99,102,241,0.15); padding:12px; border-radius:12px; text-align:center; border:1px solid rgba(99,102,241,0.3);">
             <div style="font-size:1.5rem; font-weight:800; color:var(--accent-color);">${avgSessionsPerDay}</div>
@@ -552,11 +768,12 @@ function renderOverviewTab(patient) {
         </div>
     </div>`;
 
-    if (dailyData.length > 0) {
+    if (filteredDaily.length > 0) {
         html += `
         <div class="chart-wrapper" style="margin-bottom:20px;">
             <h4 style="margin:0 0 10px 0; color:var(--accent-color); font-size:0.95rem;">
-                <i class="fa-solid fa-chart-bar"></i> Learn Unit Giornaliere
+                <i class="fa-solid ${chartType === 'bar' ? 'fa-chart-bar' : 'fa-chart-line'}"></i> Learn Unit Giornaliere
+                ${timeFilter !== 'all' ? `<span style="font-size:0.7rem; color:var(--text-secondary); font-weight:normal;">(${filteredDaily.length} giorni)</span>` : ''}
             </h4>
             <div id="daily-lu-chart" style="overflow-x:auto;"></div>
         </div>`;
@@ -574,108 +791,237 @@ function renderOverviewTab(patient) {
                 <div><span style="color:var(--text-secondary);">Data:</span> <b>${formatDateEU(lastSession.date)}</b></div>
                 <div><span style="color:var(--text-secondary);">Attivit&agrave;:</span> <b><i class="fa-solid ${lastModeIcon}" style="font-size:0.8rem; margin-right:3px; opacity:0.7;"></i>${modeName}</b></div>
                 <div><span style="color:var(--text-secondary);">Set:</span> <b>${lastSession.setName}</b>${lastSession.setCat ? ` <span style="color:var(--text-secondary); font-size:0.8em;">(${lastSession.setCat})</span>` : ''}</div>
-                <div><span style="color:var(--text-secondary);">Score:</span> <b style="color:${lastSession.percentage >= 90 ? 'var(--success-color)' : 'white'}">${lastSession.correct}/${lastSession.total} (${lastSession.percentage}%)</b></div>
+                <div><span style="color:var(--text-secondary);">Score:</span> <b style="color:${pctColor(lastSession.percentage)}">${lastSession.correct}/${lastSession.total} (${lastSession.percentage}%)</b></div>
             </div>
         </div>`;
     }
 
     content.innerHTML = html;
-    if (dailyData.length > 0) renderDailyLUChart(dailyData);
+    if (filteredDaily.length > 0) renderDailyLUChart(filteredDaily, outlierDays, chartType, patient.dayTags || {});
 }
 
-// --- Daily LU Bar Chart (green correct, red incorrect) ---
-function renderDailyLUChart(dailyData) {
+// --- Daily LU Chart (bar or line, with outlier markers) ---
+function renderDailyLUChart(dailyData, outlierDays, chartType, dayTags) {
     const chartContainer = document.getElementById('daily-lu-chart');
     if (!chartContainer) return;
+    if (!outlierDays) outlierDays = {};
+    if (!chartType) chartType = 'bar';
+    if (!dayTags) dayTags = {};
+    const _tagInfo = (date) => {
+        const k = dayTags[date];
+        return (k && DAY_TAGS[k]) ? { key: k, ...DAY_TAGS[k] } : null;
+    };
 
     const maxLU = Math.max(...dailyData.map(d => d.totalLU), 1);
-    const topPad = 18; // space for count labels above tallest bar
+    const hasAnyTag = dailyData.some(d => _tagInfo(d.date));
+    const topPad = hasAnyTag ? 30 : 18;
     const chartHeight = 150;
+    const svgNS = "http://www.w3.org/2000/svg";
+
+    if (chartType === 'line') {
+        // --- LINE CHART MODE ---
+        const padding = { left: 35, right: 15, top: topPad, bottom: 35 };
+        const chartW = Math.max(300, dailyData.length * 28 + padding.left + padding.right);
+        const svgH = padding.top + chartHeight + padding.bottom;
+        const svg = document.createElementNS(svgNS, "svg");
+        svg.setAttribute("viewBox", `0 0 ${chartW} ${svgH}`);
+        svg.setAttribute("width", chartW); svg.setAttribute("height", svgH);
+        svg.style.minWidth = chartW + 'px';
+
+        // Grid
+        [25, 50, 75, 100].forEach(pct => {
+            const gy = padding.top + chartHeight - (chartHeight * pct / 100);
+            const gl = document.createElementNS(svgNS, "line");
+            gl.setAttribute("x1", padding.left); gl.setAttribute("x2", chartW - padding.right);
+            gl.setAttribute("y1", gy); gl.setAttribute("y2", gy);
+            gl.setAttribute("stroke", "rgba(255,255,255,0.06)"); gl.setAttribute("stroke-dasharray", "3,4");
+            svg.appendChild(gl);
+            const gt = document.createElementNS(svgNS, "text");
+            gt.setAttribute("x", padding.left - 4); gt.setAttribute("y", gy + 3);
+            gt.setAttribute("text-anchor", "end"); gt.setAttribute("fill", "rgba(255,255,255,0.25)"); gt.setAttribute("font-size", "7");
+            gt.textContent = pct + '%';
+            svg.appendChild(gt);
+        });
+
+        const stepX = dailyData.length > 1 ? (chartW - padding.left - padding.right) / (dailyData.length - 1) : 0;
+        let pathD = '', areaD = '';
+        dailyData.forEach((d, i) => {
+            const pct = d.totalLU > 0 ? (d.correctLU / d.totalLU) * 100 : 0;
+            const x = padding.left + (dailyData.length > 1 ? i * stepX : (chartW - padding.left - padding.right) / 2);
+            const y = padding.top + chartHeight - (chartHeight * pct / 100);
+            if (i === 0) { pathD += `M ${x} ${y}`; areaD += `M ${x} ${padding.top + chartHeight} L ${x} ${y}`; }
+            else { pathD += ` L ${x} ${y}`; areaD += ` L ${x} ${y}`; }
+        });
+        areaD += ` L ${padding.left + (dailyData.length > 1 ? (dailyData.length - 1) * stepX : (chartW - padding.left - padding.right) / 2)} ${padding.top + chartHeight} Z`;
+
+        // Area fill
+        const area = document.createElementNS(svgNS, "path");
+        area.setAttribute("d", areaD); area.setAttribute("fill", "var(--success-color)"); area.setAttribute("opacity", "0.1");
+        svg.appendChild(area);
+        // Line
+        if (dailyData.length > 1) {
+            const path = document.createElementNS(svgNS, "path");
+            path.setAttribute("d", pathD); path.setAttribute("fill", "none");
+            path.setAttribute("stroke", "var(--success-color)"); path.setAttribute("stroke-width", "2"); path.setAttribute("opacity", "0.8");
+            svg.appendChild(path);
+        }
+        // Dots + labels
+        dailyData.forEach((d, i) => {
+            const pct = d.totalLU > 0 ? Math.round((d.correctLU / d.totalLU) * 100) : 0;
+            const x = padding.left + (dailyData.length > 1 ? i * stepX : (chartW - padding.left - padding.right) / 2);
+            const y = padding.top + chartHeight - (chartHeight * pct / 100);
+            const isOutlier = !!outlierDays[d.date];
+            const tag = _tagInfo(d.date);
+            const tooltip = `${formatDateEU(d.date + 'T00:00:00')}${tag ? ' ' + tag.symbol + ' Giornata ' + tag.label : ''}${isOutlier ? ' \u26A0 OUTLIER' : ''}\n${pct}% (${d.correctLU}/${d.totalLU})\nSessioni: ${d.sessions}`;
+
+            if (tag) {
+                const tagIcon = document.createElementNS(svgNS, "text");
+                tagIcon.setAttribute("x", x); tagIcon.setAttribute("y", padding.top - 6);
+                tagIcon.setAttribute("text-anchor", "middle"); tagIcon.setAttribute("font-size", "11");
+                tagIcon.textContent = tag.symbol;
+                const tt = document.createElementNS(svgNS, "title"); tt.textContent = 'Giornata ' + tag.label; tagIcon.appendChild(tt);
+                svg.appendChild(tagIcon);
+            }
+
+            const dot = document.createElementNS(svgNS, "circle");
+            dot.setAttribute("cx", x); dot.setAttribute("cy", y); dot.setAttribute("r", isOutlier ? "6" : "4");
+            dot.setAttribute("fill", isOutlier ? "var(--warning-color)" : "var(--success-color)");
+            dot.setAttribute("stroke", isOutlier ? "var(--warning-color)" : "white"); dot.setAttribute("stroke-width", isOutlier ? "2" : "1.5");
+            if (isOutlier) dot.setAttribute("stroke-dasharray", "2,2");
+            const t = document.createElementNS(svgNS, "title"); t.textContent = tooltip; dot.appendChild(t);
+            svg.appendChild(dot);
+
+            // Date label
+            if (dailyData.length <= 30 || i % Math.ceil(dailyData.length / 30) === 0) {
+                const dObj = new Date(d.date + 'T00:00:00');
+                const lbl = document.createElementNS(svgNS, "text");
+                lbl.setAttribute("x", x); lbl.setAttribute("y", padding.top + chartHeight + 14);
+                lbl.setAttribute("text-anchor", "middle"); lbl.setAttribute("fill", isOutlier ? "var(--warning-color)" : "#888"); lbl.setAttribute("font-size", "7");
+                lbl.textContent = `${dObj.getDate()}/${dObj.getMonth() + 1}`;
+                svg.appendChild(lbl);
+            }
+            if (isOutlier) {
+                const oLbl = document.createElementNS(svgNS, "text");
+                oLbl.setAttribute("x", x); oLbl.setAttribute("y", padding.top + chartHeight + 23);
+                oLbl.setAttribute("text-anchor", "middle"); oLbl.setAttribute("fill", "var(--warning-color)"); oLbl.setAttribute("font-size", "8");
+                oLbl.textContent = "\u26A0"; svg.appendChild(oLbl);
+            }
+        });
+        chartContainer.appendChild(svg);
+        return;
+    }
+
+    // --- BAR CHART MODE (default) ---
     const barWidth = Math.max(30, Math.min(50, 600 / dailyData.length));
     const chartWidth = Math.max(300, dailyData.length * (barWidth + 8) + 40);
-    const svgH = topPad + chartHeight + 30;
+    const hasAnyNote = dailyData.some(d => d.hasNote);
+    const hasAnyOutlier = dailyData.some(d => outlierDays[d.date]);
+    const svgH = topPad + chartHeight + (hasAnyNote || hasAnyOutlier ? 40 : 30);
 
-    const svgNS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(svgNS, "svg");
     svg.setAttribute("viewBox", `0 0 ${chartWidth} ${svgH}`);
     svg.setAttribute("width", chartWidth);
     svg.setAttribute("height", svgH);
     svg.style.minWidth = chartWidth + 'px';
 
-    const bY = topPad; // base offset for all bar y-coords
+    // Outlier hatch pattern
+    if (hasAnyOutlier) {
+        const defs = document.createElementNS(svgNS, "defs");
+        const pattern = document.createElementNS(svgNS, "pattern");
+        pattern.setAttribute("id", "outlier-hatch"); pattern.setAttribute("patternUnits", "userSpaceOnUse");
+        pattern.setAttribute("width", "6"); pattern.setAttribute("height", "6");
+        const line1 = document.createElementNS(svgNS, "line");
+        line1.setAttribute("x1", "0"); line1.setAttribute("y1", "6"); line1.setAttribute("x2", "6"); line1.setAttribute("y2", "0");
+        line1.setAttribute("stroke", "var(--warning-color)"); line1.setAttribute("stroke-width", "1.5"); line1.setAttribute("opacity", "0.5");
+        pattern.appendChild(line1); defs.appendChild(pattern); svg.appendChild(defs);
+    }
+
+    const bY = topPad;
 
     dailyData.forEach((d, i) => {
         const x = 20 + i * (barWidth + 8);
         const totalH = (d.totalLU / maxLU) * chartHeight;
         const correctH = (d.correctLU / maxLU) * chartHeight;
         const incorrectH = totalH - correctH;
-        const tooltip = `${formatDateEU(d.date + 'T00:00:00')}\nTotali: ${d.totalLU}\nCorrette: ${d.correctLU}\nErrate: ${d.incorrectLU}\nSessioni: ${d.sessions}`;
+        const isOutlier = !!outlierDays[d.date];
+        const tag = _tagInfo(d.date);
+        const tooltip = `${formatDateEU(d.date + 'T00:00:00')}${tag ? ' ' + tag.symbol + ' Giornata ' + tag.label : ''}${isOutlier ? ' \u26A0 OUTLIER' : ''}\nTotali: ${d.totalLU}\nCorrette: ${d.correctLU}\nErrate: ${d.incorrectLU}\nSessioni: ${d.sessions}`;
 
-        // Incorrect bar (red, top portion)
         if (incorrectH > 0) {
             const incorrectBar = document.createElementNS(svgNS, "rect");
-            incorrectBar.setAttribute("x", x);
-            incorrectBar.setAttribute("y", bY + chartHeight - totalH);
-            incorrectBar.setAttribute("width", barWidth);
-            incorrectBar.setAttribute("height", incorrectH);
-            incorrectBar.setAttribute("fill", "var(--danger-color)");
-            incorrectBar.setAttribute("opacity", "0.6");
-            incorrectBar.setAttribute("rx", "4");
-            const t1 = document.createElementNS(svgNS, "title");
-            t1.textContent = tooltip;
-            incorrectBar.appendChild(t1);
+            incorrectBar.setAttribute("x", x); incorrectBar.setAttribute("y", bY + chartHeight - totalH);
+            incorrectBar.setAttribute("width", barWidth); incorrectBar.setAttribute("height", incorrectH);
+            incorrectBar.setAttribute("fill", "var(--danger-color)"); incorrectBar.setAttribute("opacity", isOutlier ? "0.3" : "0.6"); incorrectBar.setAttribute("rx", "4");
+            const t1 = document.createElementNS(svgNS, "title"); t1.textContent = tooltip; incorrectBar.appendChild(t1);
             svg.appendChild(incorrectBar);
         }
 
-        // Correct bar (green, bottom portion)
         if (correctH > 0) {
             const correctBar = document.createElementNS(svgNS, "rect");
-            correctBar.setAttribute("x", x);
-            correctBar.setAttribute("y", bY + chartHeight - correctH);
-            correctBar.setAttribute("width", barWidth);
-            correctBar.setAttribute("height", correctH);
-            correctBar.setAttribute("fill", "var(--success-color)");
-            correctBar.setAttribute("opacity", "0.7");
-            correctBar.setAttribute("rx", "4");
-            const t2 = document.createElementNS(svgNS, "title");
-            t2.textContent = tooltip;
-            correctBar.appendChild(t2);
+            correctBar.setAttribute("x", x); correctBar.setAttribute("y", bY + chartHeight - correctH);
+            correctBar.setAttribute("width", barWidth); correctBar.setAttribute("height", correctH);
+            correctBar.setAttribute("fill", "var(--success-color)"); correctBar.setAttribute("opacity", isOutlier ? "0.3" : "0.7"); correctBar.setAttribute("rx", "4");
+            const t2 = document.createElementNS(svgNS, "title"); t2.textContent = tooltip; correctBar.appendChild(t2);
             svg.appendChild(correctBar);
         }
 
-        // Date label
+        // Outlier hatch overlay
+        if (isOutlier && totalH > 0) {
+            const hatch = document.createElementNS(svgNS, "rect");
+            hatch.setAttribute("x", x); hatch.setAttribute("y", bY + chartHeight - totalH);
+            hatch.setAttribute("width", barWidth); hatch.setAttribute("height", totalH);
+            hatch.setAttribute("fill", "url(#outlier-hatch)"); hatch.setAttribute("rx", "4");
+            svg.appendChild(hatch);
+        }
+
         const lbl = document.createElementNS(svgNS, "text");
-        lbl.setAttribute("x", x + barWidth / 2);
-        lbl.setAttribute("y", bY + chartHeight + 15);
-        lbl.setAttribute("text-anchor", "middle");
-        lbl.setAttribute("fill", "#888");
-        lbl.setAttribute("font-size", "8");
+        lbl.setAttribute("x", x + barWidth / 2); lbl.setAttribute("y", bY + chartHeight + 15);
+        lbl.setAttribute("text-anchor", "middle"); lbl.setAttribute("fill", isOutlier ? "var(--warning-color)" : "#888"); lbl.setAttribute("font-size", "8");
+        if (isOutlier) lbl.setAttribute("font-weight", "bold");
         const dObj = new Date(d.date + 'T00:00:00');
         lbl.textContent = `${dObj.getDate()}/${dObj.getMonth() + 1}`;
         svg.appendChild(lbl);
 
-        // Count label on top (total LU)
+        if (d.hasNote) {
+            const noteIcon = document.createElementNS(svgNS, "text");
+            noteIcon.setAttribute("x", x + barWidth / 2); noteIcon.setAttribute("y", bY + chartHeight + 24);
+            noteIcon.setAttribute("text-anchor", "middle"); noteIcon.setAttribute("fill", "#eab308"); noteIcon.setAttribute("font-size", "8");
+            noteIcon.textContent = "\u270E";
+            svg.appendChild(noteIcon);
+        }
+
+        if (isOutlier) {
+            const oIcon = document.createElementNS(svgNS, "text");
+            oIcon.setAttribute("x", x + barWidth / 2); oIcon.setAttribute("y", bY + chartHeight + (d.hasNote ? 33 : 24));
+            oIcon.setAttribute("text-anchor", "middle"); oIcon.setAttribute("fill", "var(--warning-color)"); oIcon.setAttribute("font-size", "8");
+            oIcon.textContent = "\u26A0";
+            const oTitle = document.createElementNS(svgNS, "title"); oTitle.textContent = "Giornata outlier"; oIcon.appendChild(oTitle);
+            svg.appendChild(oIcon);
+        }
+
         const countLbl = document.createElementNS(svgNS, "text");
-        countLbl.setAttribute("x", x + barWidth / 2);
-        countLbl.setAttribute("y", bY + chartHeight - totalH - 4);
-        countLbl.setAttribute("text-anchor", "middle");
-        countLbl.setAttribute("fill", "#aaa");
-        countLbl.setAttribute("font-size", "9");
-        countLbl.setAttribute("font-weight", "bold");
+        countLbl.setAttribute("x", x + barWidth / 2); countLbl.setAttribute("y", bY + chartHeight - totalH - 4);
+        countLbl.setAttribute("text-anchor", "middle"); countLbl.setAttribute("fill", isOutlier ? "var(--warning-color)" : "#aaa");
+        countLbl.setAttribute("font-size", "9"); countLbl.setAttribute("font-weight", "bold");
         countLbl.textContent = d.totalLU;
         svg.appendChild(countLbl);
 
-        // Percentage label at green/red boundary
         const pct = d.totalLU > 0 ? Math.round((d.correctLU / d.totalLU) * 100) : 0;
         const pctLbl = document.createElementNS(svgNS, "text");
-        pctLbl.setAttribute("x", x + barWidth + 3);
-        pctLbl.setAttribute("y", bY + chartHeight - correctH + 3);
-        pctLbl.setAttribute("text-anchor", "start");
-        pctLbl.setAttribute("fill", "var(--success-color)");
-        pctLbl.setAttribute("font-size", "7");
-        pctLbl.setAttribute("font-weight", "bold");
+        pctLbl.setAttribute("x", x + barWidth + 3); pctLbl.setAttribute("y", bY + chartHeight - correctH + 3);
+        pctLbl.setAttribute("text-anchor", "start"); pctLbl.setAttribute("fill", "var(--success-color)");
+        pctLbl.setAttribute("font-size", "7"); pctLbl.setAttribute("font-weight", "bold");
         pctLbl.textContent = pct + '%';
         svg.appendChild(pctLbl);
+
+        if (tag) {
+            const tagIcon = document.createElementNS(svgNS, "text");
+            tagIcon.setAttribute("x", x + barWidth / 2); tagIcon.setAttribute("y", 11);
+            tagIcon.setAttribute("text-anchor", "middle"); tagIcon.setAttribute("font-size", "11");
+            tagIcon.textContent = tag.symbol;
+            const tt = document.createElementNS(svgNS, "title"); tt.textContent = 'Giornata ' + tag.label; tagIcon.appendChild(tt);
+            svg.appendChild(tagIcon);
+        }
     });
 
     // Legend
@@ -700,6 +1046,13 @@ function renderDailyLUChart(dailyData) {
     legIText.setAttribute("fill", "#888"); legIText.setAttribute("font-size", "8");
     legIText.textContent = "Errate";
     svg.appendChild(legIText);
+    if (hasAnyOutlier) {
+        const legOutlier = document.createElementNS(svgNS, "text");
+        legOutlier.setAttribute("x", "140"); legOutlier.setAttribute("y", legendY + 6);
+        legOutlier.setAttribute("fill", "var(--warning-color)"); legOutlier.setAttribute("font-size", "8");
+        legOutlier.textContent = "\u26A0 Outlier";
+        svg.appendChild(legOutlier);
+    }
 
     chartContainer.appendChild(svg);
 }
@@ -711,7 +1064,8 @@ function renderDatesTab(patient) {
     const content = document.getElementById('report-content');
     if (!content) return;
 
-    const history = patient.history;
+    const history = patient.history || [];
+    const dailyNotes = patient.dailyNotes || {};
     const byDate = {};
     history.forEach((h, idx) => {
         const dk = getDateKey(h.date);
@@ -719,6 +1073,12 @@ function renderDatesTab(patient) {
         byDate[dk].push({ ...h, originalIndex: idx });
     });
 
+    // Also include dates that only have daily notes but no sessions
+    Object.keys(dailyNotes).forEach(dk => {
+        if (!byDate[dk]) byDate[dk] = [];
+    });
+
+    const outlierDays = patient.outlierDays || {};
     const dates = Object.keys(byDate).sort().reverse();
 
     let html = '';
@@ -727,33 +1087,59 @@ function renderDatesTab(patient) {
         const totalLU = sessions.reduce((sum, s) => sum + s.total, 0);
         const correctLU = sessions.reduce((sum, s) => sum + s.correct, 0);
         const pct = totalLU > 0 ? Math.round((correctLU / totalLU) * 100) : 0;
+        const hasDailyNote = !!dailyNotes[dk];
+        const isOutlier = !!outlierDays[dk];
+        const dayTag = getDayTagInfo(patient, dk);
+        const noteIndicator = hasDailyNote ? '<i class="fa-solid fa-book-medical" style="color:#eab308; font-size:0.7rem;" title="Nota giornata"></i>' : '';
+        const outlierIndicator = isOutlier ? '<span style="font-size:0.6rem; background:rgba(245,158,11,0.2); color:var(--warning-color); padding:1px 6px; border-radius:4px; font-weight:bold;">⚠ OUTLIER</span>' : '';
+        const tagIndicator = dayTag ? `<span style="font-size:0.6rem; background:${dayTag.color}22; color:${dayTag.color}; padding:1px 6px; border-radius:4px; font-weight:bold;">${dayTag.symbol} ${dayTag.label}</span>` : '';
 
         html += `
-        <div class="chart-wrapper" style="margin-bottom:10px; padding:0; overflow:hidden;">
+        <div class="chart-wrapper" style="margin-bottom:10px; padding:0; overflow:hidden;${isOutlier ? ' border-left:3px solid var(--warning-color); opacity:0.8;' : ''}">
             <div onclick="toggleDateExpand(this)" style="display:flex; justify-content:space-between; align-items:center; padding:12px 15px; cursor:pointer; transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background=''">
                 <div style="display:flex; align-items:center; gap:10px;">
                     <i class="fa-solid fa-chevron-right date-expand-icon" style="transition:transform 0.2s; font-size:0.7rem; color:var(--text-secondary);"></i>
                     <span style="font-weight:bold; font-size:1rem;">${formatDateEU(dk + 'T00:00:00')}</span>
+                    ${noteIndicator}
+                    ${tagIndicator}
+                    ${outlierIndicator}
                     <span style="color:var(--text-secondary); font-size:0.8rem;">${sessions.length} attivit&agrave;</span>
                 </div>
-                <div style="display:flex; gap:12px; align-items:center;">
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <button class="btn-icon" style="width:24px; height:24px; font-size:0.7rem; color:${dayTag ? dayTag.color : 'var(--text-secondary)'}; border-color:${dayTag ? dayTag.color + '66' : 'rgba(255,255,255,0.1)'}; ${dayTag ? 'background:' + dayTag.color + '22;' : ''}" onclick="event.stopPropagation(); openDayTagPicker('${patient.id}', '${dk}', this)" title="${dayTag ? 'Giornata ' + dayTag.label : 'Tagga giornata'}">${dayTag ? dayTag.symbol : '<i class="fa-solid fa-tag"></i>'}</button>
+                    <button class="btn-icon" style="width:24px; height:24px; font-size:0.6rem; color:${isOutlier ? 'var(--warning-color)' : 'var(--text-secondary)'}; border-color:${isOutlier ? 'rgba(245,158,11,0.4)' : 'rgba(255,255,255,0.1)'}; ${isOutlier ? 'background:rgba(245,158,11,0.15);' : ''}" onclick="event.stopPropagation(); toggleOutlierDay('${patient.id}', '${dk}')" title="${isOutlier ? 'Rimuovi outlier' : 'Segna come outlier'}"><i class="fa-solid fa-triangle-exclamation"></i></button>
                     <span style="font-size:0.85rem; color:var(--success-color);">${correctLU}<span style="color:var(--text-secondary);">/${totalLU}</span></span>
-                    <span style="font-weight:bold; font-size:0.9rem; color:${pct >= 90 ? 'var(--success-color)' : pct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)'};">${pct}%</span>
+                    <span style="font-weight:bold; font-size:0.9rem; color:${pctColor(pct)};">${pct}%</span>
                 </div>
             </div>
             <div class="date-detail-panel" style="display:none; padding:0 15px 12px; border-top:1px solid rgba(255,255,255,0.05);">
+                ${hasDailyNote ? `
+                <div class="daily-note-card" style="margin:8px 0 12px; padding:12px; border-radius:10px; background:rgba(234,179,8,0.08); border:1px solid rgba(234,179,8,0.2); border-left:3px solid #eab308;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <span style="font-size:0.8rem; color:#eab308; font-weight:bold;"><i class="fa-solid fa-book-medical"></i> Nota della Giornata</span>
+                        <div style="display:flex; gap:4px;">
+                            <button class="btn-icon" style="width:22px; height:22px; font-size:0.6rem; color:#eab308; border-color:rgba(234,179,8,0.3);" onclick="event.stopPropagation(); openDailyNoteEditor('${patient.id}', '${dk}')" title="Modifica"><i class="fa-solid fa-pen"></i></button>
+                            <button class="btn-icon" style="width:22px; height:22px; font-size:0.6rem; color:var(--danger-color); border-color:rgba(239,68,68,0.3);" onclick="event.stopPropagation(); deleteDailyNote('${patient.id}', '${dk}')" title="Elimina"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+                    </div>
+                    <div class="daily-note-content" style="font-size:0.85rem; line-height:1.5; color:#ddd;">${_renderNoteMarkup(dailyNotes[dk])}</div>
+                </div>` : ''}
                 ${sessions.map(s => {
             const modeName = MODES_CONFIG[s.mode] || s.mode;
             const dayModeIcon = (typeof getModeIcon === 'function') ? getModeIcon(s.mode) : 'fa-puzzle-piece';
             const typeTag = s.sessionType === 'timedelay' ? `<span style="font-size:0.6rem; background:rgba(245,158,11,0.2); color:var(--warning-color); padding:1px 5px; border-radius:4px; margin-left:4px;">TD${s.timeDelaySeconds || ''}s</span>` : '';
+            const fieldTag = s.fieldSize ? `<span style="font-size:0.6rem; background:rgba(99,102,241,0.2); color:var(--accent-color); padding:1px 5px; border-radius:4px; margin-left:4px;">F${s.fieldSize}</span>` : '';
+            const variantTag = s.variant ? (() => { const vSet = state.savedSets.find(ss => ss.id === s.setId); const vName = vSet?.variantNames?.[s.variant - 1] || `V${s.variant}`; return `<span style="font-size:0.6rem; background:rgba(139,92,246,0.2); color:#a78bfa; padding:1px 5px; border-radius:4px; margin-left:4px;"><i class="fa-solid fa-layer-group" style="font-size:0.5rem;"></i> ${vName}</span>`; })() : '';
+            const sessionNoteIcon = s.note ? '<i class="fa-solid fa-sticky-note" style="color:#eab308; font-size:0.6rem; flex-shrink:0;" title="Nota attività"></i>' : '';
             const activityKey = encodeURIComponent(s.setName + '::' + s.mode + '::' + getSessionTypeGroup(s));
             // Set thumbnail for Giornate
             let dayThumb = '';
             if (s.setId && state.savedSets) {
                 const daySet = state.savedSets.find(ss => ss.id === s.setId);
-                if (daySet && daySet.items && daySet.items.length > 0) {
-                    const fi = daySet.items.find(it => it.img || it.image);
-                    if (fi) dayThumb = `<img src="${fi.img || fi.image}" style="width:22px; height:22px; border-radius:4px; object-fit:cover; border:1px solid rgba(255,255,255,0.1); flex-shrink:0;" alt="">`;
+                if (daySet) {
+                    const fi = daySet.items && daySet.items.length > 0 ? daySet.items.find(it => it.img || it.image || it.url) : null;
+                    const dayThumbSrc = fi ? (fi.img || fi.image || fi.url) : (daySet.coverImage || null);
+                    if (dayThumbSrc) dayThumb = `<img src="${dayThumbSrc}" style="width:22px; height:22px; border-radius:4px; object-fit:cover; border:1px solid rgba(255,255,255,0.1); flex-shrink:0;" alt="">`;
                 }
             }
             return `
@@ -763,11 +1149,11 @@ function renderDatesTab(patient) {
                                 <i class="fa-solid fa-chevron-right day-act-icon" style="transition:transform 0.2s; font-size:0.6rem; color:#555;"></i>
                                 ${dayThumb}
                                 <span style="background:rgba(99,102,241,0.15); padding:2px 8px; border-radius:6px; font-size:0.7rem; color:var(--accent-color); flex-shrink:0; display:inline-flex; align-items:center; gap:4px;"><i class="fa-solid ${dayModeIcon}" style="font-size:0.65rem;"></i>${modeName}</span>
-                                <span style="font-size:0.9rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.setName}</span>${s.setCat ? `<span style="font-size:0.65rem; color:var(--text-secondary); background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:4px; flex-shrink:0;">${s.setCat}</span>` : ''}${typeTag}
+                                <span style="font-size:0.9rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.setName}</span>${s.setCat ? `<span style="font-size:0.65rem; color:var(--text-secondary); background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:4px; flex-shrink:0;">${s.setCat}</span>` : ''}${typeTag}${fieldTag}${variantTag}${sessionNoteIcon}
                             </div>
                             <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
                                 <span style="font-size:0.85rem;">${s.correct}/${s.total}</span>
-                                <span style="font-weight:bold; font-size:0.85rem; color:${s.percentage >= 90 ? 'var(--success-color)' : 'white'};">${s.percentage}%</span>
+                                <span style="font-weight:bold; font-size:0.85rem; color:${pctColor(s.percentage)};">${s.percentage}%</span>
                                 <button class="btn-icon" style="width:24px; height:24px; font-size:0.65rem; display:inline-flex;" onclick="event.stopPropagation(); editSession('${patient.id}', ${s.originalIndex})"><i class="fa-solid fa-pen"></i></button>
                                 <button class="btn-icon" style="width:24px; height:24px; font-size:0.65rem; display:inline-flex; color:var(--danger-color); border-color:rgba(239,68,68,0.3);" onclick="event.stopPropagation(); deleteSession('${patient.id}', ${s.originalIndex})"><i class="fa-solid fa-trash"></i></button>
                             </div>
@@ -827,6 +1213,16 @@ window.toggleDaySessionDetail = (header, patientId, sessionIdx, activityKeyEncod
             if (isTD && s.timeDelaySeconds) html += `<span style="font-size:0.75rem; background:rgba(245,158,11,0.15); color:var(--warning-color); padding:2px 8px; border-radius:6px;">TD ${s.timeDelaySeconds}s</span>`;
             html += `</div>`;
 
+            // Tags used (pool modes)
+            if (s.poolTags && s.poolTags.length > 0) {
+                html += `<div style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:8px;">`;
+                html += `<span style="font-size:0.7rem; color:var(--text-secondary);"><i class="fa-solid fa-tags"></i> Tag:</span>`;
+                s.poolTags.forEach(t => {
+                    html += `<span style="font-size:0.7rem; background:rgba(99,102,241,0.12); color:var(--accent-color); padding:1px 8px; border-radius:6px;">${t}</span>`;
+                });
+                html += `</div>`;
+            }
+
             // Item details (wrong/prompted items)
             if (s.itemDetails && s.itemDetails.length > 0) {
                 const wrong = s.itemDetails.filter(d => d.result !== true);
@@ -866,8 +1262,8 @@ window.toggleDaySessionDetail = (header, patientId, sessionIdx, activityKeyEncod
                     if (v > 0 && x === 0 && p === 0) { bg = 'rgba(16,185,129,0.1)'; border = 'rgba(16,185,129,0.3)'; }
                     else if (x > 0) { bg = 'rgba(239,68,68,0.1)'; border = 'rgba(239,68,68,0.3)'; }
                     else if (p > 0) { bg = 'rgba(245,158,11,0.1)'; border = 'rgba(245,158,11,0.3)'; }
-                    const pctColor = stepPct !== null ? (stepPct >= 90 ? 'var(--success-color)' : stepPct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)') : '#888';
-                    const pctHtml = stepPct !== null ? `<span style="font-size:0.7rem; color:${pctColor}; font-weight:bold; margin-left:6px;">${stepPct}%</span>` : '';
+                    const _stepClr = stepPct !== null ? pctColor(stepPct) : '#888';
+                    const pctHtml = stepPct !== null ? `<span style="font-size:0.7rem; color:${_stepClr}; font-weight:bold; margin-left:6px;">${stepPct}%</span>` : '';
                     html += `<div style="padding:4px 8px; border-radius:6px; font-size:0.75rem; background:${bg}; border:1px solid ${border}; display:flex; justify-content:space-between; align-items:center;">
                         <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px;"><b>${i + 1}.</b> ${step.name}</span>
                         <span style="font-weight:bold; flex-shrink:0; display:flex; align-items:center; gap:4px;">${parts.length > 0 ? parts.join(' ') : '<span style="color:#888">N/A</span>'}${pctHtml}</span>
@@ -883,21 +1279,99 @@ window.toggleDaySessionDetail = (header, patientId, sessionIdx, activityKeyEncod
                 html += `<div style="display:flex; flex-direction:column; gap:2px;">`;
                 s.setBreakdown.forEach((sb, i) => {
                     const pct = sb.percentage;
-                    const pctColor = pct >= 90 ? 'var(--success-color)' : pct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
-                    let bg = 'rgba(255,255,255,0.05)', border = 'rgba(255,255,255,0.1)';
-                    if (pct >= 90) { bg = 'rgba(16,185,129,0.1)'; border = 'rgba(16,185,129,0.3)'; }
-                    else if (pct >= 70) { bg = 'rgba(245,158,11,0.1)'; border = 'rgba(245,158,11,0.3)'; }
-                    else { bg = 'rgba(239,68,68,0.1)'; border = 'rgba(239,68,68,0.3)'; }
+                    const _clr = pctColor(pct);
+                    const { bg, border } = pctBg(pct);
                     let parts = [];
                     if (sb.correct > 0) parts.push(`<span style="color:var(--success-color)">${sb.correct}V</span>`);
                     if ((sb.incorrect || 0) > 0) parts.push(`<span style="color:var(--danger-color)">${sb.incorrect}X</span>`);
                     if ((sb.prompts || 0) > 0) parts.push(`<span style="color:var(--warning-color)">${sb.prompts}P</span>`);
                     html += `<div style="padding:4px 8px; border-radius:6px; font-size:0.75rem; background:${bg}; border:1px solid ${border}; display:flex; justify-content:space-between; align-items:center;">
                         <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px;"><b>${i + 1}.</b> ${sb.setName}${sb.setCat ? ` <span style="color:var(--text-secondary); font-size:0.65rem;">(${sb.setCat})</span>` : ''}</span>
-                        <span style="font-weight:bold; flex-shrink:0; display:flex; align-items:center; gap:4px;">${parts.join(' ')} <span style="font-size:0.7rem; color:${pctColor}; font-weight:bold; margin-left:6px;">${pct}%</span></span>
+                        <span style="font-weight:bold; flex-shrink:0; display:flex; align-items:center; gap:4px;">${parts.join(' ')} <span style="font-size:0.7rem; color:${_clr}; font-weight:bold; margin-left:6px;">${pct}%</span></span>
                     </div>`;
                 });
                 html += `</div></div>`;
+            }
+
+            // Topologia Compositiva breakdown
+            if (s.topoBreakdown && s.topoBreakdown.length > 0) {
+                html += `<div style="margin-bottom:8px;">`;
+                html += `<div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-layer-group"></i> Dettaglio per Topologia (${s.topoBreakdown.length}):</div>`;
+                if (s.topoPersonaggio) {
+                    html += `<div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:4px;"><i class="fa-solid fa-child"></i> Personaggio: <b style="color:var(--accent-color);">${s.topoPersonaggio}</b> &middot; Modalit&agrave;: ${s.topoSubMode === 'template' ? 'Template' : 'Random'}</div>`;
+                }
+                html += `<div style="display:flex; flex-direction:column; gap:2px;">`;
+                s.topoBreakdown.forEach(tb => {
+                    const pct = tb.percentage;
+                    const _clr = pctColor(pct);
+                    const { bg, border } = pctBg(pct);
+                    let parts = [];
+                    if (tb.correct > 0) parts.push(`<span style="color:var(--success-color)">${tb.correct}V</span>`);
+                    if (tb.incorrect > 0) parts.push(`<span style="color:var(--danger-color)">${tb.incorrect}X</span>`);
+                    if (tb.prompts > 0) parts.push(`<span style="color:var(--warning-color)">${tb.prompts}P</span>`);
+                    html += `<div style="padding:4px 8px; border-radius:6px; font-size:0.75rem; background:${bg}; border:1px solid ${border}; display:flex; justify-content:space-between; align-items:center;">
+                        <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px;"><b>${tb.label}</b></span>
+                        <span style="font-weight:bold; flex-shrink:0; display:flex; align-items:center; gap:4px;">${parts.join(' ')} <span style="font-size:0.7rem; color:${_clr}; font-weight:bold; margin-left:6px;">${pct}%</span></span>
+                    </div>`;
+                });
+                html += `</div></div>`;
+            }
+
+            // Go/No-Go breakdown
+            if (s.goNogoBreakdown && (s.goNogoBreakdown.go.total + s.goNogoBreakdown.nogo.total) > 0) {
+                const b = s.goNogoBreakdown;
+                html += `<div style="margin-bottom:8px;">`;
+                html += `<div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-traffic-light"></i> Breakdown Go / No-Go${s.goNogoTag ? ` <span style="opacity:0.7;">(No-Go: ${s.goNogoTag})</span>` : ''}:</div>`;
+                html += `<div style="display:flex; flex-direction:column; gap:2px;">`;
+                [['Go', b.go, 'fa-check'], ['No-Go', b.nogo, 'fa-hand']].forEach(([title, data, ic]) => {
+                    const { bg, border } = pctBg(data.percentage);
+                    let parts = [];
+                    if (data.correct > 0) parts.push(`<span style="color:var(--success-color)">${data.correct}V</span>`);
+                    if (data.incorrect > 0) parts.push(`<span style="color:var(--danger-color)">${data.incorrect}X</span>`);
+                    if (data.prompts > 0) parts.push(`<span style="color:var(--warning-color)">${data.prompts}P</span>`);
+                    html += `<div style="padding:4px 8px; border-radius:6px; font-size:0.75rem; background:${bg}; border:1px solid ${border}; display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-weight:bold;"><i class="fa-solid ${ic}"></i> ${title}</span>
+                        <span style="font-weight:bold; display:flex; align-items:center; gap:4px;">${parts.join(' ') || '<span style="color:#888">—</span>'} <span style="color:${pctColor(data.percentage)}; margin-left:4px;">${data.percentage}% (${data.total})</span></span>
+                    </div>`;
+                });
+                html += `</div></div>`;
+            }
+
+            // Memoria di Lavoro trials
+            if (s.memLavTrials && s.memLavTrials.length > 0) {
+                const themeLabel = { cubetti: 'Cubetti Colorati', panino: 'Panino', animali: 'Animali in Fila' }[s.memLavTheme] || s.memLavTheme || '?';
+                html += `<div style="margin-bottom:8px;">`;
+                html += `<div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-cubes-stacked"></i> ${themeLabel} · Span ${s.memLavSpan || '?'} · ${s.memLavTrials.length} trial:</div>`;
+                html += `<div style="display:flex; flex-wrap:wrap; gap:4px;">`;
+                s.memLavTrials.forEach((t, i) => {
+                    const icon = t.result === true ? '✅' : t.result === 'prompt' ? '🟡' : '❌';
+                    const errText = t.totalErrors > 0 ? ` ${t.totalErrors}err` : '';
+                    html += `<span style="display:inline-block; padding:2px 8px; border-radius:6px; font-size:0.75rem; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);">${icon} T${i + 1} (span ${t.span})${errText}</span>`;
+                });
+                html += `</div></div>`;
+            }
+
+            // Session note (collapsible + editable)
+            {
+                const _escapedDate = (s.date || '').replace(/'/g, "\\'");
+                const _escapedMode = (s.mode || '').replace(/'/g, "\\'");
+                const _escapedSetName = (s.setName || '').replace(/'/g, "\\'");
+                if (s.note) {
+                    html += `<div style="margin-top:8px; margin-bottom:8px;">
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <div onclick="this.parentElement.nextElementSibling.style.display = this.parentElement.nextElementSibling.style.display === 'none' ? 'block' : 'none'; this.querySelector('i.fa-chevron-right').style.transform = this.parentElement.nextElementSibling.style.display === 'none' ? '' : 'rotate(90deg)'" style="cursor:pointer; display:flex; align-items:center; gap:6px; font-size:0.75rem; color:#eab308; font-weight:bold; flex:1;">
+                                <i class="fa-solid fa-chevron-right" style="font-size:0.6rem; transition:transform 0.2s;"></i>
+                                <i class="fa-solid fa-sticky-note"></i> Nota
+                            </div>
+                            <button class="btn-icon" style="width:20px; height:20px; font-size:0.55rem; color:#eab308; border-color:rgba(234,179,8,0.3);" onclick="openSessionNoteEditor('${patientId}', '${_escapedDate}', '${_escapedMode}', '${_escapedSetName}')" title="Modifica nota"><i class="fa-solid fa-pen"></i></button>
+                        </div>
+                        <div style="display:none; margin-top:4px; padding:8px; border-radius:8px; background:rgba(234,179,8,0.08); border:1px solid rgba(234,179,8,0.15); font-size:0.8rem; line-height:1.4; color:#ddd; cursor:pointer;" onclick="openSessionNoteEditor('${patientId}', '${_escapedDate}', '${_escapedMode}', '${_escapedSetName}')">${_renderNoteMarkup(s.note)}</div>
+                    </div>`;
+                } else {
+                    html += `<div style="margin-top:6px; margin-bottom:6px;">
+                        <button class="btn-icon" style="height:22px; font-size:0.65rem; color:#eab308; border-color:rgba(234,179,8,0.2); padding:2px 8px; gap:4px; display:inline-flex; align-items:center;" onclick="openSessionNoteEditor('${patientId}', '${_escapedDate}', '${_escapedMode}', '${_escapedSetName}')" title="Aggiungi nota"><i class="fa-solid fa-plus" style="font-size:0.5rem;"></i> <i class="fa-solid fa-sticky-note" style="font-size:0.55rem;"></i> Nota</button>
+                    </div>`;
+                }
             }
 
             // Activity chart (full history for this activity)
@@ -999,12 +1473,8 @@ function renderSetBreakdownCollapsible(s, patientId, sessionIdx, isTD) {
 
     const chips = s.setBreakdown.map((sb, i) => {
         const pct = sb.percentage;
-        const pctColor = pct >= 90 ? 'var(--success-color)' : pct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
-        let bg = 'rgba(255,255,255,0.05)';
-        let border = 'rgba(255,255,255,0.1)';
-        if (pct >= 90) { bg = 'rgba(16,185,129,0.1)'; border = 'rgba(16,185,129,0.3)'; }
-        else if (pct >= 70) { bg = 'rgba(245,158,11,0.1)'; border = 'rgba(245,158,11,0.3)'; }
-        else { bg = 'rgba(239,68,68,0.1)'; border = 'rgba(239,68,68,0.3)'; }
+        const _clr = pctColor(pct);
+        const { bg, border } = pctBg(pct);
 
         let parts = [];
         if (sb.correct > 0) parts.push(`<span style="color:var(--success-color)">${sb.correct}V</span>`);
@@ -1013,7 +1483,7 @@ function renderSetBreakdownCollapsible(s, patientId, sessionIdx, isTD) {
 
         return `<div style="padding:4px 8px; margin:2px 0; border-radius:6px; font-size:0.75rem; background:${bg}; border:1px solid ${border}; display:flex; justify-content:space-between; align-items:center;">
             <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px;"><b>${i + 1}.</b> ${sb.setName}${sb.setCat ? ` <span style="color:var(--text-secondary); font-size:0.65rem;">(${sb.setCat})</span>` : ''}</span>
-            <span style="font-weight:bold; flex-shrink:0; display:flex; align-items:center; gap:4px;">${parts.join(' ')} <span style="font-size:0.7rem; color:${pctColor}; font-weight:bold; margin-left:4px;">${pct}%</span></span>
+            <span style="font-weight:bold; flex-shrink:0; display:flex; align-items:center; gap:4px;">${parts.join(' ')} <span style="font-size:0.7rem; color:${_clr}; font-weight:bold; margin-left:4px;">${pct}%</span></span>
         </div>`;
     }).join('');
 
@@ -1022,6 +1492,93 @@ function renderSetBreakdownCollapsible(s, patientId, sessionIdx, isTD) {
             <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(0,0,0,0.15);">
                 <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-images"></i> Dettaglio per Set (${s.setBreakdown.length}):</div>
                 <div style="display:flex; flex-direction:column; gap:2px;">${chips}</div>
+            </td>
+        </tr>`;
+}
+
+// --- Topologia breakdown collapsible row ---
+function renderTopoBreakdownCollapsible(s, patientId, sessionIdx, isTD) {
+    if (!s.topoBreakdown || s.topoBreakdown.length === 0) return '';
+    const colSpan = isTD ? 6 : 5;
+
+    let header = '';
+    if (s.topoPersonaggio) {
+        header += `<div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:4px;"><i class="fa-solid fa-child"></i> Personaggio: <b style="color:var(--accent-color);">${s.topoPersonaggio}</b> &middot; ${s.topoSubMode === 'template' ? 'Template' : 'Random'}</div>`;
+    }
+
+    const chips = s.topoBreakdown.map(tb => {
+        const pct = tb.percentage;
+        const _clr = pctColor(pct);
+        const { bg, border } = pctBg(pct);
+        let parts = [];
+        if (tb.correct > 0) parts.push(`<span style="color:var(--success-color)">${tb.correct}V</span>`);
+        if (tb.incorrect > 0) parts.push(`<span style="color:var(--danger-color)">${tb.incorrect}X</span>`);
+        if (tb.prompts > 0) parts.push(`<span style="color:var(--warning-color)">${tb.prompts}P</span>`);
+        return `<div style="padding:4px 8px; margin:2px 0; border-radius:6px; font-size:0.75rem; background:${bg}; border:1px solid ${border}; display:flex; justify-content:space-between; align-items:center;">
+            <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:8px;"><b>${tb.label}</b></span>
+            <span style="font-weight:bold; flex-shrink:0; display:flex; align-items:center; gap:4px;">${parts.join(' ')} <span style="font-size:0.7rem; color:${_clr}; font-weight:bold; margin-left:4px;">${pct}%</span></span>
+        </div>`;
+    }).join('');
+
+    return `
+        <tr class="item-details-row" style="display:table-row;">
+            <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(0,0,0,0.15);">
+                <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-layer-group"></i> Dettaglio Topologie (${s.topoBreakdown.length}):</div>
+                ${header}
+                <div style="display:flex; flex-direction:column; gap:2px;">${chips}</div>
+            </td>
+        </tr>`;
+}
+
+// --- Go/No-Go breakdown collapsible row ---
+function renderGoNogoBreakdownCollapsible(s, patientId, sessionIdx, isTD) {
+    const b = s.goNogoBreakdown;
+    if (!b) return '';
+    const colSpan = isTD ? 6 : 5;
+
+    const row = (title, data, accent) => {
+        const parts = [];
+        if (data.correct > 0) parts.push(`<span style="color:var(--success-color)">${data.correct}V</span>`);
+        if (data.incorrect > 0) parts.push(`<span style="color:var(--danger-color)">${data.incorrect}X</span>`);
+        if (data.prompts > 0) parts.push(`<span style="color:var(--warning-color)">${data.prompts}P</span>`);
+        const { bg, border } = pctBg(data.percentage);
+        return `<div style="padding:6px 10px; margin:2px 0; border-radius:6px; font-size:0.8rem; background:${bg}; border:1px solid ${border}; display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-weight:bold; color:${accent};"><i class="fa-solid ${title === 'Go' ? 'fa-check' : 'fa-hand'}"></i> ${title}</span>
+            <span style="display:flex; align-items:center; gap:6px;">${parts.join(' ') || '<span style="color:#888">—</span>'} <span style="font-weight:bold; color:${pctColor(data.percentage)};">${data.percentage}% (${data.total})</span></span>
+        </div>`;
+    };
+
+    return `
+        <tr class="item-details-row" style="display:table-row;">
+            <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(0,0,0,0.15);">
+                <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-traffic-light"></i> Breakdown Go / No-Go${s.goNogoTag ? ` <span style="opacity:0.7;">(No-Go: ${s.goNogoTag})</span>` : ''}:</div>
+                ${row('Go', b.go, 'var(--success-color)')}
+                ${row('No-Go', b.nogo, 'var(--danger-color)')}
+            </td>
+        </tr>`;
+}
+
+// --- Memoria di Lavoro collapsible row ---
+function renderMemLavCollapsible(s, patientId, sessionIdx, isTD) {
+    if (!s.memLavTrials || s.memLavTrials.length === 0) return '';
+    const colSpan = isTD ? 6 : 5;
+    const themeLabel = { cubetti: 'Cubetti Colorati', panino: 'Panino', animali: 'Animali in Fila' }[s.memLavTheme] || s.memLavTheme || '?';
+
+    const trialChips = s.memLavTrials.map((t, i) => {
+        const icon = t.result === true ? '✅' : t.result === 'prompt' ? '🟡' : '❌';
+        const errText = t.totalErrors > 0 ? ` ${t.totalErrors}err` : '';
+        const { bg, border } = t.result === true ? pctBg(100) : (t.result === 'prompt' ? { bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.3)' } : pctBg(0));
+        return `<div style="padding:4px 8px; margin:2px 0; border-radius:6px; font-size:0.75rem; background:${bg}; border:1px solid ${border}; display:flex; justify-content:space-between; align-items:center;">
+            <span><b>Trial ${i + 1}</b> <span style="color:var(--text-secondary);">· span ${t.span}</span></span>
+            <span>${icon}${errText}</span>
+        </div>`;
+    }).join('');
+
+    return `
+        <tr class="item-details-row" style="display:table-row;">
+            <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(0,0,0,0.15);">
+                <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-cubes-stacked"></i> Memoria di Lavoro · <span style="color:var(--accent-color);">${themeLabel}</span> · Span ${s.memLavSpan || '?'} · ${s.memLavTrials.length} trial:</div>
+                <div style="display:flex; flex-direction:column; gap:2px;">${trialChips}</div>
             </td>
         </tr>`;
 }
@@ -1050,13 +1607,22 @@ function renderActivitiesTab(patient, sortBy) {
         const sortedSess = [...sessions].sort((a, b) => new Date(a.date) - new Date(b.date));
         const lastDate = Math.max(...sessions.map(s => new Date(s.date).getTime()));
         const setCat = sessions.find(s => s.setCat)?.setCat || '';
-        const isMastered = checkCriterion(sortedSess);
-        const isRepertorio = checkRepertorio(sortedSess);
+        const threshold = getCriterionThreshold(patient.id, modeCode, setName);
+        const isMastered = checkCriterion(sortedSess, threshold);
+        const isRepertorio = checkRepertorio(sortedSess, threshold);
         const lastSession = sortedSess[sortedSess.length - 1];
         const lastPct = lastSession ? lastSession.percentage : 0;
         const avgPct = sessions.length > 0 ? Math.round(sessions.reduce((a, s) => a + s.percentage, 0) / sessions.length) : 0;
+        // Variants used in this activity (sessions stay grouped under the same
+        // set; the badge tells WHICH picture variant each run used).
+        const variantsUsed = [...new Set(sessions.map(s => s.variant || 0))].sort((a, b) => a - b);
+        const variantStats = variantsUsed.map(v => {
+            const ss = sessions.filter(x => (x.variant || 0) === v);
+            const avg = ss.length ? Math.round(ss.reduce((a, x) => a + (x.percentage || 0), 0) / ss.length) : 0;
+            return { v, n: ss.length, avg };
+        });
         const criterionScore = isMastered ? 2 : isRepertorio ? 1 : 0;
-        return { key, sessions, setName, modeCode, typeGroup, lastDate, setCat, isMastered, isRepertorio, lastPct, avgPct, criterionScore };
+        return { key, sessions, setName, modeCode, typeGroup, lastDate, setCat, isMastered, isRepertorio, lastPct, avgPct, criterionScore, threshold, variantsUsed, variantStats };
     });
 
     // Sort
@@ -1088,7 +1654,7 @@ function renderActivitiesTab(patient, sortBy) {
         const modeName = MODES_CONFIG[modeCode] || modeCode;
         sessions.sort((a, b) => new Date(a.date) - new Date(b.date));
         const lastSession = sessions[sessions.length - 1];
-        const nearCrit = !isMastered && isNearCriterion(sessions);
+        const nearCrit = !isMastered && isNearCriterion(sessions, item.threshold);
 
         let badgeHtml = '';
         if (isMastered) badgeHtml += `<span class="criterion-badge"><i class="fa-solid fa-trophy"></i> CRITERIO</span>`;
@@ -1106,10 +1672,10 @@ function renderActivitiesTab(patient, sortBy) {
         const setId = sessions.find(s => s.setId)?.setId;
         if (setId && state.savedSets) {
             const setObj = state.savedSets.find(ss => ss.id === setId);
-            if (setObj && setObj.items && setObj.items.length > 0) {
-                const firstImg = setObj.items.find(it => it.img || it.image);
-                if (firstImg) {
-                    const imgSrc = firstImg.img || firstImg.image;
+            if (setObj) {
+                const firstImg = setObj.items && setObj.items.length > 0 ? setObj.items.find(it => it.img || it.image || it.url) : null;
+                const imgSrc = firstImg ? (firstImg.img || firstImg.image || firstImg.url) : (setObj.coverImage || null);
+                if (imgSrc) {
                     setThumbHtml = `<img src="${imgSrc}" style="width:28px; height:28px; border-radius:6px; object-fit:cover; border:1px solid rgba(255,255,255,0.1); flex-shrink:0;" alt="">`;
                 }
             }
@@ -1126,6 +1692,11 @@ function renderActivitiesTab(patient, sortBy) {
         const setBreakdownAnalysisHtml = sessionsWithBreakdown.length > 0
             ? renderSetBreakdownAnalysis(sessionsWithBreakdown) : '';
 
+        // Check if this has topology breakdown data
+        const sessionsWithTopo = sessions.filter(s => s.topoBreakdown && s.topoBreakdown.length > 0);
+        const topoAnalysisHtml = sessionsWithTopo.length > 0
+            ? renderTopoAnalysis(sessionsWithTopo) : '';
+
         // Fluenza obiettivo
         const isFluenza = modeCode === 'fluenza';
         let fluenzaObiettivoHtml = '';
@@ -1135,10 +1706,22 @@ function renderActivitiesTab(patient, sortBy) {
             fluenzaObiettivoHtml = `<span style="font-size:0.7rem; background:rgba(99,102,241,0.15); color:var(--accent-color); padding:2px 8px; border-radius:6px; font-weight:bold;"><i class="fa-solid fa-bullseye"></i> Ob: ${obiettivo}</span>`;
         }
 
+        // Variant badges: same set, but which picture variant each run used.
+        const _setObjV = state.savedSets.find(ss => ss.name === setName);
+        const _vName = (v) => v === 0 ? 'Base' : ((_setObjV && _setObjV.variantNames && _setObjV.variantNames[v - 1]) || ('V' + v));
+        const variantBadgesHtml = (item.variantStats && item.variantStats.length > 1)
+            ? item.variantStats.map(vs => `<span title="${vs.n} sedute · media ${vs.avg}%" style="font-size:0.65rem; background:rgba(139,92,246,0.18); color:#a78bfa; padding:1px 6px; border-radius:4px; margin-left:2px;"><i class="fa-solid fa-layer-group" style="font-size:0.55rem;"></i> ${escapeHtml(_vName(vs.v))} ${vs.avg}%</span>`).join('')
+            : '';
+
         // Quick status: last session + near criterion
-        const lastPctColor = lastPct >= 90 ? 'var(--success-color)' : lastPct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
+        const lastPctColor = pctColor(lastPct, item.threshold);
         const nearCritHtml = nearCrit ? `<span style="font-size:0.65rem; background:rgba(16,185,129,0.15); color:var(--success-color); padding:1px 6px; border-radius:4px;"><i class="fa-solid fa-arrow-trend-up"></i> Vicino al criterio</span>` : '';
         const lastInfoHtml = lastSession ? `<span style="font-size:0.7rem; color:var(--text-secondary);">${formatDateEU(lastSession.date)}</span> <span style="font-size:0.75rem; font-weight:bold; color:${lastPctColor};">${lastPct}%</span>` : '';
+
+        // Last session note quick-view
+        const lastNoteSession = [...sessions].reverse().find(s => s.note);
+        const lastNoteHtml = lastNoteSession ? `<button class="btn-icon last-note-toggle" style="width:24px; height:24px; font-size:0.6rem; display:inline-flex; color:#eab308; border-color:rgba(234,179,8,0.3); flex-shrink:0;" title="Nota ultima sessione (${formatDateEU(lastNoteSession.date)})"><i class="fa-solid fa-sticky-note"></i></button>` : '';
+        const lastNoteContentHtml = lastNoteSession ? `<div class="last-note-content" style="display:none; margin-bottom:6px; padding:8px 10px; border-radius:8px; background:rgba(234,179,8,0.08); border:1px solid rgba(234,179,8,0.15); font-size:0.8rem; line-height:1.4;"><div style="font-size:0.7rem; color:#eab308; margin-bottom:4px; font-weight:bold;"><i class="fa-solid fa-sticky-note"></i> Nota del ${formatDateEU(lastNoteSession.date)}</div><div style="color:#ddd;">${_renderNoteMarkup(lastNoteSession.note)}</div></div>` : '';
 
         html += `
         <div class="chart-wrapper" data-set-id="${setId || ''}" style="margin-bottom:12px; border-left:3px solid ${typeColor};">
@@ -1146,9 +1729,10 @@ function renderActivitiesTab(patient, sortBy) {
                 <h4 style="margin:0; color:var(--accent-color); font-size:0.95rem; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                     ${setThumbHtml}
                     <i class="fa-solid ${modeIconClass}" style="font-size:0.85rem; opacity:0.7;"></i>
-                    ${setName} ${setCat ? `<span style="color:var(--text-secondary); font-size:0.7em; background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:4px;">${setCat}</span>` : ''}<span style="color:#666; font-size:0.8em;">(${modeName})</span> ${badgeHtml} ${fluenzaObiettivoHtml}
+                    ${setName} ${setCat ? `<span style="color:var(--text-secondary); font-size:0.7em; background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:4px;">${setCat}</span>` : ''}<span style="color:#666; font-size:0.8em;">(${modeName})</span> ${badgeHtml} ${fluenzaObiettivoHtml} ${variantBadgesHtml}
                 </h4>
                 <div style="display:flex; align-items:center; gap:6px;">
+                    ${lastNoteHtml}
                     <span style="font-size:0.65rem; background:rgba(${typeGroup === 'timedelay' ? '245,158,11' : '16,185,129'},0.15); color:${typeColor}; padding:2px 8px; border-radius:6px; font-weight:bold;">${typeLbl}</span>
                     <span style="font-size:0.75rem; color:var(--text-secondary);">${sessions.length} sess.</span>
                     <button class="btn-icon" onclick="toggleActivityDetails(this)" style="width:28px; height:28px; background:rgba(255,255,255,0.05);" title="Dettagli">
@@ -1158,11 +1742,14 @@ function renderActivitiesTab(patient, sortBy) {
             </div>
             <div style="display:flex; gap:8px; align-items:center; margin-bottom:6px; flex-wrap:wrap;">
                 ${lastInfoHtml} ${nearCritHtml}
+                ${item.threshold !== DEFAULT_CRITERION ? `<span style="font-size:0.65rem; background:rgba(99,102,241,0.12); color:var(--accent-color); padding:1px 6px; border-radius:4px;"><i class="fa-solid fa-sliders"></i> Soglia: ${item.threshold}%</span>` : ''}
             </div>
+            ${lastNoteContentHtml}
             <div id="${chartId}"></div>
             <div class="activity-details-panel" style="display:none; margin-top:10px; border-top:1px solid rgba(255,255,255,0.05); padding-top:8px;">
                 ${taskStepsAnalysisHtml}
                 ${setBreakdownAnalysisHtml}
+                ${topoAnalysisHtml}
                 <table style="width:100%; font-size:0.85rem; color:#ccc; border-collapse:collapse;">
                     <tr style="border-bottom:1px solid #444; text-align:left; color:#888; font-size:0.75rem;">
                         <th style="padding:5px;">Data</th><th>Score</th><th>%</th>${typeGroup === 'timedelay' ? '<th>TD</th>' : ''}<th style="text-align:right;">Azioni</th>
@@ -1175,34 +1762,64 @@ function renderActivitiesTab(patient, sortBy) {
                 : (nonCorrect > 0 ? ` <span style="color:var(--danger-color); font-size:0.75rem;">${nonCorrect}X</span>` : '');
             const isTaskAnalysisSession = s.mode === 'quaderno_task' && s.taskSteps && s.taskSteps.length > 0;
             const hasSetBreakdown = s.setBreakdown && s.setBreakdown.length > 0;
+            const hasTopoBreakdown = s.topoBreakdown && s.topoBreakdown.length > 0;
+            const hasGoNogoBreakdown = s.goNogoBreakdown && (s.goNogoBreakdown.go.total + s.goNogoBreakdown.nogo.total) > 0;
+            const hasMemLav = s.memLavTrials && s.memLavTrials.length > 0;
             const hasDetails = s.itemDetails && s.itemDetails.length > 0 && s.itemDetails.some(d => d.result !== true);
             let itemDetailsHtml = '';
-            if (hasDetails) {
+            if (hasMemLav) {
+                itemDetailsHtml = renderMemLavCollapsible(s, patient.id, s.originalIndex, isTD);
+            } else if (hasGoNogoBreakdown) {
+                itemDetailsHtml = renderGoNogoBreakdownCollapsible(s, patient.id, s.originalIndex, isTD);
+            } else if (hasDetails) {
                 itemDetailsHtml = renderItemDetailsCollapsible(s, patient.id, s.originalIndex, isTD);
             } else if (isTaskAnalysisSession) {
                 itemDetailsHtml = renderTaskStepDetailsCollapsible(s, patient.id, s.originalIndex, isTD);
+            } else if (hasTopoBreakdown) {
+                itemDetailsHtml = renderTopoBreakdownCollapsible(s, patient.id, s.originalIndex, isTD);
             } else if (hasSetBreakdown) {
                 itemDetailsHtml = renderSetBreakdownCollapsible(s, patient.id, s.originalIndex, isTD);
             }
-            const hasExpandable = hasDetails || isTaskAnalysisSession || hasSetBreakdown;
-            const expandColor = isTD ? 'var(--warning-color)' : (isTaskAnalysisSession ? 'var(--accent-color)' : (hasSetBreakdown ? 'var(--accent-color)' : 'var(--danger-color)'));
-            const expandRgba = isTD ? '245,158,11' : (isTaskAnalysisSession ? '99,102,241' : (hasSetBreakdown ? '99,102,241' : '239,68,68'));
+            const hasStructuredBreakdown = isTaskAnalysisSession || hasSetBreakdown || hasTopoBreakdown || hasGoNogoBreakdown || hasMemLav;
+            const hasExpandable = hasDetails || hasStructuredBreakdown;
+            const expandColor = isTD ? 'var(--warning-color)' : (hasStructuredBreakdown ? 'var(--accent-color)' : 'var(--danger-color)');
+            const expandRgba = isTD ? '245,158,11' : (hasStructuredBreakdown ? '99,102,241' : '239,68,68');
             const detailsBtn = hasExpandable
                 ? `<button class="btn-icon item-details-toggle" style="width:26px; height:26px; font-size:0.6rem; display:inline-flex; color:${expandColor}; border-color:rgba(${expandRgba},0.3);" title="Dettagli"><i class="fa-solid fa-chevron-down" style="transition:transform 0.2s; transform:rotate(180deg);"></i></button>`
                 : '';
+            const noteIcon = s.note ? ' <i class="fa-solid fa-sticky-note" style="color:#eab308; font-size:0.55rem;" title="Nota"></i>' : '';
+            const tagsChip = (s.poolTags && s.poolTags.length > 0)
+                ? `<div style="margin-top:2px; display:flex; flex-wrap:wrap; gap:3px;">${s.poolTags.map(t => `<span style="font-size:0.6rem; background:rgba(99,102,241,0.12); color:var(--accent-color); padding:0 5px; border-radius:4px;"><i class="fa-solid fa-tag" style="font-size:0.5rem;"></i> ${t}</span>`).join('')}</div>`
+                : '';
+            const colSpan = isTD ? 5 : 4;
+            const _escDate = (s.date || '').replace(/'/g, "\\'");
+            const _escMode = (s.mode || '').replace(/'/g, "\\'");
+            const _escSet = (s.setName || '').replace(/'/g, "\\'");
+            const noteRow = s.note ? `
+                        <tr class="note-details-row" style="display:none;">
+                            <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(234,179,8,0.06);">
+                                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:3px;">
+                                    <div style="font-size:0.75rem; color:#eab308; font-weight:bold;"><i class="fa-solid fa-sticky-note"></i> Nota</div>
+                                    <button class="btn-icon" style="width:20px; height:20px; font-size:0.55rem; color:#eab308; border-color:rgba(234,179,8,0.3);" onclick="openSessionNoteEditor('${patient.id}', '${_escDate}', '${_escMode}', '${_escSet}')" title="Modifica nota"><i class="fa-solid fa-pen"></i></button>
+                                </div>
+                                <div style="font-size:0.8rem; line-height:1.4; color:#ddd; cursor:pointer;" onclick="openSessionNoteEditor('${patient.id}', '${_escDate}', '${_escMode}', '${_escSet}')">${_renderNoteMarkup(s.note)}</div>
+                            </td>
+                        </tr>` : '';
             return `
                         <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-                            <td style="padding:6px 5px;">${formatDateEU(s.date)}</td>
+                            <td style="padding:6px 5px;">${formatDateEU(s.date)}${noteIcon}${tagsChip}</td>
                             <td>${s.correct}/${s.total}${scoreExtra}</td>
-                            <td style="font-weight:bold; color:${s.percentage >= 90 ? 'var(--success-color)' : 'white'}">${s.percentage}%</td>
+                            <td style="font-weight:bold; color:${pctColor(s.percentage, item.threshold)}">${s.percentage}%</td>
                             ${isTD ? `<td style="font-size:0.8rem; color:var(--warning-color);">${s.timeDelaySeconds || '?'}s</td>` : ''}
                             <td style="text-align:right;">
+                                ${s.note ? `<button class="btn-icon note-toggle-btn" style="width:26px; height:26px; font-size:0.6rem; display:inline-flex; color:#eab308; border-color:rgba(234,179,8,0.3);" title="Nota"><i class="fa-solid fa-sticky-note" style="transition:transform 0.2s;"></i></button>` : ''}
                                 ${detailsBtn}
                                 <button class="btn-icon" style="width:26px; height:26px; font-size:0.7rem; display:inline-flex;" onclick="editSession('${patient.id}', ${s.originalIndex})"><i class="fa-solid fa-pen"></i></button>
                                 <button class="btn-icon" style="width:26px; height:26px; font-size:0.7rem; display:inline-flex; color:var(--danger-color); border-color:rgba(239,68,68,0.3);" onclick="deleteSession('${patient.id}', ${s.originalIndex})"><i class="fa-solid fa-trash"></i></button>
                             </td>
                         </tr>
                         ${itemDetailsHtml}
+                        ${noteRow}
                     `}).join('')}
                 </table>
             </div>
@@ -1224,16 +1841,50 @@ function renderActivitiesTab(patient, sortBy) {
         });
     });
 
+    // Wire up note toggle buttons
+    content.querySelectorAll('.note-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // Find the note-details-row for this row (may be after item-details-row)
+            let tr = btn.closest('tr');
+            let noteRow = null;
+            let sibling = tr.nextElementSibling;
+            while (sibling) {
+                if (sibling.classList.contains('note-details-row')) { noteRow = sibling; break; }
+                sibling = sibling.nextElementSibling;
+            }
+            if (noteRow) {
+                const isOpen = noteRow.style.display !== 'none';
+                noteRow.style.display = isOpen ? 'none' : 'table-row';
+            }
+        });
+    });
+
+    // Wire up last-note-toggle buttons (quick view of last session note)
+    content.querySelectorAll('.last-note-toggle').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const wrapper = btn.closest('.chart-wrapper');
+            if (!wrapper) return;
+            const noteContent = wrapper.querySelector('.last-note-content');
+            if (noteContent) {
+                const isOpen = noteContent.style.display !== 'none';
+                noteContent.style.display = isOpen ? 'none' : 'block';
+            }
+        });
+    });
+
     // Render SVG charts
     chartList.forEach(item => {
         const chartId = 'activity-chart-' + item.key.replace(/[^a-zA-Z0-9]/g, '_');
         const container = document.getElementById(chartId);
-        if (container) renderActivitySVGChart(container, item.sessions, item.typeGroup, item.modeCode);
+        if (container) renderActivitySVGChart(container, item.sessions, item.typeGroup, item.modeCode, item.threshold);
     });
 }
 
 // --- ACTIVITY SVG CHART with Time Delay vertical markers ---
-function renderActivitySVGChart(container, sessions, typeGroup, modeCode) {
+function renderActivitySVGChart(container, sessions, typeGroup, modeCode, threshold) {
+    if (threshold === undefined) threshold = DEFAULT_CRITERION;
     const svgNS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(svgNS, "svg");
     svg.setAttribute("class", "chart-svg");
@@ -1283,13 +1934,14 @@ function renderActivitySVGChart(container, sessions, typeGroup, modeCode) {
             gt.textContent = pct + '%';
             svg.appendChild(gt);
         });
-        // 90% label next to threshold
+        // Threshold label
+        const threshY = 130 - (130 * threshold / 100);
         const lbl90 = document.createElementNS(svgNS, "text");
-        lbl90.setAttribute("x", "17"); lbl90.setAttribute("y", "16");
+        lbl90.setAttribute("x", "17"); lbl90.setAttribute("y", String(threshY + 3));
         lbl90.setAttribute("text-anchor", "end");
         lbl90.setAttribute("fill", "var(--danger-color)");
         lbl90.setAttribute("font-size", "7"); lbl90.setAttribute("opacity", "0.7");
-        lbl90.textContent = '90%';
+        lbl90.textContent = threshold + '%';
         svg.appendChild(lbl90);
     } else if (fluenzaMax > 0) {
         const step = Math.max(1, Math.ceil(fluenzaMax / 5));
@@ -1331,10 +1983,11 @@ function renderActivitySVGChart(container, sessions, typeGroup, modeCode) {
         obLbl.textContent = fluenzaObiettivo;
         svg.appendChild(obLbl);
     } else {
-        // 90% threshold
+        // Custom threshold line
+        const threshLineY = 130 - (130 * threshold / 100);
         const line90 = document.createElementNS(svgNS, "line");
         line90.setAttribute("x1", "20"); line90.setAttribute("x2", "300");
-        line90.setAttribute("y1", "13"); line90.setAttribute("y2", "13");
+        line90.setAttribute("y1", String(threshLineY)); line90.setAttribute("y2", String(threshLineY));
         line90.setAttribute("class", "threshold-line");
         svg.appendChild(line90);
     }
@@ -1371,6 +2024,35 @@ function renderActivitySVGChart(container, sessions, typeGroup, modeCode) {
         });
     }
 
+    // Field size vertical markers
+    {
+        let lastField = null;
+        sessions.forEach((s, i) => {
+            const fs = s.fieldSize || null;
+            if (fs !== null && fs !== lastField && lastField !== null) {
+                const x = 20 + (sessions.length > 1 ? i * stepX : 130);
+                const vLine = document.createElementNS(svgNS, "line");
+                vLine.setAttribute("x1", x); vLine.setAttribute("x2", x);
+                vLine.setAttribute("y1", "0"); vLine.setAttribute("y2", "130");
+                vLine.setAttribute("stroke", "var(--accent-color)");
+                vLine.setAttribute("stroke-width", "1.5");
+                vLine.setAttribute("stroke-dasharray", "4,3");
+                vLine.setAttribute("opacity", "0.5");
+                svg.appendChild(vLine);
+
+                const fsLbl = document.createElementNS(svgNS, "text");
+                fsLbl.setAttribute("x", x); fsLbl.setAttribute("y", "-3");
+                fsLbl.setAttribute("text-anchor", "middle");
+                fsLbl.setAttribute("fill", "var(--accent-color)");
+                fsLbl.setAttribute("font-size", "7");
+                fsLbl.setAttribute("font-weight", "bold");
+                fsLbl.textContent = `F${fs}`;
+                svg.appendChild(fsLbl);
+            }
+            lastField = fs;
+        });
+    }
+
     sessions.forEach((s, i) => {
         const x = 20 + (sessions.length > 1 ? i * stepX : 130);
         const y = isFluenza
@@ -1404,6 +2086,7 @@ function renderActivitySVGChart(container, sessions, typeGroup, modeCode) {
             : `${formatDateEU(s.date)}\nScore: ${s.percentage}% (${s.correct}/${s.total})`;
         if (s.rawP) tooltipText += `\nPrompt: ${s.rawP}`;
         if (s.timeDelaySeconds) tooltipText += `\nTime Delay: ${s.timeDelaySeconds}s`;
+        if (s.fieldSize) tooltipText += `\nField: ${s.fieldSize}`;
 
         const title = document.createElementNS(svgNS, "title");
         title.textContent = tooltipText;
@@ -1430,6 +2113,108 @@ function renderActivitySVGChart(container, sessions, typeGroup, modeCode) {
     container.appendChild(svg);
 }
 
+// --- Overview filter handlers ---
+window.changeOverviewFilter = (filter, pid) => {
+    state._overviewFilter = filter;
+    const p = state.patients.find(x => x.id === pid);
+    if (p) renderOverviewTab(p);
+};
+
+window.toggleOverviewOutliers = (pid) => {
+    state._overviewExcludeOutliers = !state._overviewExcludeOutliers;
+    const p = state.patients.find(x => x.id === pid);
+    if (p) renderOverviewTab(p);
+};
+
+window.toggleOverviewChartType = (pid) => {
+    state._overviewChartType = (state._overviewChartType || 'bar') === 'bar' ? 'line' : 'bar';
+    const p = state.patients.find(x => x.id === pid);
+    if (p) renderOverviewTab(p);
+};
+
+// --- Day tags (sentiment markers, independent from outlier exclusion) ---
+const DAY_TAGS = {
+    great: { label: 'Ottima',  symbol: '⭐', color: '#fbbf24' }, // ⭐
+    good:  { label: 'Buona',   symbol: '🙂', color: '#34d399' }, // 🙂
+    bad:   { label: 'No',      symbol: '😟', color: '#f87171' }, // 😟
+    tired: { label: 'Stanco',  symbol: '😴', color: '#a78bfa' }  // 😴
+};
+window.DAY_TAGS = DAY_TAGS;
+
+function getDayTagInfo(patient, dateKey) {
+    const key = patient && patient.dayTags ? patient.dayTags[dateKey] : null;
+    return key && DAY_TAGS[key] ? { key, ...DAY_TAGS[key] } : null;
+}
+
+window.setDayTag = async (pid, dateKey, tagKey) => {
+    const p = state.patients.find(x => x.id === pid);
+    if (!p) return;
+    if (!p.dayTags) p.dayTags = {};
+    if (!tagKey || !DAY_TAGS[tagKey] || p.dayTags[dateKey] === tagKey) {
+        delete p.dayTags[dateKey]; // toggling the active tag (or empty) clears it
+    } else {
+        p.dayTags[dateKey] = tagKey;
+    }
+    await DB.savePatient(p);
+    document.querySelectorAll('.day-tag-popover').forEach(el => el.remove());
+    _refreshActiveReportTab(pid);
+};
+
+// Re-render the tab the user is actually on (tagging a day from "Giornate"
+// used to bounce the view back to "Panoramica").
+function _refreshActiveReportTab(pid) {
+    const active = document.querySelector('.report-tab.active')?.dataset?.tab;
+    if (active && typeof switchReportTab === 'function') switchReportTab(active, pid);
+    else loadPatientData(pid);
+}
+
+window.openDayTagPicker = (pid, dateKey, anchorEl) => {
+    document.querySelectorAll('.day-tag-popover').forEach(el => el.remove());
+    const p = state.patients.find(x => x.id === pid);
+    const current = p && p.dayTags ? p.dayTags[dateKey] : null;
+
+    const pop = document.createElement('div');
+    pop.className = 'day-tag-popover';
+    pop.style.cssText = 'position:fixed; z-index:100000; background:var(--bg-elevated, #1e1e2e); border:1px solid rgba(255,255,255,0.12); border-radius:12px; padding:6px; box-shadow:0 8px 24px rgba(0,0,0,0.5); display:flex; flex-direction:column; gap:2px; min-width:150px;';
+    pop.innerHTML = Object.entries(DAY_TAGS).map(([key, t]) => `
+        <button onclick="event.stopPropagation(); setDayTag('${pid}', '${dateKey}', '${key}')" style="display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:8px; border:none; cursor:pointer; background:${current === key ? 'rgba(99,102,241,0.2)' : 'transparent'}; color:#eee; font-size:0.82rem; text-align:left;" onmouseover="this.style.background='rgba(255,255,255,0.07)'" onmouseout="this.style.background='${current === key ? 'rgba(99,102,241,0.2)' : 'transparent'}'">
+            <span style="font-size:1rem;">${t.symbol}</span> Giornata ${t.label}${current === key ? ' <i class="fa-solid fa-check" style="margin-left:auto; color:var(--success-color); font-size:0.7rem;"></i>' : ''}
+        </button>`).join('') +
+        `<button onclick="event.stopPropagation(); setDayTag('${pid}', '${dateKey}', null)" style="display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:8px; border:none; cursor:pointer; background:transparent; color:#888; font-size:0.82rem; text-align:left; border-top:1px solid rgba(255,255,255,0.06); margin-top:2px;" onmouseover="this.style.background='rgba(255,255,255,0.07)'" onmouseout="this.style.background='transparent'">
+            <i class="fa-solid fa-ban" style="width:16px; text-align:center;"></i> Nessun tag
+        </button>`;
+
+    document.body.appendChild(pop);
+    const r = anchorEl.getBoundingClientRect();
+    let top = r.bottom + 4, left = r.left;
+    const pr = pop.getBoundingClientRect();
+    if (left + pr.width > window.innerWidth - 8) left = window.innerWidth - pr.width - 8;
+    if (top + pr.height > window.innerHeight - 8) top = r.top - pr.height - 4;
+    pop.style.top = Math.max(8, top) + 'px';
+    pop.style.left = Math.max(8, left) + 'px';
+
+    setTimeout(() => {
+        const closer = (e) => {
+            if (!pop.contains(e.target)) { pop.remove(); document.removeEventListener('click', closer); }
+        };
+        document.addEventListener('click', closer);
+    }, 0);
+};
+
+// --- Outlier day management ---
+window.toggleOutlierDay = async (pid, dateKey) => {
+    const p = state.patients.find(x => x.id === pid);
+    if (!p) return;
+    if (!p.outlierDays) p.outlierDays = {};
+    if (p.outlierDays[dateKey]) {
+        delete p.outlierDays[dateKey];
+    } else {
+        p.outlierDays[dateKey] = true;
+    }
+    await DB.savePatient(p);
+    _refreshActiveReportTab(pid);
+};
+
 window.toggleActivityDetails = (btn) => {
     const wrapper = btn.closest('.chart-wrapper');
     const panel = wrapper.querySelector('.activity-details-panel');
@@ -1448,6 +2233,423 @@ window.changeActivitiesSort = (sortBy, patientId) => {
     const p = state.patients.find(x => x.id === patientId);
     if (p) renderActivitiesTab(p, sortBy);
 };
+
+// ============================================================
+// NOTES SYSTEM - Daily notes & markup rendering
+// ============================================================
+
+// Render basic markup (bold, italic, headers, lists, line breaks)
+function _renderNoteMarkup(text) {
+    if (!text) return '';
+    return text
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/^### (.+)$/gm, '<h5 style="margin:8px 0 4px; color:var(--accent-color); font-size:0.85rem;">$1</h5>')
+        .replace(/^## (.+)$/gm, '<h4 style="margin:10px 0 5px; color:var(--accent-color); font-size:0.9rem;">$1</h4>')
+        .replace(/^# (.+)$/gm, '<h3 style="margin:12px 0 6px; color:var(--accent-color); font-size:0.95rem;">$1</h3>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/~~(.+?)~~/g, '<del style="opacity:0.6;">$1</del>')
+        .replace(/^- (.+)$/gm, '<li style="margin:2px 0 2px 16px; list-style:disc;">$1</li>')
+        .replace(/^(\d+)\. (.+)$/gm, '<li style="margin:2px 0 2px 16px; list-style:decimal;" value="$1">$2</li>')
+        .replace(/\n/g, '<br>');
+}
+
+// === WYSIWYG NOTE EDITOR HELPERS ===
+// Notes are stored as the same lightweight markdown that _renderNoteMarkup
+// understands. These helpers convert that markdown to editable HTML and back,
+// so the editor can format text live (like a word processor) while the stored
+// format stays compatible with everything that renders notes.
+window._markupToEditableHtml = (md) => {
+    if (!md) return '';
+    const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const inline = (line) => esc(line)
+        .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+        .replace(/\*(.+?)\*/g, '<i>$1</i>')
+        .replace(/~~(.+?)~~/g, '<s>$1</s>');
+    const lines = md.split('\n');
+    let html = '';
+    let listType = null, listItems = [];
+    const flushList = () => {
+        if (listType) {
+            html += `<${listType}>` + listItems.map(li => `<li>${li || '<br>'}</li>`).join('') + `</${listType}>`;
+            listType = null; listItems = [];
+        }
+    };
+    for (const line of lines) {
+        let m;
+        if ((m = line.match(/^- (.*)$/))) { if (listType && listType !== 'ul') flushList(); listType = 'ul'; listItems.push(inline(m[1])); continue; }
+        if ((m = line.match(/^\d+\. (.*)$/))) { if (listType && listType !== 'ol') flushList(); listType = 'ol'; listItems.push(inline(m[1])); continue; }
+        flushList();
+        if ((m = line.match(/^### (.*)$/))) { html += `<h5>${inline(m[1])}</h5>`; continue; }
+        if ((m = line.match(/^## (.*)$/)))  { html += `<h4>${inline(m[1])}</h4>`; continue; }
+        if ((m = line.match(/^# (.*)$/)))   { html += `<h3>${inline(m[1])}</h3>`; continue; }
+        if (line.trim() === '') { html += '<div><br></div>'; continue; }
+        html += `<div>${inline(line)}</div>`;
+    }
+    flushList();
+    return html;
+};
+
+window._editableHtmlToMarkup = (root) => {
+    if (!root) return '';
+    const serializeInlineNode = (ch) => {
+        if (ch.nodeType === 3) return ch.nodeValue;
+        if (ch.nodeType !== 1) return '';
+        const tag = ch.tagName.toLowerCase();
+        if (tag === 'br') return '\n';
+        const st = ch.style || {};
+        const fw = st.fontWeight || '';
+        const isBold = tag === 'b' || tag === 'strong' || fw === 'bold' || (fw && parseInt(fw) >= 600);
+        const isItalic = tag === 'i' || tag === 'em' || st.fontStyle === 'italic';
+        const isStrike = tag === 's' || tag === 'strike' || tag === 'del' || (st.textDecoration || '').includes('line-through');
+        let inner = inlineSerialize(ch);
+        if (isBold && inner.trim()) return `**${inner}**`;
+        if (isItalic && inner.trim()) return `*${inner}*`;
+        if (isStrike && inner.trim()) return `~~${inner}~~`;
+        return inner;
+    };
+    const inlineSerialize = (parent) => {
+        let out = '';
+        parent.childNodes.forEach(ch => { out += serializeInlineNode(ch); });
+        return out;
+    };
+    const BLOCK = ['div', 'p', 'ul', 'ol', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'];
+    const lines = [];
+    const handleBlock = (el) => {
+        const tag = el.tagName ? el.tagName.toLowerCase() : '';
+        if (tag === 'ul' || tag === 'ol') {
+            let i = 1;
+            el.querySelectorAll(':scope > li').forEach(li => {
+                lines.push((tag === 'ul' ? '- ' : `${i++}. `) + inlineSerialize(li).replace(/\n+$/, '').trim());
+            });
+            return;
+        }
+        if (tag === 'h1' || tag === 'h3') { lines.push('# ' + inlineSerialize(el).trim()); return; }
+        if (tag === 'h2' || tag === 'h4') { lines.push('## ' + inlineSerialize(el).trim()); return; }
+        if (tag === 'h5' || tag === 'h6') { lines.push('### ' + inlineSerialize(el).trim()); return; }
+        // div / p / other block
+        const hasBlockChild = Array.from(el.childNodes).some(n => n.nodeType === 1 && BLOCK.includes(n.tagName.toLowerCase()));
+        if (hasBlockChild) {
+            el.childNodes.forEach(n => {
+                if (n.nodeType === 3) { if (n.nodeValue.trim()) lines.push(n.nodeValue); }
+                else if (n.nodeType === 1) handleBlock(n);
+            });
+        } else {
+            lines.push(inlineSerialize(el).replace(/\n$/, ''));
+        }
+    };
+    let pending = '';
+    Array.from(root.childNodes).forEach(n => {
+        if (n.nodeType === 3) { pending += n.nodeValue; return; }
+        if (n.nodeType !== 1) return;
+        const tag = n.tagName.toLowerCase();
+        if (BLOCK.includes(tag)) {
+            if (pending !== '') { lines.push(pending); pending = ''; }
+            handleBlock(n);
+        } else if (tag === 'br') {
+            lines.push(pending); pending = '';
+        } else {
+            pending += serializeInlineNode(n);
+        }
+    });
+    if (pending !== '') lines.push(pending);
+    return lines.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\s+$/, '');
+};
+
+// Apply a formatting command to the currently open WYSIWYG note editor
+window._noteFormat = (cmd) => {
+    const ed = document.querySelector('.note-wysiwyg');
+    if (!ed) return;
+    if (document.activeElement !== ed) ed.focus();
+    const simple = { bold: 'bold', italic: 'italic', strike: 'strikeThrough', ul: 'insertUnorderedList', ol: 'insertOrderedList' };
+    if (simple[cmd]) { document.execCommand(simple[cmd]); return; }
+    if (cmd === 'h1') document.execCommand('formatBlock', false, 'h3');
+    else if (cmd === 'h2') document.execCommand('formatBlock', false, 'h4');
+    else if (cmd === 'h3') document.execCommand('formatBlock', false, 'h5');
+};
+
+// Build the WYSIWYG toolbar markup (buttons keep the editor selection via mousedown preventDefault)
+window._noteToolbarHtml = (opts) => {
+    opts = opts || {};
+    const btn = (cmd, title, content) => `<button type="button" onmousedown="event.preventDefault()" onclick="_noteFormat('${cmd}')" title="${title}">${content}</button>`;
+    let h = '';
+    h += btn('bold', 'Grassetto', '<i class="fa-solid fa-bold"></i>');
+    h += btn('italic', 'Corsivo', '<i class="fa-solid fa-italic"></i>');
+    h += btn('strike', 'Barrato', '<i class="fa-solid fa-strikethrough"></i>');
+    h += `<span style="width:1px; background:rgba(255,255,255,0.1); margin:0 4px;"></span>`;
+    h += btn('h1', 'Titolo', '<i class="fa-solid fa-heading"></i>');
+    h += btn('h2', 'Sottotitolo', 'H2');
+    h += btn('h3', 'Sottotitolo piccolo', 'H3');
+    h += `<span style="width:1px; background:rgba(255,255,255,0.1); margin:0 4px;"></span>`;
+    h += btn('ul', 'Lista puntata', '<i class="fa-solid fa-list-ul"></i>');
+    h += btn('ol', 'Lista numerata', '<i class="fa-solid fa-list-ol"></i>');
+    return h;
+};
+
+// Open daily note editor (fullscreen modal with WYSIWYG toolbar)
+window.openDailyNoteEditor = (patientId, dateKey) => {
+    const p = state.patients.find(x => x.id === patientId);
+    if (!p) return;
+
+    if (!dateKey) {
+        // Default to today
+        dateKey = new Date().toISOString().split('T')[0];
+    }
+
+    const existingNote = (p.dailyNotes || {})[dateKey] || '';
+
+    // Remove any existing editor
+    const existing = document.getElementById('daily-note-editor-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'daily-note-editor-overlay';
+    overlay.className = 'daily-note-editor-overlay';
+
+    overlay.innerHTML = `
+        <div class="daily-note-editor">
+            <div class="daily-note-editor-header">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <i class="fa-solid fa-book-medical" style="color:#eab308; font-size:1.1rem;"></i>
+                    <h3 style="margin:0; font-size:1rem;">Nota della Giornata</h3>
+                </div>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <input type="date" id="daily-note-date" value="${dateKey}" style="padding:4px 8px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.85rem;">
+                    <button onclick="document.getElementById('daily-note-editor-overlay').remove()" style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:1.2rem;"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+            </div>
+            <div class="daily-note-toolbar">${_noteToolbarHtml()}</div>
+            <div id="daily-note-editable" class="note-wysiwyg" contenteditable="true" data-placeholder="Scrivi le note della giornata...">${_markupToEditableHtml(existingNote)}</div>
+            <div class="daily-note-preview-toggle" style="display:flex; justify-content:flex-end; align-items:center; padding:8px 12px;">
+                <div style="display:flex; gap:8px;">
+                    <button onclick="document.getElementById('daily-note-editor-overlay').remove()" class="btn btn-ghost" style="padding:6px 16px; font-size:0.85rem;">Annulla</button>
+                    <button onclick="_saveDailyNoteFromEditor('${patientId}')" class="btn btn-primary" style="padding:6px 16px; font-size:0.85rem;"><i class="fa-solid fa-floppy-disk"></i> Salva Nota</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    document.getElementById('daily-note-editable').focus();
+};
+
+// Save daily note from editor
+window._saveDailyNoteFromEditor = async (patientId) => {
+    const p = state.patients.find(x => x.id === patientId);
+    if (!p) return;
+    const dateInput = document.getElementById('daily-note-date');
+    const ed = document.getElementById('daily-note-editable');
+    if (!dateInput || !ed) return;
+
+    const dk = dateInput.value;
+    const text = _editableHtmlToMarkup(ed).trim();
+
+    if (!p.dailyNotes) p.dailyNotes = {};
+
+    if (text) {
+        p.dailyNotes[dk] = text;
+    } else {
+        delete p.dailyNotes[dk];
+    }
+
+    await DB.savePatient(p);
+    document.getElementById('daily-note-editor-overlay').remove();
+
+    // Refresh current view
+    if (state.activePatientId === patientId) {
+        loadPatientData(patientId);
+    }
+};
+
+// Delete a daily note
+window.deleteDailyNote = async (patientId, dateKey) => {
+    if (!await themedConfirm("Eliminare la nota di questa giornata?")) return;
+    const p = state.patients.find(x => x.id === patientId);
+    if (!p || !p.dailyNotes) return;
+    delete p.dailyNotes[dateKey];
+    await DB.savePatient(p);
+    loadPatientData(patientId);
+};
+
+// Edit a session (activity) note
+window.openSessionNoteEditor = (patientId, sessionDate, sessionMode, sessionSetName) => {
+    const p = state.patients.find(x => x.id === patientId);
+    if (!p) return;
+
+    // Find session by date + mode + setName
+    const sessionIdx = p.history.findIndex(h =>
+        h.date === sessionDate && h.mode === sessionMode && h.setName === sessionSetName
+    );
+    if (sessionIdx === -1) return;
+    const s = p.history[sessionIdx];
+
+    const existingNote = s.note || '';
+
+    const existing = document.getElementById('daily-note-editor-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'daily-note-editor-overlay';
+    overlay.className = 'daily-note-editor-overlay';
+
+    const modeName = MODES_CONFIG[s.mode] || s.mode;
+
+    overlay.innerHTML = `
+        <div class="daily-note-editor">
+            <div class="daily-note-editor-header">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <i class="fa-solid fa-sticky-note" style="color:#eab308; font-size:1.1rem;"></i>
+                    <h3 style="margin:0; font-size:1rem;">Nota Attività</h3>
+                </div>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:0.8rem; color:var(--text-secondary);">${modeName} - ${s.setName}</span>
+                    <button onclick="document.getElementById('daily-note-editor-overlay').remove()" style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:1.2rem;"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+            </div>
+            <div class="daily-note-toolbar">${_noteToolbarHtml()}</div>
+            <div id="daily-note-editable" class="note-wysiwyg" contenteditable="true" data-placeholder="Scrivi la nota per questa attività...">${_markupToEditableHtml(existingNote)}</div>
+            <div class="daily-note-preview-toggle" style="display:flex; justify-content:flex-end; align-items:center; padding:8px 12px;">
+                <div style="display:flex; gap:8px;">
+                    <button onclick="document.getElementById('daily-note-editor-overlay').remove()" class="btn btn-ghost" style="padding:6px 16px; font-size:0.85rem;">Annulla</button>
+                    <button onclick="_saveSessionNoteFromEditor('${patientId}', ${sessionIdx})" class="btn btn-primary" style="padding:6px 16px; font-size:0.85rem;"><i class="fa-solid fa-floppy-disk"></i> Salva Nota</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    document.getElementById('daily-note-editable').focus();
+};
+
+// Save session note from editor
+window._saveSessionNoteFromEditor = async (patientId, sessionIdx) => {
+    const p = state.patients.find(x => x.id === patientId);
+    if (!p || !p.history[sessionIdx]) return;
+    const ed = document.getElementById('daily-note-editable');
+    if (!ed) return;
+
+    const text = _editableHtmlToMarkup(ed).trim();
+    if (text) {
+        p.history[sessionIdx].note = text;
+    } else {
+        delete p.history[sessionIdx].note;
+    }
+
+    await DB.savePatient(p);
+    document.getElementById('daily-note-editor-overlay').remove();
+
+    if (state.activePatientId === patientId) {
+        loadPatientData(patientId);
+    }
+};
+
+// ============================================================
+// TAB 4: DIARIO CLINICO - Chronological diary view
+// ============================================================
+function renderDiaryTab(patient) {
+    const content = document.getElementById('report-content');
+    if (!content) return;
+
+    const dailyNotes = patient.dailyNotes || {};
+    const history = patient.history || [];
+
+    // Collect all dates with notes (daily or activity)
+    const allDates = new Set();
+    Object.keys(dailyNotes).forEach(dk => allDates.add(dk));
+    history.forEach(h => {
+        if (h.note) allDates.add(getDateKey(h.date));
+    });
+
+    const dates = [...allDates].sort().reverse();
+
+    if (dates.length === 0) {
+        content.innerHTML = `
+            <div style="text-align:center; padding:40px 20px; color:var(--text-secondary);">
+                <i class="fa-solid fa-book-medical" style="font-size:2.5rem; opacity:0.3; margin-bottom:12px; display:block;"></i>
+                <p style="font-size:0.9rem; margin-bottom:8px;">Nessuna nota registrata</p>
+                <p style="font-size:0.8rem; opacity:0.6;">Le note della giornata e delle attività appariranno qui in ordine cronologico.</p>
+                <button class="btn btn-primary" style="margin-top:12px; padding:8px 20px; font-size:0.85rem;" onclick="openDailyNoteEditor('${patient.id}')">
+                    <i class="fa-solid fa-plus"></i> Aggiungi Nota Giornata
+                </button>
+            </div>`;
+        return;
+    }
+
+    let html = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+        <h4 style="margin:0; color:var(--accent-color); font-size:0.95rem;"><i class="fa-solid fa-book-medical"></i> Diario Clinico</h4>
+        <button class="btn btn-primary" style="padding:6px 14px; font-size:0.8rem;" onclick="openDailyNoteEditor('${patient.id}')">
+            <i class="fa-solid fa-plus"></i> Nuova Nota
+        </button>
+    </div>`;
+
+    dates.forEach(dk => {
+        const hasDailyNote = !!dailyNotes[dk];
+        const dayActivityNotes = history.filter(h => getDateKey(h.date) === dk && h.note);
+
+        html += `
+        <div class="diary-entry" style="margin-bottom:16px; border-radius:12px; overflow:hidden; border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02);">
+            <div style="padding:12px 16px; background:rgba(0,0,0,0.15); display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05);">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <i class="fa-solid fa-calendar-day" style="color:var(--accent-color); font-size:0.9rem;"></i>
+                    <span style="font-weight:bold; font-size:1rem;">${formatDateEU(dk + 'T00:00:00')}</span>
+                    <span style="font-size:0.7rem; color:var(--text-secondary);">${_getDayOfWeek(dk)}</span>
+                </div>
+                <div style="display:flex; gap:4px;">
+                    ${hasDailyNote ? `<button class="btn-icon" style="width:24px; height:24px; font-size:0.65rem; color:#eab308; border-color:rgba(234,179,8,0.3);" onclick="openDailyNoteEditor('${patient.id}', '${dk}')" title="Modifica nota giornata"><i class="fa-solid fa-pen"></i></button>` : `<button class="btn-icon" style="width:24px; height:24px; font-size:0.65rem; color:#eab308; border-color:rgba(234,179,8,0.3);" onclick="openDailyNoteEditor('${patient.id}', '${dk}')" title="Aggiungi nota giornata"><i class="fa-solid fa-plus"></i></button>`}
+                </div>
+            </div>`;
+
+        // Daily note
+        if (hasDailyNote) {
+            html += `
+            <div style="padding:14px 16px; border-bottom:${dayActivityNotes.length > 0 ? '1px solid rgba(255,255,255,0.05)' : 'none'};">
+                <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+                    <span style="display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:5px; background:rgba(234,179,8,0.15);"><i class="fa-solid fa-book-medical" style="color:#eab308; font-size:0.6rem;"></i></span>
+                    <span style="font-size:0.75rem; color:#eab308; font-weight:600;">Nota della Giornata</span>
+                </div>
+                <div class="diary-note-text" style="font-size:0.85rem; line-height:1.6; color:#ddd; padding-left:26px; cursor:pointer;" onclick="openDailyNoteEditor('${patient.id}', '${dk}')" title="Clicca per modificare">${_renderNoteMarkup(dailyNotes[dk])}</div>
+            </div>`;
+        }
+
+        // Activity notes
+        if (dayActivityNotes.length > 0) {
+            dayActivityNotes.forEach(s => {
+                const modeName = MODES_CONFIG[s.mode] || s.mode;
+                const modeIcon = (typeof getModeIcon === 'function') ? getModeIcon(s.mode) : 'fa-puzzle-piece';
+                const timeStr = new Date(s.date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+                const escapedDate = (s.date || '').replace(/'/g, "\\'");
+                const escapedMode = (s.mode || '').replace(/'/g, "\\'");
+                const escapedSetName = (s.setName || '').replace(/'/g, "\\'");
+                html += `
+                <div style="padding:10px 16px; border-bottom:1px solid rgba(255,255,255,0.03);">
+                    <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px; flex-wrap:wrap;">
+                        <span style="display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:5px; background:rgba(99,102,241,0.15);"><i class="fa-solid ${modeIcon}" style="color:var(--accent-color); font-size:0.6rem;"></i></span>
+                        <span style="font-size:0.75rem; color:var(--accent-color); font-weight:600;">${modeName}</span>
+                        <span style="font-size:0.75rem; color:var(--text-secondary);">- ${s.setName}</span>
+                        <span style="font-size:0.65rem; color:#888;">${timeStr}</span>
+                        <span style="font-size:0.7rem; font-weight:bold; color:${pctColor(s.percentage)};">${s.percentage}%</span>
+                        <button class="btn-icon" style="width:22px; height:22px; font-size:0.6rem; color:#eab308; border-color:rgba(234,179,8,0.3); margin-left:auto;" onclick="openSessionNoteEditor('${patient.id}', '${escapedDate}', '${escapedMode}', '${escapedSetName}')" title="Modifica nota"><i class="fa-solid fa-pen"></i></button>
+                    </div>
+                    <div style="font-size:0.8rem; line-height:1.5; color:#ccc; padding-left:26px; border-left:2px solid rgba(99,102,241,0.2); cursor:pointer;" onclick="openSessionNoteEditor('${patient.id}', '${escapedDate}', '${escapedMode}', '${escapedSetName}')">${_renderNoteMarkup(s.note)}</div>
+                </div>`;
+            });
+        }
+
+        html += `</div>`;
+    });
+
+    content.innerHTML = html;
+}
+
+// Helper: get day of week in Italian
+function _getDayOfWeek(dateKey) {
+    const days = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
+    const d = new Date(dateKey + 'T00:00:00');
+    return days[d.getDay()];
+}
 
 // ============================================================
 // --- EXCEL EXPORT ---
@@ -1519,7 +2721,8 @@ th { background: #4472c4; color: white; font-weight: bold; }
         const modeName = MODES_CONFIG[mode] || mode;
         const last = sessions[sessions.length - 1];
         const avgPct = Math.round(sessions.reduce((a, s) => a + s.percentage, 0) / sessions.length);
-        const hasCriterion = checkCriterion(sessions);
+        const _thr = getCriterionThreshold(p.id, mode, name);
+        const hasCriterion = checkCriterion(sessions, _thr);
         const lastD = new Date(last.date);
         const lastDateStr = `${String(lastD.getDate()).padStart(2, '0')}/${String(lastD.getMonth() + 1).padStart(2, '0')}/${lastD.getFullYear()}`;
         const aCat = sessions.find(s => s.setCat)?.setCat || '';
@@ -1539,26 +2742,40 @@ th { background: #4472c4; color: white; font-weight: bold; }
 // TASK ANALYSIS - Per-step breakdown across sessions
 // ============================================================
 function renderTaskStepsAnalysis(sessions) {
-    // Get the template from the first session that has taskSteps
-    const template = sessions[0].taskSteps;
-    if (!template || template.length === 0) return '';
+    // Template = UNION of the step names seen across ALL sessions, ordered
+    // starting from the most recent session (so steps added to the list later
+    // appear, and steps only present in older sessions are still shown).
+    // Matching is BY NAME, never by index: inserting/reordering steps no longer
+    // mixes one step's data into another.
+    const byRecency = [...sessions].sort((a, b) => new Date(b.date) - new Date(a.date));
+    const names = [];
+    const seenNames = new Set();
+    byRecency.forEach(s => (s.taskSteps || []).forEach(st => {
+        if (st && st.name && !seenNames.has(st.name)) { seenNames.add(st.name); names.push(st.name); }
+    }));
+    if (names.length === 0) return '';
 
     // Aggregate per-step across ALL sessions (excluding N/A)
-    const stepAggregates = template.map((tmplStep, stepIdx) => {
+    const stepAggregates = names.map(name => {
         let totalV = 0, totalX = 0, totalP = 0, totalScored = 0;
         sessions.forEach(session => {
-            if (session.taskSteps && session.taskSteps[stepIdx]) {
-                const step = session.taskSteps[stepIdx];
-                (step.results || []).forEach(r => {
+            const step = (session.taskSteps || []).find(st => st && st.name === name);
+            if (!step) return;
+            if (step.results && step.results.length) {
+                step.results.forEach(r => {
                     if (r === true) { totalV++; totalScored++; }
                     else if (r === false) { totalX++; totalScored++; }
                     else if (r === 'prompt') { totalP++; totalScored++; }
                 });
+            } else {
+                // Legacy/merged records may carry only the counters
+                totalV += step.v || 0; totalX += step.x || 0; totalP += step.p || 0;
+                totalScored += (step.v || 0) + (step.x || 0) + (step.p || 0);
             }
         });
         const pctCorrect = totalScored > 0 ? Math.round((totalV / totalScored) * 100) : 0;
         const pctError = totalScored > 0 ? Math.round(((totalX + totalP) / totalScored) * 100) : 0;
-        return { name: tmplStep.name, totalV, totalX, totalP, totalScored, pctCorrect, pctError };
+        return { name, totalV, totalX, totalP, totalScored, pctCorrect, pctError };
     });
 
     // Find steps with lowest correct percentage (problem areas)
@@ -1607,7 +2824,7 @@ function renderTaskStepsAnalysis(sessions) {
             const sTotalScored = sessionStepData.reduce((s, x) => s + x.totalScored, 0);
             const sTotalV = sessionStepData.reduce((s, x) => s + x.totalV, 0);
             const sPct = sTotalScored > 0 ? Math.round((sTotalV / sTotalScored) * 100) : 0;
-            const pctColor = sPct >= 90 ? 'var(--success-color)' : sPct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
+            const _clr = pctColor(sPct);
 
             html += `
             <div style="border:1px solid rgba(255,255,255,0.05); border-radius:8px; margin-bottom:6px; overflow:hidden;">
@@ -1620,7 +2837,7 @@ function renderTaskStepsAnalysis(sessions) {
                     </div>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span style="font-size:0.8rem;">${sTotalV}/${sTotalScored}</span>
-                        <span style="font-weight:bold; font-size:0.8rem; color:${pctColor};">${sPct}%</span>
+                        <span style="font-weight:bold; font-size:0.8rem; color:${_clr};">${sPct}%</span>
                     </div>
                 </div>
                 <div style="display:none; padding:6px;">
@@ -1652,7 +2869,7 @@ function renderTaskStepTable(stepAggregates, title) {
 
     stepAggregates.forEach((step, i) => {
         const barWidth = step.pctCorrect;
-        const barColor = step.pctCorrect >= 90 ? 'var(--success-color)' : step.pctCorrect >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
+        const barColor = pctColor(step.pctCorrect);
         html += `
         <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
             <td style="padding:5px 4px; color:var(--text-secondary); font-weight:bold;">${i + 1}</td>
@@ -1737,7 +2954,7 @@ function renderSetBreakdownAnalysis(sessions) {
             const sTotalScored = breakdown.reduce((sum, sb) => sum + (sb.total || 0), 0);
             const sTotalV = breakdown.reduce((sum, sb) => sum + (sb.correct || 0), 0);
             const sPct = sTotalScored > 0 ? Math.round((sTotalV / sTotalScored) * 100) : 0;
-            const pctColor = sPct >= 90 ? 'var(--success-color)' : sPct >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
+            const _clr = pctColor(sPct);
 
             const sessionSetData = breakdown.map(sb => ({
                 setName: sb.setName, setCat: sb.setCat || '',
@@ -1758,7 +2975,7 @@ function renderSetBreakdownAnalysis(sessions) {
                     </div>
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span style="font-size:0.8rem;">${sTotalV}/${sTotalScored}</span>
-                        <span style="font-weight:bold; font-size:0.8rem; color:${pctColor};">${sPct}%</span>
+                        <span style="font-weight:bold; font-size:0.8rem; color:${_clr};">${sPct}%</span>
                     </div>
                 </div>
                 <div style="display:none; padding:6px;">
@@ -1790,7 +3007,7 @@ function renderSetBreakdownTable(setAggregates, title) {
 
     setAggregates.forEach((s, i) => {
         const barWidth = s.pctCorrect;
-        const barColor = s.pctCorrect >= 90 ? 'var(--success-color)' : s.pctCorrect >= 70 ? 'var(--warning-color)' : 'var(--danger-color)';
+        const barColor = pctColor(s.pctCorrect);
         html += `
         <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
             <td style="padding:5px 4px; color:var(--text-secondary); font-weight:bold;">${i + 1}</td>
@@ -1810,6 +3027,83 @@ function renderSetBreakdownTable(setAggregates, title) {
     });
 
     html += `</table>`;
+    return html;
+}
+
+// --- Topologia aggregate analysis across sessions ---
+function renderTopoAnalysis(sessions) {
+    const sessionsWithTopo = sessions.filter(s => s.topoBreakdown && s.topoBreakdown.length > 0);
+    if (sessionsWithTopo.length === 0) return '';
+
+    const posMap = {};
+    sessionsWithTopo.forEach(session => {
+        (session.topoBreakdown || []).forEach(tb => {
+            if (!posMap[tb.position]) posMap[tb.position] = { position: tb.position, label: tb.label, totalV: 0, totalX: 0, totalP: 0, totalScored: 0 };
+            posMap[tb.position].totalV += tb.correct || 0;
+            posMap[tb.position].totalX += tb.incorrect || 0;
+            posMap[tb.position].totalP += tb.prompts || 0;
+            posMap[tb.position].totalScored += tb.total || 0;
+        });
+    });
+
+    const posAggregates = Object.values(posMap).map(p => ({
+        ...p,
+        pctCorrect: p.totalScored > 0 ? Math.round((p.totalV / p.totalScored) * 100) : 0
+    }));
+
+    if (posAggregates.length === 0) return '';
+
+    const sorted = [...posAggregates].filter(p => p.totalScored > 0).sort((a, b) => a.pctCorrect - b.pctCorrect);
+    const worstPos = sorted.filter(p => p.pctCorrect < 90).slice(0, 3);
+
+    let html = `
+    <div style="margin-top:10px; padding:10px; background:rgba(99,102,241,0.05); border:1px solid rgba(99,102,241,0.15); border-radius:12px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+            <i class="fa-solid fa-layer-group" style="color:var(--accent-color);"></i>
+            <span style="font-weight:bold; font-size:0.9rem; color:var(--accent-color);">Analisi per Topologia</span>
+            <span style="font-size:0.7rem; color:var(--text-secondary);">(su ${sessionsWithTopo.length} sessioni)</span>
+        </div>`;
+
+    if (worstPos.length > 0) {
+        html += `<div style="margin-bottom:10px; padding:8px; background:rgba(239,68,68,0.08); border-radius:8px; border:1px solid rgba(239,68,68,0.15);">
+            <div style="font-size:0.75rem; color:var(--danger-color); font-weight:bold; margin-bottom:4px;">
+                <i class="fa-solid fa-triangle-exclamation"></i> Topologie critiche:
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:4px;">
+                ${worstPos.map(p => `<span style="display:inline-block; padding:2px 8px; border-radius:6px; font-size:0.75rem; background:rgba(239,68,68,0.12); color:var(--danger-color); border:1px solid rgba(239,68,68,0.2);">${p.label} <b>${p.pctCorrect}%</b></span>`).join('')}
+            </div>
+        </div>`;
+    }
+
+    // Aggregate table
+    html += `<table style="width:100%; font-size:0.8rem; color:#ccc; border-collapse:collapse;">
+        <tr style="border-bottom:1px solid #444; color:#888; font-size:0.7rem;">
+            <th style="padding:4px; text-align:left;">Topologia</th>
+            <th style="text-align:center;">V</th>
+            <th style="text-align:center;">X/P</th>
+            <th style="text-align:center;">Tot</th>
+            <th style="text-align:right;">%</th>
+        </tr>`;
+    posAggregates.sort((a, b) => a.pctCorrect - b.pctCorrect).forEach(p => {
+        const barColor = pctColor(p.pctCorrect);
+        html += `
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
+            <td style="padding:5px 4px; font-weight:600;">${p.label}</td>
+            <td style="text-align:center; color:var(--success-color);">${p.totalV}</td>
+            <td style="text-align:center; color:var(--danger-color);">${p.totalX + p.totalP}</td>
+            <td style="text-align:center;">${p.totalScored}</td>
+            <td style="text-align:right; width:90px;">
+                <div style="display:flex; align-items:center; gap:4px; justify-content:flex-end;">
+                    <div style="width:50px; height:6px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden;">
+                        <div style="width:${p.pctCorrect}%; height:100%; background:${barColor}; border-radius:3px;"></div>
+                    </div>
+                    <span style="font-weight:bold; color:${barColor}; min-width:30px; text-align:right;">${p.pctCorrect}%</span>
+                </div>
+            </td>
+        </tr>`;
+    });
+    html += `</table>`;
+    html += `</div>`;
     return html;
 }
 
@@ -1845,8 +3139,9 @@ function _buildPatientSummaryForAI(patient, fakeName) {
         const firstSess = sortedSess[0];
         const lastSess = sortedSess[sortedSess.length - 1];
         const avgPct = Math.round(sessions.reduce((a, s) => a + s.percentage, 0) / sessions.length);
-        const hasCriterion = checkCriterion(sessions);
-        const isRepert = checkRepertorio(sessions);
+        const _thr = getCriterionThreshold(patient.id, mode, setName);
+        const hasCriterion = checkCriterion(sessions, _thr);
+        const isRepert = checkRepertorio(sessions, _thr);
         const setCat = sessions.find(s => s.setCat)?.setCat || '';
 
         // Trend: compare first half avg vs second half avg
@@ -1942,10 +3237,10 @@ window.generateAIReport = async (pid) => {
     }
 
     const apiKey = getGeminiApiKey();
-    if (!apiKey) {
+    if (!apiKey && !(typeof nvidiaTextActive === 'function' && nvidiaTextActive())) {
         openSettings();
         setTimeout(() => {
-            alert('Per generare il report AI, inserisci prima la tua chiave API Gemini nelle Impostazioni.');
+            alert('Per generare il report AI, inserisci prima la tua chiave API Gemini nelle Impostazioni (oppure attiva il motore NVIDIA).');
         }, 300);
         return;
     }
@@ -2087,7 +3382,7 @@ window.askReportFollowUp = async () => {
     }
 
     const apiKey = getGeminiApiKey();
-    if (!apiKey) return;
+    if (!apiKey && !(typeof nvidiaTextActive === 'function' && nvidiaTextActive())) return;
 
     const fakeName = window._aiReportFakeName;
     const realName = window._aiReportRealName;
@@ -2182,6 +3477,10 @@ window.askReportFollowUp = async () => {
 
 // Gemini multi-turn conversation call
 async function _callGeminiConversation(contents, apiKey) {
+    // Provider routing: when the NVIDIA text engine is selected, use it instead.
+    if (typeof nvidiaTextActive === 'function' && nvidiaTextActive()) {
+        return await nvidiaConversation(contents);
+    }
     const MAX_RETRIES = 3;
     const BACKOFF_MS = [3000, 8000, 15000];
 
@@ -2268,6 +3567,56 @@ function _updateReportWithFollowUp(pid, question, answer) {
     reports[0].followUps.push({ question, answer });
     _setPatientReports(pid, reports);
 }
+
+// --- OPEN REPORT HISTORY STANDALONE (from cartella clinica) ---
+window.openReportHistoryStandalone = (pid) => {
+    const reports = _getPatientReports(pid);
+    if (reports.length === 0) {
+        alert('Nessun report salvato per questo paziente.');
+        return;
+    }
+
+    // Ensure the AI report modal exists
+    let modal = document.getElementById('modal-ai-report');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'modal-ai-report';
+        modal.className = 'modal-fs';
+        modal.innerHTML = `
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-clock-rotate-left"></i> Storico Report AI</h2>
+                <button class="btn btn-danger" onclick="closeAIReport()">Chiudi</button>
+            </div>
+            <div class="modal-body" id="ai-report-body" style="max-width:700px; margin:0 auto; padding-bottom:80px;"></div>
+            <div id="ai-report-chat-bar" style="display:none; position:fixed; bottom:0; left:0; right:0; background:var(--glass-bg, rgba(15,15,30,0.95)); backdrop-filter:blur(20px); border-top:1px solid var(--glass-border); padding:10px 16px; z-index:1001;">
+                <div style="max-width:700px; margin:0 auto; display:flex; gap:8px; align-items:center;">
+                    <i class="fa-solid fa-comments" style="color:var(--accent-color); font-size:1rem;"></i>
+                    <input type="text" id="ai-report-chat-input" placeholder="Chiedi altro sul report..."
+                        style="flex:1; padding:10px 14px; border-radius:10px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.05); color:var(--text-primary); font-size:0.85rem; outline:none;"
+                        onkeydown="if(event.key==='Enter')askReportFollowUp()">
+                    <button class="btn btn-primary" style="padding:8px 14px; border-radius:10px; font-size:0.85rem;" onclick="askReportFollowUp()">
+                        <i class="fa-solid fa-paper-plane"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    } else {
+        // Update header to show "Storico" instead of "Report AI"
+        const header = modal.querySelector('.modal-header h2');
+        if (header) header.innerHTML = '<i class="fa-solid fa-clock-rotate-left"></i> Storico Report AI';
+    }
+
+    // Hide chat bar
+    const chatBar = document.getElementById('ai-report-chat-bar');
+    if (chatBar) chatBar.style.display = 'none';
+
+    // Open modal
+    setTimeout(() => modal.classList.add('open'), 10);
+
+    // Show history
+    openReportHistory(pid);
+};
 
 // --- REPORT HISTORY ---
 window.openReportHistory = (pid) => {
@@ -2403,8 +3752,8 @@ function _escapeForAttr(str) {
     return (str || '').replace(/'/g, "\\'").replace(/\n/g, '\\n');
 }
 
-window.deleteReport = (pid, index) => {
-    if (!confirm('Eliminare questo report?')) return;
+window.deleteReport = async (pid, index) => {
+    if (!await themedConfirm('Eliminare questo report?')) return;
     const reports = _getPatientReports(pid);
     reports.splice(index, 1);
     _setPatientReports(pid, reports);
@@ -2523,6 +3872,10 @@ function _markdownToHtml(md) {
 
 // Gemini call that returns plain text (not JSON)
 async function _callGeminiText(prompt, apiKey) {
+    // Provider routing: when the NVIDIA text engine is selected, use it instead.
+    if (typeof nvidiaTextActive === 'function' && nvidiaTextActive()) {
+        return await nvidiaChatText(prompt, { maxTokens: 8192, temperature: 0.7 });
+    }
     const MAX_RETRIES = 3;
     const BACKOFF_MS = [3000, 8000, 15000];
 

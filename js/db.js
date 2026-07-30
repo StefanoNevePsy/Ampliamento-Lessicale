@@ -19,75 +19,64 @@ class DB {
             r.onerror = e => rej(e.target.error);
         });
     }
+    // Wrap an IDBRequest so failures (quota, corruption) REJECT instead of
+    // hanging the awaiting import/save forever.
+    static _p(request, map) {
+        return new Promise((res, rej) => {
+            request.onsuccess = () => res(map ? map(request.result) : request.result);
+            request.onerror = () => rej(request.error || new Error('Errore IndexedDB'));
+        });
+    }
     // Sets
     static async getAllSets() {
         const db = await DB.open();
-        return new Promise(r => {
-            const tx = db.transaction(STORE_SETS, 'readonly').objectStore(STORE_SETS).getAll();
-            tx.onsuccess = () => r(tx.result || []);
-        });
+        return DB._p(db.transaction(STORE_SETS, 'readonly').objectStore(STORE_SETS).getAll(), v => v || []);
     }
     static async saveSet(set) {
         const db = await DB.open();
-        return new Promise(r => {
-            const tx = db.transaction(STORE_SETS, 'readwrite').objectStore(STORE_SETS).put(set);
-            tx.onsuccess = () => r(true);
-        });
+        return DB._p(db.transaction(STORE_SETS, 'readwrite').objectStore(STORE_SETS).put(set), () => true);
     }
     static async deleteSet(id) {
         const db = await DB.open();
-        return new Promise(r => {
-            const tx = db.transaction(STORE_SETS, 'readwrite').objectStore(STORE_SETS).delete(id);
-            tx.onsuccess = () => r(true);
-        });
+        return DB._p(db.transaction(STORE_SETS, 'readwrite').objectStore(STORE_SETS).delete(id), () => true);
+    }
+    static async getSet(id) {
+        const db = await DB.open();
+        return DB._p(db.transaction(STORE_SETS, 'readonly').objectStore(STORE_SETS).get(id), v => v || null);
+    }
+    static async getAllSetIds() {
+        const db = await DB.open();
+        return DB._p(db.transaction(STORE_SETS, 'readonly').objectStore(STORE_SETS).getAllKeys(), v => v || []);
     }
     // Patients
     static async getAllPatients() {
         const db = await DB.open();
-        return new Promise(r => {
-            const tx = db.transaction(STORE_PATIENTS, 'readonly').objectStore(STORE_PATIENTS).getAll();
-            tx.onsuccess = () => r(tx.result || []);
-        });
+        return DB._p(db.transaction(STORE_PATIENTS, 'readonly').objectStore(STORE_PATIENTS).getAll(), v => v || []);
     }
     static async savePatient(p) {
         const db = await DB.open();
-        return new Promise(r => {
-            const tx = db.transaction(STORE_PATIENTS, 'readwrite').objectStore(STORE_PATIENTS).put(p);
-            tx.onsuccess = () => r(true);
-        });
+        return DB._p(db.transaction(STORE_PATIENTS, 'readwrite').objectStore(STORE_PATIENTS).put(p), () => true);
     }
     static async deletePatient(id) {
         const db = await DB.open();
-        return new Promise(r => {
-            const tx = db.transaction(STORE_PATIENTS, 'readwrite').objectStore(STORE_PATIENTS).delete(id);
-            tx.onsuccess = () => r(true);
-        });
+        return DB._p(db.transaction(STORE_PATIENTS, 'readwrite').objectStore(STORE_PATIENTS).delete(id), () => true);
     }
     // Tag Images (IndexedDB - no localStorage limit)
     static async getAllTagImages() {
         const db = await DB.open();
-        return new Promise(r => {
-            const tx = db.transaction(STORE_TAG_IMAGES, 'readonly').objectStore(STORE_TAG_IMAGES).getAll();
-            tx.onsuccess = () => {
-                const map = {};
-                (tx.result || []).forEach(rec => { map[rec.tag] = rec.dataUrl; });
-                r(map);
-            };
+        return DB._p(db.transaction(STORE_TAG_IMAGES, 'readonly').objectStore(STORE_TAG_IMAGES).getAll(), rows => {
+            const map = {};
+            (rows || []).forEach(rec => { map[rec.tag] = rec.dataUrl; });
+            return map;
         });
     }
     static async saveTagImage(tag, dataUrl) {
         const db = await DB.open();
-        return new Promise(r => {
-            const tx = db.transaction(STORE_TAG_IMAGES, 'readwrite').objectStore(STORE_TAG_IMAGES).put({ tag, dataUrl });
-            tx.onsuccess = () => r(true);
-        });
+        return DB._p(db.transaction(STORE_TAG_IMAGES, 'readwrite').objectStore(STORE_TAG_IMAGES).put({ tag, dataUrl }), () => true);
     }
     static async deleteTagImage(tag) {
         const db = await DB.open();
-        return new Promise(r => {
-            const tx = db.transaction(STORE_TAG_IMAGES, 'readwrite').objectStore(STORE_TAG_IMAGES).delete(tag);
-            tx.onsuccess = () => r(true);
-        });
+        return DB._p(db.transaction(STORE_TAG_IMAGES, 'readwrite').objectStore(STORE_TAG_IMAGES).delete(tag), () => true);
     }
     static async importAllTagImages(map) {
         const db = await DB.open();
@@ -96,6 +85,10 @@ class DB {
         for (const [tag, dataUrl] of Object.entries(map)) {
             store.put({ tag, dataUrl });
         }
-        return new Promise(r => { tx.oncomplete = () => r(true); });
+        return new Promise((res, rej) => {
+            tx.oncomplete = () => res(true);
+            tx.onerror = () => rej(tx.error || new Error('Errore IndexedDB'));
+            tx.onabort = () => rej(tx.error || new Error('Transazione annullata (quota?)'));
+        });
     }
 }

@@ -1,0 +1,200 @@
+name: Build APK per tablet
+
+# Builds a signed-consistently debug APK on every push (and on demand) and
+# publishes it to a rolling pre-release ("tablet-latest") so it can be
+# downloaded and installed directly from the tablet. Because every build is
+# signed with the SAME key, installing a new APK over the app updates it in
+# place and PRESERVES all data (patients/sessions in IndexedDB, cached models).
+
+on:
+  workflow_dispatch:
+    inputs:
+      native:
+        description: 'Includi i moduli nativi (ML Kit / ORT NPU) — sperimentale'
+        type: boolean
+        default: false
+  push:
+    branches:
+      - claude/psychology-app-setup-CmBhq
+      - main
+    paths-ignore:
+      - '**.md'
+      - '.github/workflows/build.yml'
+
+concurrency:
+  group: android-tablet-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      NATIVE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.native || 'false' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm install
+
+      # Consistent signing = updates preserve data. Prefer a user-provided
+      # keystore secret (e.g. your PC's Android Studio debug key, so even the
+      # FIRST switch keeps data); otherwise use the committed fixed debug key.
+      - name: Prepare signing key
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          mkdir -p ~/.android
+          if [ -n "$KS_B64" ]; then
+            # Strip any whitespace/newlines the secret may carry, then decode.
+            printf '%s' "$KS_B64" | tr -d '[:space:]' | base64 -d > ~/.android/debug.keystore
+            echo "Keystore da secret ANDROID_KEYSTORE_B64 ($(wc -c < ~/.android/debug.keystore) byte)."
+          else
+            cp ci/debug.keystore ~/.android/debug.keystore
+            echo "Keystore fisso committato (ci/debug.keystore)."
+          fi
+          # It MUST load with the standard debug credentials (storepass 'android',
+          # alias 'androiddebugkey') — otherwise Gradle silently auto-generates a
+          # NEW debug key and the APK can't update over the installed app. Fail loud.
+          if ! keytool -list -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey >/tmp/ks.txt 2>&1; then
+            echo "::error::ANDROID_KEYSTORE_B64 non è un keystore debug valido (password/alias standard). Rigenera il secret."
+            cat /tmp/ks.txt
+            exit 1
+          fi
+          echo "Firma verificata — impronta usata:"
+          keytool -list -v -keystore ~/.android/debug.keystore -storepass android 2>/dev/null | grep -E "SHA256:|Valid from" | head -2
+
+      - name: Build web assets
+        run: npm run build:web
+
+      - name: Add Capacitor Android project
+        run: npx cap add android
+
+      - name: Patch Android manifest permissions
+        run: node scripts/add-android-permissions.js
+
+      - name: Inject native modules (ML Kit / ORT)
+        if: env.NATIVE == 'true'
+        run: node scripts/add-native-npu.js
+
+      - name: Raise Gradle heap / resource settings
+        run: node scripts/fix-android-gradle.js
+
+      - name: Generate full icon set (legacy + adaptive + Monet monochrome/themed)
+        run: |
+          set -e
+          npm install --no-save sharp
+          RES=android/app/src/main/res
+          node - <<'NODE'
+          const fs = require('fs');
+          const sharp = require('sharp');
+          const RES = 'android/app/src/main/res';
+          const svg = f => fs.readFileSync('build/' + f);
+          // 1) Legacy launcher bitmaps (square + round) — used pre-API26 and as
+          //    the task-switcher / recents bitmap fallback.
+          const legacy = [[48,'mdpi'],[72,'hdpi'],[96,'xhdpi'],[144,'xxhdpi'],[192,'xxxhdpi']];
+          // 2) Adaptive layers (foreground + monochrome) on the 108dp canvas.
+          const adaptive = [[108,'mdpi'],[162,'hdpi'],[216,'xhdpi'],[324,'xxhdpi'],[432,'xxxhdpi']];
+          (async () => {
+            for (const [sz, dpi] of legacy) {
+              const dir = `${RES}/mipmap-${dpi}`; fs.mkdirSync(dir, { recursive: true });
+              const buf = await sharp(svg('icon.svg')).resize(sz, sz).png().toBuffer();
+              fs.writeFileSync(`${dir}/ic_launcher.png`, buf);
+              fs.writeFileSync(`${dir}/ic_launcher_round.png`, buf);
+            }
+            for (const [sz, dpi] of adaptive) {
+              const dir = `${RES}/drawable-${dpi}`; fs.mkdirSync(dir, { recursive: true });
+              await sharp(svg('icon-foreground.svg')).resize(sz, sz).png().toFile(`${dir}/ic_launcher_foreground.png`);
+              await sharp(svg('icon-monochrome.svg')).resize(sz, sz).png().toFile(`${dir}/ic_launcher_monochrome.png`);
+            }
+            // 3) Adaptive-icon XMLs (background colour + foreground + Monet monochrome).
+            const anydpi = `${RES}/mipmap-anydpi-v26`; fs.mkdirSync(anydpi, { recursive: true });
+            const xml = `<?xml version="1.0" encoding="utf-8"?>\n<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n    <background android:drawable="@color/ic_launcher_background"/>\n    <foreground android:drawable="@drawable/ic_launcher_foreground"/>\n    <monochrome android:drawable="@drawable/ic_launcher_monochrome"/>\n</adaptive-icon>\n`;
+            fs.writeFileSync(`${anydpi}/ic_launcher.xml`, xml);
+            fs.writeFileSync(`${anydpi}/ic_launcher_round.xml`, xml);
+            console.log('base icons generated');
+          })();
+          NODE
+          # Canonical patch: background colour, themed (Monet) XML, foreground/monochrome padding.
+          node scripts/fix-adaptive-icons.js
+          echo "== generated icon resources =="
+          ls $RES/mipmap-anydpi-v26 $RES/drawable-xxxhdpi $RES/values/ic_launcher_background.xml
+
+      - name: Sync web assets
+        run: npx cap copy android
+
+      # AGP on these runners ignores ~/.android/debug.keystore and auto-generates
+      # a fresh debug key each build (so the APK signature kept changing and
+      # couldn't update over the installed app). Force the debug signingConfig to
+      # OUR keystore at an explicit path — deterministic signature every build.
+      - name: Force debug signing to our keystore
+        run: |
+          cp ~/.android/debug.keystore android/app/ci-debug.keystore
+          cat >> android/app/build.gradle <<'GRADLE'
+
+          android.signingConfigs.debug {
+              storeFile file("ci-debug.keystore")
+              storePassword "android"
+              keyAlias "androiddebugkey"
+              keyPassword "android"
+          }
+          GRADLE
+          echo "Firma forzata su ci-debug.keystore — impronta:"
+          keytool -list -v -keystore android/app/ci-debug.keystore -storepass android 2>/dev/null | grep -E "SHA256:|Valid from" | head -2
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Stage APK with stable + versioned names
+        run: |
+          mkdir -p out
+          SHORT=$(git rev-parse --short HEAD)
+          STAMP=$(date -u +%Y%m%d-%H%M)
+          cp android/app/build/outputs/apk/debug/app-debug.apk "out/terapia-attiva.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "out/terapia-attiva-${STAMP}-${SHORT}.apk"
+          echo "APK_STAMP=${STAMP}" >> $GITHUB_ENV
+          echo "APK_SHORT=${SHORT}" >> $GITHUB_ENV
+          ls -la out/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: terapia-attiva-apk
+          path: out/*.apk
+
+      - name: Publish to rolling release (tablet-latest)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: tablet-latest
+          name: 'App tablet — ultima build'
+          prerelease: true
+          body: |
+            APK aggiornato automaticamente.
+
+            - Build: ${{ env.APK_STAMP }} · commit `${{ env.APK_SHORT }}`
+            - Branch: `${{ github.ref_name }}`
+            - Moduli nativi: `${{ env.NATIVE }}`
+
+            **Scarica `terapia-attiva.apk`** qui sotto e installalo sul tablet:
+            aggiorna l'app conservando dati e modelli (stessa firma).
+          files: out/*.apk
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
