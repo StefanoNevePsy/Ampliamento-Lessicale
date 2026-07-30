@@ -1664,8 +1664,27 @@ function updateScoreUI() {
 }
 
 // --- SESSION TYPE SELECTOR ---
+// Two states only: a toggle button reads better than a dropdown, and carries
+// the colour of the active mode (green = independent, orange = time delay).
+window.toggleSessionType = () => {
+    const field = document.getElementById('session-type-select');
+    if (!field) return;
+    field.value = field.value === 'timedelay' ? 'independent' : 'timedelay';
+    window.onSessionTypeChange();
+};
+
 window.onSessionTypeChange = () => {
     const type = document.getElementById('session-type-select').value;
+    const toggle = document.getElementById('session-type-toggle');
+    if (toggle) {
+        const isTD = type === 'timedelay';
+        toggle.innerHTML = isTD
+            ? '<i class="fa-solid fa-hourglass-half"></i> Time Delay'
+            : '<i class="fa-solid fa-user-check"></i> Indipendente';
+        toggle.style.background = isTD ? 'rgba(245,158,11,0.18)' : 'rgba(16,185,129,0.15)';
+        toggle.style.color = isTD ? 'var(--warning-color)' : 'var(--success-color)';
+        toggle.style.borderColor = isTD ? 'rgba(245,158,11,0.45)' : 'rgba(16,185,129,0.4)';
+    }
     const tdWrapper = document.getElementById('td-seconds-wrapper');
     const btnX = document.getElementById('btn-score-x');
     const timerWrapper = document.getElementById('td-timer-wrapper');
@@ -1688,6 +1707,13 @@ function getSelectedSessionType() {
     const sel = document.getElementById('session-type-select');
     return sel ? sel.value : 'independent';
 }
+
+window.stepTDSeconds = (delta) => {
+    const input = document.getElementById('td-seconds-ctrl');
+    if (!input) return;
+    const cur = parseInt(input.value) || 5;
+    input.value = Math.max(1, Math.min(30, cur + delta));
+};
 
 function getSelectedTDSeconds() {
     const input = document.getElementById('td-seconds-ctrl');

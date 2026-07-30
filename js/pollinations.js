@@ -916,7 +916,11 @@ window.selectPollStyle = (el) => {
 
 window.acceptPollImage = async (itemIndex) => {
     if (_pollLastImageUrl && state.editingItems[itemIndex]) {
-        state.editingItems[itemIndex].url = await compressDataUrl(_pollLastImageUrl, getEditingImageQuality());
+        // Write into the variant currently being edited (not always the base)
+        const _v = (typeof state._editingVariant === 'number') ? state._editingVariant : 0;
+        const _compressed = await compressDataUrl(_pollLastImageUrl, getEditingImageQuality());
+        if (_v > 0 && typeof setItemVariantUrl === 'function') setItemVariantUrl(state.editingItems[itemIndex], _v, _compressed);
+        else state.editingItems[itemIndex].url = _compressed;
         renderEditorList();
         closePollinationsGenerator();
     }
@@ -1056,10 +1060,14 @@ window.runBulkPollGeneration = async () => {
     }
 
     const target = document.querySelector('.bulk-poll-target.selected')?.dataset.target || 'missing';
+    const _tv = (typeof state._editingVariant === 'number') ? state._editingVariant : 0;
+    const _hasImg = (it) => (_tv > 0 && typeof getItemVariantUrl === 'function')
+        ? !!(it.variantUrls && it.variantUrls[_tv])
+        : !!it.url;
     const items = state.editingItems
         .map((item, idx) => ({ item, idx }))
         .filter(({ item }) => !item.hidden)
-        .filter(({ item }) => target === 'all' || !item.url);
+        .filter(({ item }) => target === 'all' || !_hasImg(item));
 
     if (items.length === 0) {
         alert('Nessun item da generare.');
@@ -1129,7 +1137,10 @@ window.runBulkPollGeneration = async () => {
             } else {
                 imageUrl = await generateCloudflareImage(translatedLabel, randomStyle);
             }
-            state.editingItems[idx].url = await compressDataUrl(imageUrl, getEditingImageQuality());
+            const _bv = (typeof state._editingVariant === 'number') ? state._editingVariant : 0;
+            const _bImg = await compressDataUrl(imageUrl, getEditingImageQuality());
+            if (_bv > 0 && typeof setItemVariantUrl === 'function') setItemVariantUrl(state.editingItems[idx], _bv, _bImg);
+            else state.editingItems[idx].url = _bImg;
             log.innerHTML += `<div style="color:var(--success-color);"><i class="fa-solid fa-check"></i> ${escapeHtml(item.label)} → ${escapeHtml(translatedLabel)} (${styleName})</div>`;
         } catch (err) {
             errors++;
@@ -1360,7 +1371,9 @@ async function _aiStudioApplyFile(file, idx) {
     try {
         const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = e => res(e.target.result); r.onerror = rej; r.readAsDataURL(file); });
         const compressed = await compressDataUrl(dataUrl, getEditingImageQuality());
-        state.editingItems[idx].url = compressed;
+        const _av = (typeof state._editingVariant === 'number') ? state._editingVariant : 0;
+        if (_av > 0 && typeof setItemVariantUrl === 'function') setItemVariantUrl(state.editingItems[idx], _av, compressed);
+        else state.editingItems[idx].url = compressed;
         if (typeof renderEditorList === 'function') renderEditorList();
         _aiStudioStatus('Immagine importata ✓', 'var(--success-color)');
         setTimeout(() => _aiStudioClose(), 700);

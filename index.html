@@ -147,17 +147,24 @@
                     </select>
                 </div>
 
-                <div class="select-wrapper" style="max-width: 140px;">
+                <div class="select-wrapper" style="max-width: 160px;">
                     <label><i class="fa-solid fa-clipboard-check"></i> Tipo</label>
-                    <select id="session-type-select" onchange="onSessionTypeChange()">
-                        <option value="independent">Indipendente</option>
-                        <option value="timedelay">Time Delay</option>
-                    </select>
+                    <input type="hidden" id="session-type-select" value="independent">
+                    <button type="button" id="session-type-toggle" onclick="toggleSessionType()" title="Tocca per cambiare tipo di seduta"
+                            style="width:100%; padding:8px 10px; border-radius:var(--radius-sm); border:1px solid var(--glass-border); background:rgba(16,185,129,0.15); color:var(--success-color); font-size:0.9rem; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; white-space:nowrap;">
+                        <i class="fa-solid fa-user-check"></i> Indipendente
+                    </button>
                 </div>
 
-                <div class="select-wrapper" id="td-seconds-wrapper" style="max-width: 70px; display:none;">
-                    <label>Sec TD</label>
-                    <input type="number" id="td-seconds-ctrl" value="5" min="1" max="30" style="padding:8px; border-radius:var(--radius-sm); background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.9rem; width:100%; text-align:center;">
+                <div class="select-wrapper" id="td-seconds-wrapper" style="max-width: 118px; display:none;">
+                    <label><i class="fa-solid fa-stopwatch"></i> Secondi</label>
+                    <div style="display:flex; align-items:center; gap:2px;">
+                        <button type="button" onclick="stepTDSeconds(-1)" title="Meno secondi"
+                                style="width:28px; height:34px; border-radius:var(--radius-sm) 0 0 var(--radius-sm); border:1px solid var(--glass-border); background:rgba(255,255,255,0.06); color:var(--warning-color); font-size:1rem; cursor:pointer;">&minus;</button>
+                        <input type="number" id="td-seconds-ctrl" value="5" min="1" max="30" style="padding:8px 2px; border-radius:0; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); border-left:none; border-right:none; color:white; font-size:0.95rem; font-weight:700; width:40px; text-align:center;">
+                        <button type="button" onclick="stepTDSeconds(1)" title="Pi&ugrave; secondi"
+                                style="width:28px; height:34px; border-radius:0 var(--radius-sm) var(--radius-sm) 0; border:1px solid var(--glass-border); background:rgba(255,255,255,0.06); color:var(--warning-color); font-size:1rem; cursor:pointer;">+</button>
+                    </div>
                 </div>
             </div>
 

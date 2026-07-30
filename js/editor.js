@@ -358,7 +358,7 @@ function renderEditorList() {
                 <i class="fa-solid fa-eraser" style="font-size:0.8rem; ${itemMasked ? 'color:var(--success-color)' : 'opacity:0.4'}"></i>
             </button>
             <button class="btn btn-ghost" style="padding:6px;" onclick="highlightEditorItem(${idx}); event.stopPropagation();" title="Evidenzia soggetto (resto in bianco e nero)">
-                <i class="fa-solid fa-highlighter" style="font-size:0.8rem; ${item.originalUrl ? 'color:var(--warning-color)' : 'opacity:0.4'}"></i>
+                <i class="fa-solid fa-highlighter" style="font-size:0.8rem; ${(editVariant > 0 ? (item.variantOriginalUrls && item.variantOriginalUrls[editVariant]) : item.originalUrl) ? 'color:var(--warning-color)' : 'opacity:0.4'}"></i>
             </button>
             <button class="btn btn-ghost" style="padding:6px;" onclick="openZoomEditor(${idx}); event.stopPropagation();" title="Imposta Area Zoom">
                 <i class="fa-solid fa-crop" style="font-size:0.8rem; ${item.zoomArea ? 'color:var(--warning-color)' : 'opacity:0.4'}"></i>
@@ -429,22 +429,39 @@ window.openManualCutout = (item, onDone, variantIndex) => {
 // The result replaces item.url; item.originalUrl preserves the source for restore.
 window.highlightEditorItem = (idx) => {
     const item = state.editingItems[idx];
-    if (!item || !item.url) { alert('Nessuna immagine da evidenziare.'); return; }
+    const v = state._editingVariant || 0;
+    const curUrl = getItemVariantUrl(item, v);
+    if (!item || !curUrl) { alert('Nessuna immagine da evidenziare.'); return; }
     if (typeof openMaskEditor !== 'function') { alert('Editor non disponibile.'); return; }
-    const source = item.originalUrl || item.url; // always edit from the clean image
+    const vLabel = v > 0 ? ((state._editingVariantNames || [])[v - 1] || ('Variante ' + v)) : 'Base';
+    const origForVariant = v > 0 ? (item.variantOriginalUrls && item.variantOriginalUrls[v]) : item.originalUrl;
+    const source = origForVariant || curUrl; // always edit from the clean image
     openMaskEditor({
         imageUrl: source,
         mode: 'highlight',
-        title: 'Evidenzia — ' + (item.label || 'Item'),
+        title: 'Evidenzia — ' + (item.label || 'Item') + ' · ' + vLabel,
         onApply: (result) => {
             if (result === null) {
-                // Remove effect: restore original
-                if (item.originalUrl) { item.url = item.originalUrl; delete item.originalUrl; }
+                // Remove effect: restore the original picture of THIS variant
+                if (v > 0) {
+                    if (item.variantOriginalUrls && item.variantOriginalUrls[v]) {
+                        setItemVariantUrl(item, v, item.variantOriginalUrls[v]);
+                        delete item.variantOriginalUrls[v];
+                        if (Object.keys(item.variantOriginalUrls).length === 0) delete item.variantOriginalUrls;
+                    }
+                } else if (item.originalUrl) { item.url = item.originalUrl; delete item.originalUrl; }
             } else {
-                if (!item.originalUrl) item.originalUrl = item.url;
-                item.url = result;
-                // Base image changed; any cached scontorno no longer matches
-                delete item.maskedUrl;
+                if (v > 0) {
+                    if (!item.variantOriginalUrls) item.variantOriginalUrls = {};
+                    if (!item.variantOriginalUrls[v]) item.variantOriginalUrls[v] = curUrl;
+                    setItemVariantUrl(item, v, result);
+                    setItemVariantMasked(item, v, null);
+                } else {
+                    if (!item.originalUrl) item.originalUrl = item.url;
+                    item.url = result;
+                    // Base image changed; any cached scontorno no longer matches
+                    delete item.maskedUrl;
+                }
             }
             renderEditorList();
         }
@@ -622,7 +639,11 @@ window.aiBatchScontornoEditor = async () => {
 // The result replaces item.url; item.originalUrl preserves the source.
 window.aiBatchHighlightEditor = async () => {
     if (typeof aiHighlightDataUrl !== 'function') { alert('Editor AI non disponibile.'); return; }
-    const items = state.editingItems.filter(i => i.url && i.url.startsWith('data:'));
+    const hv = state._editingVariant || 0;
+    const items = state.editingItems.filter(i => {
+        const u = getItemVariantUrl(i, hv);
+        return u && u.startsWith('data:');
+    });
     if (items.length === 0) { alert('Nessuna immagine da evidenziare.'); return; }
     const proceed = (typeof themedConfirm === 'function')
         ? await themedConfirm(`Evidenziare il soggetto in ${items.length} immagini?\nLo sfondo diventa bianco e nero. L'originale resta recuperabile.`)
@@ -636,8 +657,18 @@ window.aiBatchHighlightEditor = async () => {
         try {
             const pct = (done / items.length) * 100;
             showBackupProgress(`Evidenzia AI: ${label} (${done + 1}/${items.length})`, pct);
-            const res = await aiHighlightDataUrl(item.url, (t) => showBackupProgress(`${t} — ${label} (${done + 1}/${items.length})`, pct));
-            if (res) { if (!item.originalUrl) item.originalUrl = item.url; item.url = res; delete item.maskedUrl; }
+            const res = await aiHighlightDataUrl(getItemVariantUrl(item, hv), (t) => showBackupProgress(`${t} — ${label} (${done + 1}/${items.length})`, pct));
+            if (res) {
+                if (hv > 0) {
+                    if (!item.variantOriginalUrls) item.variantOriginalUrls = {};
+                    if (!item.variantOriginalUrls[hv]) item.variantOriginalUrls[hv] = getItemVariantUrl(item, hv);
+                    setItemVariantUrl(item, hv, res);
+                    setItemVariantMasked(item, hv, null);
+                } else {
+                    if (!item.originalUrl) item.originalUrl = item.url;
+                    item.url = res; delete item.maskedUrl;
+                }
+            }
             else failed++;
         } catch (e) {
             console.warn('bulk AI highlight failed for', label, e);
