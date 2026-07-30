@@ -456,7 +456,7 @@ window.openGeminiGenerator = () => {
 
                 <label style="font-size:0.85rem; color:#aaa;">Descrizione del set da generare</label>
                 <textarea id="gemini-prompt" rows="4" placeholder="Es: 20 parole bisillabe di animali domestici per bambini di 4 anni&#10;Es: verbi di azioni quotidiane in forma infinitiva&#10;Es: oggetti della cucina, trisillabe, livello facile"
-                    style="width:100%; padding:12px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:1rem; resize:vertical; font-family:inherit;"></textarea>
+                    style="width:100%; padding:12px; border-radius:10px; background:rgba(var(--shade-rgb),0.3); border:1px solid var(--glass-border); color:var(--text-primary); font-size:1rem; resize:vertical; font-family:inherit;"></textarea>
 
                 <div id="gemini-suggestions" style="display:flex; gap:6px; flex-wrap:wrap; margin:10px 0;">
                     <span class="tag-suggestion" onclick="setGeminiPrompt('20 animali bisillabe per bambini')">Animali bisillabe</span>
@@ -483,7 +483,7 @@ window.openGeminiGenerator = () => {
                         <h3 style="margin:0 0 10px; color:var(--success-color);"><i class="fa-solid fa-check-circle"></i> Set generato!</h3>
                         <p id="gemini-result-info" style="margin:0; font-size:0.9rem; color:#ccc;"></p>
                     </div>
-                    <div id="gemini-result-preview" style="max-height:300px; overflow-y:auto; margin-top:10px; padding:10px; background:rgba(0,0,0,0.2); border-radius:10px;"></div>
+                    <div id="gemini-result-preview" style="max-height:300px; overflow-y:auto; margin-top:10px; padding:10px; background:rgba(var(--shade-rgb),0.2); border-radius:10px;"></div>
                     <div style="display:flex; gap:10px; margin-top:15px;">
                         <button class="btn btn-success" style="flex:1; padding:12px;" onclick="saveGeminiSet()">
                             <i class="fa-solid fa-save"></i> Salva nell'Archivio
@@ -543,7 +543,7 @@ window.runGeminiGeneration = async () => {
 
         const preview = document.getElementById('gemini-result-preview');
         preview.innerHTML = _lastGeminiSet.items.map((item, i) =>
-            `<div style="padding:6px 10px; border-bottom:1px solid rgba(255,255,255,0.05); display:flex; align-items:center; gap:8px;">
+            `<div style="padding:6px 10px; border-bottom:1px solid rgba(var(--ink-rgb),0.05); display:flex; align-items:center; gap:8px;">
                 <span style="color:#666; font-size:0.75rem; width:24px;">${i + 1}.</span>
                 <span>${escapeHtml(item.label)}</span>
                 ${item.seqNumber ? `<span style="color:var(--accent-color); font-size:0.75rem;">#${item.seqNumber}</span>` : ''}

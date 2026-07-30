@@ -233,7 +233,7 @@ const CLOUDFLARE_MODELS = [
 
 function _cfModelSelectHtml(id) {
     const cur = getCloudflareModel();
-    return `<select id="${id}" onchange="setCloudflareModel(this.value)" style="width:100%; padding:8px 10px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.82rem; margin-bottom:10px; cursor:pointer;">
+    return `<select id="${id}" onchange="setCloudflareModel(this.value)" style="width:100%; padding:8px 10px; border-radius:8px; background:rgba(var(--shade-rgb),0.3); border:1px solid var(--glass-border); color:var(--text-primary); font-size:0.82rem; margin-bottom:10px; cursor:pointer;">
         ${CLOUDFLARE_MODELS.map(m => `<option value="${m.value}"${m.value === cur ? ' selected' : ''}>${m.label}</option>`).join('')}
     </select>`;
 }
@@ -368,9 +368,9 @@ window.showGeminiBulkGuide = () => {
     modal.id = 'modal-gemini-trial';
     modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:21000; display:flex; align-items:center; justify-content:center; padding:20px; overflow-y:auto;';
     modal.innerHTML = `
-        <div style="width:100%; max-width:520px; background:#1e1e2f; border-radius:16px; border:1px solid var(--glass-border); padding:22px; max-height:90vh; overflow-y:auto;">
+        <div style="width:100%; max-width:520px; background:var(--modal-bg); border-radius:16px; border:1px solid var(--glass-border); padding:22px; max-height:90vh; overflow-y:auto;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <h3 style="margin:0; color:white; font-size:1.05rem;"><i class="fa-solid fa-images" style="color:#34d399;"></i> Immagini in blocco gratis (Nano Banana)</h3>
+                <h3 style="margin:0; color:var(--text-primary); font-size:1.05rem;"><i class="fa-solid fa-images" style="color:#34d399;"></i> Immagini in blocco gratis (Nano Banana)</h3>
                 <button class="btn btn-ghost" onclick="document.getElementById('modal-gemini-trial').remove()" style="padding:6px 10px;"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <p style="color:var(--text-secondary); font-size:0.85rem; margin:0 0 12px;">Il modello immagini di Google (Nano&nbsp;Banana) costa ~0,034$ a immagine, ma i <b>300$ di credito di prova</b> di Google Cloud bastano per <b>~8.800 immagini gratis</b>. Una volta configurato, il generatore in blocco le crea tutte da solo.</p>
@@ -420,9 +420,9 @@ window.openPollinationsGenerator = (itemIndex) => {
     const hasNvidiaKey = typeof getNvidiaApiKey === 'function' && !!getNvidiaApiKey();
 
     modal.innerHTML = `
-        <div style="width:100%; max-width:540px; background:#1e1e2f; border-radius:16px; border:1px solid var(--glass-border); padding:24px; max-height:90vh; overflow-y:auto;">
+        <div style="width:100%; max-width:540px; background:var(--modal-bg); border-radius:16px; border:1px solid var(--glass-border); padding:24px; max-height:90vh; overflow-y:auto;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                <h3 style="margin:0; color:white;"><i class="fa-solid fa-image" style="color:var(--accent-color);"></i> Immagine</h3>
+                <h3 style="margin:0; color:var(--text-primary);"><i class="fa-solid fa-image" style="color:var(--accent-color);"></i> Immagine</h3>
                 <button class="btn btn-ghost" onclick="closePollinationsGenerator()" style="padding:6px 10px;"><i class="fa-solid fa-xmark"></i></button>
             </div>
 
@@ -451,7 +451,7 @@ window.openPollinationsGenerator = (itemIndex) => {
             <!-- Pixabay tab -->
             <div id="img-tab-pixabay" style="${_imgGenTab !== 'pixabay' ? 'display:none;' : ''}">
                 <div style="display:flex; gap:6px; margin-bottom:8px;">
-                    <input type="text" id="pixabay-query" value="${escapeHtml(item.label)}" placeholder="Cerca immagine..." style="flex:1; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white;" onkeydown="if(event.key==='Enter')runPixabaySearch(${itemIndex})">
+                    <input type="text" id="pixabay-query" value="${escapeHtml(item.label)}" placeholder="Cerca immagine..." style="flex:1; padding:10px; border-radius:10px; background:rgba(var(--shade-rgb),0.3); border:1px solid var(--glass-border); color:var(--text-primary);" onkeydown="if(event.key==='Enter')runPixabaySearch(${itemIndex})">
                     <button class="btn btn-primary" onclick="runPixabaySearch(${itemIndex})" style="padding:10px 16px;">
                         <i class="fa-solid fa-search"></i>
                     </button>
@@ -466,7 +466,7 @@ window.openPollinationsGenerator = (itemIndex) => {
             <!-- Openverse tab -->
             <div id="img-tab-openverse" style="${_imgGenTab !== 'openverse' ? 'display:none;' : ''}">
                 <div style="display:flex; gap:6px; margin-bottom:8px;">
-                    <input type="text" id="openverse-query" value="${escapeHtml(item.label)}" placeholder="Cerca immagine..." style="flex:1; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white;" onkeydown="if(event.key==='Enter')runOpenverseSearch(${itemIndex})">
+                    <input type="text" id="openverse-query" value="${escapeHtml(item.label)}" placeholder="Cerca immagine..." style="flex:1; padding:10px; border-radius:10px; background:rgba(var(--shade-rgb),0.3); border:1px solid var(--glass-border); color:var(--text-primary);" onkeydown="if(event.key==='Enter')runOpenverseSearch(${itemIndex})">
                     <button class="btn btn-primary" onclick="runOpenverseSearch(${itemIndex})" style="padding:10px 16px;">
                         <i class="fa-solid fa-search"></i>
                     </button>
@@ -478,8 +478,8 @@ window.openPollinationsGenerator = (itemIndex) => {
             <!-- ARASAAC tab -->
             <div id="img-tab-arasaac" style="${_imgGenTab !== 'arasaac' ? 'display:none;' : ''}">
                 <div style="display:flex; gap:6px; margin-bottom:8px;">
-                    <input type="text" id="arasaac-query" value="${escapeHtml(item.label)}" placeholder="Cerca pittogramma..." style="flex:1; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white;" onkeydown="if(event.key==='Enter')runArasaacSearch(${itemIndex})">
-                    <select id="arasaac-lang" onchange="setArasaacLang(this.value); runArasaacSearch(${itemIndex})" style="padding:10px; border-radius:10px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.85rem;">
+                    <input type="text" id="arasaac-query" value="${escapeHtml(item.label)}" placeholder="Cerca pittogramma..." style="flex:1; padding:10px; border-radius:10px; background:rgba(var(--shade-rgb),0.3); border:1px solid var(--glass-border); color:var(--text-primary);" onkeydown="if(event.key==='Enter')runArasaacSearch(${itemIndex})">
+                    <select id="arasaac-lang" onchange="setArasaacLang(this.value); runArasaacSearch(${itemIndex})" style="padding:10px; border-radius:10px; background:var(--input-bg); border:1px solid var(--glass-border); color:white; font-size:0.85rem;">
                         ${['it', 'en', 'es', 'fr', 'de'].map(l => `<option value="${l}"${getArasaacLang() === l ? ' selected' : ''}>${l.toUpperCase()}</option>`).join('')}
                     </select>
                     <button class="btn ai-arasaac-btn" onclick="aiArasaacSearch(${itemIndex})" style="padding:10px 14px; background:rgba(168,85,247,0.15); border:1px solid rgba(168,85,247,0.4); border-radius:10px; color:#a855f7; cursor:pointer;" title="Ottimizza ricerca con AI">
@@ -507,7 +507,7 @@ window.openPollinationsGenerator = (itemIndex) => {
                         <i class="fa-solid fa-language"></i> Traduci/correggi
                     </button>
                 </div>
-                <textarea id="cloudflare-prompt" rows="2" style="width:100%; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.95rem; resize:vertical; font-family:inherit; margin-bottom:6px;">${escapeHtml(item.label)}</textarea>
+                <textarea id="cloudflare-prompt" rows="2" style="width:100%; padding:10px; border-radius:10px; background:rgba(var(--shade-rgb),0.3); border:1px solid var(--glass-border); color:var(--text-primary); font-size:0.95rem; resize:vertical; font-family:inherit; margin-bottom:6px;">${escapeHtml(item.label)}</textarea>
                 <label style="display:flex; align-items:center; gap:6px; font-size:0.78rem; color:#aaa; margin-bottom:10px; cursor:pointer;">
                     <input type="checkbox" id="cf-autotranslate" checked style="width:15px; height:15px; accent-color:var(--accent-color);">
                     Traduci automaticamente in inglese prima di generare
@@ -530,7 +530,7 @@ window.openPollinationsGenerator = (itemIndex) => {
                     <i class="fa-solid fa-wand-magic-sparkles"></i> Google <b>Nano Banana 2 Lite</b> &mdash; a pagamento (chiave Gemini con fatturazione attiva): ~0,034$ a immagine (~0,017$ in batch).
                 </div>
                 <label style="font-size:0.8rem; color:#aaa;">Prompt</label>
-                <textarea id="gemini-prompt" rows="2" style="width:100%; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.95rem; resize:vertical; font-family:inherit; margin-bottom:6px;">${escapeHtml(item.label)}</textarea>
+                <textarea id="gemini-prompt" rows="2" style="width:100%; padding:10px; border-radius:10px; background:rgba(var(--shade-rgb),0.3); border:1px solid var(--glass-border); color:var(--text-primary); font-size:0.95rem; resize:vertical; font-family:inherit; margin-bottom:6px;">${escapeHtml(item.label)}</textarea>
                 <label style="display:flex; align-items:center; gap:6px; font-size:0.78rem; color:#aaa; margin-bottom:10px; cursor:pointer;">
                     <input type="checkbox" id="gemini-autotranslate" checked style="width:15px; height:15px; accent-color:var(--accent-color);">
                     Traduci automaticamente in inglese prima di generare
@@ -554,7 +554,7 @@ window.openPollinationsGenerator = (itemIndex) => {
                 <label style="font-size:0.8rem; color:#aaa;">Modello</label>
                 ${typeof _nvImageModelSelectHtml === 'function' ? _nvImageModelSelectHtml('nvidia-model-single') : ''}
                 <label style="font-size:0.8rem; color:#aaa;">Prompt</label>
-                <textarea id="nvidia-prompt" rows="2" style="width:100%; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.95rem; resize:vertical; font-family:inherit; margin-bottom:6px;">${escapeHtml(item.label)}</textarea>
+                <textarea id="nvidia-prompt" rows="2" style="width:100%; padding:10px; border-radius:10px; background:rgba(var(--shade-rgb),0.3); border:1px solid var(--glass-border); color:var(--text-primary); font-size:0.95rem; resize:vertical; font-family:inherit; margin-bottom:6px;">${escapeHtml(item.label)}</textarea>
                 <label style="display:flex; align-items:center; gap:6px; font-size:0.78rem; color:#aaa; margin-bottom:10px; cursor:pointer;">
                     <input type="checkbox" id="nvidia-autotranslate" checked style="width:15px; height:15px; accent-color:var(--accent-color);">
                     Traduci automaticamente in inglese prima di generare
@@ -946,9 +946,9 @@ window.openBulkPollinations = () => {
     const hasNvidiaKey = typeof getNvidiaApiKey === 'function' && !!getNvidiaApiKey();
 
     modal.innerHTML = `
-        <div style="width:100%; max-width:500px; background:#1e1e2f; border-radius:16px; border:1px solid var(--glass-border); padding:24px; max-height:90vh; overflow-y:auto;">
+        <div style="width:100%; max-width:500px; background:var(--modal-bg); border-radius:16px; border:1px solid var(--glass-border); padding:24px; max-height:90vh; overflow-y:auto;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-                <h3 style="margin:0; color:white;"><i class="fa-solid fa-images" style="color:var(--accent-color);"></i> Genera Tutte le Immagini</h3>
+                <h3 style="margin:0; color:var(--text-primary);"><i class="fa-solid fa-images" style="color:var(--accent-color);"></i> Genera Tutte le Immagini</h3>
                 <button class="btn btn-ghost" onclick="closeBulkPollinations()" style="padding:6px 10px;"><i class="fa-solid fa-xmark"></i></button>
             </div>
 
@@ -997,7 +997,7 @@ window.openBulkPollinations = () => {
                     <span id="bulk-poll-progress-text">Generazione in corso...</span>
                     <span id="bulk-poll-progress-count">0/0</span>
                 </div>
-                <div style="width:100%; height:6px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden;">
+                <div style="width:100%; height:6px; background:rgba(var(--ink-rgb),0.1); border-radius:3px; overflow:hidden;">
                     <div id="bulk-poll-progress-bar" style="width:0%; height:100%; background:var(--accent-color); transition:width 0.3s;"></div>
                 </div>
                 <div id="bulk-poll-log" style="max-height:150px; overflow-y:auto; margin-top:8px; font-size:0.8rem; color:#888;"></div>
@@ -1238,9 +1238,9 @@ window.showCloudflareInstructions = () => {
     modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:25000; display:flex; align-items:center; justify-content:center; padding:20px; overflow-y:auto;';
 
     modal.innerHTML = `
-        <div style="width:100%; max-width:680px; background:#1e1e2f; border-radius:16px; border:1px solid var(--glass-border); padding:24px; max-height:90vh; overflow-y:auto;">
+        <div style="width:100%; max-width:680px; background:var(--modal-bg); border-radius:16px; border:1px solid var(--glass-border); padding:24px; max-height:90vh; overflow-y:auto;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-                <h3 style="margin:0; color:white;"><i class="fa-solid fa-cloud" style="color:#f38020;"></i> Setup Cloudflare Worker (gratis, 10 min)</h3>
+                <h3 style="margin:0; color:var(--text-primary);"><i class="fa-solid fa-cloud" style="color:#f38020;"></i> Setup Cloudflare Worker (gratis, 10 min)</h3>
                 <button class="btn btn-ghost" onclick="document.getElementById('modal-cf-instructions').remove()" style="padding:6px 10px;"><i class="fa-solid fa-xmark"></i></button>
             </div>
 
@@ -1256,7 +1256,7 @@ window.showCloudflareInstructions = () => {
             <h4 style="margin:14px 0 8px; color:var(--accent-color);">Step 2 — Crea un Worker</h4>
             <ol style="margin:0; padding-left:20px; font-size:0.85rem; color:#ccc; line-height:1.6;">
                 <li>Dal dashboard: <b>Workers &amp; Pages</b> → <b>Create</b> → <b>Start with Hello World</b></li>
-                <li>Dai un nome (es. <code style="background:rgba(0,0,0,0.4); padding:1px 5px; border-radius:3px;">stimoli-flux</code>) → <b>Deploy</b></li>
+                <li>Dai un nome (es. <code style="background:rgba(var(--shade-rgb),0.4); padding:1px 5px; border-radius:3px;">stimoli-flux</code>) → <b>Deploy</b></li>
                 <li>Clicca <b>Edit code</b> (in alto a destra)</li>
                 <li>Cancella tutto il contenuto e incolla il codice qui sotto, poi <b>Save and Deploy</b></li>
             </ol>
@@ -1264,21 +1264,21 @@ window.showCloudflareInstructions = () => {
             <div style="position:relative; margin-top:10px;">
                 <button onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent); this.textContent='Copiato!'; setTimeout(()=>this.textContent='Copia',1500);"
                     style="position:absolute; top:6px; right:6px; padding:4px 10px; font-size:0.75rem; background:var(--accent-color); color:white; border:none; border-radius:6px; cursor:pointer;">Copia</button>
-                <pre style="background:rgba(0,0,0,0.5); padding:12px; border-radius:8px; font-size:0.75rem; color:#a5d6ff; overflow-x:auto; max-height:240px; margin:0; line-height:1.4;">${escapeHtml(CLOUDFLARE_WORKER_CODE)}</pre>
+                <pre style="background:rgba(var(--shade-rgb),0.5); padding:12px; border-radius:8px; font-size:0.75rem; color:#a5d6ff; overflow-x:auto; max-height:240px; margin:0; line-height:1.4;">${escapeHtml(CLOUDFLARE_WORKER_CODE)}</pre>
             </div>
 
             <h4 style="margin:14px 0 8px; color:var(--accent-color);">Step 3 — Abilita Workers AI</h4>
-            <p style="margin:0 0 10px; font-size:0.85rem; color:#ccc;">Nel Worker, vai su <b>Settings</b> → <b>Bindings</b> → <b>Add binding</b> → seleziona <b>AI</b> → variabile <code style="background:rgba(0,0,0,0.4); padding:1px 5px; border-radius:3px;">AI</code> → <b>Deploy</b>.</p>
+            <p style="margin:0 0 10px; font-size:0.85rem; color:#ccc;">Nel Worker, vai su <b>Settings</b> → <b>Bindings</b> → <b>Add binding</b> → seleziona <b>AI</b> → variabile <code style="background:rgba(var(--shade-rgb),0.4); padding:1px 5px; border-radius:3px;">AI</code> → <b>Deploy</b>.</p>
 
             <h4 style="margin:14px 0 8px; color:var(--accent-color);">Step 4 — (Consigliato) Token di sicurezza</h4>
             <p style="margin:0 0 10px; font-size:0.85rem; color:#ccc;">
                 Senza protezione il tuo Worker è pubblico e chiunque può consumare la tua quota.
-                Vai su <b>Settings</b> → <b>Variables and Secrets</b> → <b>Add</b> → tipo <b>Secret</b> → nome <code style="background:rgba(0,0,0,0.4); padding:1px 5px; border-radius:3px;">AUTH_TOKEN</code> → valore: una stringa lunga a tua scelta (es. genera su <a href="https://www.uuidgenerator.net/" target="_blank" style="color:var(--accent-color);">uuidgenerator.net</a>). Salva.
+                Vai su <b>Settings</b> → <b>Variables and Secrets</b> → <b>Add</b> → tipo <b>Secret</b> → nome <code style="background:rgba(var(--shade-rgb),0.4); padding:1px 5px; border-radius:3px;">AUTH_TOKEN</code> → valore: una stringa lunga a tua scelta (es. genera su <a href="https://www.uuidgenerator.net/" target="_blank" style="color:var(--accent-color);">uuidgenerator.net</a>). Salva.
             </p>
 
             <h4 style="margin:14px 0 8px; color:var(--accent-color);">Step 5 — Configura qui</h4>
             <ul style="margin:0; padding-left:20px; font-size:0.85rem; color:#ccc; line-height:1.6;">
-                <li>Copia l'URL del Worker (es. <code style="background:rgba(0,0,0,0.4); padding:1px 5px; border-radius:3px;">https://stimoli-flux.tuoaccount.workers.dev</code>) nel campo <b>URL del Worker</b></li>
+                <li>Copia l'URL del Worker (es. <code style="background:rgba(var(--shade-rgb),0.4); padding:1px 5px; border-radius:3px;">https://stimoli-flux.tuoaccount.workers.dev</code>) nel campo <b>URL del Worker</b></li>
                 <li>Incolla l'AUTH_TOKEN (se l'hai impostato) nel campo <b>Auth Token</b></li>
                 <li><b>Salva</b> le impostazioni</li>
             </ul>
@@ -1314,7 +1314,7 @@ window.populateAiStudioStyles = function () {
     if (!c) return;
     const sel = getAiStudioStyles();
     c.innerHTML = POLL_STYLES.map(s => `
-        <label style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:#ddd; cursor:pointer; background:rgba(255,255,255,0.04); padding:5px 9px; border-radius:8px;">
+        <label style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:#ddd; cursor:pointer; background:rgba(var(--ink-rgb),0.04); padding:5px 9px; border-radius:8px;">
             <input type="checkbox" value="${s.id}" ${sel.includes(s.id) ? 'checked' : ''} onchange="_saveAiStudioStyles()" style="accent-color:var(--accent-color);">
             <i class="fa-solid ${s.icon}" style="color:${s.color};"></i> ${s.label}
         </label>`).join('');
@@ -1435,20 +1435,20 @@ window.openAiStudioPrompt = async (itemIndex) => {
     modal.id = 'modal-aistudio';
     modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.92); z-index:21000; display:flex; align-items:center; justify-content:center; padding:20px; overflow-y:auto;';
     modal.innerHTML = `
-        <div style="width:100%; max-width:480px; background:#1e1e2f; border-radius:16px; border:1px solid var(--glass-border); padding:20px; max-height:90vh; overflow-y:auto;">
+        <div style="width:100%; max-width:480px; background:var(--modal-bg); border-radius:16px; border:1px solid var(--glass-border); padding:20px; max-height:90vh; overflow-y:auto;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                <h3 style="margin:0; color:white; font-size:1rem;"><i class="fa-solid fa-wand-magic-sparkles" style="color:#8ab4f8;"></i> Prompt per AI Studio (gratis)</h3>
+                <h3 style="margin:0; color:var(--text-primary); font-size:1rem;"><i class="fa-solid fa-wand-magic-sparkles" style="color:#8ab4f8;"></i> Prompt per AI Studio (gratis)</h3>
                 <button class="btn btn-ghost" onclick="_aiStudioClose()" style="padding:6px 10px;"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <div style="font-size:0.8rem; color:#aaa; margin-bottom:8px;">Item: <b style="color:#fff;">${escapeHtml(item.label)}</b></div>
+            <div style="font-size:0.8rem; color:#aaa; margin-bottom:8px;">Item: <b style="color:var(--text-primary);">${escapeHtml(item.label)}</b></div>
             <label style="font-size:0.8rem; color:#aaa;">Stile</label>
-            <select id="aistudio-style" onchange="_aiStudioRefresh()" style="width:100%; padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; margin-bottom:4px;">
+            <select id="aistudio-style" onchange="_aiStudioRefresh()" style="width:100%; padding:8px; border-radius:8px; background:var(--input-bg); border:1px solid var(--glass-border); color:white; margin-bottom:4px;">
                 <option value="random">Casuale (dal pool nelle Impostazioni)</option>
                 ${POLL_STYLES.map(s => `<option value="${s.id}">${s.label}</option>`).join('')}
             </select>
             <div id="aistudio-style-info" style="font-size:0.7rem; color:#8ab4f8; margin-bottom:8px; min-height:14px;"></div>
             <label style="font-size:0.8rem; color:#aaa;">Prompt (tradotto + 1:1 + sfondo bianco)</label>
-            <textarea id="aistudio-prompt-text" rows="4" style="width:100%; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.85rem; resize:vertical; font-family:inherit; margin-bottom:8px;"></textarea>
+            <textarea id="aistudio-prompt-text" rows="4" style="width:100%; padding:10px; border-radius:10px; background:rgba(var(--shade-rgb),0.3); border:1px solid var(--glass-border); color:var(--text-primary); font-size:0.85rem; resize:vertical; font-family:inherit; margin-bottom:8px;"></textarea>
             <div style="display:flex; gap:8px; margin-bottom:14px;">
                 <button class="btn btn-primary" style="flex:1; padding:10px;" onclick="_aiStudioCopy()"><i class="fa-solid fa-copy"></i> Copia prompt</button>
                 <button class="btn btn-ghost" style="flex:1; padding:10px;" onclick="window.open('https://aistudio.google.com/','_blank')"><i class="fa-solid fa-up-right-from-square"></i> Apri AI Studio</button>

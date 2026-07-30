@@ -188,7 +188,7 @@ window.populateNvidiaImageSelect = populateNvidiaImageSelect;
 
 function _nvImageModelSelectHtml(id) {
     const cur = getNvidiaImageModel();
-    return `<select id="${id}" onchange="setNvidiaImageModel(this.value)" style="width:100%; padding:8px 10px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.82rem; margin-bottom:10px; cursor:pointer;">
+    return `<select id="${id}" onchange="setNvidiaImageModel(this.value)" style="width:100%; padding:8px 10px; border-radius:8px; background:rgba(var(--shade-rgb),0.3); border:1px solid var(--glass-border); color:var(--text-primary); font-size:0.82rem; margin-bottom:10px; cursor:pointer;">
         ${getNvidiaAvailableImageModels().map(m => `<option value="${m.id}"${m.id === cur ? ' selected' : ''}>${m.label}</option>`).join('')}
     </select>`;
 }

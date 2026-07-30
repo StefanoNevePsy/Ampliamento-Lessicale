@@ -256,7 +256,7 @@ function updateRanContent() {
                     grid-template-rows:repeat(${rows}, minmax(80px, 1fr));
                     gap:10px; overflow-y:auto;">
             ${items.map(x => `
-                <div style="background:${showingScontorno(x) ? 'transparent' : 'white'}; border-radius:8px; padding:4px; display:flex; align-items:center; justify-content:center; min-height:0; min-width:0; overflow:hidden; ${showingScontorno(x) ? '' : 'box-shadow:0 2px 5px rgba(0,0,0,0.2);'}">
+                <div style="background:${showingScontorno(x) ? 'transparent' : 'white'}; border-radius:8px; padding:4px; display:flex; align-items:center; justify-content:center; min-height:0; min-width:0; overflow:hidden; ${showingScontorno(x) ? '' : 'box-shadow:0 2px 5px rgba(var(--shadow-rgb),0.2);'}">
                     <img src="${imgUrl(x)}" style="max-width:100%; max-height:100%; object-fit:contain;" onerror="handleImgError(this,'${jsAttr(x.label)}')">
                 </div>
             `).join('')}
@@ -313,12 +313,12 @@ function renderRanIntensivo(items, stage) {
                 <span style="font-weight:700; font-size:0.9rem;">RAN Intensivo</span>
             </div>
             <div style="display:flex; align-items:center; gap:10px;">
-                <div style="background:rgba(0,0,0,0.3); border-radius:8px; padding:4px 12px; font-size:0.8rem; display:flex; align-items:center; gap:6px;">
+                <div style="background:rgba(var(--shade-rgb),0.3); border-radius:8px; padding:4px 12px; font-size:0.8rem; display:flex; align-items:center; gap:6px;">
                     <span style="font-weight:bold;">${presented}</span>
                     <span style="color:var(--text-secondary);">/</span>
                     <span style="font-weight:bold;">${target}</span>
                 </div>
-                <div style="width:80px; height:8px; border-radius:4px; background:rgba(255,255,255,0.1); overflow:hidden;">
+                <div style="width:80px; height:8px; border-radius:4px; background:rgba(var(--ink-rgb),0.1); overflow:hidden;">
                     <div style="width:${pct}%; height:100%; background:var(--accent-color); border-radius:4px; transition:width 0.3s;"></div>
                 </div>
                 <span style="font-size:0.75rem; color:var(--text-secondary);">${uniqueErrorItems} item, ${ri.totalCorrect} <i class="fa-solid fa-check" style="color:var(--success-color);"></i></span>
@@ -457,17 +457,17 @@ function renderFluenzaUI(stage) {
                         ${t}s
                     </button>
                 `).join('')}
-                <div style="display:flex; align-items:center; gap:4px; padding:4px 8px; border-radius:10px; border:1px solid ${isCustom ? 'var(--success-color)' : 'var(--glass-border)'}; background:${isCustom ? 'rgba(16,185,129,0.15)' : 'rgba(0,0,0,0.2)'};">
+                <div style="display:flex; align-items:center; gap:4px; padding:4px 8px; border-radius:10px; border:1px solid ${isCustom ? 'var(--success-color)' : 'var(--glass-border)'}; background:${isCustom ? 'rgba(16,185,129,0.15)' : 'rgba(var(--shade-rgb),0.2)'};">
                     <input type="number" id="fluenza-custom-time" value="${state.fluenzaTimerDuration}" min="5" max="600" step="5"
-                        style="width:50px; padding:6px; border:none; background:transparent; color:white; font-size:1rem; text-align:center; outline:none;"
+                        style="width:50px; padding:6px; border:none; background:transparent; color:var(--text-primary); font-size:1rem; text-align:center; outline:none;"
                         onchange="const v=Math.max(5,Math.min(600,parseInt(this.value)||60)); state.fluenzaTimerDuration=v; state.fluenzaTimeLeft=v; this.value=v; renderFluenzaUI(document.getElementById('game-stage'));">
                     <span style="font-size:0.8rem; color:var(--text-secondary);">sec</span>
                 </div>
             </div>
             <label style="display:flex; align-items:center; gap:8px; cursor:pointer; user-select:none; font-size:0.85rem; color:var(--text-secondary);"
                    onclick="state.fluenzaShowBar=!state.fluenzaShowBar; renderFluenzaUI(document.getElementById('game-stage'));">
-                <span style="width:36px; height:20px; border-radius:10px; background:${state.fluenzaShowBar ? 'var(--accent-color)' : 'rgba(255,255,255,0.15)'}; position:relative; display:inline-block; transition:0.2s;">
-                    <span style="width:16px; height:16px; border-radius:50%; background:white; position:absolute; top:2px; ${state.fluenzaShowBar ? 'left:18px' : 'left:2px'}; transition:0.2s; box-shadow:0 1px 3px rgba(0,0,0,0.3);"></span>
+                <span style="width:36px; height:20px; border-radius:10px; background:${state.fluenzaShowBar ? 'var(--accent-color)' : 'rgba(var(--ink-rgb),0.15)'}; position:relative; display:inline-block; transition:0.2s;">
+                    <span style="width:16px; height:16px; border-radius:50%; background:white; position:absolute; top:2px; ${state.fluenzaShowBar ? 'left:18px' : 'left:2px'}; transition:0.2s; box-shadow:0 1px 3px rgba(var(--shadow-rgb),0.3);"></span>
                 </span>
                 <i class="fa-solid fa-bars-progress"></i> Mostra barra tempo
             </label>
@@ -495,7 +495,7 @@ function renderFluenzaUI(stage) {
                     <div style="font-size:2rem; font-weight:bold; color:var(--danger-color);">${errors}</div>
                     <div style="font-size:0.75rem; color:var(--text-secondary);">Errori</div>
                 </div>` : ''}
-                <div style="background:rgba(255,255,255,0.05); padding:15px 25px; border-radius:14px; text-align:center;">
+                <div style="background:rgba(var(--ink-rgb),0.05); padding:15px 25px; border-radius:14px; text-align:center;">
                     <div style="font-size:2rem; font-weight:bold;">${count}</div>
                     <div style="font-size:0.75rem; color:var(--text-secondary);">Totale</div>
                 </div>
@@ -523,12 +523,12 @@ function renderFluenzaUI(stage) {
     stage.innerHTML = `
     <div style="display:flex; flex-direction:column; height:100%; width:100%;">
         <!-- Timer bar -->
-        <div style="padding:8px 15px; background:rgba(0,0,0,0.3); display:flex; align-items:center; gap:12px; flex-shrink:0;">
+        <div style="padding:8px 15px; background:rgba(var(--shade-rgb),0.3); display:flex; align-items:center; gap:12px; flex-shrink:0;">
             <span style="font-size:1.4rem; font-weight:bold; color:${timerColor}; font-variant-numeric:tabular-nums; min-width:55px;">${timeStr}</span>
-            ${showBar ? `<div style="flex:1; height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden;">
+            ${showBar ? `<div style="flex:1; height:8px; background:rgba(var(--ink-rgb),0.1); border-radius:4px; overflow:hidden;">
                 <div style="width:${pct}%; height:100%; background:${timerColor}; border-radius:4px; transition:width 1s linear;"></div>
             </div>` : '<div style="flex:1;"></div>'}
-            <span style="font-size:1rem; font-weight:bold; color:white;">${correct} <span style="font-size:0.7rem; color:var(--text-secondary);">/ ${count}</span></span>
+            <span style="font-size:1rem; font-weight:bold; color:var(--text-primary);">${correct} <span style="font-size:0.7rem; color:var(--text-secondary);">/ ${count}</span></span>
             ${errors > 0 ? `<span style="font-size:0.85rem; color:var(--danger-color); font-weight:bold;">${errors}<i class="fa-solid fa-xmark" style="font-size:0.7rem; margin-left:2px;"></i></span>` : ''}
             <button class="btn-icon" onclick="state.fluenzaHideLabels=!state.fluenzaHideLabels; renderFluenzaUI(document.getElementById('game-stage'));"
                     title="Mostra/Nascondi etichette (E)"
@@ -684,7 +684,7 @@ function renderTombola(items, stage) {
 
     stage.innerHTML = `
         <div style="display:flex; height:100%; flex-direction:column;">
-            <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0;">
+            <div style="padding:10px; background:rgba(var(--shade-rgb),0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0;">
                 <div style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">Trova:</div>
                 <div id="deck-target" style="background:white; padding:5px; border-radius:8px; display:flex; align-items:center; gap:10px;">
                     ${getDeckHtml()}
@@ -788,7 +788,7 @@ function renderMemory(items, stage) {
 
     stage.innerHTML = `
         <div style="display:flex; height:100%; flex-direction:column;">
-            <div id="mem-stats-bar" style="padding:8px 12px; background:rgba(0,0,0,0.2); display:flex; gap:14px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap; font-size:0.8rem;">
+            <div id="mem-stats-bar" style="padding:8px 12px; background:rgba(var(--shade-rgb),0.2); display:flex; gap:14px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap; font-size:0.8rem;">
                 <span><i class="fa-solid fa-clone" style="color:var(--accent-color);"></i> <b id="mem-stat-matches">0</b>/${totalPairs}</span>
                 <span style="color:var(--text-secondary);"><i class="fa-solid fa-hand-pointer"></i> Tentativi: <b id="mem-stat-attempts">0</b></span>
                 <span style="color:var(--danger-color);"><i class="fa-solid fa-x"></i> Errori: <b id="mem-stat-errors">0</b></span>
@@ -807,7 +807,7 @@ function renderMemory(items, stage) {
                                  style="max-width:100%; max-height:100%; width:auto; height:auto; object-fit:contain; background:white; border-radius:6px;"
                                  onerror="handleImgError(this, '${jsAttr(item.label)}')">
                         </div>
-                        <i class="fa-solid fa-question icon-back" style="color:white; font-size:2rem;"></i>
+                        <i class="fa-solid fa-question icon-back" style="color:#fff; font-size:2rem;"></i>
                     </div>
                 `).join('')}
             </div>
@@ -888,7 +888,7 @@ function _memShowSummary() {
                     <div style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase;">Coppie</div>
                     <div style="font-size:1.5rem; font-weight:bold;">${m.matches}/${m.totalPairs}</div>
                 </div>
-                <div style="background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); border-radius:var(--radius-md); padding:10px; text-align:center;">
+                <div style="background:rgba(var(--ink-rgb),0.05); border:1px solid var(--glass-border); border-radius:var(--radius-md); padding:10px; text-align:center;">
                     <div style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase;">Tentativi</div>
                     <div style="font-size:1.5rem; font-weight:bold;">${m.pairAttempts}</div>
                 </div>
@@ -900,7 +900,7 @@ function _memShowSummary() {
                     <div style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase;">Efficienza</div>
                     <div style="font-size:1.5rem; font-weight:bold; color:var(--success-color);">${eff}%</div>
                 </div>
-                <div style="background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); border-radius:var(--radius-md); padding:10px; text-align:center;">
+                <div style="background:rgba(var(--ink-rgb),0.05); border:1px solid var(--glass-border); border-radius:var(--radius-md); padding:10px; text-align:center;">
                     <div style="font-size:0.7rem; color:var(--text-secondary); text-transform:uppercase;">Tempo</div>
                     <div style="font-size:1.5rem; font-weight:bold;">${mm}:${ss}</div>
                 </div>
@@ -908,8 +908,8 @@ function _memShowSummary() {
             <button class="btn btn-primary" onclick="replayRound()" style="margin-bottom:16px; padding:12px 24px;"><i class="fa-solid fa-shuffle"></i> Nuovo giro (punteggio mantenuto)</button>
             ${pairList ? `<div style="width:100%; max-width:500px;">
                 <div style="font-size:0.75rem; color:var(--text-secondary); text-transform:uppercase; margin-bottom:6px; padding:0 8px;">Dettaglio coppie</div>
-                <table style="width:100%; border-collapse:collapse; background:rgba(255,255,255,0.03); border-radius:var(--radius-md); overflow:hidden; font-size:0.85rem;">
-                    <thead style="background:rgba(0,0,0,0.2); color:var(--text-secondary); font-size:0.7rem; text-transform:uppercase;">
+                <table style="width:100%; border-collapse:collapse; background:rgba(var(--ink-rgb),0.03); border-radius:var(--radius-md); overflow:hidden; font-size:0.85rem;">
+                    <thead style="background:rgba(var(--shade-rgb),0.2); color:var(--text-secondary); font-size:0.7rem; text-transform:uppercase;">
                         <tr>
                             <th style="padding:6px 8px; text-align:left;">Coppia</th>
                             <th style="padding:6px 8px; text-align:center;">Tentativi</th>
@@ -1022,7 +1022,7 @@ function showPoolBatch(stage) {
 
     stage.innerHTML = `
     <div style="display:flex; height:100%; flex-direction:column;">
-        <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
+        <div style="padding:10px; background:rgba(var(--shade-rgb),0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
             <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
                 <i class="fa-solid fa-shuffle"></i> Pool Random
             </span>
@@ -1120,7 +1120,7 @@ function showIntrusoRound(stage, round) {
 
     stage.innerHTML = `
     <div style="display:flex; height:100%; flex-direction:column;">
-        <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
+        <div style="padding:10px; background:rgba(var(--shade-rgb),0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
             <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">Trova l'intruso!</span>
             <span style="background:rgba(139,92,246,0.2); color:#a78bfa; padding:2px 10px; border-radius:10px; font-size:0.75rem;">
                 Categoria: ${round.targetTag}
@@ -1236,7 +1236,7 @@ window.skipIntrusoRound = () => {
 function renderTopologia(items, stage) {
     stage.innerHTML = `
     <div style="display:flex; height:100%; flex-direction:column;">
-        <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
+        <div style="padding:10px; background:rgba(var(--shade-rgb),0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
             <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
                 <i class="fa-solid fa-up-down-left-right"></i> Topologia
             </span>
@@ -1277,7 +1277,7 @@ function renderTopologia(items, stage) {
             el.style.cssText = `position:absolute; left:${left}px; top:${top}px; width:${itemW}px; height:${itemH}px;
                 background:white; border-radius:12px; padding:4px; cursor:grab; touch-action:none;
                 display:flex; flex-direction:column; align-items:center; justify-content:center;
-                box-shadow:0 4px 15px rgba(0,0,0,0.3); z-index:1; user-select:none; transition:box-shadow 0.2s;`;
+                box-shadow:0 4px 15px rgba(var(--shadow-rgb),0.3); z-index:1; user-select:none; transition:box-shadow 0.2s;`;
 
             const img = document.createElement('img');
             img.src = imgUrl(item);
@@ -1317,7 +1317,7 @@ function setupTopoDrag(canvasId) {
         e.preventDefault();
         activeEl = el;
         activeEl.style.zIndex = '100';
-        activeEl.style.boxShadow = '0 8px 30px rgba(0,0,0,0.5)';
+        activeEl.style.boxShadow = '0 8px 30px rgba(var(--shade-rgb),0.5)';
         activeEl.style.cursor = 'grabbing';
         const pos = getPos(e);
         startX = pos.x; startY = pos.y; movedFar = false;
@@ -1344,7 +1344,7 @@ function setupTopoDrag(canvasId) {
         if (activeEl) {
             const el = activeEl;
             el.style.zIndex = '1';
-            el.style.boxShadow = '0 4px 15px rgba(0,0,0,0.3)';
+            el.style.boxShadow = '0 4px 15px rgba(var(--shade-rgb),0.3)';
             el.style.cursor = 'grab';
             activeEl = null;
             // Double-tap (two clean taps within 350ms) cycles the card size:
@@ -1466,7 +1466,7 @@ function renderSequenzeUI(stage) {
 
     stage.innerHTML = `
     <div style="display:flex; height:100%; flex-direction:column;">
-        <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
+        <div style="padding:10px; background:rgba(var(--shade-rgb),0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
             <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
                 <i class="fa-solid fa-arrow-down-1-9"></i> Sequenze
             </span>
@@ -1493,7 +1493,7 @@ function renderSequenzeUI(stage) {
                      onclick="selectSourceCard(${card.seqNumber})"
                      style="background:white; border-radius:14px; padding:8px; cursor:pointer; flex-shrink:0;
                             border:3px solid ${isSelected ? 'var(--accent-color)' : 'transparent'};
-                            box-shadow:${isSelected ? '0 0 20px rgba(99,102,241,0.5)' : '0 2px 10px rgba(0,0,0,0.25)'};
+                            box-shadow:${isSelected ? '0 0 20px rgba(99,102,241,0.5)' : '0 2px 10px rgba(var(--shade-rgb),0.25)'};
                             display:flex; flex-direction:column; align-items:center; gap:6px;
                             transition:0.15s; user-select:none; ${isSelected ? 'transform:scale(1.05);' : ''}">
                     <img src="${imgUrl(card)}" style="width:100px; height:100px; object-fit:contain; border-radius:10px;" draggable="false" onerror="handleImgError(this, '${card.label}')">
@@ -1516,7 +1516,7 @@ function renderSequenzeUI(stage) {
         const wrongColor = _seqTD ? 'var(--warning-color)' : 'var(--danger-color)';
         const wrongRgba = _seqTD ? '245,158,11' : '239,68,68';
         const slotBorder = verified ? (isCorrect ? '3px solid var(--success-color)' : isWrong ? `3px solid ${wrongColor}` : '2px dashed #555') : (placedItem ? '2px solid var(--accent-color)' : '2px dashed #555');
-        const slotBg = verified ? (isCorrect ? 'rgba(16,185,129,0.1)' : isWrong ? `rgba(${wrongRgba},0.1)` : 'rgba(255,255,255,0.02)') : (placedItem ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.02)');
+        const slotBg = verified ? (isCorrect ? 'rgba(16,185,129,0.1)' : isWrong ? `rgba(${wrongRgba},0.1)` : 'rgba(var(--ink-rgb),0.02)') : (placedItem ? 'rgba(99,102,241,0.08)' : 'rgba(var(--ink-rgb),0.02)');
         const slotShadow = verified ? (isCorrect ? '0 0 12px rgba(16,185,129,0.3)' : isWrong ? `0 0 12px rgba(${wrongRgba},0.3)` : 'none') : 'none';
 
         return `
@@ -1525,7 +1525,7 @@ function renderSequenzeUI(stage) {
                      style="min-width:130px; flex:1; max-width:180px; border:${slotBorder}; border-radius:14px; background:${slotBg};
                             display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:10px 8px;
                             cursor:${!verified ? 'pointer' : 'default'}; transition:0.2s; box-shadow:${slotShadow}; position:relative; flex-shrink:0; user-select:none;">
-                    <span style="width:30px; height:30px; border-radius:50%; background:rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:0.9rem; color:var(--text-secondary);">${slotIdx + 1}</span>
+                    <span style="width:30px; height:30px; border-radius:50%; background:rgba(var(--ink-rgb),0.1); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:0.9rem; color:var(--text-secondary);">${slotIdx + 1}</span>
                     ${placedItem ? `
                         <div style="background:white; border-radius:12px; padding:5px;">
                             <img src="${imgUrl(placedItem)}" style="width:100px; height:100px; object-fit:contain; border-radius:10px;" draggable="false" onerror="handleImgError(this, '${placedItem.label}')">
@@ -1697,7 +1697,7 @@ function renderRaccontoUI(stage) {
 
     stage.innerHTML = `
     <div style="display:flex; height:100%; flex-direction:column;">
-        <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
+        <div style="padding:10px; background:rgba(var(--shade-rgb),0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
             <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
                 <i class="fa-solid fa-book-open"></i> Racconto
             </span>
@@ -1712,8 +1712,8 @@ function renderRaccontoUI(stage) {
             ${items.map((item, idx) => {
         const isSelected = selectedIdx === idx;
         const result = scored[idx];
-        const resultBorder = result === true ? '3px solid var(--success-color)' : result === false ? '3px solid var(--danger-color)' : result === 'prompt' ? '3px solid var(--warning-color)' : (isSelected ? '3px solid var(--accent-color)' : '2px solid rgba(255,255,255,0.1)');
-        const resultBg = result === true ? 'rgba(16,185,129,0.1)' : result === false ? 'rgba(239,68,68,0.1)' : result === 'prompt' ? 'rgba(245,158,11,0.1)' : (isSelected ? 'rgba(99,102,241,0.1)' : 'rgba(255,255,255,0.03)');
+        const resultBorder = result === true ? '3px solid var(--success-color)' : result === false ? '3px solid var(--danger-color)' : result === 'prompt' ? '3px solid var(--warning-color)' : (isSelected ? '3px solid var(--accent-color)' : '2px solid rgba(var(--ink-rgb),0.1)');
+        const resultBg = result === true ? 'rgba(16,185,129,0.1)' : result === false ? 'rgba(239,68,68,0.1)' : result === 'prompt' ? 'rgba(245,158,11,0.1)' : (isSelected ? 'rgba(99,102,241,0.1)' : 'rgba(var(--ink-rgb),0.03)');
         const resultIcon = result === true ? '<i class="fa-solid fa-check" style="color:var(--success-color);"></i>' : result === false ? '<i class="fa-solid fa-xmark" style="color:var(--danger-color);"></i>' : result === 'prompt' ? '<i class="fa-solid fa-hand" style="color:var(--warning-color);"></i>' : '';
         const shadow = isSelected ? '0 0 25px rgba(99,102,241,0.5)' : 'none';
         const scale = isSelected ? 'transform:scale(1.08);' : '';
@@ -1723,7 +1723,7 @@ function renderRaccontoUI(stage) {
                      style="min-width:140px; max-width:200px; flex-shrink:0; border:${resultBorder}; border-radius:16px; background:${resultBg};
                             display:flex; flex-direction:column; align-items:center; gap:8px; padding:12px 10px; cursor:pointer;
                             transition:0.2s; box-shadow:${shadow}; ${scale} user-select:none; position:relative;">
-                    <span style="width:28px; height:28px; border-radius:50%; background:rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:0.85rem; color:var(--text-secondary);">${idx + 1}</span>
+                    <span style="width:28px; height:28px; border-radius:50%; background:rgba(var(--ink-rgb),0.1); display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:0.85rem; color:var(--text-secondary);">${idx + 1}</span>
                     <div style="background:white; border-radius:12px; padding:5px;">
                         <img src="${imgUrl(item)}" style="width:120px; height:120px; object-fit:contain; border-radius:10px;" draggable="false" onerror="handleImgError(this, '${jsAttr(item.label)}')">
                     </div>
@@ -1988,7 +1988,7 @@ function showCategorizzazioneItem(stage) {
 
     stage.innerHTML = `
     <div style="display:flex; height:100%; flex-direction:column;">
-        <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
+        <div style="padding:10px; background:rgba(var(--shade-rgb),0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
             <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
                 <i class="fa-solid fa-layer-group"></i> A quale categoria appartiene?
             </span>
@@ -1998,18 +1998,18 @@ function showCategorizzazioneItem(stage) {
             </button>
         </div>
         <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:15px; min-height:0;">
-            <div id="cat-card" style="background:white; border-radius:16px; padding:10px; max-width:300px; width:100%; max-height:55%; display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 10px 40px rgba(0,0,0,0.5); transition:0.3s;">
+            <div id="cat-card" style="background:white; border-radius:16px; padding:10px; max-width:300px; width:100%; max-height:55%; display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 10px 40px rgba(var(--shadow-rgb),0.5); transition:0.3s;">
                 <img src="${imgUrl(item)}"
                      style="max-width:100%; max-height:85%; object-fit:contain; border-radius:8px;"
                      onerror="handleImgError(this, '${jsAttr(item.label)}')">
                 <div style="font-size:1rem; color:#333; font-weight:800; margin-top:6px; text-transform:uppercase;">${item.label}</div>
             </div>
         </div>
-        <div style="padding:15px 10px; display:flex; gap:12px; flex-wrap:wrap; justify-content:center; background:rgba(0,0,0,0.2); border-top:1px solid #ffffff10; flex-shrink:0;">
+        <div style="padding:15px 10px; display:flex; gap:12px; flex-wrap:wrap; justify-content:center; background:rgba(var(--shade-rgb),0.2); border-top:1px solid #ffffff10; flex-shrink:0;">
             ${tags.map((tag, i) => `
                 <button class="btn" onclick="handleCatChoice('${tag}')"
                     style="background:${tagColors[i % tagColors.length]}; padding:15px 25px; font-size:1.2rem; border-radius:16px; min-width:140px; min-height:100px; text-transform:capitalize; display:flex; flex-direction:column; align-items:center; gap:8px;">
-                    ${tagImgs[tag.toLowerCase().trim()] ? `<img src="${tagImgs[tag.toLowerCase().trim()]}" style="width:64px; height:64px; object-fit:contain; border-radius:10px; background:rgba(255,255,255,0.3);">` : ''}
+                    ${tagImgs[tag.toLowerCase().trim()] ? `<img src="${tagImgs[tag.toLowerCase().trim()]}" style="width:64px; height:64px; object-fit:contain; border-radius:10px; background:rgba(var(--ink-rgb),0.3);">` : ''}
                     <span>${tag}</span>
                 </button>
             `).join('')}
@@ -2094,11 +2094,11 @@ function renderSearchFind(items, stage) {
     // Navigation arrows (only if multiple items and NOT in fullscreen)
     const navHtml = (total > 1 && !isFs) ? `
         <div style="display:flex; align-items:center; gap:6px;">
-            <button class="btn btn-sm" onclick="sfPrevVariant()" style="padding:4px 8px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.08); color:${idx === 0 ? '#555' : 'white'}; border-radius:6px; cursor:${idx === 0 ? 'default' : 'pointer'};" ${idx === 0 ? 'disabled' : ''}>
+            <button class="btn btn-sm" onclick="sfPrevVariant()" style="padding:4px 8px; border:1px solid var(--glass-border); background:rgba(var(--ink-rgb),0.08); color:${idx === 0 ? '#555' : 'white'}; border-radius:6px; cursor:${idx === 0 ? 'default' : 'pointer'};" ${idx === 0 ? 'disabled' : ''}>
                 <i class="fa-solid fa-chevron-left"></i>
             </button>
             <span style="font-size:0.75rem; color:var(--text-secondary); white-space:nowrap;">Img ${idx + 1} / ${total}</span>
-            <button class="btn btn-sm" onclick="sfNextVariant()" style="padding:4px 8px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.08); color:${idx >= total - 1 ? '#555' : 'white'}; border-radius:6px; cursor:${idx >= total - 1 ? 'default' : 'pointer'};" ${idx >= total - 1 ? 'disabled' : ''}>
+            <button class="btn btn-sm" onclick="sfNextVariant()" style="padding:4px 8px; border:1px solid var(--glass-border); background:rgba(var(--ink-rgb),0.08); color:${idx >= total - 1 ? '#555' : 'white'}; border-radius:6px; cursor:${idx >= total - 1 ? 'default' : 'pointer'};" ${idx >= total - 1 ? 'disabled' : ''}>
                 <i class="fa-solid fa-chevron-right"></i>
             </button>
         </div>` : (total > 1 && isFs ? `<span style="font-size:0.65rem; color:var(--text-secondary);">${idx + 1}/${total}</span>` : '');
@@ -2106,7 +2106,7 @@ function renderSearchFind(items, stage) {
     stage.innerHTML = `
         <div class="search-find-container">
             <div class="sf-toolbar">
-                <span style="color:white;font-weight:bold;">${s.label}</span>
+                <span style="color:#fff;font-weight:bold;">${s.label}</span>
                 <div style="display:flex; align-items:center; gap:8px;">
                     ${navHtml}
                     <button class="btn btn-sm btn-danger" onclick="clearMarkers()"><i class="fa-solid fa-eraser"></i> Pulisci</button>
@@ -2374,7 +2374,7 @@ function renderTombolaSonora(items, stage) {
 
     stage.innerHTML = `
         <div style="display:flex; height:100%; flex-direction:column;">
-            <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0;">
+            <div style="padding:10px; background:rgba(var(--shade-rgb),0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0;">
                 <div style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
                     <i class="fa-solid fa-music"></i> Ascolta e Trova:
                 </div>
@@ -2517,22 +2517,22 @@ function showZoomItem(stage) {
 
     stage.innerHTML = `
     <div style="display:flex; height:100%; flex-direction:column;">
-        <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
+        <div style="padding:10px; background:rgba(var(--shade-rgb),0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
             <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
                 <i class="fa-solid fa-magnifying-glass"></i> Cos'&egrave;?
             </span>
             <span style="color:var(--text-secondary); font-size:0.8rem;">${idx + 1}/${items.length}</span>
         </div>
         <div id="zoom-display" style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; min-height:0; cursor:pointer;" onclick="revealZoom()">
-            <div id="zoom-image-container" style="position:relative; max-width:90%; max-height:70%; overflow:hidden; border-radius:16px; box-shadow:0 10px 40px rgba(0,0,0,0.5); background:white;">
+            <div id="zoom-image-container" style="position:relative; max-width:90%; max-height:70%; overflow:hidden; border-radius:16px; box-shadow:0 10px 40px rgba(var(--shadow-rgb),0.5); background:white;">
                 <img id="zoom-img" src="${item.url}" style="display:block; width:100%; height:auto; transform-origin:${area.x + area.w / 2}% ${area.y + area.h / 2}%; transform:scale(${Math.round(100 / area.w * 2.5)}); transition:transform 0.8s ease;" onerror="handleImgError(this, '${jsAttr(item.label)}')">
             </div>
-            <div id="zoom-label" style="margin-top:15px; font-size:1.5rem; font-weight:800; color:white; text-transform:uppercase; opacity:0; transition:opacity 0.5s;">${item.label}</div>
+            <div id="zoom-label" style="margin-top:15px; font-size:1.5rem; font-weight:800; color:var(--text-primary); text-transform:uppercase; opacity:0; transition:opacity 0.5s;">${item.label}</div>
             <div id="zoom-hint" style="margin-top:10px; color:var(--text-secondary); font-size:0.85rem;">
                 <i class="fa-solid fa-hand-pointer"></i> Tocca per rivelare
             </div>
         </div>
-        <div style="padding:10px; display:flex; gap:10px; justify-content:center; background:rgba(0,0,0,0.2); border-top:1px solid #ffffff10; flex-shrink:0;">
+        <div style="padding:10px; display:flex; gap:10px; justify-content:center; background:rgba(var(--shade-rgb),0.2); border-top:1px solid #ffffff10; flex-shrink:0;">
             <button class="btn btn-primary" onclick="nextZoomItem()" style="padding:10px 30px;">
                 <i class="fa-solid fa-forward"></i> Avanti
             </button>
@@ -2600,14 +2600,14 @@ function _showRicordaBoard(stage, cards, flipped) {
     let toolbarHtml;
     if (!flipped) {
         toolbarHtml = `
-            <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
+            <div style="padding:10px; background:rgba(var(--shade-rgb),0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
                 <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
                     <i class="fa-solid fa-brain"></i> Ricorda - Memorizza!
                 </span>
                 <span style="color:var(--text-secondary); font-size:0.75rem;">${cards.length} carte</span>
                 <div style="display:flex; align-items:center; gap:4px;">
                     <input type="number" id="ricorda-timer-sec" value="${state._ricordaTimerSec || 5}" min="1" max="60"
-                           style="width:50px; padding:4px 6px; border-radius:8px; background:rgba(255,255,255,0.1); border:1px solid var(--glass-border); color:white; font-size:0.8rem; text-align:center;"
+                           style="width:50px; padding:4px 6px; border-radius:8px; background:rgba(var(--ink-rgb),0.1); border:1px solid var(--glass-border); color:var(--text-primary); font-size:0.8rem; text-align:center;"
                            onchange="state._ricordaTimerSec = parseInt(this.value) || 5">
                     <span style="font-size:0.7rem; color:var(--text-secondary);">sec</span>
                 </div>
@@ -2621,7 +2621,7 @@ function _showRicordaBoard(stage, cards, flipped) {
     } else {
         const scoredCount = uniqueScored.size;
         toolbarHtml = `
-            <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
+            <div style="padding:10px; background:rgba(var(--shade-rgb),0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
                 <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
                     <i class="fa-solid fa-brain"></i> Ricorda - Indovina!
                 </span>
@@ -2636,23 +2636,23 @@ function _showRicordaBoard(stage, cards, flipped) {
     // Card back design - decorative pattern using theme colors
     const cardBackHtml = `
         <div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center;
-                    background: linear-gradient(135deg, var(--accent-color) 0%, color-mix(in srgb, var(--accent-color) 70%, #1e1e2f) 100%);
+                    background: linear-gradient(135deg, var(--accent-color) 0%, color-mix(in srgb, var(--accent-color) 70%, var(--modal-bg)) 100%);
                     border-radius:10px; position:relative; overflow:hidden;">
             <div style="position:absolute; inset:6px; border-radius:8px; border:2px solid rgba(255,255,255,0.2);"></div>
             <div style="position:absolute; inset:10px; border-radius:6px; border:1px dashed rgba(255,255,255,0.12);"></div>
-            <div style="position:absolute; top:8px; left:8px; font-size:0.6rem; opacity:0.3; color:white;">
+            <div style="position:absolute; top:8px; left:8px; font-size:0.6rem; opacity:0.3; color:#fff;">
                 <i class="fa-solid fa-star"></i>
             </div>
-            <div style="position:absolute; bottom:8px; right:8px; font-size:0.6rem; opacity:0.3; color:white;">
+            <div style="position:absolute; bottom:8px; right:8px; font-size:0.6rem; opacity:0.3; color:#fff;">
                 <i class="fa-solid fa-star"></i>
             </div>
-            <div style="position:absolute; top:8px; right:8px; font-size:0.6rem; opacity:0.3; color:white;">
+            <div style="position:absolute; top:8px; right:8px; font-size:0.6rem; opacity:0.3; color:#fff;">
                 <i class="fa-solid fa-diamond"></i>
             </div>
-            <div style="position:absolute; bottom:8px; left:8px; font-size:0.6rem; opacity:0.3; color:white;">
+            <div style="position:absolute; bottom:8px; left:8px; font-size:0.6rem; opacity:0.3; color:#fff;">
                 <i class="fa-solid fa-diamond"></i>
             </div>
-            <i class="fa-solid fa-brain" style="color:rgba(255,255,255,0.35); font-size:2.2rem; filter:drop-shadow(0 2px 8px rgba(0,0,0,0.3));"></i>
+            <i class="fa-solid fa-brain" style="color:rgba(255,255,255,0.35); font-size:2.2rem; filter:drop-shadow(0 2px 8px rgba(var(--shadow-rgb),0.3));"></i>
         </div>`;
 
     // Cards grid with 3D flip
@@ -2931,11 +2931,11 @@ function _spRender(stage) {
         : '';
     const formBadge = isPlural
         ? `<span style="background:rgba(var(--accent-rgb),0.2); color:var(--accent-color); padding:3px 12px; border-radius:10px; font-size:0.85rem; font-weight:bold;">&times; ${count}</span>`
-        : `<span style="background:rgba(255,255,255,0.08); color:var(--text-secondary); padding:3px 12px; border-radius:10px; font-size:0.85rem;">Singolare</span>`;
+        : `<span style="background:rgba(var(--ink-rgb),0.08); color:var(--text-secondary); padding:3px 12px; border-radius:10px; font-size:0.85rem;">Singolare</span>`;
 
     stage.innerHTML = `
     <div style="display:flex; height:100%; flex-direction:column;">
-        <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
+        <div style="padding:10px; background:rgba(var(--shade-rgb),0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
             <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
                 <i class="fa-solid fa-1"></i> Sing/Plur
             </span>
@@ -3109,7 +3109,7 @@ function _stroopNumRender(stage) {
 
     stage.innerHTML = `
     <div style="display:flex; height:100%; flex-direction:column;">
-        <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
+        <div style="padding:10px; background:rgba(var(--shade-rgb),0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
             <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
                 <i class="fa-solid fa-hashtag"></i> Stroop Numerico
             </span>
@@ -3280,7 +3280,7 @@ function _goNogoRender(stage) {
 
     stage.innerHTML = `
     <div style="display:flex; height:100%; flex-direction:column;">
-        <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
+        <div style="padding:10px; background:rgba(var(--shade-rgb),0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
             <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
                 <i class="fa-solid fa-traffic-light"></i> Go/No-Go
             </span>
@@ -3430,7 +3430,7 @@ function _stroopEtRender(stage) {
 
     stage.innerHTML = `
     <div style="display:flex; height:100%; flex-direction:column;">
-        <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
+        <div style="padding:10px; background:rgba(var(--shade-rgb),0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
             <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
                 <i class="fa-solid fa-font"></i> Stroop Etichetta
             </span>
@@ -3648,13 +3648,13 @@ function _topoCompRender(stage) {
         ? `<span title="Categoria del round (la risposta esatta resta nascosta)" style="background:rgba(245,158,11,0.15); color:var(--warning-color); padding:3px 12px; border-radius:10px; font-size:0.82rem; font-weight:600;">
             <i class="fa-solid ${catCfg.icon}"></i> ${catCfg.pair}
           </span>`
-        : `<span style="background:rgba(255,255,255,0.08); color:var(--text-secondary); padding:3px 12px; border-radius:10px; font-size:0.85rem;">
+        : `<span style="background:rgba(var(--ink-rgb),0.08); color:var(--text-secondary); padding:3px 12px; border-radius:10px; font-size:0.85rem;">
             <i class="fa-solid fa-question"></i> ?
           </span>`;
 
     stage.innerHTML = `
     <div style="display:flex; height:100%; flex-direction:column;">
-        <div style="padding:10px; background:rgba(0,0,0,0.2); display:flex; gap:8px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
+        <div style="padding:10px; background:rgba(var(--shade-rgb),0.2); display:flex; gap:8px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10; flex-shrink:0; flex-wrap:wrap;">
             <span style="font-size:0.8rem; text-transform:uppercase; font-weight:bold;">
                 <i class="fa-solid fa-layer-group"></i> Topologia
             </span>
@@ -3676,7 +3676,7 @@ function _topoCompRender(stage) {
                 <i class="fa-solid fa-forward-step"></i>
             </button>
         </div>
-        <div id="topo-comp-canvas-area" style="flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:10px; background:rgba(255,255,255,0.03);"></div>
+        <div id="topo-comp-canvas-area" style="flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:10px; background:rgba(var(--ink-rgb),0.03);"></div>
         <div style="text-align:center; padding:6px; color:var(--text-secondary); font-size:0.7rem; opacity:0.6; border-top:1px solid #ffffff10; display:flex; gap:16px; justify-content:center;">
             <span><i class="fa-solid fa-child"></i> ${tc.currentChar.label || '?'}</span>
             <span><i class="fa-solid ${posConfig.container ? 'fa-box' : 'fa-cube'}"></i> ${posConfig.container ? ((tc.currentContainer && tc.currentContainer.type === 'item') ? (tc.currentContainer.item.label || 'Contenitore') : ((TOPO_CONTAINERS[tc.currentContainer] || {}).label || 'Scatola')) : (tc.currentRef.label || '?')}</span>
@@ -4069,7 +4069,7 @@ window.topoCompSelectPersonaggio = () => {
     if (!tc) return;
     const stage = document.getElementById('game-stage');
 
-    const noneCell = `<div onclick="topoCompPickPersonaggio(-1)" style="cursor:pointer; padding:6px; border:3px dashed ${tc.personaggio ? 'rgba(255,255,255,0.25)' : 'var(--accent-color)'}; border-radius:var(--radius-md); background:rgba(255,255,255,0.03); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; min-height:88px;">
+    const noneCell = `<div onclick="topoCompPickPersonaggio(-1)" style="cursor:pointer; padding:6px; border:3px dashed ${tc.personaggio ? 'rgba(var(--ink-rgb),0.25)' : 'var(--accent-color)'}; border-radius:var(--radius-md); background:rgba(var(--ink-rgb),0.03); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; min-height:88px;">
         <i class="fa-solid fa-shuffle" style="font-size:1.4rem; color:var(--text-secondary);"></i>
         <div style="font-size:0.65rem; color:var(--text-secondary); text-align:center;">Nessuno<br>(full random)</div>
     </div>`;
@@ -4077,7 +4077,7 @@ window.topoCompSelectPersonaggio = () => {
     const gridHtml = noneCell + tc.items.map((item, idx) => {
         const url = item.maskedUrl || imgUrl(item);
         const isSelected = tc.personaggio && tc.personaggio.label === item.label && tc.personaggio.url === item.url;
-        return `<div onclick="topoCompPickPersonaggio(${idx})" style="cursor:pointer; padding:6px; border:3px solid ${isSelected ? 'var(--accent-color)' : 'transparent'}; border-radius:var(--radius-md); background:rgba(255,255,255,0.05); display:flex; flex-direction:column; align-items:center; gap:4px;">
+        return `<div onclick="topoCompPickPersonaggio(${idx})" style="cursor:pointer; padding:6px; border:3px solid ${isSelected ? 'var(--accent-color)' : 'transparent'}; border-radius:var(--radius-md); background:rgba(var(--ink-rgb),0.05); display:flex; flex-direction:column; align-items:center; gap:4px;">
             <img src="${url}" style="width:60px; height:60px; object-fit:contain;" onerror="handleImgError(this, '${(item.label || '').replace(/'/g, "\\'")}')">
             <div style="font-size:0.65rem; color:var(--text-secondary); text-align:center;">${item.label || ''}</div>
         </div>`;
@@ -4085,7 +4085,7 @@ window.topoCompSelectPersonaggio = () => {
 
     stage.innerHTML = `
     <div style="height:100%; display:flex; flex-direction:column;">
-        <div style="padding:12px; background:rgba(0,0,0,0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10;">
+        <div style="padding:12px; background:rgba(var(--shade-rgb),0.2); display:flex; gap:10px; align-items:center; justify-content:center; border-bottom:1px solid #ffffff10;">
             <span style="font-size:0.9rem; font-weight:bold;"><i class="fa-solid fa-child"></i> Scegli Personaggio</span>
             <span style="font-size:0.68rem; color:var(--text-secondary);">tocca di nuovo quello attivo per deselezionarlo</span>
             <button class="btn btn-sm btn-ghost" onclick="topoCompClosePersonaggio()" style="padding:3px 10px; font-size:0.7rem;">
@@ -4539,7 +4539,7 @@ function renderQuadernoGeneral(container) {
                 style: 'min-width:150px; padding:8px 12px; border-radius:8px; font-size:0.9rem;'
             })}
             ${listChoices.length > 0 ? `
-            <select onchange="loadQuadernoListChoice(this.value); this.value='';" title="Carica una lista salvata" style="padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.85rem; max-width:180px;">
+            <select onchange="loadQuadernoListChoice(this.value); this.value='';" title="Carica una lista salvata" style="padding:8px; border-radius:8px; background:var(--input-bg); border:1px solid var(--glass-border); color:white; font-size:0.85rem; max-width:180px;">
                 <option value="">&#128194; Carica lista...</option>
                 ${listChoices.map(c => `<option value="${c.key.replace(/"/g, '&quot;')}">${c.name} (${c.count})</option>`).join('')}
             </select>` : ''}
@@ -4555,12 +4555,12 @@ function renderQuadernoGeneral(container) {
                 onkeydown: "if(event.key==='Enter')addQuadernoRow()",
                 style: 'min-width:120px; padding:10px; border-radius:8px; font-size:0.9rem;'
             })}
-            <select id="quaderno-session-type" onchange="onQuadernoTypeChange()" title="Tipo predefinito per nuovi item" style="padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.85rem;">
+            <select id="quaderno-session-type" onchange="onQuadernoTypeChange()" title="Tipo predefinito per nuovi item" style="padding:8px; border-radius:8px; background:var(--input-bg); border:1px solid var(--glass-border); color:white; font-size:0.85rem;">
                 <option value="independent" ${qType === 'independent' ? 'selected' : ''}>Indipendente</option>
                 <option value="timedelay" ${qType === 'timedelay' ? 'selected' : ''}>Time Delay</option>
             </select>
             <span id="quaderno-td-seconds-wrap" style="${qType === 'timedelay' ? '' : 'display:none;'}">
-                <input type="number" id="quaderno-td-seconds" value="${state._quadernoTDSeconds || 5}" min="1" max="30" style="width:55px; padding:8px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.85rem; text-align:center;" placeholder="sec">
+                <input type="number" id="quaderno-td-seconds" value="${state._quadernoTDSeconds || 5}" min="1" max="30" style="width:55px; padding:8px; border-radius:8px; background:rgba(var(--shade-rgb),0.3); border:1px solid var(--glass-border); color:var(--text-primary); font-size:0.85rem; text-align:center;" placeholder="sec">
             </span>
             <button class="btn btn-primary" onclick="addQuadernoRow()" style="padding:10px 16px;">
                 <i class="fa-solid fa-plus"></i>
@@ -4608,7 +4608,7 @@ function renderQuadernoRow(row, idx, sessionType) {
 
     const totalRows = (state._quadernoType === 'general' ? state._quadernoRows : state._quadernoSteps || []).length;
     return `
-    <div style="display:flex; flex-direction:column; gap:6px; padding:12px 14px; margin-bottom:8px; background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); border-radius:14px; transition:0.2s;">
+    <div style="display:flex; flex-direction:column; gap:6px; padding:12px 14px; margin-bottom:8px; background:rgba(var(--ink-rgb),0.05); border:1px solid var(--glass-border); border-radius:14px; transition:0.2s;">
         <div style="display:flex; align-items:center; gap:6px;">
             <div style="display:flex; flex-direction:column; gap:2px; flex-shrink:0;">
                 <button onclick="moveQuadernoRow(${idx},-1)" style="width:24px; height:16px; border:none; background:transparent; color:${idx > 0 ? 'var(--text-secondary)' : '#333'}; cursor:${idx > 0 ? 'pointer' : 'default'}; font-size:0.6rem; display:flex; align-items:center; justify-content:center; padding:0;" title="Sposta su" ${idx === 0 ? 'disabled' : ''}>
@@ -4621,7 +4621,7 @@ function renderQuadernoRow(row, idx, sessionType) {
             <span onclick="renameQuadernoRow(${idx})" style="flex:1; font-size:1.05rem; font-weight:700; cursor:pointer;" title="Rinomina">${row.name}</span>
             <button onclick="toggleQuadernoRowType(${idx})" style="padding:2px 8px; border-radius:6px; border:1px solid ${isTD ? 'var(--warning-color)' : 'rgba(99,102,241,0.5)'}; background:${isTD ? 'rgba(245,158,11,0.15)' : 'rgba(99,102,241,0.1)'}; color:${isTD ? 'var(--warning-color)' : 'var(--accent-color)'}; font-size:0.65rem; font-weight:bold; cursor:pointer; white-space:nowrap;" title="Cambia tipo sessione">${isTD ? 'TD' : 'IND'}</button>
             <span style="background:rgba(99,102,241,0.2); color:var(--accent-color); padding:3px 10px; border-radius:8px; font-size:0.85rem; font-weight:bold; min-width:35px; text-align:center;" title="Totale LU">${total}</span>
-            <button onclick="undoQuadernoResult(${idx})" style="width:34px; height:34px; border-radius:10px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.05); color:var(--text-secondary); cursor:pointer; font-size:0.85rem; display:flex; align-items:center; justify-content:center;" title="Annulla ultimo" ${total === 0 ? 'disabled style="opacity:0.3; width:34px; height:34px; border-radius:10px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.05); color:var(--text-secondary); cursor:default; font-size:0.85rem; display:flex; align-items:center; justify-content:center;"' : ''}>
+            <button onclick="undoQuadernoResult(${idx})" style="width:34px; height:34px; border-radius:10px; border:1px solid var(--glass-border); background:rgba(var(--ink-rgb),0.05); color:var(--text-secondary); cursor:pointer; font-size:0.85rem; display:flex; align-items:center; justify-content:center;" title="Annulla ultimo" ${total === 0 ? 'disabled style="opacity:0.3; width:34px; height:34px; border-radius:10px; border:1px solid var(--glass-border); background:rgba(var(--ink-rgb),0.05); color:var(--text-secondary); cursor:default; font-size:0.85rem; display:flex; align-items:center; justify-content:center;"' : ''}>
                 <i class="fa-solid fa-rotate-left"></i>
             </button>
             <button onclick="removeQuadernoRow(${idx})" style="width:34px; height:34px; border-radius:10px; border:none; background:transparent; color:#666; cursor:pointer; font-size:0.85rem; display:flex; align-items:center; justify-content:center;" title="Rimuovi riga">
@@ -5026,7 +5026,7 @@ function renderQuadernoTask(container) {
                 style: 'min-width:150px; padding:8px 12px; border-radius:8px; font-size:0.9rem;'
             })}
             ${listChoices.length > 0 ? `
-            <select onchange="loadQuadernoListChoice(this.value); this.value='';" title="Carica un task salvato" style="padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.85rem; max-width:180px;">
+            <select onchange="loadQuadernoListChoice(this.value); this.value='';" title="Carica un task salvato" style="padding:8px; border-radius:8px; background:var(--input-bg); border:1px solid var(--glass-border); color:white; font-size:0.85rem; max-width:180px;">
                 <option value="">&#128194; Carica task...</option>
                 ${listChoices.map(c => `<option value="${c.key.replace(/"/g, '&quot;')}">${c.name} (${c.count})</option>`).join('')}
             </select>` : ''}
@@ -5051,12 +5051,12 @@ function renderQuadernoTask(container) {
                 onkeydown: "if(event.key==='Enter')addQuadernoStep()",
                 style: 'min-width:120px; padding:10px; border-radius:8px; font-size:0.9rem;'
             })}
-            <select id="quaderno-session-type" onchange="onQuadernoTypeChange()" style="padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.85rem;">
+            <select id="quaderno-session-type" onchange="onQuadernoTypeChange()" style="padding:8px; border-radius:8px; background:var(--input-bg); border:1px solid var(--glass-border); color:white; font-size:0.85rem;">
                 <option value="independent" ${qType === 'independent' ? 'selected' : ''}>Indipendente</option>
                 <option value="timedelay" ${qType === 'timedelay' ? 'selected' : ''}>Time Delay</option>
             </select>
             <span id="quaderno-td-seconds-wrap" style="${qType === 'timedelay' ? '' : 'display:none;'}">
-                <input type="number" id="quaderno-td-seconds" value="${state._quadernoTDSeconds || 5}" min="1" max="30" style="width:55px; padding:8px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.85rem; text-align:center;" placeholder="sec">
+                <input type="number" id="quaderno-td-seconds" value="${state._quadernoTDSeconds || 5}" min="1" max="30" style="width:55px; padding:8px; border-radius:8px; background:rgba(var(--shade-rgb),0.3); border:1px solid var(--glass-border); color:var(--text-primary); font-size:0.85rem; text-align:center;" placeholder="sec">
             </span>
             <button class="btn btn-primary" onclick="addQuadernoStep()" style="padding:10px 16px;">
                 <i class="fa-solid fa-plus"></i>
@@ -5107,7 +5107,7 @@ function renderQuadernoTaskStep(step, idx, sessionType, isActive) {
             : lastResult === 'prompt' ? '<span style="color:var(--warning-color); font-weight:800;">P</span>'
                 : lastResult === 'na' ? '<span style="color:#888; font-size:0.7rem;">N/A</span>' : '';
 
-    const activeBorder = isActive ? 'border:2px solid var(--accent-color); background:rgba(99,102,241,0.1);' : 'border:1px solid var(--glass-border); background:rgba(255,255,255,0.05);';
+    const activeBorder = isActive ? 'border:2px solid var(--accent-color); background:rgba(99,102,241,0.1);' : 'border:1px solid var(--glass-border); background:rgba(var(--ink-rgb),0.05);';
     const activeGlow = isActive ? 'box-shadow:0 0 12px rgba(99,102,241,0.3);' : '';
 
     // Only show buttons for active step
@@ -5116,8 +5116,8 @@ function renderQuadernoTaskStep(step, idx, sessionType, isActive) {
             ${isTD ? `
             <div style="position:relative; width:64px; height:64px; display:flex; align-items:center; justify-content:center;">
                 <svg class="task-td-ring" width="64" height="64" style="position:absolute; top:0; left:0; pointer-events:none; transform:rotate(-90deg); opacity:${typeof _isTDTimerVisible === 'function' && !_isTDTimerVisible() ? '0' : '1'};">
-                    <circle cx="32" cy="32" r="28" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="3"/>
-                    <circle class="task-td-ring-progress" cx="32" cy="32" r="28" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="3"
+                    <circle cx="32" cy="32" r="28" fill="none" stroke="rgba(var(--ink-rgb),0.15)" stroke-width="3"/>
+                    <circle class="task-td-ring-progress" cx="32" cy="32" r="28" fill="none" stroke="rgba(var(--ink-rgb),0.55)" stroke-width="3"
                             stroke-dasharray="${2 * Math.PI * 28}" stroke-dashoffset="0" stroke-linecap="round"/>
                 </svg>
                 <button onclick="taskStepScore('prompt')" style="width:56px; height:56px; border-radius:50%; border:2px solid var(--warning-color); background:rgba(245,158,11,0.15); color:var(--warning-color); cursor:pointer; font-size:1rem; font-weight:800; display:flex; align-items:center; justify-content:center; transition:0.1s;" onpointerdown="this.style.transform='scale(0.9)'" onpointerup="this.style.transform='scale(1)'">
@@ -5152,7 +5152,7 @@ function renderQuadernoTaskStep(step, idx, sessionType, isActive) {
                 <button onclick="moveQuadernoRow(${idx},-1)" style="width:22px; height:14px; border:none; background:transparent; color:${idx > 0 ? 'var(--text-secondary)' : '#333'}; cursor:${idx > 0 ? 'pointer' : 'default'}; font-size:0.55rem; display:flex; align-items:center; justify-content:center; padding:0;" ${idx === 0 ? 'disabled' : ''}>
                     <i class="fa-solid fa-chevron-up"></i>
                 </button>
-                <span style="width:22px; height:22px; border-radius:50%; background:${isActive ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)'}; display:flex; align-items:center; justify-content:center; font-size:0.75rem; font-weight:bold; color:${isActive ? 'white' : 'var(--text-secondary)'};">${idx + 1}</span>
+                <span style="width:22px; height:22px; border-radius:50%; background:${isActive ? 'var(--accent-color)' : 'rgba(var(--ink-rgb),0.1)'}; display:flex; align-items:center; justify-content:center; font-size:0.75rem; font-weight:bold; color:${isActive ? 'white' : 'var(--text-secondary)'};">${idx + 1}</span>
                 <button onclick="moveQuadernoRow(${idx},1)" style="width:22px; height:14px; border:none; background:transparent; color:${idx < totalSteps - 1 ? 'var(--text-secondary)' : '#333'}; cursor:${idx < totalSteps - 1 ? 'pointer' : 'default'}; font-size:0.55rem; display:flex; align-items:center; justify-content:center; padding:0;" ${idx >= totalSteps - 1 ? 'disabled' : ''}>
                     <i class="fa-solid fa-chevron-down"></i>
                 </button>
@@ -5296,7 +5296,7 @@ const MEM_LAV_THEMES = {
             tower.style.cssText = 'display:flex; flex-direction:column-reverse; align-items:center; gap:2px; transition:all 0.3s;';
             sequence.forEach((item, i) => {
                 const block = document.createElement('div');
-                block.style.cssText = `width:${60 - i * 2}px; height:30px; background:${item.color}; border-radius:4px; border:2px solid rgba(255,255,255,0.3); display:flex; align-items:center; justify-content:center; font-size:0.7rem; color:white; font-weight:bold; animation:memLavSlideIn 0.3s ease ${i * 0.1}s both;`;
+                block.style.cssText = `width:${60 - i * 2}px; height:30px; background:${item.color}; border-radius:4px; border:2px solid rgba(var(--ink-rgb),0.3); display:flex; align-items:center; justify-content:center; font-size:0.7rem; color:white; font-weight:bold; animation:memLavSlideIn 0.3s ease ${i * 0.1}s both;`;
                 block.textContent = item.emoji;
                 tower.appendChild(block);
             });
@@ -5329,7 +5329,7 @@ const MEM_LAV_THEMES = {
             topFirst.forEach((item, vi) => {
                 const seqIdx = sequence.length - 1 - vi;
                 const layer = document.createElement('div');
-                layer.style.cssText = `width:130px; height:26px; margin-top:${vi === 0 ? '0' : '-4px'}; filter:drop-shadow(0 1px 1px rgba(0,0,0,0.2)); animation:memLavSlideIn 0.3s ease ${seqIdx * 0.1}s both;`;
+                layer.style.cssText = `width:130px; height:26px; margin-top:${vi === 0 ? '0' : '-4px'}; filter:drop-shadow(0 1px 1px rgba(var(--shadow-rgb),0.2)); animation:memLavSlideIn 0.3s ease ${seqIdx * 0.1}s both;`;
                 let svg = item.svg;
                 if (item.id === 'bread') {
                     svg = seqIdx === sequence.length - 1 ? item.svgTop
@@ -5414,7 +5414,7 @@ function _renderMemLavSetup(stage) {
 
     let themeButtons = Object.entries(MEM_LAV_THEMES).map(([k, v]) =>
         `<button onclick="state._memLavState.theme='${k}'; _renderMemLavSetup(document.getElementById('game-stage'));"
-                style="padding:8px 16px; border-radius:10px; border:2px solid ${k === ml.theme ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)'}; background:${k === ml.theme ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.03)'}; color:${k === ml.theme ? 'var(--accent-color)' : 'var(--text-secondary)'}; cursor:pointer; font-weight:${k === ml.theme ? 'bold' : 'normal'}; font-size:0.85rem;">
+                style="padding:8px 16px; border-radius:10px; border:2px solid ${k === ml.theme ? 'var(--accent-color)' : 'rgba(var(--ink-rgb),0.1)'}; background:${k === ml.theme ? 'rgba(99,102,241,0.2)' : 'rgba(var(--ink-rgb),0.03)'}; color:${k === ml.theme ? 'var(--accent-color)' : 'var(--text-secondary)'}; cursor:pointer; font-weight:${k === ml.theme ? 'bold' : 'normal'}; font-size:0.85rem;">
             <i class="fa-solid ${v.icon}"></i> ${v.label}
         </button>`
     ).join('');
@@ -5430,9 +5430,9 @@ function _renderMemLavSetup(stage) {
         </div>
         <div style="display:flex; align-items:center; justify-content:center; gap:12px; margin-bottom:20px;">
             <span style="font-size:0.85rem; color:var(--text-secondary);">Span:</span>
-            <button onclick="_memLavAdjustSpan(-1)" style="width:32px; height:32px; border-radius:50%; border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.05); color:white; cursor:pointer; font-size:1rem;">-</button>
+            <button onclick="_memLavAdjustSpan(-1)" style="width:32px; height:32px; border-radius:50%; border:1px solid rgba(var(--ink-rgb),0.2); background:rgba(var(--ink-rgb),0.05); color:var(--text-primary); cursor:pointer; font-size:1rem;">-</button>
             <span id="memlav-span-display" style="font-size:1.5rem; font-weight:bold; color:var(--accent-color); min-width:30px; text-align:center;">${ml.span}</span>
-            <button onclick="_memLavAdjustSpan(1)" style="width:32px; height:32px; border-radius:50%; border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.05); color:white; cursor:pointer; font-size:1rem;">+</button>
+            <button onclick="_memLavAdjustSpan(1)" style="width:32px; height:32px; border-radius:50%; border:1px solid rgba(var(--ink-rgb),0.2); background:rgba(var(--ink-rgb),0.05); color:var(--text-primary); cursor:pointer; font-size:1rem;">+</button>
         </div>
         <div style="text-align:center; margin-bottom:16px;">
             <span style="font-size:0.75rem; color:var(--text-secondary); background:rgba(${isTimeDelay ? '245,158,11' : '16,185,129'},0.15); padding:3px 10px; border-radius:6px; color:${isTimeDelay ? 'var(--warning-color)' : 'var(--success-color)'};">
@@ -5503,7 +5503,7 @@ function _renderMemLavClinicianPhase(stage) {
             </div>
         </div>
         <div id="memlav-clin-visual" style="flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:10px; overflow:hidden;"></div>
-        <div style="flex-shrink:0; display:flex; flex-wrap:wrap; gap:10px; padding:10px 16px 16px; justify-content:center; border-top:1px solid rgba(255,255,255,0.06);">
+        <div style="flex-shrink:0; display:flex; flex-wrap:wrap; gap:10px; padding:10px 16px 16px; justify-content:center; border-top:1px solid rgba(var(--ink-rgb),0.06);">
             ${itemsHtml}
         </div>
         ${ml.clinicianSequence.length === ml.span ? `
@@ -5594,7 +5594,7 @@ function _renderMemLavChildPhase(stage) {
         } else if (i === currentPos) {
             posIndicators.push(`<span style="width:10px; height:10px; border-radius:50%; background:var(--accent-color); animation:memLavPulse 1s infinite;"></span>`);
         } else {
-            posIndicators.push(`<span style="width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,0.15);"></span>`);
+            posIndicators.push(`<span style="width:8px; height:8px; border-radius:50%; background:rgba(var(--ink-rgb),0.15);"></span>`);
         }
     }
 
@@ -5688,7 +5688,7 @@ function _showMemLavFeedback(container, type, text) {
     const colors = { success: '#10b981', warning: '#f59e0b', danger: '#ef4444' };
     const color = colors[type] || colors.danger;
     const overlay = document.createElement('div');
-    overlay.style.cssText = `position:absolute; top:0; left:0; right:0; bottom:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.5); z-index:100; pointer-events:none;`;
+    overlay.style.cssText = `position:absolute; top:0; left:0; right:0; bottom:0; display:flex; align-items:center; justify-content:center; background:rgba(var(--shade-rgb),0.5); z-index:100; pointer-events:none;`;
     overlay.innerHTML = `<div style="font-size:1.5rem; font-weight:bold; color:${color}; animation:memLavPulse 0.5s;">${text}</div>`;
     container.style.position = 'relative';
     container.appendChild(overlay);
@@ -5792,7 +5792,7 @@ function _renderMemLavTrialResult(stage) {
     <div style="height:100%; display:flex; flex-direction:column; padding:20px; overflow-y:auto;">
         <div style="text-align:center; margin-bottom:16px;">
             <div style="font-size:2rem; margin-bottom:8px;">${resultIcon}</div>
-            <div style="font-size:1rem; font-weight:bold; color:white;">Trial ${ml.trials.length} completato</div>
+            <div style="font-size:1rem; font-weight:bold; color:var(--text-primary);">Trial ${ml.trials.length} completato</div>
             <div style="margin-top:8px; font-size:0.85rem; color:var(--text-secondary);">Sequenza: ${seqHtml}</div>
             ${lastTrial.totalErrors > 0 ? `<div style="margin-top:6px; font-size:0.8rem; color:var(--warning-color);">${lastTrial.totalErrors} errori totali</div>` : ''}
         </div>

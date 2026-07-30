@@ -70,7 +70,7 @@ function renderTagEditor(tags) {
             ${chipsHtml}
             <input type="text" id="tag-input" placeholder="Aggiungi tag..."
                 onkeydown="handleTagKeydown(event)"
-                style="border:none; background:transparent; color:white; padding:4px; font-size:0.85rem; flex:1; min-width:100px;">
+                style="border:none; background:transparent; color:var(--text-primary); padding:4px; font-size:0.85rem; flex:1; min-width:100px;">
         </div>
         ${suggestionsHtml ? `<div class="tag-suggestions">${suggestionsHtml}</div>` : ''}
     `;
@@ -293,7 +293,7 @@ function renderEditorList() {
         : 'Base';
 
     const counterHtml = `
-        <div style="position:sticky; top:0; z-index:10; background:#1e1e2f; padding:10px; margin-bottom:10px; border-bottom:1px solid var(--glass-border); display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; color:#ccc; font-size:0.9rem;">
+        <div style="position:sticky; top:0; z-index:10; background:var(--modal-bg); padding:10px; margin-bottom:10px; border-bottom:1px solid var(--glass-border); display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; color:#ccc; font-size:0.9rem;">
             <span><i class="fa-solid fa-list-ol"></i> Item Attivi: <b style="color:${activeItems >= 20 ? 'var(--success-color)' : 'var(--warning-color)'}">${activeItems}</b> / ${totalItems}</span>
             <span style="font-size:0.78rem; display:flex; gap:10px; align-items:center;">
                 <span style="background:rgba(139,92,246,0.18); color:#a78bfa; padding:2px 8px; border-radius:6px;"><i class="fa-solid fa-layer-group" style="font-size:0.7rem;"></i> ${vName}</span>
@@ -326,8 +326,8 @@ function renderEditorList() {
         <div class="editor-item" style="${activeStyle} ${opacityStyle} transition:0.2s; cursor:pointer;" onclick="setActiveItem(${idx})">
             <div class="editor-thumb" style="cursor:pointer; position:relative;${thumbBg}${editVariant > 0 && !hasVariantImg ? ' outline:2px dashed var(--warning-color); outline-offset:-2px;' : ''}" onclick="triggerItemUpload(${idx}); event.stopPropagation();" title="Clicca per caricare">
                 <img src="${displayUrl || getPlaceholderUrl(item.label)}" style="width:100%; height:100%; object-fit:${showMasked ? 'contain' : 'cover'}; pointer-events:none;">
-                <div style="position:absolute; inset:0; background:rgba(0,0,0,0.3); display:flex; justify-content:center; align-items:center; opacity:0;">
-                    <i class="fa-solid fa-camera" style="color:white;"></i>
+                <div style="position:absolute; inset:0; background:rgba(0,0,0,0.35); display:flex; justify-content:center; align-items:center; opacity:0;">
+                    <i class="fa-solid fa-camera" style="color:#fff;"></i>
                 </div>
             </div>
             <div style="flex:1">
@@ -344,7 +344,7 @@ function renderEditorList() {
                 onclick="event.stopPropagation();"
                 placeholder="#"
                 title="N. Sequenza"
-                style="width:38px; padding:4px; border-radius:6px; background:${item.seqNumber ? 'rgba(99,102,241,0.2)' : 'rgba(0,0,0,0.2)'}; border:1px solid ${item.seqNumber ? 'var(--accent-color)' : 'var(--glass-border)'}; color:${item.seqNumber ? 'var(--accent-color)' : '#888'}; font-size:0.8rem; text-align:center; font-weight:bold;">
+                style="width:38px; padding:4px; border-radius:6px; background:${item.seqNumber ? 'rgba(99,102,241,0.2)' : 'rgba(var(--shade-rgb),0.2)'}; border:1px solid ${item.seqNumber ? 'var(--accent-color)' : 'var(--glass-border)'}; color:${item.seqNumber ? 'var(--accent-color)' : '#888'}; font-size:0.8rem; text-align:center; font-weight:bold;">
             <button class="btn btn-ghost" style="padding:6px;" onclick="openPollinationsGenerator(${idx}); event.stopPropagation();" title="Cerca o genera immagine">
                 <i class="fa-solid fa-wand-magic-sparkles" style="font-size:0.8rem; ${item.url ? 'opacity:0.4' : 'color:var(--accent-color); opacity:0.8'}"></i>
             </button>
@@ -862,7 +862,7 @@ window.openZoomEditor = (index) => {
     const currentArea = item.zoomArea || null;
 
     modal.innerHTML = `
-        <div style="color:white; margin-bottom:15px; text-align:center;">
+        <div style="color:#fff; margin-bottom:15px; text-align:center;">
             <h3 style="margin:0 0 5px 0;"><i class="fa-solid fa-crop"></i> Definisci Area Zoom</h3>
             <p style="margin:0; opacity:0.7; font-size:0.85rem;">Trascina sull'immagine per selezionare l'area da zoomare</p>
         </div>
@@ -1007,8 +1007,8 @@ function renderEditorCover() {
     box.innerHTML = `
         <div onclick="focusSetCover()" title="${cover ? 'Tocca, poi Ctrl+V per sostituire la copertina' : 'Tocca, poi Ctrl+V per incollare la copertina'}"
              style="position:relative; width:62px; height:62px; border-radius:10px; overflow:hidden; cursor:pointer;
-                    border:2px ${active ? 'solid var(--accent-color)' : 'dashed rgba(255,255,255,0.22)'};
-                    background:rgba(0,0,0,0.25); display:flex; align-items:center; justify-content:center;
+                    border:2px ${active ? 'solid var(--accent-color)' : 'dashed rgba(var(--ink-rgb),0.22)'};
+                    background:rgba(var(--shade-rgb),0.25); display:flex; align-items:center; justify-content:center;
                     ${active ? 'box-shadow:0 0 0 3px rgba(99,102,241,0.25);' : ''}">
             ${cover
                 ? `<img src="${cover}" style="width:100%; height:100%; object-fit:cover;">`
@@ -1210,7 +1210,7 @@ function renderVariantEditor() {
 
     // Base variant chip
     html += `<span class="tag-chip" style="cursor:pointer; font-size:0.8rem; padding:5px 12px;
-        ${activeVar === 0 ? 'background:rgba(99,102,241,0.3); border-color:var(--accent-color); color:white; font-weight:bold;' : ''}"
+        ${activeVar === 0 ? 'background:rgba(99,102,241,0.3); border-color:var(--accent-color); color:var(--text-primary); font-weight:bold;' : ''}"
         onclick="selectEditingVariant(0)">
         <i class="fa-solid fa-image" style="margin-right:4px;"></i>Base
     </span>`;
@@ -1222,7 +1222,7 @@ function renderVariantEditor() {
         const filled = state.editingItems.filter(item => item.variantUrls && item.variantUrls[vIdx]).length;
         const total = state.editingItems.length;
         html += `<span class="tag-chip" style="cursor:pointer; font-size:0.8rem; padding:5px 12px;
-            ${isActive ? 'background:rgba(99,102,241,0.3); border-color:var(--accent-color); color:white; font-weight:bold;' : ''}"
+            ${isActive ? 'background:rgba(99,102,241,0.3); border-color:var(--accent-color); color:var(--text-primary); font-weight:bold;' : ''}"
             onclick="selectEditingVariant(${vIdx})">
             <i class="fa-solid fa-layer-group" style="margin-right:4px;"></i>${name}
             <span style="opacity:0.5; font-size:0.65rem; margin-left:4px;">${filled}/${total}</span>
