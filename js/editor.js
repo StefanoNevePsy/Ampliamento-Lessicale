@@ -1242,6 +1242,64 @@ function setItemVariantUrl(item, variantIndex, url) {
 }
 window.setItemVariantUrl = setItemVariantUrl;
 
+// --- Repair of variant data written by older builds -----------------------
+// There was a window (per-variant cut-outs shipped before per-variant pictures)
+// in which a picture pasted or generated with a variant open was written to the
+// item's BASE url, while its cut-out and its pre-highlight original were already
+// filed under the variant. The variant then looks right in the editor — the
+// preview falls back to the base picture, and the cut-out really is the new one —
+// but it owns no picture, so the modes play the base images.
+//
+// Those orphans are recognisable, and the picture they were made from is known:
+//   variantOriginalUrls[v]  is literally this variant's own picture before the
+//                           highlight step, so it can be adopted as-is;
+//   variantMaskedUrls[v]    was cut out of whatever item.url held at the time,
+//                           which is the picture the editor is showing.
+function diagnoseVariantData(items, v) {
+    const report = { ok: [], fromOriginal: [], fromBase: [], empty: [] };
+    if (!v) return report;
+    (items || []).forEach((item, idx) => {
+        const entry = { idx, label: item.label || `#${idx + 1}` };
+        if (hasOwnVariantImage(item, v)) { report.ok.push(entry); return; }
+        if (item.variantOriginalUrls && item.variantOriginalUrls[v]) { report.fromOriginal.push(entry); return; }
+        if (item.variantMaskedUrls && item.variantMaskedUrls[v] && item.url) { report.fromBase.push(entry); return; }
+        report.empty.push(entry);
+    });
+    return report;
+}
+window.diagnoseVariantData = diagnoseVariantData;
+
+window.repairVariantData = async () => {
+    const v = state._editingVariant || 0;
+    if (!v) return;
+    const diag = diagnoseVariantData(state.editingItems, v);
+    const n = diag.fromOriginal.length + diag.fromBase.length;
+    if (n === 0) return;
+
+    const vName = (state._editingVariantNames || [])[v - 1] || ('Variante ' + v);
+    const sample = [...diag.fromOriginal, ...diag.fromBase].slice(0, 6).map(e => e.label).join(', ');
+    const msg = `Registrare in "${vName}" l'immagine che stai gia' vedendo, per ${n} item?\n\n`
+        + `${sample}${n > 6 ? `, +${n - 6} altri` : ''}\n\n`
+        + `Da questo momento le attivita' useranno quell'immagine (e il suo scontorno) invece di ripiegare sulla base. `
+        + `Le immagini base non vengono toccate. Nulla e' definitivo finche' non premi Salva.`;
+    const ok = (typeof themedConfirm === 'function') ? await themedConfirm(msg) : confirm(msg);
+    if (!ok) return;
+
+    diag.fromOriginal.forEach(e => {
+        const item = state.editingItems[e.idx];
+        setItemVariantUrl(item, v, item.variantOriginalUrls[v]);
+    });
+    diag.fromBase.forEach(e => {
+        const item = state.editingItems[e.idx];
+        setItemVariantUrl(item, v, item.url);
+    });
+
+    renderVariantEditor();
+    renderEditorList();
+    if (typeof _showImportToast === 'function') _showImportToast(`${n} item riparati in ${vName} \u2014 premi Salva per confermare`);
+    else alert(`${n} item riparati in ${vName} \u2014 premi Salva per confermare.`);
+};
+
 // Render variant editor UI in the editor modal
 function renderVariantEditor() {
     const container = document.getElementById('edit-variant-container');
@@ -1288,6 +1346,20 @@ function renderVariantEditor() {
             <i class="fa-solid fa-info-circle"></i> Stai modificando la variante <b>${varName}</b>. Le immagini caricate andranno in questa variante.
             Le immagini con bordo tratteggiato non hanno ancora un'immagine per questa variante (verr&agrave; usata l'immagine base).
         </div>`;
+
+        const diag = diagnoseVariantData(state.editingItems, activeVar);
+        const repairable = diag.fromOriginal.length + diag.fromBase.length;
+        if (repairable > 0) {
+            html += `<div style="margin-top:6px; font-size:0.75rem; color:var(--warning-color); background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.3); padding:8px 10px; border-radius:8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                <span style="flex:1; min-width:220px;">
+                    <i class="fa-solid fa-screwdriver-wrench"></i> <b>${repairable}</b> item hanno lo scontorno di questa variante ma nessuna immagine registrata:
+                    salvati da una versione precedente, che scriveva l&rsquo;immagine sulla base. In attivit&agrave; mostrano l&rsquo;immagine base.
+                </span>
+                <button class="btn btn-sm" onclick="repairVariantData()" style="background:var(--warning-color); color:#000; padding:5px 12px; font-size:0.75rem; white-space:nowrap;">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Ripara ${repairable} item
+                </button>
+            </div>`;
+        }
     }
 
     container.innerHTML = html;

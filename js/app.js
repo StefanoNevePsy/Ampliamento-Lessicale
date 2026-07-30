@@ -710,15 +710,7 @@ window.loadSelectedSet = async (setId) => {
             state._sfVariantIndex = 0; // Reset variant on set switch
             let playItems = state.items.filter(i => !i.hidden);
             // Apply active variant URLs
-            const activeVariant = parseInt(document.getElementById('variant-select').value) || 0;
-            if (activeVariant > 0 && typeof getItemVariantUrl === 'function') {
-                playItems = playItems.map(item => {
-                    const varUrl = getItemVariantUrl(item, activeVariant);
-                    // Each variant carries its OWN cut-out (never the base one)
-                    if (varUrl && varUrl !== item.url) return { ...item, url: varUrl, maskedUrl: getItemVariantMasked(item, activeVariant) || undefined, _originalUrl: item.url };
-                    return item;
-                });
-            }
+            playItems = _applyVariantToItems(playItems, activeVariantIndex());
             state.session.playItems = playItems;
             renderGameMode(mode, playItems);
         } else {
@@ -1332,17 +1324,7 @@ window.startGame = () => {
     }
 
     // Apply active variant URLs to play items
-    const activeVariant = parseInt(document.getElementById('variant-select').value) || 0;
-    if (activeVariant > 0 && typeof getItemVariantUrl === 'function') {
-        playItems = playItems.map(item => {
-            const varUrl = getItemVariantUrl(item, activeVariant);
-            if (varUrl && varUrl !== item.url) {
-                // Each variant carries its OWN cut-out (never the base one)
-                return { ...item, url: varUrl, maskedUrl: getItemVariantMasked(item, activeVariant) || undefined, _originalUrl: item.url };
-            }
-            return item;
-        });
-    }
+    playItems = _applyVariantToItems(playItems, activeVariantIndex());
 
     state.tactIndex = 0;
     state.ranIndex = 0;
@@ -3144,6 +3126,31 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // --- VARIANT SELECTOR ---
+function activeVariantIndex() {
+    const el = document.getElementById('variant-select');
+    return parseInt(el && el.value) || 0;
+}
+window.activeVariantIndex = activeVariantIndex;
+
+// Swap in a variant's own picture AND its own cut-out. An item is switched over
+// only when the variant really owns a picture for it — never by comparing URLs:
+// two variants may legitimately share the same picture while having different
+// cut-outs, and then a comparison would silently keep the base cut-out.
+// Items the variant doesn't cover keep the base picture, cut-out included.
+function _applyVariantToItems(items, variantIndex) {
+    if (!variantIndex || typeof hasOwnVariantImage !== 'function') return items;
+    return items.map(item => {
+        if (!hasOwnVariantImage(item, variantIndex)) return item;
+        return {
+            ...item,
+            url: getItemVariantUrl(item, variantIndex),
+            maskedUrl: getItemVariantMasked(item, variantIndex) || undefined,
+            _originalUrl: item.url,
+        };
+    });
+}
+window._applyVariantToItems = _applyVariantToItems;
+
 function _updateVariantSelector() {
     const wrapper = document.getElementById('variant-selector-wrapper');
     const select = document.getElementById('variant-select');
