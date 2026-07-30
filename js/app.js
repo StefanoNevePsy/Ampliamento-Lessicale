@@ -3161,14 +3161,26 @@ function _updateVariantSelector() {
             opt.textContent = name;
             select.appendChild(opt);
         });
+        // Rebuilding the options resets the widget to the first one, so restore the
+        // clinician's choice — but only if it belongs to the set still on screen and
+        // that variant still exists.
+        const keep = state._variantSetId === state.activeSetId ? (state._variantIndex || 0) : 0;
+        select.value = String(keep >= 0 && keep <= variantNames.length ? keep : 0);
+        state._variantIndex = parseInt(select.value) || 0;
+        state._variantSetId = state.activeSetId;
     } else {
         wrapper.classList.add('hidden');
         select.innerHTML = '<option value="0">Base</option>';
         select.value = '0';
+        state._variantIndex = 0;
+        state._variantSetId = state.activeSetId;
     }
 }
 
 window.onVariantChange = () => {
+    const select = document.getElementById('variant-select');
+    state._variantIndex = parseInt(select && select.value) || 0;
+    state._variantSetId = state.activeSetId;
     window.startGame();
 };
 
