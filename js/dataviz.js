@@ -135,13 +135,20 @@ function vizItemStats(patient) {
         h.itemDetails.forEach(it => {
             const label = (it.label || '').trim();
             if (!label) return;
-            const m = map[label] || (map[label] = { label, total: 0, correct: 0, prompt: 0, error: 0, seq: [], lastDate: h.date, cats: {} });
+            const m = map[label] || (map[label] = { label, total: 0, correct: 0, prompt: 0, error: 0, seq: [], lastDate: h.date, cats: {}, byVariant: {} });
             m.total++;
+            const score = it.result === true ? 1 : it.result === 'prompt' ? 0.5 : 0;
             if (it.result === true) { m.correct++; m.seq.push(1); }
             else if (it.result === 'prompt') { m.prompt++; m.seq.push(0.5); }
             else { m.error++; m.seq.push(0); }
             m.lastDate = h.date;
             if (h.setName) m.cats[h.setName] = (m.cats[h.setName] || 0) + 1;
+            // Per-variant tally: same word, different picture. The detail's own
+            // variant wins; otherwise fall back to the session's variant.
+            const vIdx = (it.variant != null ? it.variant : (h.variant || 0));
+            if (!m.byVariant[vIdx]) m.byVariant[vIdx] = { n: 0, sum: 0, setName: h.setName || '' };
+            m.byVariant[vIdx].n++;
+            m.byVariant[vIdx].sum += score;
         });
     });
     return Object.values(map).map(m => {
@@ -152,7 +159,18 @@ function vizItemStats(patient) {
         if (recentScore >= 0.8 && m.total >= 2) status = 'acquisito';
         else if (recentScore >= 0.45) status = 'emergente';
         const cat = Object.keys(m.cats).sort((a, b) => m.cats[b] - m.cats[a])[0] || '—';
-        return { ...m, mastery, recentScore, status, cat };
+        // Compare the word across picture variants: with >=2 variants each
+        // practised at least twice, flag a meaningful gap (>=25 points).
+        const vEntries = Object.entries(m.byVariant || {})
+            .map(([v, d]) => ({ v: parseInt(v), n: d.n, pct: d.n ? Math.round((d.sum / d.n) * 100) : 0, setName: d.setName }))
+            .filter(e => e.n >= 2)
+            .sort((a, b) => a.pct - b.pct);
+        let variantGap = null;
+        if (vEntries.length >= 2) {
+            const worst = vEntries[0], best = vEntries[vEntries.length - 1];
+            if (best.pct - worst.pct >= 25) variantGap = { worst, best, delta: best.pct - worst.pct };
+        }
+        return { ...m, mastery, recentScore, status, cat, variants: vEntries, variantGap };
     });
 }
 
@@ -548,8 +566,47 @@ function vizVocabulary(container, patient) {
     const s = skin();
     const items = vizItemStats(patient);
     if (!items.length) { container.innerHTML = '<p style="color:var(--text-secondary); text-align:center; padding:20px;">Nessun dato per-item. Le modalità con dettaglio per stimolo lo popolano automaticamente.</p>'; return; }
-    if (s.organic) return _vizVocabSky(container, items, s);
+    if (s.organic) { _vizVariantGapPanel(container, items, s); return _vizVocabSky(container, items, s); }
     return _vizVocabHeat(container, items, s);
+}
+
+// Resolve a variant index to its name, using the set the word belongs to.
+function _vizVariantName(setName, v) {
+    if (!v) return 'Base';
+    try {
+        const set = (state.savedSets || []).find(x => x.name === setName);
+        const n = set && set.variantNames && set.variantNames[v - 1];
+        return n || ('Variante ' + v);
+    } catch (e) { return 'Variante ' + v; }
+}
+
+// Words that behave differently depending on the picture variant: the same
+// label is much harder with one image than another (a stimulus problem, not a
+// vocabulary problem).
+function _vizVariantGapPanel(container, items, s) {
+    const gaps = items.filter(i => i.variantGap)
+        .sort((a, b) => b.variantGap.delta - a.variantGap.delta)
+        .slice(0, 12);
+    if (!gaps.length) return;
+    const box = document.createElement('div');
+    box.style.cssText = `margin:14px 0 10px; padding:10px 12px; border-radius:10px; background:${s.mid}14; border:1px solid ${s.mid}44;`;
+    box.innerHTML = `<div style="font-size:0.8rem; font-weight:700; color:${s.mid}; margin-bottom:6px;">
+            <i class="fa-solid fa-layer-group"></i> Differenze tra varianti
+        </div>
+        <div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:8px;">Stessa parola, immagine diversa: qui la resa cambia in modo marcato (&ge;25 punti). Spesso &egrave; l'immagine a essere poco chiara, non la parola.</div>
+        <div style="display:flex; flex-direction:column; gap:5px;">
+        ${gaps.map(g => {
+            const w = g.variantGap.worst, b = g.variantGap.best;
+            return `<div style="display:flex; align-items:center; gap:8px; font-size:0.75rem; flex-wrap:wrap;">
+                <b style="min-width:88px;">${_esc(g.label)}</b>
+                <span style="color:${s.bad};">${_esc(_vizVariantName(w.setName || g.cat, w.v))} ${w.pct}%</span>
+                <i class="fa-solid fa-arrow-right" style="opacity:0.4; font-size:0.6rem;"></i>
+                <span style="color:${s.good};">${_esc(_vizVariantName(b.setName || g.cat, b.v))} ${b.pct}%</span>
+                <span style="margin-left:auto; font-weight:700; color:${s.mid};">&Delta; ${g.variantGap.delta}</span>
+            </div>`;
+        }).join('')}
+        </div>`;
+    container.appendChild(box);
 }
 
 function _vizVocabHeat(container, items, s) {
@@ -562,6 +619,7 @@ function _vizVocabHeat(container, items, s) {
     summary.innerHTML = [['acquisito', 'Acquisiti', s.good], ['emergente', 'Emergenti', s.mid], ['difficile', 'Da rinforzare', s.bad]]
         .map(([k, l, c]) => `<div style="background:${c}22; border:1px solid ${c}55; border-radius:10px; padding:6px 12px; text-align:center; min-width:84px;"><div style="font-size:1.3rem; font-weight:800; color:${c};">${counts[k]}</div><div style="font-size:0.65rem; color:var(--text-secondary);">${l}</div></div>`).join('');
     container.appendChild(summary);
+    _vizVariantGapPanel(container, items, s);
 
     const grid = document.createElement('div');
     grid.style.cssText = 'display:grid; grid-template-columns:repeat(auto-fill, minmax(120px, 1fr)); gap:6px;';
@@ -570,9 +628,12 @@ function _vizVocabHeat(container, items, s) {
         const spark = it.seq.slice(-8).map(v => v === 1 ? '●' : v === 0.5 ? '◐' : '○').join('');
         const chip = document.createElement('div');
         chip.style.cssText = `background:${col}1a; border-left:3px solid ${col}; border-radius:6px; padding:6px 8px; overflow:hidden;`;
-        chip.innerHTML = `<div style="font-size:0.8rem; font-weight:600; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${_esc(it.label)}</div>` +
+        const gapMark = it.variantGap ? ` <i class="fa-solid fa-layer-group" style="color:${s.mid}; font-size:0.55rem;" title="Resa diversa tra varianti"></i>` : '';
+        chip.innerHTML = `<div style="font-size:0.8rem; font-weight:600; color:var(--text-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${_esc(it.label)}${gapMark}</div>` +
             `<div style="font-size:0.62rem; color:var(--text-secondary); margin-top:2px;">${Math.round(it.mastery * 100)}% · ${it.total}× <span style="letter-spacing:1px; color:${col};">${spark}</span></div>`;
-        chip.title = `${it.label}\nAcquisizione: ${Math.round(it.mastery * 100)}%\nCorrette ${it.correct} · Prompt ${it.prompt} · Errori ${it.error}\nCategoria: ${it.cat}`;
+        const vLines = (it.variants && it.variants.length > 1)
+            ? '\n' + it.variants.map(v => `  ${_vizVariantName(v.setName || it.cat, v.v)}: ${v.pct}% (${v.n}×)`).join('\n') : '';
+        chip.title = `${it.label}\nAcquisizione: ${Math.round(it.mastery * 100)}%\nCorrette ${it.correct} · Prompt ${it.prompt} · Errori ${it.error}\nCategoria: ${it.cat}${vLines}`;
         grid.appendChild(chip);
     });
     container.appendChild(grid);

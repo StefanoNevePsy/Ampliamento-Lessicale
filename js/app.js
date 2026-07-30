@@ -714,8 +714,8 @@ window.loadSelectedSet = async (setId) => {
             if (activeVariant > 0 && typeof getItemVariantUrl === 'function') {
                 playItems = playItems.map(item => {
                     const varUrl = getItemVariantUrl(item, activeVariant);
-                    // Drop the base maskedUrl on variants (the cut-out is for the base image)
-                    if (varUrl && varUrl !== item.url) return { ...item, url: varUrl, maskedUrl: undefined, _originalUrl: item.url };
+                    // Each variant carries its OWN cut-out (never the base one)
+                    if (varUrl && varUrl !== item.url) return { ...item, url: varUrl, maskedUrl: getItemVariantMasked(item, activeVariant) || undefined, _originalUrl: item.url };
                     return item;
                 });
             }
@@ -1337,7 +1337,8 @@ window.startGame = () => {
         playItems = playItems.map(item => {
             const varUrl = getItemVariantUrl(item, activeVariant);
             if (varUrl && varUrl !== item.url) {
-                return { ...item, url: varUrl, maskedUrl: undefined, _originalUrl: item.url };
+                // Each variant carries its OWN cut-out (never the base one)
+                return { ...item, url: varUrl, maskedUrl: getItemVariantMasked(item, activeVariant) || undefined, _originalUrl: item.url };
             }
             return item;
         });
@@ -2181,7 +2182,10 @@ async function _doSaveSession(p, noteText) {
                 const item = !isNaN(idx) ? playItems[idx] : null;
                 const label = item ? (item.label || item.l || `Item ${idx + 1}`) : null;
                 if (label) {
-                    itemDetails.push({ label, result });
+                    // Tag the variant so the per-word analysis can compare
+                    // the same word across different picture variants.
+                    const _v = sessionData.variant || 0;
+                    itemDetails.push(_v ? { label, result, variant: _v } : { label, result });
                 }
             }
             if (itemDetails.length > 0) {
@@ -2389,8 +2393,18 @@ function renderLibCard(s, idxInCat, catLength) {
         </div>`;
     }
 
-    const imgCount = s.items.filter(i => i.url).length;
-    const maskedCount = s.items.filter(i => i.maskedUrl).length;
+    // Count across base + variants: a set with variants has several pictures
+    // per item, each with its own cut-out.
+    const _vCount = (s.variantNames || []).length;
+    let imgCount = 0, maskedCount = 0;
+    s.items.forEach(i => {
+        if (i.url) imgCount++;
+        if (i.maskedUrl) maskedCount++;
+        for (let v = 1; v <= _vCount; v++) {
+            if (i.variantUrls && i.variantUrls[v]) imgCount++;
+            if (i.variantMaskedUrls && i.variantMaskedUrls[v]) maskedCount++;
+        }
+    });
     const scontornoIcon = maskedCount === imgCount && imgCount > 0
         ? 'color:var(--success-color)'
         : (maskedCount > 0 ? 'color:var(--warning-color)' : 'opacity:0.4');

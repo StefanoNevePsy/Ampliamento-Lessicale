@@ -1613,8 +1613,16 @@ function renderActivitiesTab(patient, sortBy) {
         const lastSession = sortedSess[sortedSess.length - 1];
         const lastPct = lastSession ? lastSession.percentage : 0;
         const avgPct = sessions.length > 0 ? Math.round(sessions.reduce((a, s) => a + s.percentage, 0) / sessions.length) : 0;
+        // Variants used in this activity (sessions stay grouped under the same
+        // set; the badge tells WHICH picture variant each run used).
+        const variantsUsed = [...new Set(sessions.map(s => s.variant || 0))].sort((a, b) => a - b);
+        const variantStats = variantsUsed.map(v => {
+            const ss = sessions.filter(x => (x.variant || 0) === v);
+            const avg = ss.length ? Math.round(ss.reduce((a, x) => a + (x.percentage || 0), 0) / ss.length) : 0;
+            return { v, n: ss.length, avg };
+        });
         const criterionScore = isMastered ? 2 : isRepertorio ? 1 : 0;
-        return { key, sessions, setName, modeCode, typeGroup, lastDate, setCat, isMastered, isRepertorio, lastPct, avgPct, criterionScore, threshold };
+        return { key, sessions, setName, modeCode, typeGroup, lastDate, setCat, isMastered, isRepertorio, lastPct, avgPct, criterionScore, threshold, variantsUsed, variantStats };
     });
 
     // Sort
@@ -1698,6 +1706,13 @@ function renderActivitiesTab(patient, sortBy) {
             fluenzaObiettivoHtml = `<span style="font-size:0.7rem; background:rgba(99,102,241,0.15); color:var(--accent-color); padding:2px 8px; border-radius:6px; font-weight:bold;"><i class="fa-solid fa-bullseye"></i> Ob: ${obiettivo}</span>`;
         }
 
+        // Variant badges: same set, but which picture variant each run used.
+        const _setObjV = state.savedSets.find(ss => ss.name === setName);
+        const _vName = (v) => v === 0 ? 'Base' : ((_setObjV && _setObjV.variantNames && _setObjV.variantNames[v - 1]) || ('V' + v));
+        const variantBadgesHtml = (item.variantStats && item.variantStats.length > 1)
+            ? item.variantStats.map(vs => `<span title="${vs.n} sedute · media ${vs.avg}%" style="font-size:0.65rem; background:rgba(139,92,246,0.18); color:#a78bfa; padding:1px 6px; border-radius:4px; margin-left:2px;"><i class="fa-solid fa-layer-group" style="font-size:0.55rem;"></i> ${escapeHtml(_vName(vs.v))} ${vs.avg}%</span>`).join('')
+            : '';
+
         // Quick status: last session + near criterion
         const lastPctColor = pctColor(lastPct, item.threshold);
         const nearCritHtml = nearCrit ? `<span style="font-size:0.65rem; background:rgba(16,185,129,0.15); color:var(--success-color); padding:1px 6px; border-radius:4px;"><i class="fa-solid fa-arrow-trend-up"></i> Vicino al criterio</span>` : '';
@@ -1714,7 +1729,7 @@ function renderActivitiesTab(patient, sortBy) {
                 <h4 style="margin:0; color:var(--accent-color); font-size:0.95rem; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                     ${setThumbHtml}
                     <i class="fa-solid ${modeIconClass}" style="font-size:0.85rem; opacity:0.7;"></i>
-                    ${setName} ${setCat ? `<span style="color:var(--text-secondary); font-size:0.7em; background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:4px;">${setCat}</span>` : ''}<span style="color:#666; font-size:0.8em;">(${modeName})</span> ${badgeHtml} ${fluenzaObiettivoHtml}
+                    ${setName} ${setCat ? `<span style="color:var(--text-secondary); font-size:0.7em; background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:4px;">${setCat}</span>` : ''}<span style="color:#666; font-size:0.8em;">(${modeName})</span> ${badgeHtml} ${fluenzaObiettivoHtml} ${variantBadgesHtml}
                 </h4>
                 <div style="display:flex; align-items:center; gap:6px;">
                     ${lastNoteHtml}

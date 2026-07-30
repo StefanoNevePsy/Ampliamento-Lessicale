@@ -282,15 +282,26 @@ function renderEditorList() {
 
     const totalItems = state.editingItems.length;
     const activeItems = state.editingItems.filter(i => !i.hidden).length;
+    const editVariant = state._editingVariant || 0;
+    // Counters refer to the variant being edited: a variant is an independent
+    // picture set, so "missing image" / "cut out" must be judged on ITS images.
+    const visible = state.editingItems.filter(i => !i.hidden);
+    const withImg = visible.filter(i => getItemVariantUrl(i, editVariant)).length;
+    const withMask = visible.filter(i => getItemVariantMasked(i, editVariant)).length;
+    const vName = editVariant > 0
+        ? ((state._editingVariantNames || [])[editVariant - 1] || ('Variante ' + editVariant))
+        : 'Base';
 
     const counterHtml = `
-        <div style="position:sticky; top:0; z-index:10; background:#1e1e2f; padding:10px; margin-bottom:10px; border-bottom:1px solid var(--glass-border); display:flex; justify-content:space-between; align-items:center; color:#ccc; font-size:0.9rem;">
+        <div style="position:sticky; top:0; z-index:10; background:#1e1e2f; padding:10px; margin-bottom:10px; border-bottom:1px solid var(--glass-border); display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; color:#ccc; font-size:0.9rem;">
             <span><i class="fa-solid fa-list-ol"></i> Item Attivi: <b style="color:${activeItems >= 20 ? 'var(--success-color)' : 'var(--warning-color)'}">${activeItems}</b> / ${totalItems}</span>
-            <span style="font-size:0.8rem; opacity:0.7;">(Target RAN: ~20)</span>
+            <span style="font-size:0.78rem; display:flex; gap:10px; align-items:center;">
+                <span style="background:rgba(139,92,246,0.18); color:#a78bfa; padding:2px 8px; border-radius:6px;"><i class="fa-solid fa-layer-group" style="font-size:0.7rem;"></i> ${vName}</span>
+                <span title="Item con immagine in questa variante"><i class="fa-solid fa-image" style="opacity:0.7;"></i> <b style="color:${withImg === visible.length ? 'var(--success-color)' : 'var(--warning-color)'}">${withImg}</b>/${visible.length}</span>
+                <span title="Item scontornati in questa variante"><i class="fa-solid fa-eraser" style="opacity:0.7;"></i> <b style="color:${withMask === withImg && withImg > 0 ? 'var(--success-color)' : 'var(--text-secondary)'}">${withMask}</b>/${withImg}</span>
+            </span>
         </div>
     `;
-
-    const editVariant = state._editingVariant || 0;
     const listHtml = state.editingItems.map((item, idx) => {
         const isSelected = state.activeEditorIndex === idx;
         const activeStyle = isSelected ? 'border:1px solid var(--accent-color); background:rgba(99, 102, 241, 0.1);' : 'border:1px solid transparent;';
@@ -306,8 +317,9 @@ function renderEditorList() {
         const hasVariantImg = editVariant > 0 && item.variantUrls && item.variantUrls[editVariant];
         // When "show cut-outs" is on, preview the masked (scontornata) version so
         // the AI/bulk results are visible. Checkerboard makes transparency obvious.
-        const showMasked = state._editorShowMasked && item.maskedUrl;
-        if (showMasked) displayUrl = item.maskedUrl;
+        const itemMasked = getItemVariantMasked(item, editVariant);
+        const showMasked = state._editorShowMasked && itemMasked;
+        if (showMasked) displayUrl = itemMasked;
         const thumbBg = showMasked ? 'background:repeating-conic-gradient(#777 0% 25%, #555 0% 50%) 50%/12px 12px;' : '';
 
         return `
@@ -342,8 +354,8 @@ function renderEditorList() {
             <button class="btn btn-ghost" style="padding:6px;" onclick="triggerAudioUpload(${idx}); event.stopPropagation();" title="Carica Audio">
                 <i class="fa-solid fa-music" style="font-size:0.8rem; ${item.audio ? 'color:var(--success-color)' : 'opacity:0.4'}"></i>
             </button>
-            <button class="btn btn-ghost" style="padding:6px;" onclick="scontornaEditorItem(${idx}); event.stopPropagation();" title="${item.maskedUrl ? 'Scontorno OK (clicca per rifare)' : 'Rimuovi sfondo'}">
-                <i class="fa-solid fa-eraser" style="font-size:0.8rem; ${item.maskedUrl ? 'color:var(--success-color)' : 'opacity:0.4'}"></i>
+            <button class="btn btn-ghost" style="padding:6px;" onclick="scontornaEditorItem(${idx}); event.stopPropagation();" title="${itemMasked ? 'Scontorno OK per «' + vName + '» (clicca per rifare)' : 'Rimuovi sfondo (' + vName + ')'}">
+                <i class="fa-solid fa-eraser" style="font-size:0.8rem; ${itemMasked ? 'color:var(--success-color)' : 'opacity:0.4'}"></i>
             </button>
             <button class="btn btn-ghost" style="padding:6px;" onclick="highlightEditorItem(${idx}); event.stopPropagation();" title="Evidenzia soggetto (resto in bianco e nero)">
                 <i class="fa-solid fa-highlighter" style="font-size:0.8rem; ${item.originalUrl ? 'color:var(--warning-color)' : 'opacity:0.4'}"></i>
@@ -366,11 +378,12 @@ function renderEditorList() {
 // --- SCONTORNO (Background removal) ---
 window.scontornaEditorItem = async (idx) => {
     const item = state.editingItems[idx];
-    if (!item || !item.url) return;
+    const v = state._editingVariant || 0;
+    if (!item || !getItemVariantUrl(item, v)) return;
     if (typeof removeBackground !== 'function') return;
 
-    // Open preview overlay with tolerance slider
-    _openScontornoPreview(item, () => renderEditorList());
+    // Open preview overlay with tolerance slider (acts on the active variant)
+    _openScontornoPreview(item, () => renderEditorList(), v);
 };
 
 // "Front mask" editor: the user paints the FRONT part of a container object
@@ -396,16 +409,17 @@ window.openFrontMaskEditor = (item, onDone) => {
 };
 
 // Manual/AI cutout editor (used by the "advanced" button in the scontorno preview)
-window.openManualCutout = (item, onDone) => {
+window.openManualCutout = (item, onDone, variantIndex) => {
     if (typeof openMaskEditor !== 'function') { alert('Editor non disponibile.'); return; }
+    const v = variantIndex || 0;
+    const vLabel = v > 0 ? ((state._editingVariantNames || [])[v - 1] || ('Variante ' + v)) : 'Base';
     openMaskEditor({
-        imageUrl: item.url,
+        imageUrl: getItemVariantUrl(item, v),
         mode: 'cutout',
-        title: 'Scontorno — ' + (item.label || 'Item'),
-        initialMaskUrl: item.maskedUrl || null,
+        title: 'Scontorno — ' + (item.label || 'Item') + ' · ' + vLabel,
+        initialMaskUrl: getItemVariantMasked(item, v),
         onApply: (result) => {
-            if (result === null) delete item.maskedUrl;
-            else item.maskedUrl = result;
+            setItemVariantMasked(item, v, result || null);
             if (onDone) onDone();
         }
     });
@@ -437,17 +451,21 @@ window.highlightEditorItem = (idx) => {
     });
 };
 
-function _openScontornoPreview(item, onDone) {
+function _openScontornoPreview(item, onDone, variantIndex) {
+    const v = variantIndex || 0;
+    const srcUrl = getItemVariantUrl(item, v);
+    const curMasked = getItemVariantMasked(item, v);
+    const vLabel = v > 0 ? ((state._editingVariantNames || [])[v - 1] || ('Variante ' + v)) : 'Base';
     const tolerance = getScontornoTolerance();
     const overlay = document.createElement('div');
     overlay.className = 'themed-dialog-overlay';
     overlay.innerHTML = `
         <div class="themed-dialog" style="max-width:500px; padding:16px;">
-            <div style="font-weight:bold; margin-bottom:10px;"><i class="fa-solid fa-eraser"></i> Scontorno — ${item.label || 'Item'}</div>
+            <div style="font-weight:bold; margin-bottom:10px;"><i class="fa-solid fa-eraser"></i> Scontorno — ${item.label || 'Item'} <span style="font-size:0.72rem; background:rgba(139,92,246,0.18); color:#a78bfa; padding:1px 7px; border-radius:5px; margin-left:4px;">${vLabel}</span></div>
             <div style="display:flex; gap:10px; margin-bottom:12px;">
                 <div style="flex:1; text-align:center;">
                     <div style="font-size:0.65rem; color:var(--text-secondary); text-transform:uppercase; margin-bottom:4px;">Originale</div>
-                    <img id="sc-preview-orig" src="${item.url}" style="max-width:100%; max-height:200px; object-fit:contain; border-radius:var(--radius-sm); background:repeating-conic-gradient(#808080 0% 25%, transparent 0% 50%) 50%/16px 16px;">
+                    <img id="sc-preview-orig" src="${srcUrl}" style="max-width:100%; max-height:200px; object-fit:contain; border-radius:var(--radius-sm); background:repeating-conic-gradient(#808080 0% 25%, transparent 0% 50%) 50%/16px 16px;">
                 </div>
                 <div style="flex:1; text-align:center;">
                     <div style="font-size:0.65rem; color:var(--text-secondary); text-transform:uppercase; margin-bottom:4px;">Scontornata</div>
@@ -469,7 +487,7 @@ function _openScontornoPreview(item, onDone) {
             </div>
             <div class="themed-dialog-btns">
                 <button class="btn btn-ghost" id="sc-btn-cancel">Annulla</button>
-                <button class="btn btn-ghost" id="sc-btn-clear" style="${item.maskedUrl ? '' : 'display:none;'} color:var(--danger-color);">Rimuovi scontorno</button>
+                <button class="btn btn-ghost" id="sc-btn-clear" style="${curMasked ? '' : 'display:none;'} color:var(--danger-color);">Rimuovi scontorno</button>
                 <button class="btn btn-ghost" id="sc-btn-front" style="color:var(--warning-color);" title="Dipingi la parte davanti: l'oggetto diventa un contenitore per Topologia dentro/fuori"><i class="fa-solid fa-box-open"></i> Contenitore</button>
                 <button class="btn btn-ghost" id="sc-btn-manual" style="color:var(--accent-color);"><i class="fa-solid fa-hand-pointer"></i> Manuale / AI</button>
                 <button class="btn btn-primary" id="sc-btn-apply">Applica</button>
@@ -486,7 +504,7 @@ function _openScontornoPreview(item, onDone) {
 
     const runPreview = async (tol) => {
         resultDiv.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="font-size:1.5rem; color:var(--text-secondary);"></i>';
-        const result = await removeBackground(item.url, tol);
+        const result = await removeBackground(srcUrl, tol);
         currentResult = result;
         if (result) {
             resultDiv.innerHTML = `<img src="${result}" style="max-width:100%; max-height:200px; object-fit:contain;">`;
@@ -497,9 +515,9 @@ function _openScontornoPreview(item, onDone) {
 
     // If a cut-out already exists (e.g. from the AI/bulk models), show THAT first
     // instead of immediately running the colour-based scontorno over it.
-    if (item.maskedUrl) {
-        currentResult = item.maskedUrl;
-        resultDiv.innerHTML = `<img src="${item.maskedUrl}" style="max-width:100%; max-height:200px; object-fit:contain;"><div style="font-size:0.62rem; color:var(--text-muted); margin-top:4px;">Scontorno attuale (AI/manuale). Muovi la tolleranza per rifare quello a colori.</div>`;
+    if (curMasked) {
+        currentResult = curMasked;
+        resultDiv.innerHTML = `<img src="${curMasked}" style="max-width:100%; max-height:200px; object-fit:contain;"><div style="font-size:0.62rem; color:var(--text-muted); margin-top:4px;">Scontorno attuale (AI/manuale). Muovi la tolleranza per rifare quello a colori.</div>`;
     } else {
         runPreview(tolerance);
     }
@@ -515,21 +533,21 @@ function _openScontornoPreview(item, onDone) {
     overlay.querySelector('#sc-btn-cancel').onclick = () => close();
     overlay.querySelector('#sc-btn-manual').onclick = () => {
         close();
-        window.openManualCutout(item, onDone);
+        window.openManualCutout(item, onDone, v);
     };
     overlay.querySelector('#sc-btn-front').onclick = () => {
         close();
         window.openFrontMaskEditor(item, onDone);
     };
     overlay.querySelector('#sc-btn-clear').onclick = () => {
-        delete item.maskedUrl;
+        setItemVariantMasked(item, v, null);
         close();
         if (onDone) onDone();
     };
     overlay.querySelector('#sc-btn-apply').onclick = () => {
         const tol = parseInt(slider.value);
         setScontornoTolerance(tol);
-        if (currentResult) item.maskedUrl = currentResult;
+        if (currentResult) setItemVariantMasked(item, v, currentResult);
         close();
         if (onDone) onDone();
     };
@@ -538,7 +556,8 @@ function _openScontornoPreview(item, onDone) {
 
 window.batchScontornoEditor = async () => {
     if (typeof removeBackground !== 'function') return;
-    const items = state.editingItems.filter(i => i.url && !i.maskedUrl);
+    const v = state._editingVariant || 0;
+    const items = state.editingItems.filter(i => getItemVariantUrl(i, v) && !getItemVariantMasked(i, v));
     if (items.length === 0) return;
 
     const tolerance = getScontornoTolerance();
@@ -547,8 +566,8 @@ window.batchScontornoEditor = async () => {
 
     let done = 0;
     for (const item of items) {
-        const result = await removeBackground(item.url, tolerance);
-        if (result) item.maskedUrl = result;
+        const result = await removeBackground(getItemVariantUrl(item, v), tolerance);
+        if (result) setItemVariantMasked(item, v, result);
         done++;
         if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ' + done + '/' + items.length;
     }
@@ -561,9 +580,13 @@ window.batchScontornoEditor = async () => {
 // between them so memory stays bounded (no all-at-once decode/compose).
 window.aiBatchScontornoEditor = async () => {
     if (typeof aiCutoutDataUrl !== 'function') { alert('Editor AI non disponibile.'); return; }
-    const items = state.editingItems.filter(i => i.url && i.url.startsWith('data:') && !i.maskedUrl);
+    const v = state._editingVariant || 0;
+    const items = state.editingItems.filter(i => {
+        const u = getItemVariantUrl(i, v);
+        return u && u.startsWith('data:') && !getItemVariantMasked(i, v);
+    });
     if (items.length === 0) {
-        alert('Nessuna immagine da scontornare (sono già tutte scontornate, o mancano le immagini).');
+        alert('Nessuna immagine da scontornare in questa variante (sono già tutte scontornate, o mancano le immagini).');
         return;
     }
     const proceed = (typeof themedConfirm === 'function')
@@ -578,8 +601,8 @@ window.aiBatchScontornoEditor = async () => {
         try {
             const pct = (done / items.length) * 100;
             showBackupProgress(`Scontorno AI: ${label} (${done + 1}/${items.length})`, pct);
-            const res = await aiCutoutDataUrl(item.url, (t) => showBackupProgress(`${t} — ${label} (${done + 1}/${items.length})`, pct));
-            if (res) item.maskedUrl = res; else failed++;
+            const res = await aiCutoutDataUrl(getItemVariantUrl(item, v), (t) => showBackupProgress(`${t} — ${label} (${done + 1}/${items.length})`, pct));
+            if (res) setItemVariantMasked(item, v, res); else failed++;
         } catch (e) {
             console.warn('bulk AI scontorno failed for', label, e);
             failed++;
@@ -642,13 +665,15 @@ window.toggleEditorShowMasked = () => {
 // Remove every existing background-removal result in the set, so they can be
 // redone in bulk (e.g. with a different/AI model). Originals stay untouched.
 window.clearAllScontorni = async () => {
-    const items = state.editingItems.filter(i => i.maskedUrl);
-    if (items.length === 0) { alert('Nessuno scontorno da rimuovere.'); return; }
+    const v = state._editingVariant || 0;
+    const vLabel = v > 0 ? ((state._editingVariantNames || [])[v - 1] || ('Variante ' + v)) : 'Base';
+    const items = state.editingItems.filter(i => getItemVariantMasked(i, v));
+    if (items.length === 0) { alert('Nessuno scontorno da rimuovere in «' + vLabel + '».'); return; }
     const proceed = (typeof themedConfirm === 'function')
-        ? await themedConfirm(`Rimuovere lo scontorno da ${items.length} immagini?\nLe immagini originali restano intatte; potrai rifare lo scontorno in bulk.`)
+        ? await themedConfirm(`Rimuovere lo scontorno da ${items.length} immagini della variante «${vLabel}»?\nLe immagini originali restano intatte; potrai rifare lo scontorno in bulk.`)
         : confirm(`Rimuovere lo scontorno da ${items.length} immagini?`);
     if (!proceed) return;
-    items.forEach(i => delete i.maskedUrl);
+    items.forEach(i => setItemVariantMasked(i, v, null));
     renderEditorList();
     alert(`Scontorni rimossi da ${items.length} immagini. Ricorda di salvare il set (o rifai subito il bulk).`);
 };
@@ -1095,6 +1120,41 @@ function getItemVariantUrl(item, variantIndex) {
     return item.url; // fallback to base
 }
 window.getItemVariantUrl = getItemVariantUrl;
+
+// --- Per-variant cut-outs -------------------------------------------------
+// Each variant is a DIFFERENT picture, so it needs its OWN cut-out. Base keeps
+// item.maskedUrl; variants store theirs in item.variantMaskedUrls[index].
+function getItemVariantMasked(item, variantIndex) {
+    if (!item) return null;
+    if (!variantIndex || variantIndex === 0) return item.maskedUrl || null;
+    return (item.variantMaskedUrls && item.variantMaskedUrls[variantIndex]) || null;
+}
+window.getItemVariantMasked = getItemVariantMasked;
+
+function setItemVariantMasked(item, variantIndex, url) {
+    if (!item) return;
+    if (!variantIndex || variantIndex === 0) {
+        if (url) item.maskedUrl = url; else delete item.maskedUrl;
+        return;
+    }
+    if (url) {
+        if (!item.variantMaskedUrls) item.variantMaskedUrls = {};
+        item.variantMaskedUrls[variantIndex] = url;
+    } else if (item.variantMaskedUrls) {
+        delete item.variantMaskedUrls[variantIndex];
+        if (Object.keys(item.variantMaskedUrls).length === 0) delete item.variantMaskedUrls;
+    }
+}
+window.setItemVariantMasked = setItemVariantMasked;
+
+// Resolve the image an item shows for a variant, honouring the cut-out
+// preference — used by the modes at play time.
+function itemVariantDisplayUrl(item, variantIndex) {
+    const masked = getItemVariantMasked(item, variantIndex);
+    if (masked && typeof getUseScontornoEverywhere === 'function' && getUseScontornoEverywhere()) return masked;
+    return getItemVariantUrl(item, variantIndex);
+}
+window.itemVariantDisplayUrl = itemVariantDisplayUrl;
 
 // Helper: set the URL for a specific variant of an item
 function setItemVariantUrl(item, variantIndex, url) {
