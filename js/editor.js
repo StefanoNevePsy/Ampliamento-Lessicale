@@ -286,8 +286,12 @@ function renderEditorList() {
     // Counters refer to the variant being edited: a variant is an independent
     // picture set, so "missing image" / "cut out" must be judged on ITS images.
     const visible = state.editingItems.filter(i => !i.hidden);
-    const withImg = visible.filter(i => getItemVariantUrl(i, editVariant)).length;
-    const withMask = visible.filter(i => getItemVariantMasked(i, editVariant)).length;
+    // NB: getItemVariantUrl() falls back to the base picture, so it can never be
+    // used to count coverage — it would report a variant as complete while the
+    // modes silently play the base images. Ask for the variant's OWN picture.
+    const withImg = visible.filter(i => hasOwnVariantImage(i, editVariant)).length;
+    const withMask = visible.filter(i => hasOwnVariantImage(i, editVariant) && getItemVariantMasked(i, editVariant)).length;
+    const missingInVariant = visible.length - withImg;
     const vName = editVariant > 0
         ? ((state._editingVariantNames || [])[editVariant - 1] || ('Variante ' + editVariant))
         : 'Base';
@@ -300,6 +304,10 @@ function renderEditorList() {
                 <span title="Item con immagine in questa variante"><i class="fa-solid fa-image" style="opacity:0.7;"></i> <b style="color:${withImg === visible.length ? 'var(--success-color)' : 'var(--warning-color)'}">${withImg}</b>/${visible.length}</span>
                 <span title="Item scontornati in questa variante"><i class="fa-solid fa-eraser" style="opacity:0.7;"></i> <b style="color:${withMask === withImg && withImg > 0 ? 'var(--success-color)' : 'var(--text-secondary)'}">${withMask}</b>/${withImg}</span>
             </span>
+            ${editVariant > 0 && missingInVariant > 0 ? `
+            <span style="flex-basis:100%; font-size:0.75rem; background:rgba(245,158,11,0.12); color:var(--warning-color); border:1px solid rgba(245,158,11,0.3); padding:5px 9px; border-radius:8px;">
+                <i class="fa-solid fa-triangle-exclamation"></i> <b>${missingInVariant}</b> item senza immagine propria in questa variante (marcati <b>BASE</b>): nelle attivit&agrave; mostreranno l&rsquo;immagine base.
+            </span>` : ''}
         </div>
     `;
     const listHtml = state.editingItems.map((item, idx) => {
@@ -314,7 +322,14 @@ function renderEditorList() {
 
         // Resolve display URL based on active editing variant
         let displayUrl = getItemVariantUrl(item, editVariant);
-        const hasVariantImg = editVariant > 0 && item.variantUrls && item.variantUrls[editVariant];
+        const hasVariantImg = hasOwnVariantImage(item, editVariant);
+        // The thumbnail falls back to the base picture so the row is never empty —
+        // say so out loud, otherwise a borrowed image reads as a real one.
+        const borrowedBadge = editVariant > 0 && !hasVariantImg
+            ? `<span title="Nessuna immagine per questa variante: in attivit&agrave; verr&agrave; usata quella base"
+                     style="position:absolute; left:2px; top:2px; font-size:0.5rem; font-weight:700; letter-spacing:0.3px;
+                            background:var(--warning-color); color:#000; padding:1px 4px; border-radius:4px;">BASE</span>`
+            : '';
         // When "show cut-outs" is on, preview the masked (scontornata) version so
         // the AI/bulk results are visible. Checkerboard makes transparency obvious.
         const itemMasked = getItemVariantMasked(item, editVariant);
@@ -326,6 +341,7 @@ function renderEditorList() {
         <div class="editor-item" style="${activeStyle} ${opacityStyle} transition:0.2s; cursor:pointer;" onclick="setActiveItem(${idx})">
             <div class="editor-thumb" style="cursor:pointer; position:relative;${thumbBg}${editVariant > 0 && !hasVariantImg ? ' outline:2px dashed var(--warning-color); outline-offset:-2px;' : ''}" onclick="triggerItemUpload(${idx}); event.stopPropagation();" title="Clicca per caricare">
                 <img src="${displayUrl || getPlaceholderUrl(item.label)}" style="width:100%; height:100%; object-fit:${showMasked ? 'contain' : 'cover'}; pointer-events:none;">
+                ${borrowedBadge}
                 <div style="position:absolute; inset:0; background:rgba(0,0,0,0.35); display:flex; justify-content:center; align-items:center; opacity:0;">
                     <i class="fa-solid fa-camera" style="color:#fff;"></i>
                 </div>
@@ -380,6 +396,10 @@ window.scontornaEditorItem = async (idx) => {
     const item = state.editingItems[idx];
     const v = state._editingVariant || 0;
     if (!item || !getItemVariantUrl(item, v)) return;
+    if (v > 0 && !hasOwnVariantImage(item, v)) {
+        alert('Questo item non ha ancora un\'immagine propria in questa variante: caricala prima di scontornarla.');
+        return;
+    }
     if (typeof removeBackground !== 'function') return;
 
     // Open preview overlay with tolerance slider (acts on the active variant)
@@ -412,6 +432,10 @@ window.openFrontMaskEditor = (item, onDone) => {
 window.openManualCutout = (item, onDone, variantIndex) => {
     if (typeof openMaskEditor !== 'function') { alert('Editor non disponibile.'); return; }
     const v = variantIndex || 0;
+    if (v > 0 && !hasOwnVariantImage(item, v)) {
+        alert('Questo item non ha ancora un\'immagine propria in questa variante: caricala prima di scontornarla.');
+        return;
+    }
     const vLabel = v > 0 ? ((state._editingVariantNames || [])[v - 1] || ('Variante ' + v)) : 'Base';
     openMaskEditor({
         imageUrl: getItemVariantUrl(item, v),
@@ -432,6 +456,10 @@ window.highlightEditorItem = (idx) => {
     const v = state._editingVariant || 0;
     const curUrl = getItemVariantUrl(item, v);
     if (!item || !curUrl) { alert('Nessuna immagine da evidenziare.'); return; }
+    if (v > 0 && !hasOwnVariantImage(item, v)) {
+        alert('Questo item non ha ancora un\'immagine propria in questa variante: caricala prima di evidenziarla.');
+        return;
+    }
     if (typeof openMaskEditor !== 'function') { alert('Editor non disponibile.'); return; }
     const vLabel = v > 0 ? ((state._editingVariantNames || [])[v - 1] || ('Variante ' + v)) : 'Base';
     const origForVariant = v > 0 ? (item.variantOriginalUrls && item.variantOriginalUrls[v]) : item.originalUrl;
@@ -574,7 +602,10 @@ function _openScontornoPreview(item, onDone, variantIndex) {
 window.batchScontornoEditor = async () => {
     if (typeof removeBackground !== 'function') return;
     const v = state._editingVariant || 0;
-    const items = state.editingItems.filter(i => getItemVariantUrl(i, v) && !getItemVariantMasked(i, v));
+    // Only items that own a picture in this variant: getItemVariantUrl() would
+    // hand back the BASE image, and we would store a cut-out of the wrong
+    // picture under this variant.
+    const items = state.editingItems.filter(i => hasOwnVariantImage(i, v) && !getItemVariantMasked(i, v));
     if (items.length === 0) return;
 
     const tolerance = getScontornoTolerance();
@@ -599,6 +630,7 @@ window.aiBatchScontornoEditor = async () => {
     if (typeof aiCutoutDataUrl !== 'function') { alert('Editor AI non disponibile.'); return; }
     const v = state._editingVariant || 0;
     const items = state.editingItems.filter(i => {
+        if (!hasOwnVariantImage(i, v)) return false; // never cut out the borrowed base image
         const u = getItemVariantUrl(i, v);
         return u && u.startsWith('data:') && !getItemVariantMasked(i, v);
     });
@@ -641,6 +673,7 @@ window.aiBatchHighlightEditor = async () => {
     if (typeof aiHighlightDataUrl !== 'function') { alert('Editor AI non disponibile.'); return; }
     const hv = state._editingVariant || 0;
     const items = state.editingItems.filter(i => {
+        if (!hasOwnVariantImage(i, hv)) return false; // never edit the borrowed base image
         const u = getItemVariantUrl(i, hv);
         return u && u.startsWith('data:');
     });
@@ -1151,6 +1184,17 @@ function getItemVariantUrl(item, variantIndex) {
     return item.url; // fallback to base
 }
 window.getItemVariantUrl = getItemVariantUrl;
+
+// Does this item have a picture of its OWN for the variant? Use this — never
+// getItemVariantUrl() — whenever the answer drives a count, a badge or a
+// "what's missing" decision: getItemVariantUrl() falls back to the base image,
+// so it answers "will something be shown", not "is this variant covered".
+function hasOwnVariantImage(item, variantIndex) {
+    if (!item) return false;
+    if (!variantIndex || variantIndex === 0) return !!item.url;
+    return !!(item.variantUrls && item.variantUrls[variantIndex]);
+}
+window.hasOwnVariantImage = hasOwnVariantImage;
 
 // --- Per-variant cut-outs -------------------------------------------------
 // Each variant is a DIFFERENT picture, so it needs its OWN cut-out. Base keeps
