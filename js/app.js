@@ -275,7 +275,7 @@ function _isZipSignature(data) {
 function _showImportToast(message) {
     // Create a toast notification
     const toast = document.createElement('div');
-    toast.style.cssText = 'position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:var(--success-color, #22c55e); color:#fff; padding:12px 24px; border-radius:12px; font-size:0.9rem; font-weight:600; z-index:99999; box-shadow:0 4px 20px rgba(0,0,0,0.3); text-align:center; max-width:90vw; animation:slideUp 0.3s ease;';
+    toast.style.cssText = 'position:fixed; bottom:80px; left:50%; transform:translateX(-50%); background:var(--success-color, #22c55e); color:#fff; padding:12px 24px; border-radius:12px; font-size:0.9rem; font-weight:600; z-index:99999; box-shadow:0 4px 20px rgba(var(--shadow-rgb),0.3); text-align:center; max-width:90vw; animation:slideUp 0.3s ease;';
     toast.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${message}`;
     document.body.appendChild(toast);
 
@@ -388,7 +388,7 @@ function renderPoolTagSelector() {
         const isSelected = state.selectedPoolTags.includes(tag);
         const count = tagCounts[tag];
         return `<span class="tag-chip" style="cursor:pointer; font-size:0.75rem; padding:4px 10px;
-                    ${isSelected ? 'background:rgba(99,102,241,0.3); border-color:var(--accent-color); color:white;' : ''}"
+                    ${isSelected ? 'background:rgba(99,102,241,0.3); border-color:var(--accent-color); color:var(--text-primary);' : ''}"
                     onclick="togglePoolTag('${tag}')">
                     ${isSelected ? '<i class="fa-solid fa-check" style="font-size:0.6rem;"></i> ' : ''}${tag}
                     <span style="opacity:0.6; font-size:0.65rem;">(${count})</span>
@@ -710,15 +710,7 @@ window.loadSelectedSet = async (setId) => {
             state._sfVariantIndex = 0; // Reset variant on set switch
             let playItems = state.items.filter(i => !i.hidden);
             // Apply active variant URLs
-            const activeVariant = parseInt(document.getElementById('variant-select').value) || 0;
-            if (activeVariant > 0 && typeof getItemVariantUrl === 'function') {
-                playItems = playItems.map(item => {
-                    const varUrl = getItemVariantUrl(item, activeVariant);
-                    // Each variant carries its OWN cut-out (never the base one)
-                    if (varUrl && varUrl !== item.url) return { ...item, url: varUrl, maskedUrl: getItemVariantMasked(item, activeVariant) || undefined, _originalUrl: item.url };
-                    return item;
-                });
-            }
+            playItems = _applyVariantToItems(playItems, activeVariantIndex());
             state.session.playItems = playItems;
             renderGameMode(mode, playItems);
         } else {
@@ -1332,17 +1324,7 @@ window.startGame = () => {
     }
 
     // Apply active variant URLs to play items
-    const activeVariant = parseInt(document.getElementById('variant-select').value) || 0;
-    if (activeVariant > 0 && typeof getItemVariantUrl === 'function') {
-        playItems = playItems.map(item => {
-            const varUrl = getItemVariantUrl(item, activeVariant);
-            if (varUrl && varUrl !== item.url) {
-                // Each variant carries its OWN cut-out (never the base one)
-                return { ...item, url: varUrl, maskedUrl: getItemVariantMasked(item, activeVariant) || undefined, _originalUrl: item.url };
-            }
-            return item;
-        });
-    }
+    playItems = _applyVariantToItems(playItems, activeVariantIndex());
 
     state.tactIndex = 0;
     state.ranIndex = 0;
@@ -1664,8 +1646,27 @@ function updateScoreUI() {
 }
 
 // --- SESSION TYPE SELECTOR ---
+// Two states only: a toggle button reads better than a dropdown, and carries
+// the colour of the active mode (green = independent, orange = time delay).
+window.toggleSessionType = () => {
+    const field = document.getElementById('session-type-select');
+    if (!field) return;
+    field.value = field.value === 'timedelay' ? 'independent' : 'timedelay';
+    window.onSessionTypeChange();
+};
+
 window.onSessionTypeChange = () => {
     const type = document.getElementById('session-type-select').value;
+    const toggle = document.getElementById('session-type-toggle');
+    if (toggle) {
+        const isTD = type === 'timedelay';
+        toggle.innerHTML = isTD
+            ? '<i class="fa-solid fa-hourglass-half"></i> Time Delay'
+            : '<i class="fa-solid fa-user-check"></i> Indipendente';
+        toggle.style.background = isTD ? 'rgba(245,158,11,0.18)' : 'rgba(16,185,129,0.15)';
+        toggle.style.color = isTD ? 'var(--warning-color)' : 'var(--success-color)';
+        toggle.style.borderColor = isTD ? 'rgba(245,158,11,0.45)' : 'rgba(16,185,129,0.4)';
+    }
     const tdWrapper = document.getElementById('td-seconds-wrapper');
     const btnX = document.getElementById('btn-score-x');
     const timerWrapper = document.getElementById('td-timer-wrapper');
@@ -1688,6 +1689,13 @@ function getSelectedSessionType() {
     const sel = document.getElementById('session-type-select');
     return sel ? sel.value : 'independent';
 }
+
+window.stepTDSeconds = (delta) => {
+    const input = document.getElementById('td-seconds-ctrl');
+    if (!input) return;
+    const cur = parseInt(input.value) || 5;
+    input.value = Math.max(1, Math.min(30, cur + delta));
+};
 
 function getSelectedTDSeconds() {
     const input = document.getElementById('td-seconds-ctrl');
@@ -2345,16 +2353,16 @@ function renderLibCard(s, idxInCat, catLength) {
 
     if (s.coverImage) {
         // A custom cover always wins over the auto-generated 4-image preview.
-        previewHtml = `<div style="height:120px; border-radius:8px; overflow:hidden; background:rgba(0,0,0,0.3); margin-bottom:8px;">
+        previewHtml = `<div style="height:120px; border-radius:8px; overflow:hidden; background:rgba(var(--shade-rgb),0.3); margin-bottom:8px;">
             <img src="${s.coverImage}" loading="lazy" alt="" style="width:100%; height:100%; object-fit:cover;">
         </div>`;
     } else if (previews.length > 0) {
-        previewHtml = `<div class="lib-preview-grid" style="display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:2px; height:120px; border-radius:8px; overflow:hidden; background:rgba(0,0,0,0.3); margin-bottom:8px;">
+        previewHtml = `<div class="lib-preview-grid" style="display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:2px; height:120px; border-radius:8px; overflow:hidden; background:rgba(var(--shade-rgb),0.3); margin-bottom:8px;">
             ${previews.map(i => `<img src="${i.url}" style="width:100%; height:100%; object-fit:cover;">`).join('')}
-            ${previews.length < 4 ? Array(4 - previews.length).fill('<div style="background:rgba(255,255,255,0.05);"></div>').join('') : ''}
+            ${previews.length < 4 ? Array(4 - previews.length).fill('<div style="background:rgba(var(--ink-rgb),0.05);"></div>').join('') : ''}
         </div>`;
     } else {
-        previewHtml = `<div style="height:120px; background:rgba(0,0,0,0.2); border-radius:8px; display:flex; align-items:center; justify-content:center; color:#666; font-size:0.8rem; margin-bottom:8px; flex-direction:column; gap:5px;">
+        previewHtml = `<div style="height:120px; background:rgba(var(--shade-rgb),0.2); border-radius:8px; display:flex; align-items:center; justify-content:center; color:#666; font-size:0.8rem; margin-bottom:8px; flex-direction:column; gap:5px;">
             <i class="fa-solid fa-image fa-2x" style="opacity:0.3"></i>
             <span>No Img</span>
         </div>`;
@@ -2384,10 +2392,10 @@ function renderLibCard(s, idxInCat, catLength) {
     let reorderHtml = '';
     if (idxInCat !== undefined && catLength !== undefined) {
         reorderHtml = `<div style="position:absolute; top:6px; right:6px; display:flex; gap:2px; z-index:2;">
-            <button onclick="event.stopPropagation(); moveSetInCategory('${s.id}',-1)" style="width:24px; height:24px; border:1px solid var(--glass-border); border-radius:6px; background:rgba(0,0,0,0.4); color:${idxInCat > 0 ? 'var(--text-secondary)' : '#333'}; cursor:${idxInCat > 0 ? 'pointer' : 'default'}; font-size:0.6rem; display:flex; align-items:center; justify-content:center;" title="Sposta su" ${idxInCat === 0 ? 'disabled' : ''}>
+            <button onclick="event.stopPropagation(); moveSetInCategory('${s.id}',-1)" style="width:24px; height:24px; border:1px solid var(--glass-border); border-radius:6px; background:rgba(var(--shade-rgb),0.4); color:${idxInCat > 0 ? 'var(--text-secondary)' : '#333'}; cursor:${idxInCat > 0 ? 'pointer' : 'default'}; font-size:0.6rem; display:flex; align-items:center; justify-content:center;" title="Sposta su" ${idxInCat === 0 ? 'disabled' : ''}>
                 <i class="fa-solid fa-arrow-left"></i>
             </button>
-            <button onclick="event.stopPropagation(); moveSetInCategory('${s.id}',1)" style="width:24px; height:24px; border:1px solid var(--glass-border); border-radius:6px; background:rgba(0,0,0,0.4); color:${idxInCat < catLength - 1 ? 'var(--text-secondary)' : '#333'}; cursor:${idxInCat < catLength - 1 ? 'pointer' : 'default'}; font-size:0.6rem; display:flex; align-items:center; justify-content:center;" title="Sposta giù" ${idxInCat >= catLength - 1 ? 'disabled' : ''}>
+            <button onclick="event.stopPropagation(); moveSetInCategory('${s.id}',1)" style="width:24px; height:24px; border:1px solid var(--glass-border); border-radius:6px; background:rgba(var(--shade-rgb),0.4); color:${idxInCat < catLength - 1 ? 'var(--text-secondary)' : '#333'}; cursor:${idxInCat < catLength - 1 ? 'pointer' : 'default'}; font-size:0.6rem; display:flex; align-items:center; justify-content:center;" title="Sposta giù" ${idxInCat >= catLength - 1 ? 'disabled' : ''}>
                 <i class="fa-solid fa-arrow-right"></i>
             </button>
         </div>`;
@@ -2781,7 +2789,7 @@ function renderActivityLayoutBody() {
         const _tc = getThemeGroupColors();
         const groupColor = (_editingLayout.groupColors[gi]) || _tc[gi % _tc.length];
         html += `
-        <div style="background:rgba(0,0,0,0.2); border-radius:12px; padding:12px; margin-bottom:10px; border:1px solid rgba(255,255,255,0.08); border-left:3px solid ${groupColor};">
+        <div style="background:rgba(var(--shade-rgb),0.2); border-radius:12px; padding:12px; margin-bottom:10px; border:1px solid rgba(var(--ink-rgb),0.08); border-left:3px solid ${groupColor};">
             <div style="display:flex; gap:6px; align-items:center; margin-bottom:8px; flex-wrap:wrap;">
                 <div style="display:flex; flex-direction:column; gap:2px;">
                     <button class="btn btn-ghost" onclick="moveGroupUp(${gi})" style="padding:1px 7px; font-size:0.65rem;" ${gi === 0 ? 'disabled style="padding:1px 7px; font-size:0.65rem; opacity:0.3;"' : ''}>&#9650;</button>
@@ -2809,7 +2817,7 @@ function renderActivityLayoutBody() {
                 ? `<option value="${idx}">${g.name || '(Principale)'}</option>` : '').filter(Boolean).join('');
 
             html += `
-                <div style="display:flex; align-items:center; gap:5px; padding:5px 6px; background:rgba(255,255,255,0.03); border-radius:8px; ${isCustom ? 'border-left:3px solid var(--accent-color);' : ''}">
+                <div style="display:flex; align-items:center; gap:5px; padding:5px 6px; background:rgba(var(--ink-rgb),0.03); border-radius:8px; ${isCustom ? 'border-left:3px solid var(--accent-color);' : ''}">
                     <button class="btn btn-ghost" onclick="openModeIconPicker('${mode}')" style="width:32px; height:32px; padding:0; font-size:0.9rem; color:${groupColor}; display:flex; align-items:center; justify-content:center; border-radius:6px;" title="Cambia icona">
                         <i class="fa-solid ${modeIconClass}"></i>
                     </button>
@@ -2879,7 +2887,7 @@ window.openAddCustomMode = () => {
 
     const html = `
     <div style="position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:20000; display:flex; align-items:center; justify-content:center; padding:20px;" id="custom-mode-overlay">
-        <div style="background:#1e1e2f; border-radius:16px; padding:20px; max-width:400px; width:100%; border:1px solid rgba(255,255,255,0.1);">
+        <div style="background:var(--modal-bg); border-radius:16px; padding:20px; max-width:400px; width:100%; border:1px solid rgba(var(--ink-rgb),0.1);">
             <h3 style="margin:0 0 15px 0;"><i class="fa-solid fa-plus-circle"></i> Nuova Attivit&agrave; Personalizzata</h3>
             <label style="font-size:0.8rem; color:#aaa;">Nome</label>
             <input type="text" id="custom-mode-name" placeholder="es. Scena Azioni" style="margin-bottom:10px; font-size:1rem;">
@@ -2926,14 +2934,14 @@ window.deleteCustomMode = async (modeKey, gi, mi) => {
 window.openModeIconPicker = (modeKey) => {
     const currentIcon = (_editingLayout.modeIcons && _editingLayout.modeIcons[modeKey]) || MODE_ICONS[getModeEngine(modeKey)] || 'fa-puzzle-piece';
     const iconsHtml = FA_ICON_CHOICES.map(ic =>
-        `<button onclick="selectModeIcon('${modeKey}','${ic}')" style="width:40px; height:40px; display:inline-flex; align-items:center; justify-content:center; border:1px solid ${ic === currentIcon ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)'}; border-radius:8px; background:${ic === currentIcon ? 'rgba(99,102,241,0.25)' : 'rgba(255,255,255,0.03)'}; color:${ic === currentIcon ? 'var(--accent-color)' : '#ccc'}; cursor:pointer; font-size:1rem; transition:all 0.15s;" onmouseover="this.style.background='rgba(99,102,241,0.15)'" onmouseout="this.style.background='${ic === currentIcon ? 'rgba(99,102,241,0.25)' : 'rgba(255,255,255,0.03)'}'" title="${ic}">
+        `<button onclick="selectModeIcon('${modeKey}','${ic}')" style="width:40px; height:40px; display:inline-flex; align-items:center; justify-content:center; border:1px solid ${ic === currentIcon ? 'var(--accent-color)' : 'rgba(var(--ink-rgb),0.1)'}; border-radius:8px; background:${ic === currentIcon ? 'rgba(99,102,241,0.25)' : 'rgba(var(--ink-rgb),0.03)'}; color:${ic === currentIcon ? 'var(--accent-color)' : '#ccc'}; cursor:pointer; font-size:1rem; transition:all 0.15s;" onmouseover="this.style.background='rgba(99,102,241,0.15)'" onmouseout="this.style.background='${ic === currentIcon ? 'rgba(99,102,241,0.25)' : 'rgba(var(--ink-rgb),0.03)'}'" title="${ic}">
             <i class="fa-solid ${ic}"></i>
         </button>`
     ).join('');
 
     const html = `
     <div style="position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:20000; display:flex; align-items:center; justify-content:center; padding:20px;" id="icon-picker-overlay" onclick="if(event.target===this)this.remove()">
-        <div style="background:#1e1e2f; border-radius:16px; padding:20px; max-width:500px; width:100%; max-height:80vh; overflow-y:auto; border:1px solid rgba(255,255,255,0.1);">
+        <div style="background:var(--modal-bg); border-radius:16px; padding:20px; max-width:500px; width:100%; max-height:80vh; overflow-y:auto; border:1px solid rgba(var(--ink-rgb),0.1);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                 <h3 style="margin:0;"><i class="fa-solid fa-icons"></i> Scegli Icona</h3>
                 <button class="btn btn-ghost" onclick="selectModeIcon('${modeKey}','')" style="font-size:0.75rem; padding:4px 10px;">
@@ -3118,6 +3126,31 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // --- VARIANT SELECTOR ---
+function activeVariantIndex() {
+    const el = document.getElementById('variant-select');
+    return parseInt(el && el.value) || 0;
+}
+window.activeVariantIndex = activeVariantIndex;
+
+// Swap in a variant's own picture AND its own cut-out. An item is switched over
+// only when the variant really owns a picture for it — never by comparing URLs:
+// two variants may legitimately share the same picture while having different
+// cut-outs, and then a comparison would silently keep the base cut-out.
+// Items the variant doesn't cover keep the base picture, cut-out included.
+function _applyVariantToItems(items, variantIndex) {
+    if (!variantIndex || typeof hasOwnVariantImage !== 'function') return items;
+    return items.map(item => {
+        if (!hasOwnVariantImage(item, variantIndex)) return item;
+        return {
+            ...item,
+            url: getItemVariantUrl(item, variantIndex),
+            maskedUrl: getItemVariantMasked(item, variantIndex) || undefined,
+            _originalUrl: item.url,
+        };
+    });
+}
+window._applyVariantToItems = _applyVariantToItems;
+
 function _updateVariantSelector() {
     const wrapper = document.getElementById('variant-selector-wrapper');
     const select = document.getElementById('variant-select');
@@ -3135,14 +3168,26 @@ function _updateVariantSelector() {
             opt.textContent = name;
             select.appendChild(opt);
         });
+        // Rebuilding the options resets the widget to the first one, so restore the
+        // clinician's choice — but only if it belongs to the set still on screen and
+        // that variant still exists.
+        const keep = state._variantSetId === state.activeSetId ? (state._variantIndex || 0) : 0;
+        select.value = String(keep >= 0 && keep <= variantNames.length ? keep : 0);
+        state._variantIndex = parseInt(select.value) || 0;
+        state._variantSetId = state.activeSetId;
     } else {
         wrapper.classList.add('hidden');
         select.innerHTML = '<option value="0">Base</option>';
         select.value = '0';
+        state._variantIndex = 0;
+        state._variantSetId = state.activeSetId;
     }
 }
 
 window.onVariantChange = () => {
+    const select = document.getElementById('variant-select');
+    state._variantIndex = parseInt(select && select.value) || 0;
+    state._variantSetId = state.activeSetId;
     window.startGame();
 };
 
@@ -3264,10 +3309,10 @@ window.openVisualPromptConfig = () => {
         const preview = p.image
             ? `<img src="${p.image}" style="width:36px;height:36px;border-radius:8px;object-fit:cover;" alt="">`
             : `<div style="width:36px;height:36px;border-radius:8px;background:${p.color}20;display:flex;align-items:center;justify-content:center;"><i class="fa-solid ${p.icon}" style="color:${p.color};font-size:1rem;"></i></div>`;
-        return `<div style="display:flex; align-items:center; gap:10px; padding:8px; background:rgba(255,255,255,0.03); border-radius:8px; margin-bottom:6px;">
+        return `<div style="display:flex; align-items:center; gap:10px; padding:8px; background:rgba(var(--ink-rgb),0.03); border-radius:8px; margin-bottom:6px;">
             <label style="display:flex; align-items:center;"><input type="checkbox" ${p.enabled ? 'checked' : ''} onchange="vpbToggleEnabled(${i}, this.checked)"></label>
             ${preview}
-            <input type="text" value="${p.label}" onchange="vpbChangeLabel(${i}, this.value)" style="flex:1; padding:4px 8px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.3); color:white; font-size:0.85rem;">
+            <input type="text" value="${p.label}" onchange="vpbChangeLabel(${i}, this.value)" style="flex:1; padding:4px 8px; border-radius:6px; border:1px solid rgba(var(--ink-rgb),0.15); background:rgba(var(--shade-rgb),0.3); color:var(--text-primary); font-size:0.85rem;">
             <input type="color" value="${p.color}" onchange="vpbChangeColor(${i}, this.value)" style="width:30px; height:30px; border:none; border-radius:6px; cursor:pointer;">
             <button class="btn-icon" style="width:28px; height:28px; font-size:0.7rem; color:#10b981;" onclick="vpbSearchArasaac(${i})" title="Cerca pittogramma ARASAAC"><i class="fa-solid fa-icons"></i></button>
             <button class="btn-icon" style="width:28px; height:28px; font-size:0.7rem; color:var(--accent-color);" onclick="vpbUploadImage(${i})" title="Carica immagine"><i class="fa-solid fa-image"></i></button>
@@ -3277,7 +3322,7 @@ window.openVisualPromptConfig = () => {
     }).join('');
 
     modal.innerHTML = `
-    <div style="width:100%; max-width:500px; background:#1e1e2f; border-radius:16px; border:1px solid var(--glass-border); padding:22px; max-height:90vh; overflow-y:auto;">
+    <div style="width:100%; max-width:500px; background:var(--modal-bg); border-radius:16px; border:1px solid var(--glass-border); padding:22px; max-height:90vh; overflow-y:auto;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
             <h3 style="margin:0; color:var(--accent-color);"><i class="fa-solid fa-hand-pointer"></i> Prompt Visivi</h3>
             <button class="btn btn-ghost" onclick="document.getElementById('vpb-config-modal').remove()" style="padding:6px 10px;"><i class="fa-solid fa-xmark"></i></button>
@@ -3368,13 +3413,13 @@ window.vpbSearchArasaac = (idx) => {
     modal.id = 'vpb-arasaac-modal';
     modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:26000; display:flex; align-items:center; justify-content:center; padding:20px;';
     modal.innerHTML = `
-    <div style="width:100%; max-width:460px; background:#1e1e2f; border-radius:16px; border:1px solid var(--glass-border); padding:20px; max-height:85vh; overflow-y:auto;">
+    <div style="width:100%; max-width:460px; background:var(--modal-bg); border-radius:16px; border:1px solid var(--glass-border); padding:20px; max-height:85vh; overflow-y:auto;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
             <h3 style="margin:0; color:#10b981; font-size:1rem;"><i class="fa-solid fa-icons"></i> Pittogramma ARASAAC</h3>
             <button class="btn btn-ghost" onclick="document.getElementById('vpb-arasaac-modal').remove()" style="padding:6px 10px;"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div style="display:flex; gap:6px; margin-bottom:10px;">
-            <input type="text" id="vpb-arasaac-query" value="${(defaultQuery || '').replace(/"/g, '&quot;')}" placeholder="Cerca..." onkeydown="if(event.key==='Enter')vpbRunArasaacSearch(${idx})" style="flex:1; padding:9px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white;">
+            <input type="text" id="vpb-arasaac-query" value="${(defaultQuery || '').replace(/"/g, '&quot;')}" placeholder="Cerca..." onkeydown="if(event.key==='Enter')vpbRunArasaacSearch(${idx})" style="flex:1; padding:9px; border-radius:8px; background:rgba(var(--shade-rgb),0.3); border:1px solid var(--glass-border); color:var(--text-primary);">
             <button class="btn ai-arasaac-btn" onclick="vpbAiArasaacSearch(${idx})" style="padding:9px 12px; background:rgba(168,85,247,0.15); border:1px solid rgba(168,85,247,0.4); border-radius:8px; color:#a855f7; cursor:pointer;" title="Ottimizza con AI"><i class="fa-solid fa-wand-magic-sparkles"></i></button>
             <button class="btn btn-primary" onclick="vpbRunArasaacSearch(${idx})" style="padding:9px 14px;"><i class="fa-solid fa-search"></i></button>
         </div>
@@ -3567,7 +3612,7 @@ function renderNotebookPanel() {
     ${savedLists.length > 0 ? `
     <div style="display:flex; gap:6px; margin-bottom:10px; align-items:center;">
         <i class="fa-solid fa-folder-open" style="color:var(--accent-color); font-size:0.8rem;"></i>
-        <select id="side-q-load" onchange="loadSideQuadernoList(this.value); this.value='';" style="flex:1; padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.8rem;" title="Carica gli item di una lista salvata (i duplicati vengono saltati)">
+        <select id="side-q-load" onchange="loadSideQuadernoList(this.value); this.value='';" style="flex:1; padding:8px; border-radius:8px; background:var(--input-bg); border:1px solid var(--glass-border); color:white; font-size:0.8rem;" title="Carica gli item di una lista salvata (i duplicati vengono saltati)">
             <option value="">Carica lista salvata...</option>
             ${loadOptsHtml}
         </select>
@@ -3582,17 +3627,17 @@ function renderNotebookPanel() {
     </div>
 
     <div style="display:flex; gap:6px; margin-top:10px; align-items:center; flex-wrap:wrap;">
-        <input list="side-q-names" type="text" id="side-q-new" placeholder="Nome item..." onkeydown="if(event.key==='Enter')addSideQuadernoRow()" autocomplete="off" style="flex:1; min-width:100px; padding:9px 10px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.85rem;">
+        <input list="side-q-names" type="text" id="side-q-new" placeholder="Nome item..." onkeydown="if(event.key==='Enter')addSideQuadernoRow()" autocomplete="off" style="flex:1; min-width:100px; padding:9px 10px; border-radius:8px; background:rgba(var(--shade-rgb),0.3); border:1px solid var(--glass-border); color:var(--text-primary); font-size:0.85rem;">
         <button class="btn btn-primary" onclick="addSideQuadernoRow()" style="padding:9px 14px;"><i class="fa-solid fa-plus"></i></button>
     </div>
 
     <div style="display:flex; gap:6px; margin-top:8px; align-items:center; flex-wrap:wrap;">
         <span style="font-size:0.7rem; color:var(--text-secondary);">Tipo predefinito:</span>
-        <select id="side-q-type" onchange="setSideQuadernoType(this.value)" style="flex:1; padding:8px; border-radius:8px; background:#2a2a40; border:1px solid var(--glass-border); color:white; font-size:0.8rem;" title="Tipo predefinito per nuovi item">
+        <select id="side-q-type" onchange="setSideQuadernoType(this.value)" style="flex:1; padding:8px; border-radius:8px; background:var(--input-bg); border:1px solid var(--glass-border); color:white; font-size:0.8rem;" title="Tipo predefinito per nuovi item">
             <option value="independent" ${!isTD ? 'selected' : ''}>Indipendente</option>
             <option value="timedelay" ${isTD ? 'selected' : ''}>Time Delay</option>
         </select>
-        ${isTD ? `<input type="number" id="side-q-td" value="${sq.tdSeconds || 5}" min="1" max="30" onchange="state._sideQuaderno.tdSeconds=parseInt(this.value)||5; _saveSideQuaderno();" style="width:55px; padding:8px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.8rem; text-align:center;">` : ''}
+        ${isTD ? `<input type="number" id="side-q-td" value="${sq.tdSeconds || 5}" min="1" max="30" onchange="state._sideQuaderno.tdSeconds=parseInt(this.value)||5; _saveSideQuaderno();" style="width:55px; padding:8px; border-radius:8px; background:rgba(var(--shade-rgb),0.3); border:1px solid var(--glass-border); color:var(--text-primary); font-size:0.8rem; text-align:center;">` : ''}
     </div>
 
     <div style="display:flex; gap:6px; margin-top:14px;">
@@ -3624,12 +3669,12 @@ function _renderSideQuadernoRow(row, idx, isTD) {
             </div>`;
 
     return `
-    <div style="display:flex; flex-direction:column; gap:6px; padding:10px; margin-bottom:7px; background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); border-radius:12px;">
+    <div style="display:flex; flex-direction:column; gap:6px; padding:10px; margin-bottom:7px; background:rgba(var(--ink-rgb),0.05); border:1px solid var(--glass-border); border-radius:12px;">
         <div style="display:flex; align-items:center; gap:6px;">
             <span style="flex:1; font-size:0.9rem; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${row.name}</span>
             <button onclick="toggleSideQuadernoRowType(${idx})" style="padding:2px 8px; border-radius:6px; border:1px solid ${rowIsTD ? 'var(--warning-color)' : 'rgba(99,102,241,0.5)'}; background:${rowIsTD ? 'rgba(245,158,11,0.15)' : 'rgba(99,102,241,0.1)'}; color:${rowIsTD ? 'var(--warning-color)' : 'var(--accent-color)'}; font-size:0.65rem; font-weight:bold; cursor:pointer; white-space:nowrap;" title="Cambia tipo sessione">${rowIsTD ? 'TD' : 'IND'}</button>
             <span style="background:rgba(99,102,241,0.2); color:var(--accent-color); padding:2px 8px; border-radius:6px; font-size:0.75rem; font-weight:bold;" title="Totale LU">${total}</span>
-            <button onclick="sideQuadernoUndo(${idx})" style="width:28px; height:28px; border-radius:8px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.05); color:var(--text-secondary); cursor:pointer; font-size:0.7rem;" title="Annulla ultimo" ${total === 0 ? 'disabled' : ''}><i class="fa-solid fa-rotate-left"></i></button>
+            <button onclick="sideQuadernoUndo(${idx})" style="width:28px; height:28px; border-radius:8px; border:1px solid var(--glass-border); background:rgba(var(--ink-rgb),0.05); color:var(--text-secondary); cursor:pointer; font-size:0.7rem;" title="Annulla ultimo" ${total === 0 ? 'disabled' : ''}><i class="fa-solid fa-rotate-left"></i></button>
             <button onclick="sideQuadernoRemoveRow(${idx})" style="width:28px; height:28px; border-radius:8px; border:none; background:transparent; color:#666; cursor:pointer; font-size:0.75rem;" title="Rimuovi"><i class="fa-solid fa-trash"></i></button>
         </div>
         <div style="display:flex; gap:10px; justify-content:center;">

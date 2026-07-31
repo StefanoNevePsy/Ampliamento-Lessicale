@@ -80,7 +80,7 @@
 
         shown.forEach(p => {
             const cell = document.createElement('div');
-            cell.style.cssText = `border-radius:10px; padding:6px 8px 4px; ${s.bg !== 'transparent' ? 'background:' + s.bg + ';' : 'background:rgba(255,255,255,0.02);'} border:1px solid ${s.grid};`;
+            cell.style.cssText = `border-radius:10px; padding:6px 8px 4px; ${s.bg !== 'transparent' ? 'background:' + s.bg + ';' : 'background:rgba(var(--ink-rgb),0.02);'} border:1px solid ${s.grid};`;
             const fullName = p.g.setName;
             const name = fullName.length > 18 ? fullName.slice(0, 17) + '…' : fullName;
             const modeLbl = p.g.mode + (p.g.sessionType === 'timedelay' ? ' · TD' : '');
@@ -150,7 +150,7 @@
         svgEl('path', { d: areaTop, fill: 'none', stroke: s.p, 'stroke-width': 2, opacity: 0.9 }, svg);
 
         rates.forEach((r, i) => {
-            const c = svgEl('circle', { cx: xAt(i), cy: yAt(r.rate), r: 3, fill: pctSkinColor(100 - r.rate, s), stroke: s.bg === 'transparent' ? '#1e1e2f' : s.bg, 'stroke-width': 1 }, svg);
+            const c = svgEl('circle', { cx: xAt(i), cy: yAt(r.rate), r: 3, fill: pctSkinColor(100 - r.rate, s), stroke: s.bg === 'transparent' ? 'var(--modal-bg)' : s.bg, 'stroke-width': 1 }, svg);
             _title(c, `${formatDateEU(r.date + 'T00:00:00')}\nQuota di aiuto: ${Math.round(r.rate)}%`);
             if (i % Math.ceil(n / 8 || 1) === 0)
                 svgEl('text', { x: xAt(i), y: h - pad.b + 14, 'text-anchor': 'middle', 'font-size': 7.5, fill: s.textDim, text: r.date.slice(8) + '/' + r.date.slice(5, 7) }, svg);
@@ -262,7 +262,7 @@
 
         shown.forEach(act => {
             const cell = document.createElement('div');
-            cell.style.cssText = `border-radius:10px; padding:8px; ${s.bg !== 'transparent' ? 'background:' + s.bg + ';' : 'background:rgba(255,255,255,0.02);'} border:1px solid ${s.grid};`;
+            cell.style.cssText = `border-radius:10px; padding:8px; ${s.bg !== 'transparent' ? 'background:' + s.bg + ';' : 'background:rgba(var(--ink-rgb),0.02);'} border:1px solid ${s.grid};`;
             const title = document.createElement('div');
             title.style.cssText = 'font-size:0.76rem; font-weight:700; text-align:center; margin-bottom:4px; color:var(--text-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
             title.title = `${act.setName} · ${act.mode}`;
@@ -368,7 +368,7 @@
             _title(lbl, `${g.setName} (${g.mode}${g.sessionType === 'timedelay' ? ' · Time Delay' : ''})`);
             cellData[ri].forEach((cv, ci) => {
                 const x = ci * cellW, y = topH + ri * cellH;
-                const fill = cv ? pctSkinColor(cv.pct, s) : (s.organic ? 'rgba(120,100,80,0.06)' : 'rgba(255,255,255,0.04)');
+                const fill = cv ? pctSkinColor(cv.pct, s) : (s.organic ? 'rgba(120,100,80,0.06)' : 'rgba(var(--ink-rgb),0.04)');
                 const rect = svgEl('rect', { x: x + 1, y: y + 1, width: cellW - 2, height: cellH - 2, rx: 3, fill }, svg);
                 if (cv) _title(rect, `${g.setName}\n${colLabel(colKeys[ci])}\n${cv.pct}% (${cv.n} sedut${cv.n === 1 ? 'a' : 'e'})`);
             });
@@ -448,7 +448,7 @@
                 const cy = i * rowH + rowH / 2;
                 const cx = 24 + (s.organic ? Math.sin(cy * 0.05) * 3 : 0);
                 if (s.organic) svgEl('circle', { cx: cx.toFixed(1), cy, r: 9, fill: s.good, opacity: 0.16 }, lineSvg);
-                const node = svgEl('circle', { cx: cx.toFixed(1), cy, r: s.organic ? 5.5 : 5, fill: s.good, stroke: s.bg === 'transparent' ? '#1e1e2f' : s.bg, 'stroke-width': 1.4 }, lineSvg);
+                const node = svgEl('circle', { cx: cx.toFixed(1), cy, r: s.organic ? 5.5 : 5, fill: s.good, stroke: s.bg === 'transparent' ? 'var(--modal-bg)' : s.bg, 'stroke-width': 1.4 }, lineSvg);
                 _title(node, `${m.setName}\n${formatDateEU(m.date)}\nin ${m.sessionsToCriterion} sedute`);
             });
 
@@ -473,7 +473,7 @@
             list.style.cssText = 'display:flex; flex-direction:column; gap:5px;';
             inProgress.slice().sort((a, b) => b.lastPct - a.lastPct).slice(0, 8).forEach(ip => { // closest to the goal first
                 const row = document.createElement('div');
-                row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:0.76rem; padding:4px 8px; border-radius:8px; background:rgba(255,255,255,0.03);';
+                row.style.cssText = 'display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:0.76rem; padding:4px 8px; border-radius:8px; background:rgba(var(--ink-rgb),0.03);';
                 row.innerHTML = `<span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${_esc(ip.setName)} <span style="color:var(--text-secondary); font-size:0.68rem;">(${_esc(ip.mode)}${ip.sessionType === 'timedelay' ? ' · TD' : ''})</span></span>` +
                     `<span style="font-weight:700; padding:2px 8px; border-radius:6px; color:#fff; background:${pctSkinColor(ip.lastPct, s)}; white-space:nowrap;">${Math.round(ip.lastPct)}%</span>`;
                 list.appendChild(row);

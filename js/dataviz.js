@@ -9,8 +9,8 @@
 const VIZ_SKINS = {
     clinico: {
         label: 'Clinico', icon: 'fa-stethoscope',
-        bg: 'transparent', grid: 'rgba(255,255,255,0.07)', axis: 'rgba(255,255,255,0.35)',
-        text: 'rgba(255,255,255,0.65)', textDim: 'rgba(255,255,255,0.3)',
+        bg: 'transparent', grid: 'rgba(var(--ink-rgb),0.07)', axis: 'rgba(var(--ink-rgb),0.35)',
+        text: 'rgba(var(--ink-rgb),0.65)', textDim: 'rgba(var(--ink-rgb),0.3)',
         good: '#10b981', mid: '#f59e0b', bad: '#ef4444',
         v: '#10b981', p: '#f59e0b', x: '#ef4444',
         accent: '#6366f1', organic: false, font: 'inherit'
@@ -315,11 +315,11 @@ function vizCalendarHeatmap(container, patient) {
             const rec = byDate[dk];
             const inRange = cur >= start && cur <= last;
             if (!inRange) continue;
-            const fill = rec ? pctSkinColor(rec.pct, s) : (s.organic ? 'rgba(120,100,80,0.06)' : 'rgba(255,255,255,0.04)');
+            const fill = rec ? pctSkinColor(rec.pct, s) : (s.organic ? 'rgba(120,100,80,0.06)' : 'rgba(var(--ink-rgb),0.04)');
             const r = svgEl('rect', { x, y, width: cell, height: cell, rx: s.organic ? cell / 2 : 3, fill, opacity: rec ? 1 : 1 }, svg);
             if (rec) {
                 _title(r, `${formatDateEU(dk + 'T00:00:00')}\n${rec.pct}% (${rec.correctLU}/${rec.totalLU})\n${rec.sessions} sessioni${rec.tag ? '\n' + rec.tag.symbol + ' ' + rec.tag.label : ''}${rec.outlier ? '\n⚠ outlier' : ''}`);
-                if (rec.tag) svgEl('circle', { cx: x + cell - 3, cy: y + 3, r: 2.5, fill: rec.tag.color, stroke: s.bg === 'transparent' ? '#1e1e2f' : s.bg, 'stroke-width': 0.6 }, svg);
+                if (rec.tag) svgEl('circle', { cx: x + cell - 3, cy: y + 3, r: 2.5, fill: rec.tag.color, stroke: s.bg === 'transparent' ? 'var(--modal-bg)' : s.bg, 'stroke-width': 0.6 }, svg);
                 if (rec.hasNote) svgEl('circle', { cx: x + 3, cy: y + cell - 3, r: 1.6, fill: s.accent }, svg);
                 if (rec.outlier) svgEl('rect', { x, y, width: cell, height: cell, rx: s.organic ? cell / 2 : 3, fill: 'none', stroke: s.bad, 'stroke-width': 1, 'stroke-dasharray': '2,2' }, svg);
             }
@@ -453,7 +453,7 @@ function vizTimeDelayFading(container, patient) {
     series.forEach((d, i) => {
         const x = pad.l + (series.length > 1 ? i * stepX : plotW / 2);
         const y = pad.t + plotH - plotH * d.delay / maxDelay;
-        const c = svgEl('circle', { cx: x, cy: y, r: 4, fill: pctSkinColor(d.pct, s), stroke: s.bg === 'transparent' ? '#1e1e2f' : s.bg, 'stroke-width': 1.2 }, svg);
+        const c = svgEl('circle', { cx: x, cy: y, r: 4, fill: pctSkinColor(d.pct, s), stroke: s.bg === 'transparent' ? 'var(--modal-bg)' : s.bg, 'stroke-width': 1.2 }, svg);
         _title(c, `${formatDateEU(d.date + 'T00:00:00')}\nDelay: ${d.delay}s · ${d.pct}%\n${d.setName || ''}`);
     });
     const cap = document.createElement('div');
@@ -505,7 +505,7 @@ function vizDomainRadar(container, patient) {
     // control row
     const ctrl = document.createElement('div');
     ctrl.style.cssText = 'display:flex; justify-content:center; margin-bottom:8px;';
-    ctrl.innerHTML = `<button onclick="state._vizRadarProgress=${!showProg}; renderVizTab(state.patients.find(p=>p.id==='${patient.id}'))" style="padding:5px 12px; border-radius:8px; cursor:pointer; font-size:0.72rem; border:1px solid ${showProg ? 'var(--accent-color)' : 'rgba(255,255,255,0.12)'}; background:${showProg ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.03)'}; color:${showProg ? 'var(--accent-color)' : 'var(--text-secondary)'};"><i class="fa-solid fa-arrow-trend-up"></i> Progresso (inizio → recente)</button>`;
+    ctrl.innerHTML = `<button onclick="state._vizRadarProgress=${!showProg}; renderVizTab(state.patients.find(p=>p.id==='${patient.id}'))" style="padding:5px 12px; border-radius:8px; cursor:pointer; font-size:0.72rem; border:1px solid ${showProg ? 'var(--accent-color)' : 'rgba(var(--ink-rgb),0.12)'}; background:${showProg ? 'rgba(99,102,241,0.2)' : 'rgba(var(--ink-rgb),0.03)'}; color:${showProg ? 'var(--accent-color)' : 'var(--text-secondary)'};"><i class="fa-solid fa-arrow-trend-up"></i> Progresso (inizio → recente)</button>`;
     container.appendChild(ctrl);
 
     // MAIN macro radar
@@ -547,7 +547,7 @@ function vizDomainRadar(container, patient) {
         richMacros.forEach(mk => {
             const subs = bySub[mk].slice().sort((a, b) => a.label.localeCompare(b.label));
             const cell = document.createElement('div');
-            cell.style.cssText = `width:100%; max-width:230px; padding:8px; border-radius:12px; ${s.bg !== 'transparent' ? 'background:' + s.bg + ';' : 'background:rgba(255,255,255,0.02);'} border:1px solid ${VIZ_MACROS[mk].color}44;`;
+            cell.style.cssText = `width:100%; max-width:230px; padding:8px; border-radius:12px; ${s.bg !== 'transparent' ? 'background:' + s.bg + ';' : 'background:rgba(var(--ink-rgb),0.02);'} border:1px solid ${VIZ_MACROS[mk].color}44;`;
             cell.innerHTML = `<div style="text-align:center; font-size:0.78rem; font-weight:700; color:${VIZ_MACROS[mk].color}; margin-bottom:2px;"><i class="fa-solid ${VIZ_MACROS[mk].icon}"></i> ${mk} <span style="color:var(--text-secondary); font-weight:400;">${ms[mk].score}%</span></div>`;
             grid.appendChild(cell);
             const ssz = 190, scx = ssz / 2, scy = ssz / 2 + 2, sR = ssz / 2 - 44;
@@ -828,7 +828,7 @@ function vizDailyRose(container, patient) {
         const large = (a1 - a0) > Math.PI ? 1 : 0;
         const path = svgEl('path', {
             d: `M ${ix0} ${iy0} L ${x0} ${y0} A ${Ri} ${Ri} 0 ${large} 1 ${x1} ${y1} L ${ix1} ${iy1} A ${Rmin} ${Rmin} 0 ${large} 0 ${ix0} ${iy0} Z`,
-            fill: col, opacity: 0.9, stroke: s.bg === 'transparent' ? '#1e1e2f' : s.bg, 'stroke-width': 0.8
+            fill: col, opacity: 0.9, stroke: s.bg === 'transparent' ? 'var(--modal-bg)' : s.bg, 'stroke-width': 0.8
         }, svg);
         _title(path, `${formatDateEU(d.date + 'T00:00:00')}\n${d.pct}% · ${d.sessions} sedute · ${d.totalLU} LU${d.tag ? '\n' + d.tag.symbol + ' ' + d.tag.label : ''}`);
         const am = (a0 + a1) / 2;
@@ -923,16 +923,16 @@ function renderVizTab(patient) {
     const skinBtns = Object.keys(VIZ_SKINS).map(k => {
         const sd = VIZ_SKINS[k];
         const on = k === sk;
-        return `<button onclick="setVizSkin('${k}'); ${rerender}" title="${sd.label}" style="padding:5px 10px; border-radius:8px; cursor:pointer; font-size:0.72rem; border:1px solid ${on ? 'var(--accent-color)' : 'rgba(255,255,255,0.12)'}; background:${on ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.03)'}; color:${on ? 'var(--accent-color)' : 'var(--text-secondary)'};"><i class="fa-solid ${sd.icon}"></i> ${sd.label}</button>`;
+        return `<button onclick="setVizSkin('${k}'); ${rerender}" title="${sd.label}" style="padding:5px 10px; border-radius:8px; cursor:pointer; font-size:0.72rem; border:1px solid ${on ? 'var(--accent-color)' : 'rgba(var(--ink-rgb),0.12)'}; background:${on ? 'rgba(99,102,241,0.2)' : 'rgba(var(--ink-rgb),0.03)'}; color:${on ? 'var(--accent-color)' : 'var(--text-secondary)'};"><i class="fa-solid ${sd.icon}"></i> ${sd.label}</button>`;
     }).join('');
 
-    const _tf = (val, label) => `<button onclick="setVizFilter('${val}', '${patient.id}')" style="padding:4px 10px; border-radius:6px; font-size:0.7rem; cursor:pointer; border:1px solid ${tf === val ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)'}; background:${tf === val ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.03)'}; color:${tf === val ? 'var(--accent-color)' : 'var(--text-secondary)'}; font-weight:${tf === val ? '700' : '400'};">${label}</button>`;
-    const filterBar = `<div style="display:flex; gap:5px; align-items:center; flex-wrap:wrap; margin-bottom:10px; background:rgba(0,0,0,0.2); padding:6px 8px; border-radius:10px;">
+    const _tf = (val, label) => `<button onclick="setVizFilter('${val}', '${patient.id}')" style="padding:4px 10px; border-radius:6px; font-size:0.7rem; cursor:pointer; border:1px solid ${tf === val ? 'var(--accent-color)' : 'rgba(var(--ink-rgb),0.1)'}; background:${tf === val ? 'rgba(99,102,241,0.2)' : 'rgba(var(--ink-rgb),0.03)'}; color:${tf === val ? 'var(--accent-color)' : 'var(--text-secondary)'}; font-weight:${tf === val ? '700' : '400'};">${label}</button>`;
+    const filterBar = `<div style="display:flex; gap:5px; align-items:center; flex-wrap:wrap; margin-bottom:10px; background:rgba(var(--shade-rgb),0.2); padding:6px 8px; border-radius:10px;">
         <span style="font-size:0.7rem; color:var(--text-secondary);"><i class="fa-solid fa-filter"></i></span>
         ${_tf('week', 'Sett.')}${_tf('month', 'Mese')}${_tf('quarter', '3 mesi')}${_tf('year', 'Anno')}${_tf('custom', 'Da-A')}${_tf('all', 'Tutto')}
     </div>${tf === 'custom' ? `<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; font-size:0.72rem; color:var(--text-secondary);">
-        Da <input type="date" value="${state._vizFrom || ''}" onchange="state._vizFrom=this.value; ${rerender}" style="padding:4px; border-radius:6px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white;">
-        A <input type="date" value="${state._vizTo || ''}" onchange="state._vizTo=this.value; ${rerender}" style="padding:4px; border-radius:6px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white;">
+        Da <input type="date" value="${state._vizFrom || ''}" onchange="state._vizFrom=this.value; ${rerender}" style="padding:4px; border-radius:6px; background:rgba(var(--shade-rgb),0.3); border:1px solid var(--glass-border); color:var(--text-primary);">
+        A <input type="date" value="${state._vizTo || ''}" onchange="state._vizTo=this.value; ${rerender}" style="padding:4px; border-radius:6px; background:rgba(var(--shade-rgb),0.3); border:1px solid var(--glass-border); color:var(--text-primary);">
     </div>` : ''}`;
 
     // Grouped view nav
@@ -940,7 +940,7 @@ function renderVizTab(patient) {
     VIZ_VIEWS.forEach(v => {
         if (v.group !== lastGroup) { viewBtns += `<span style="font-size:0.62rem; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px; align-self:center; margin:0 2px 0 6px; opacity:0.6; white-space:nowrap;">${v.group}</span>`; lastGroup = v.group; }
         const on = v.id === cur;
-        viewBtns += `<button onclick="selectVizView('${v.id}', '${patient.id}')" style="padding:6px 10px; border-radius:8px; cursor:pointer; font-size:0.74rem; white-space:nowrap; border:1px solid ${on ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)'}; background:${on ? 'var(--accent-color)' : 'rgba(255,255,255,0.03)'}; color:${on ? '#fff' : 'var(--text-secondary)'};"><i class="fa-solid ${v.icon}"></i> ${v.label}</button>`;
+        viewBtns += `<button onclick="selectVizView('${v.id}', '${patient.id}')" style="padding:6px 10px; border-radius:8px; cursor:pointer; font-size:0.74rem; white-space:nowrap; border:1px solid ${on ? 'var(--accent-color)' : 'rgba(var(--ink-rgb),0.1)'}; background:${on ? 'var(--accent-color)' : 'rgba(var(--ink-rgb),0.03)'}; color:${on ? '#fff' : 'var(--text-secondary)'};"><i class="fa-solid ${v.icon}"></i> ${v.label}</button>`;
     });
 
     content.innerHTML = `

@@ -56,7 +56,7 @@ window.offlineShareSendSelect = async () => {
                 ? `<img src="${p.photo}" style="width:36px; height:36px; border-radius:50%; object-fit:cover;">`
                 : `<div style="width:36px; height:36px; border-radius:50%; background:rgba(99,102,241,0.15); display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-user" style="color:var(--accent-color); font-size:0.8rem;"></i></div>`;
             html += `
-            <div onclick="offlineSharePatient('${p.id}')" style="display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:10px; cursor:pointer; border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02); margin-bottom:6px; transition:background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='rgba(255,255,255,0.02)'">
+            <div onclick="offlineSharePatient('${p.id}')" style="display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:10px; cursor:pointer; border:1px solid rgba(var(--ink-rgb),0.06); background:rgba(var(--ink-rgb),0.02); margin-bottom:6px; transition:background 0.15s;" onmouseover="this.style.background='rgba(var(--ink-rgb),0.05)'" onmouseout="this.style.background='rgba(var(--ink-rgb),0.02)'">
                 ${photoHtml}
                 <div style="flex:1;">
                     <div style="font-weight:600; font-size:0.9rem;">${p.name}</div>

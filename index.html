@@ -7,7 +7,7 @@
     <title>Terapia Attiva v40</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#1e1e2f">
+    <meta name="theme-color" content="var(--modal-bg)">
 
     <!-- Icons & Fonts -->
     <link rel="icon" type="image/svg+xml" href="build/icon.svg">
@@ -101,7 +101,7 @@
             <!-- Tag selector (shown for pool modes) -->
             <div class="select-wrapper hidden" style="flex: 2;" id="tag-selector-wrapper">
                 <label><i class="fa-solid fa-tags"></i> Seleziona Tag</label>
-                <div id="pool-tag-selector" style="display:flex; gap:6px; flex-wrap:wrap; padding:6px; background:rgba(0,0,0,0.2); border-radius:8px; min-height:40px; align-items:center;">
+                <div id="pool-tag-selector" style="display:flex; gap:6px; flex-wrap:wrap; padding:6px; background:rgba(var(--shade-rgb),0.2); border-radius:8px; min-height:40px; align-items:center;">
                     <span style="color:var(--text-secondary); font-size:0.8rem;">Scegli un'attivit&agrave; Pool...</span>
                 </div>
             </div>
@@ -147,17 +147,24 @@
                     </select>
                 </div>
 
-                <div class="select-wrapper" style="max-width: 140px;">
+                <div class="select-wrapper" style="max-width: 160px;">
                     <label><i class="fa-solid fa-clipboard-check"></i> Tipo</label>
-                    <select id="session-type-select" onchange="onSessionTypeChange()">
-                        <option value="independent">Indipendente</option>
-                        <option value="timedelay">Time Delay</option>
-                    </select>
+                    <input type="hidden" id="session-type-select" value="independent">
+                    <button type="button" id="session-type-toggle" onclick="toggleSessionType()" title="Tocca per cambiare tipo di seduta"
+                            style="width:100%; padding:8px 10px; border-radius:var(--radius-sm); border:1px solid var(--glass-border); background:rgba(16,185,129,0.15); color:var(--success-color); font-size:0.9rem; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px; white-space:nowrap;">
+                        <i class="fa-solid fa-user-check"></i> Indipendente
+                    </button>
                 </div>
 
-                <div class="select-wrapper" id="td-seconds-wrapper" style="max-width: 70px; display:none;">
-                    <label>Sec TD</label>
-                    <input type="number" id="td-seconds-ctrl" value="5" min="1" max="30" style="padding:8px; border-radius:var(--radius-sm); background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.9rem; width:100%; text-align:center;">
+                <div class="select-wrapper" id="td-seconds-wrapper" style="max-width: 118px; display:none;">
+                    <label><i class="fa-solid fa-stopwatch"></i> Secondi</label>
+                    <div style="display:flex; align-items:center; gap:2px;">
+                        <button type="button" onclick="stepTDSeconds(-1)" title="Meno secondi"
+                                style="width:28px; height:34px; border-radius:var(--radius-sm) 0 0 var(--radius-sm); border:1px solid var(--glass-border); background:rgba(var(--ink-rgb),0.06); color:var(--warning-color); font-size:1rem; cursor:pointer;">&minus;</button>
+                        <input type="number" id="td-seconds-ctrl" value="5" min="1" max="30" style="padding:8px 2px; border-radius:0; background:rgba(var(--shade-rgb),0.3); border:1px solid var(--glass-border); border-left:none; border-right:none; color:var(--text-primary); font-size:0.95rem; font-weight:700; width:40px; text-align:center;">
+                        <button type="button" onclick="stepTDSeconds(1)" title="Pi&ugrave; secondi"
+                                style="width:28px; height:34px; border-radius:0 var(--radius-sm) var(--radius-sm) 0; border:1px solid var(--glass-border); background:rgba(var(--ink-rgb),0.06); color:var(--warning-color); font-size:1rem; cursor:pointer;">+</button>
+                    </div>
                 </div>
             </div>
 
@@ -214,15 +221,15 @@
             </button>
             <div id="td-timer-wrapper" style="position:relative; display:none;">
                 <svg id="td-ring" width="68" height="68" style="position:absolute; top:-4px; left:-4px; pointer-events:none; transform:rotate(-90deg);">
-                    <circle cx="34" cy="34" r="30" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="3"/>
-                    <circle id="td-ring-progress" cx="34" cy="34" r="30" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="3"
+                    <circle cx="34" cy="34" r="30" fill="none" stroke="rgba(var(--ink-rgb),0.15)" stroke-width="3"/>
+                    <circle id="td-ring-progress" cx="34" cy="34" r="30" fill="none" stroke="rgba(var(--ink-rgb),0.55)" stroke-width="3"
                             stroke-dasharray="188.5" stroke-dashoffset="0" stroke-linecap="round"/>
                 </svg>
                 <button id="btn-score-p" class="btn-score prompt" onclick="recordResponse('prompt')" title="Prompt (Tasto P)">
                     P
                 </button>
             </div>
-            <div style="background:rgba(0,0,0,0.5); padding:5px 10px; border-radius:10px; color:white; font-size:0.8rem; display:flex; flex-direction:column; align-items:center; justify-content:center; min-width: 60px;">
+            <div style="background:rgba(var(--shade-rgb),0.5); padding:5px 10px; border-radius:10px; color:var(--text-primary); font-size:0.8rem; display:flex; flex-direction:column; align-items:center; justify-content:center; min-width: 60px;">
                 <span id="score-display" style="font-weight:bold; font-size:1.1rem;">0/0</span>
                 <span style="font-size:0.6rem; opacity:0.8; letter-spacing:1px;">SCORE</span>
             </div>
@@ -233,7 +240,7 @@
 
         <div id="session-name-wrapper" class="hidden" style="pointer-events:auto; display:flex; align-items:center; gap:6px;">
             <div class="custom-autocomplete-wrap">
-                <input type="text" id="session-name-input" placeholder="Nome sessione (opzionale)" autocomplete="off" style="padding:8px 12px; border-radius:12px; background:rgba(30,30,50,0.95); border:1px solid var(--glass-border); color:white; font-size:0.8rem; width:200px; backdrop-filter:blur(8px);">
+                <input type="text" id="session-name-input" placeholder="Nome sessione (opzionale)" autocomplete="off" style="padding:8px 12px; border-radius:12px; background:var(--glass-bg); border:1px solid var(--glass-border); color:var(--text-primary); font-size:0.8rem; width:200px; backdrop-filter:blur(8px);">
                 <div class="custom-ac-panel" id="session-name-input-ac-panel"></div>
             </div>
         </div>
@@ -334,7 +341,7 @@
         </div>
 
         <div class="modal-body">
-            <div style="background: rgba(0,0,0,0.2); padding:15px; border-radius:12px; margin-bottom:20px;">
+            <div style="background: rgba(var(--shade-rgb),0.2); padding:15px; border-radius:12px; margin-bottom:20px;">
                 <label style="font-size:0.8rem; color:var(--text-muted);">Nome del Set</label>
                 <div style="display:flex; gap:10px; align-items:flex-start; margin-bottom:10px;">
                     <div id="edit-cover-slot" style="flex-shrink:0;"></div>
@@ -374,7 +381,7 @@
                 </label>
                 <div id="edit-variant-container" style="margin-top:6px;"></div>
             </div>
-            <div style="margin-bottom:20px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:15px; display:flex; gap:8px; flex-wrap:wrap;">
+            <div style="margin-bottom:20px; border-bottom:1px solid rgba(var(--ink-rgb),0.1); padding-bottom:15px; display:flex; gap:8px; flex-wrap:wrap;">
                  <button class="btn btn-ghost" onclick="document.getElementById('bulk-upload').click()"><i class="fa-solid fa-images"></i> Carica Immagini (Bulk)</button>
                  <input type="file" id="bulk-upload" class="hidden" multiple accept="image/*" onchange="bulkUploadImages(this)">
                  <button class="btn btn-ghost" onclick="openBulkPollinations()" style="color:var(--accent-color); border-color:rgba(99,102,241,0.3);"><i class="fa-solid fa-wand-magic-sparkles"></i> Genera Immagini AI</button>
@@ -391,7 +398,7 @@
                 <button class="btn btn-ghost" style="padding:15px;" onclick="openScontornoSettings()" title="Impostazioni tolleranza scontorno"><i class="fa-solid fa-sliders"></i></button>
             </div>
             <div id="bulk-add-panel" class="hidden" style="margin-top:10px;">
-                <textarea id="bulk-add-textarea" rows="6" placeholder="Scrivi un nome per riga&#10;es:&#10;Mela&#10;Pera&#10;Banana" style="width:100%; padding:10px; border-radius:10px; background:rgba(255,255,255,0.05); border:1px solid var(--glass-border); color:white; font-size:0.85rem; resize:vertical;"></textarea>
+                <textarea id="bulk-add-textarea" rows="6" placeholder="Scrivi un nome per riga&#10;es:&#10;Mela&#10;Pera&#10;Banana" style="width:100%; padding:10px; border-radius:10px; background:rgba(var(--ink-rgb),0.05); border:1px solid var(--glass-border); color:var(--text-primary); font-size:0.85rem; resize:vertical;"></textarea>
                 <button class="btn btn-primary" style="width:100%; margin-top:6px; padding:10px;" onclick="bulkAddItems()"><i class="fa-solid fa-plus"></i> Aggiungi Tutti</button>
             </div>
         </div>
@@ -619,7 +626,7 @@
             <div style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(99, 102, 241, 0.05) 100%); padding: 20px; border-radius: 16px; margin-bottom: 20px; border: 1px solid rgba(99, 102, 241, 0.2); display: flex; gap: 20px; align-items: center;">
                 <div style="font-size: 2.5rem; color: var(--accent-color); padding: 0 10px;"><i class="fa-solid fa-brain"></i></div>
                 <div>
-                    <h3 style="margin: 0 0 10px 0; color: white;">Terapia Attiva</h3>
+                    <h3 style="margin: 0 0 10px 0; color:var(--text-primary);">Terapia Attiva</h3>
                     <p style="margin: 0; opacity: 0.85;">Piattaforma per terapia psicoeducativa, precision teaching e riabilitazione neuropsicologica. Gestisci pazienti, crea set di stimoli, conduci le attivit&agrave; e monitora i progressi. Tutti i dati restano <b>sul dispositivo</b> (nessun account necessario) e funziona <b>offline</b>.</p>
                 </div>
             </div>
@@ -642,7 +649,7 @@
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
 
                 <!-- INTERFACE -->
-                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--accent-color);">
+                <div style="background: rgba(var(--ink-rgb),0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--accent-color);">
                     <h3 style="margin-top: 0; color: var(--accent-color); display: flex; align-items: center; gap: 10px;">
                         <i class="fa-solid fa-display"></i> Interfaccia
                     </h3>
@@ -664,7 +671,7 @@
                 </div>
 
                 <!-- PATIENTS -->
-                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--success-color);">
+                <div style="background: rgba(var(--ink-rgb),0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--success-color);">
                     <h3 style="margin-top: 0; color: var(--success-color); display: flex; align-items: center; gap: 10px;">
                         <i class="fa-solid fa-user-doctor"></i> Pazienti &amp; Cartella clinica
                     </h3>
@@ -687,7 +694,7 @@
                 </div>
 
                 <!-- MODES -->
-                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--cat-5);">
+                <div style="background: rgba(var(--ink-rgb),0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--cat-5);">
                     <h3 style="margin-top: 0; color: #a855f7; display: flex; align-items: center; gap: 10px;">
                         <i class="fa-solid fa-gamepad"></i> Le attivit&agrave; (25)
                     </h3>
@@ -725,7 +732,7 @@
                 </div>
 
                 <!-- SESSION -->
-                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--warning-color);">
+                <div style="background: rgba(var(--ink-rgb),0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--warning-color);">
                     <h3 style="margin-top: 0; color: var(--warning-color); display: flex; align-items: center; gap: 10px;">
                         <i class="fa-solid fa-stopwatch"></i> Seduta &amp; valutazione
                     </h3>
@@ -736,7 +743,12 @@
                                 <span style="color:var(--warning-color);"><b>P</b> = con aiuto</span>
                                 <span style="color:var(--danger-color);"><b>X</b> = errato</span>
                             </span></li>
-                        <li><i class="fa-solid fa-clock-rotate-left" style="color:var(--warning-color); width:20px;"></i> <strong>Tipo di seduta:</strong> <b>Indipendente</b> (V/X) oppure <b>Time Delay</b> (V/P con secondi di attesa configurabili).</li>
+                        <li><i class="fa-solid fa-clock-rotate-left" style="color:var(--warning-color); width:20px;"></i> <strong>Tipo di seduta:</strong> il riquadro <b>Tipo</b> in alto &egrave; un <b>tasto che si scambia al tocco</b> &mdash; non serve aprire nessun men&ugrave;:<br>
+                            <span style="display:flex; gap:8px; flex-wrap:wrap; margin-top:5px; font-size:0.9em;">
+                                <span style="background:rgba(16,185,129,0.15); color:var(--success-color); border:1px solid rgba(16,185,129,0.35); padding:2px 10px; border-radius:8px;"><i class="fa-solid fa-user-check"></i> Indipendente</span>
+                                <span style="background:rgba(245,158,11,0.15); color:var(--warning-color); border:1px solid rgba(245,158,11,0.35); padding:2px 10px; border-radius:8px;"><i class="fa-solid fa-hourglass-half"></i> Time Delay</span>
+                            </span>
+                            <span style="font-size:0.88em; opacity:0.85; display:block; margin-top:5px;"><b>Verde/Indipendente</b>: si punteggia V (corretto) o X (errato). <b>Arancione/Time Delay</b>: compare accanto al tasto il selettore <b>&minus; secondi +</b> (1&ndash;30, default 5); parte un conto alla rovescia e la risposta &egrave; V se arriva prima della scadenza, P se arriva dopo l&rsquo;aiuto. Il colore del tasto dice sempre in che modalit&agrave; sei.</span></li>
                         <li><i class="fa-solid fa-sliders" style="color:var(--warning-color); width:20px;"></i> <strong>N. stimoli</strong> e <strong>griglia</strong>: quanti item mostrare e come disporli.</li>
                         <li><i class="fa-solid fa-shuffle" style="color:var(--warning-color); width:20px;"></i> <strong>Nuovo giro:</strong> nelle attivit&agrave; che finiscono da sole (Tombola, Memory, Zoom, Categorizzazione, Fluenza&hellip;) trovi il tasto <b>Nuovo giro</b>: rimescola e riparte <b>mantenendo il punteggio</b>, cos&igrave; puoi concatenare pi&ugrave; giri e salvare una volta sola.</li>
                         <li><i class="fa-solid fa-rotate-left" style="color:var(--warning-color); width:20px;"></i> <strong>Undo:</strong> <b>Ctrl+Z</b> annulla l&rsquo;ultimo punteggio.</li>
@@ -746,7 +758,7 @@
                 </div>
 
                 <!-- EDITOR & LIBRARY -->
-                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--cat-6);">
+                <div style="background: rgba(var(--ink-rgb),0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--cat-6);">
                     <h3 style="margin-top: 0; color: #ec4899; display: flex; align-items: center; gap: 10px;">
                         <i class="fa-solid fa-pen-ruler"></i> Editor &amp; Libreria
                     </h3>
@@ -758,7 +770,11 @@
                         <li><i class="fa-solid fa-eraser" style="color:var(--cat-6); width:20px;"></i> <strong>Scontorno (togliere lo sfondo):</strong> automatico con regolazione della tolleranza, oppure <b>Manuale/AI</b> con bacchetta magica (con morbidezza dei bordi regolabile) e pennello. Disponibile anche <b>in blocco</b> su tutto il set.</li>
                         <li><i class="fa-solid fa-highlighter" style="color:var(--cat-6); width:20px;"></i> <strong>Evidenzia soggetto:</strong> lascia a colori il soggetto e sfuma il resto in bianco e nero.</li>
                         <li><i class="fa-solid fa-box-open" style="color:var(--cat-6); width:20px;"></i> <strong>Contenitore:</strong> dipingi la &laquo;parte davanti&raquo; di un oggetto (es. la parete di una tazza): quell&rsquo;item potr&agrave; contenere altri soggetti nelle attivit&agrave; dentro/fuori.</li>
-                        <li><i class="fa-solid fa-layer-group" style="color:var(--cat-6); width:20px;"></i> <strong>Varianti:</strong> pi&ugrave; versioni della stessa immagine (es. contesti diversi) selezionabili durante l&rsquo;attivit&agrave;.</li>
+                        <li><i class="fa-solid fa-layer-group" style="color:var(--cat-6); width:20px;"></i> <strong>Varianti:</strong> un secondo (terzo&hellip;) corredo di immagini per gli <b>stessi item</b> &mdash; la stessa parola vista in un&rsquo;altra foto, un altro disegno, un altro contesto. Servono per la <b>generalizzazione</b>: il bambino impara &laquo;cane&raquo;, non &laquo;quella foto di cane&raquo;.<br>
+                            <span style="font-size:0.88em; opacity:0.85; display:block; margin-top:4px;">
+                            <b>Come si usano.</b> Nell&rsquo;editor, la barra <b>Base / Variante 1 / Variante 2&hellip;</b> in cima alla lista sceglie su quale corredo stai lavorando; il contatore accanto (es. <i>13/20</i>) &egrave; riferito <b>solo</b> alla variante attiva. Durante l&rsquo;attivit&agrave; scegli quale variante presentare.<br>
+                            <b>Sono indipendenti davvero.</b> Ogni variante ha le <b>sue</b> immagini, il <b>suo</b> scontorno, la <b>sua</b> evidenziazione: scontornare la Base non scontorna la Variante 1. Tutto quello che generi, cerchi o incolli finisce nella variante che hai aperto in quel momento &mdash; controlla sempre quale scheda &egrave; attiva prima di incollare.<br>
+                            <b>Nei dati.</b> Le sedute restano sotto lo <b>stesso set</b>, con un <b>badge che indica la variante</b> usata; in Attivit&agrave; vedi le percentuali separate per variante e l&rsquo;<b>analisi delle parole</b> segnala gli item che vanno sensibilmente peggio in una variante rispetto a un&rsquo;altra &mdash; tipicamente un problema di generalizzazione su quell&rsquo;immagine, non sulla parola.</span></li>
                         <li><i class="fa-solid fa-music" style="color:var(--cat-6); width:20px;"></i> <strong>Audio</strong> per item, <i class="fa-solid fa-crop"></i> <strong>area Zoom</strong>, <i class="fa-solid fa-arrow-down-1-9"></i> <strong>numero di sequenza</strong>, <i class="fa-solid fa-eye-slash"></i> <strong>nascondi item</strong> senza cancellarlo.</li>
                         <li><i class="fa-solid fa-compress" style="color:var(--cat-6); width:20px;"></i> <strong>Qualit&agrave; immagini:</strong> alta/media/bassa per bilanciare nitidezza e spazio occupato.</li>
                         <li><i class="fa-solid fa-folder" style="color:var(--cat-6); width:20px;"></i> <strong>Libreria:</strong> ordinamento e categorie collassabili, riordino dei set, esportazione e condivisione per singolo set.</li>
@@ -766,7 +782,7 @@
                 </div>
 
                 <!-- IMAGES -->
-                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid #22d3ee;">
+                <div style="background: rgba(var(--ink-rgb),0.05); border-radius: 12px; padding: 20px; border-top: 4px solid #22d3ee;">
                     <h3 style="margin-top: 0; color: #22d3ee; display: flex; align-items: center; gap: 10px;">
                         <i class="fa-solid fa-wand-magic-sparkles"></i> Trovare e creare immagini
                     </h3>
@@ -782,7 +798,7 @@
                 </div>
 
                 <!-- DATAVIZ -->
-                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid #8b5cf6;">
+                <div style="background: rgba(var(--ink-rgb),0.05); border-radius: 12px; padding: 20px; border-top: 4px solid #8b5cf6;">
                     <h3 style="margin-top: 0; color: #a78bfa; display: flex; align-items: center; gap: 10px;">
                         <i class="fa-solid fa-shapes"></i> Visualizzazioni dei dati
                     </h3>
@@ -801,7 +817,7 @@
                 </div>
 
                 <!-- ACTIVITY LAYOUT -->
-                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--cat-2);">
+                <div style="background: rgba(var(--ink-rgb),0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--cat-2);">
                     <h3 style="margin-top: 0; color: #f59e0b; display: flex; align-items: center; gap: 10px;">
                         <i class="fa-solid fa-sliders"></i> Personalizzare le attivit&agrave;
                     </h3>
@@ -814,7 +830,7 @@
                 </div>
 
                 <!-- BACKUP & SYNC -->
-                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid #06b6d4;">
+                <div style="background: rgba(var(--ink-rgb),0.05); border-radius: 12px; padding: 20px; border-top: 4px solid #06b6d4;">
                     <h3 style="margin-top: 0; color: #06b6d4; display: flex; align-items: center; gap: 10px;">
                         <i class="fa-solid fa-cloud-arrow-up"></i> Backup, condivisione e pi&ugrave; dispositivi
                     </h3>
@@ -829,28 +845,28 @@
                 </div>
 
                 <!-- SHORTCUTS -->
-                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--text-secondary);">
+                <div style="background: rgba(var(--ink-rgb),0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--text-secondary);">
                     <h3 style="margin-top: 0; color: var(--text-secondary); display: flex; align-items: center; gap: 10px;">
                         <i class="fa-solid fa-keyboard"></i> Scorciatoie da tastiera
                     </h3>
                     <div style="display:grid; grid-template-columns:auto 1fr; gap:8px 15px; font-size:0.9rem; line-height:1.6;">
-                        <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">V</kbd> <span>Risposta corretta</span>
-                        <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">X</kbd> <span>Risposta errata</span>
-                        <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">P</kbd> <span>Risposta con aiuto (Time Delay)</span>
-                        <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">Ctrl+Z</kbd> <span>Annulla ultimo punteggio</span>
-                        <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">Ctrl+V</kbd> <span>Incolla immagine (item, copertina, foto paziente)</span>
-                        <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">&larr; &rarr;</kbd> <span>Avanti/indietro tra gli stimoli</span>
-                        <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">Del</kbd> <span>Cancella marker (Cerca-Trova)</span>
-                        <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">D</kbd> <span>Puntatore / penna</span>
-                        <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">F</kbd> <span>Schermo intero area di gioco</span>
-                        <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">L</kbd> <span>Blocco scorrimento (child lock)</span>
-                        <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">E</kbd> <span>Mostra/nascondi etichette</span>
-                        <kbd style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">S</kbd> <span>Salta round</span>
+                        <kbd style="background:rgba(var(--ink-rgb),0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">V</kbd> <span>Risposta corretta</span>
+                        <kbd style="background:rgba(var(--ink-rgb),0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">X</kbd> <span>Risposta errata</span>
+                        <kbd style="background:rgba(var(--ink-rgb),0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">P</kbd> <span>Risposta con aiuto (Time Delay)</span>
+                        <kbd style="background:rgba(var(--ink-rgb),0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">Ctrl+Z</kbd> <span>Annulla ultimo punteggio</span>
+                        <kbd style="background:rgba(var(--ink-rgb),0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">Ctrl+V</kbd> <span>Incolla immagine (item, copertina, foto paziente)</span>
+                        <kbd style="background:rgba(var(--ink-rgb),0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">&larr; &rarr;</kbd> <span>Avanti/indietro tra gli stimoli</span>
+                        <kbd style="background:rgba(var(--ink-rgb),0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">Del</kbd> <span>Cancella marker (Cerca-Trova)</span>
+                        <kbd style="background:rgba(var(--ink-rgb),0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">D</kbd> <span>Puntatore / penna</span>
+                        <kbd style="background:rgba(var(--ink-rgb),0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">F</kbd> <span>Schermo intero area di gioco</span>
+                        <kbd style="background:rgba(var(--ink-rgb),0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">L</kbd> <span>Blocco scorrimento (child lock)</span>
+                        <kbd style="background:rgba(var(--ink-rgb),0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">E</kbd> <span>Mostra/nascondi etichette</span>
+                        <kbd style="background:rgba(var(--ink-rgb),0.1); padding:2px 8px; border-radius:4px; font-family:monospace; font-size:0.85em;">S</kbd> <span>Salta round</span>
                     </div>
                 </div>
 
                 <!-- TIPS -->
-                <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--success-color);">
+                <div style="background: rgba(var(--ink-rgb),0.05); border-radius: 12px; padding: 20px; border-top: 4px solid var(--success-color);">
                     <h3 style="margin-top: 0; color: var(--success-color); display: flex; align-items: center; gap: 10px;">
                         <i class="fa-solid fa-lightbulb"></i> Consigli pratici
                     </h3>
@@ -929,7 +945,7 @@
             <div id="p2p-select-panel" style="display:none;">
                 <div id="p2p-select-body" style="margin-bottom:12px;"></div>
                 <div id="p2p-size-info" style="background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.3); border-radius:10px; padding:10px; margin-bottom:12px; font-size:0.8rem; color:var(--text-muted); text-align:center;"></div>
-                <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:10px; padding:8px 10px; background:rgba(0,0,0,0.2); border-radius:8px;">
+                <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:10px; padding:8px 10px; background:rgba(var(--shade-rgb),0.2); border-radius:8px;">
                     <i class="fa-solid fa-compress"></i> I dati vengono compressi e inviati un elemento alla volta, anche per librerie molto grandi.
                 </div>
                 <div style="display:flex; gap:8px;">
@@ -964,7 +980,7 @@
                     <div id="p2p-qr-reader" style="width:100%;"></div>
                 </div>
                 <div style="display:flex; gap:8px; align-items:center; margin-top:10px;">
-                    <input type="text" id="p2p-manual-code" placeholder="Inserisci codice" style="flex:1; padding:10px; border-radius:10px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-family:monospace; font-size:1rem; text-align:center; letter-spacing:2px;">
+                    <input type="text" id="p2p-manual-code" placeholder="Inserisci codice" style="flex:1; padding:10px; border-radius:10px; background:rgba(var(--shade-rgb),0.3); border:1px solid var(--glass-border); color:var(--text-primary); font-family:monospace; font-size:1rem; text-align:center; letter-spacing:2px;">
                     <button class="btn btn-primary" onclick="connectToSender(document.getElementById('p2p-manual-code').value)" style="padding:10px 16px;">
                         <i class="fa-solid fa-plug"></i>
                     </button>
@@ -973,7 +989,7 @@
 
             <!-- Progress panel -->
             <div id="p2p-progress-panel" style="display:none; text-align:center;">
-                <div style="margin:20px 0; height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden;">
+                <div style="margin:20px 0; height:8px; background:rgba(var(--ink-rgb),0.1); border-radius:4px; overflow:hidden;">
                     <div id="p2p-progress-bar-fill" style="width:0%; height:100%; background:var(--accent-color); border-radius:4px; transition:width 0.3s;"></div>
                 </div>
                 <p id="p2p-progress-text" style="color:var(--text-secondary); font-size:0.9rem;"></p>
@@ -1042,7 +1058,7 @@
                     <div id="offline-qr-reader" style="width:100%;"></div>
                 </div>
                 <div id="offline-receive-progress" style="display:none; margin:10px 0;">
-                    <div style="height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden;">
+                    <div style="height:8px; background:rgba(var(--ink-rgb),0.1); border-radius:4px; overflow:hidden;">
                         <div id="offline-receive-bar" style="width:0%; height:100%; background:var(--accent-color); border-radius:4px; transition:width 0.3s;"></div>
                     </div>
                     <p id="offline-receive-text" style="color:var(--text-secondary); font-size:0.8rem; margin-top:6px; text-align:center;"></p>
@@ -1114,7 +1130,7 @@
                 <div id="qs-progress-icon" style="margin-bottom:15px;">
                     <i class="fa-solid fa-share-from-square" style="font-size:3rem; color:var(--accent-color); animation:pulse 1.5s infinite;"></i>
                 </div>
-                <div style="height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden; margin-bottom:10px;">
+                <div style="height:8px; background:rgba(var(--ink-rgb),0.1); border-radius:4px; overflow:hidden; margin-bottom:10px;">
                     <div id="qs-progress-bar" style="width:0%; height:100%; background:var(--accent-color); border-radius:4px; transition:width 0.3s;"></div>
                 </div>
                 <p id="qs-progress-text" style="color:var(--text-secondary); font-size:0.9rem;"></p>

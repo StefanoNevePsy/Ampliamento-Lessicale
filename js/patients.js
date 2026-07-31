@@ -441,9 +441,9 @@ window.openThresholdEditor = (pid) => {
     let overrideRows = '';
     Object.entries(overrides).sort().forEach(([key, val]) => {
         const label = _criterionOverrideLabel(key);
-        overrideRows += `<div style="display:flex; align-items:center; gap:8px; padding:6px 8px; background:rgba(255,255,255,0.03); border-radius:6px; margin-bottom:4px;">
+        overrideRows += `<div style="display:flex; align-items:center; gap:8px; padding:6px 8px; background:rgba(var(--ink-rgb),0.03); border-radius:6px; margin-bottom:4px;">
             <span style="flex:1; font-size:0.85rem; overflow:hidden; text-overflow:ellipsis;">${label}</span>
-            <input type="number" min="10" max="100" value="${val}" style="width:60px; padding:4px; border-radius:4px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.3); color:white; text-align:center; font-size:0.85rem;" onchange="_setCriterionOverrideRaw('${pid}', '${key.replace(/'/g, "\\'")}', this.value)">
+            <input type="number" min="10" max="100" value="${val}" style="width:60px; padding:4px; border-radius:4px; border:1px solid rgba(var(--ink-rgb),0.15); background:rgba(var(--shade-rgb),0.3); color:var(--text-primary); text-align:center; font-size:0.85rem;" onchange="_setCriterionOverrideRaw('${pid}', '${key.replace(/'/g, "\\'")}', this.value)">
             <span style="font-size:0.8rem; color:var(--text-secondary);">%</span>
             <button class="btn-icon" style="width:24px; height:24px; color:var(--danger-color);" onclick="deleteCriterionOverride('${pid}', '${key.replace(/'/g, "\\'")}'); openThresholdEditor('${pid}');"><i class="fa-solid fa-xmark"></i></button>
         </div>`;
@@ -462,7 +462,7 @@ window.openThresholdEditor = (pid) => {
     modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:25000; display:flex; align-items:center; justify-content:center; padding:20px; overflow-y:auto;';
 
     modal.innerHTML = `
-        <div style="width:100%; max-width:480px; background:#1e1e2f; border-radius:16px; border:1px solid var(--glass-border); padding:22px; max-height:90vh; overflow-y:auto;">
+        <div style="width:100%; max-width:480px; background:var(--modal-bg); border-radius:16px; border:1px solid var(--glass-border); padding:22px; max-height:90vh; overflow-y:auto;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
                 <h3 style="margin:0; color:var(--accent-color);"><i class="fa-solid fa-sliders"></i> Soglie Criterio</h3>
                 <button class="btn btn-ghost" onclick="document.getElementById('modal-threshold-editor').remove()" style="padding:6px 10px;"><i class="fa-solid fa-xmark"></i></button>
@@ -472,18 +472,18 @@ window.openThresholdEditor = (pid) => {
                 <div style="font-size:0.85rem; font-weight:bold; margin-bottom:8px; color:#8b5cf6;"><i class="fa-solid fa-user"></i> Soglia Globale Paziente</div>
                 <div style="display:flex; align-items:center; gap:10px;">
                     <input type="range" min="10" max="100" step="5" value="${globalThreshold}" id="threshold-global-range" oninput="document.getElementById('threshold-global-val').value=this.value" style="flex:1;">
-                    <input type="number" min="10" max="100" value="${globalThreshold}" id="threshold-global-val" style="width:55px; padding:4px; border-radius:4px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.3); color:white; text-align:center; font-size:0.9rem; font-weight:bold;" oninput="document.getElementById('threshold-global-range').value=this.value">
+                    <input type="number" min="10" max="100" value="${globalThreshold}" id="threshold-global-val" style="width:55px; padding:4px; border-radius:4px; border:1px solid rgba(var(--ink-rgb),0.15); background:rgba(var(--shade-rgb),0.3); color:var(--text-primary); text-align:center; font-size:0.9rem; font-weight:bold;" oninput="document.getElementById('threshold-global-range').value=this.value">
                     <span style="font-size:0.85rem; color:var(--text-secondary);">%</span>
                 </div>
                 <button class="btn btn-primary" style="margin-top:8px; padding:6px 16px; font-size:0.8rem;" onclick="setCriterionThreshold('${pid}', document.getElementById('threshold-global-val').value); this.textContent='Salvato ✓'; setTimeout(()=>{this.textContent='Salva';},1500);">Salva</button>
             </div>
             ${overrideRows ? `<div style="margin-bottom:16px;"><div style="font-size:0.85rem; font-weight:bold; margin-bottom:8px; color:var(--text-secondary);"><i class="fa-solid fa-list"></i> Override Attivi</div>${overrideRows}</div>` : ''}
-            <div style="padding:12px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:10px;">
+            <div style="padding:12px; background:rgba(var(--ink-rgb),0.03); border:1px solid rgba(var(--ink-rgb),0.08); border-radius:10px;">
                 <div style="font-size:0.85rem; font-weight:bold; margin-bottom:8px; color:var(--text-secondary);"><i class="fa-solid fa-plus"></i> Aggiungi Override</div>
                 <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:end;">
                     <div style="flex:1; min-width:150px;">
                         <label style="font-size:0.7rem; color:var(--text-secondary);">Ambito</label>
-                        <select id="threshold-new-scope" style="width:100%; padding:6px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.3); color:white; font-size:0.8rem;">
+                        <select id="threshold-new-scope" style="width:100%; padding:6px; border-radius:6px; border:1px solid rgba(var(--ink-rgb),0.15); background:rgba(var(--shade-rgb),0.3); color:var(--text-primary); font-size:0.8rem;">
                             <optgroup label="Modalità">${modeOptions}</optgroup>
                             ${setOptions ? `<optgroup label="Set">${setOptions}</optgroup>` : ''}
                             ${actOptions ? `<optgroup label="Set + Modalità">${actOptions}</optgroup>` : ''}
@@ -491,7 +491,7 @@ window.openThresholdEditor = (pid) => {
                     </div>
                     <div style="width:70px;">
                         <label style="font-size:0.7rem; color:var(--text-secondary);">Soglia %</label>
-                        <input type="number" min="10" max="100" value="80" id="threshold-new-val" style="width:100%; padding:6px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(0,0,0,0.3); color:white; text-align:center; font-size:0.85rem;">
+                        <input type="number" min="10" max="100" value="80" id="threshold-new-val" style="width:100%; padding:6px; border-radius:6px; border:1px solid rgba(var(--ink-rgb),0.15); background:rgba(var(--shade-rgb),0.3); color:var(--text-primary); text-align:center; font-size:0.85rem;">
                     </div>
                     <button class="btn btn-primary" style="padding:6px 14px; font-size:0.8rem;" onclick="addCriterionOverride('${pid}')"><i class="fa-solid fa-plus"></i></button>
                 </div>
@@ -600,7 +600,7 @@ window.loadPatientData = (pid) => {
 
     // === TAB NAVIGATION ===
     container.innerHTML += `
-        <div id="report-tabs" style="display:flex; gap:4px; margin-bottom:15px; background:rgba(0,0,0,0.2); padding:4px; border-radius:12px;">
+        <div id="report-tabs" style="display:flex; gap:4px; margin-bottom:15px; background:rgba(var(--shade-rgb),0.2); padding:4px; border-radius:12px;">
             <button class="report-tab active" onclick="switchReportTab('overview', '${pid}')" data-tab="overview" style="flex:1; padding:8px; border:none; border-radius:8px; cursor:pointer; font-weight:600; font-size:0.85rem; background:var(--accent-color); color:white;">
                 <i class="fa-solid fa-chart-line"></i> Panoramica
             </button>
@@ -724,10 +724,10 @@ function renderOverviewTab(patient) {
     const dailyPcts = metricsDaily.map(d => d.totalLU > 0 ? (d.correctLU / d.totalLU) * 100 : 0);
     const avgDailyPct = dailyPcts.length > 0 ? Math.round(dailyPcts.reduce((a, b) => a + b, 0) / dailyPcts.length) : 0;
 
-    const _fBtn = (val, label) => `<button onclick="changeOverviewFilter('${val}', '${patient.id}')" style="padding:4px 10px; border-radius:6px; font-size:0.7rem; border:1px solid ${timeFilter === val ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)'}; background:${timeFilter === val ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.03)'}; color:${timeFilter === val ? 'var(--accent-color)' : 'var(--text-secondary)'}; cursor:pointer; font-weight:${timeFilter === val ? 'bold' : 'normal'};">${label}</button>`;
+    const _fBtn = (val, label) => `<button onclick="changeOverviewFilter('${val}', '${patient.id}')" style="padding:4px 10px; border-radius:6px; font-size:0.7rem; border:1px solid ${timeFilter === val ? 'var(--accent-color)' : 'rgba(var(--ink-rgb),0.1)'}; background:${timeFilter === val ? 'rgba(99,102,241,0.2)' : 'rgba(var(--ink-rgb),0.03)'}; color:${timeFilter === val ? 'var(--accent-color)' : 'var(--text-secondary)'}; cursor:pointer; font-weight:${timeFilter === val ? 'bold' : 'normal'};">${label}</button>`;
 
     let html = `
-    <div style="display:flex; gap:6px; margin-bottom:12px; align-items:center; flex-wrap:wrap; background:rgba(0,0,0,0.2); padding:8px; border-radius:10px;">
+    <div style="display:flex; gap:6px; margin-bottom:12px; align-items:center; flex-wrap:wrap; background:rgba(var(--shade-rgb),0.2); padding:8px; border-radius:10px;">
         <span style="font-size:0.75rem; color:var(--text-secondary); margin-right:2px;"><i class="fa-solid fa-filter"></i></span>
         ${_fBtn('week', 'Sett.')}
         ${_fBtn('month', 'Mese')}
@@ -735,14 +735,14 @@ function renderOverviewTab(patient) {
         ${_fBtn('custom', 'Da-A')}
         ${_fBtn('all', 'Tutto')}
         ${outlierCount > 0 ? `<label style="font-size:0.7rem; color:var(--text-secondary); display:flex; align-items:center; gap:4px; margin-left:auto; cursor:pointer;"><input type="checkbox" ${excludeOutliers ? 'checked' : ''} onchange="toggleOverviewOutliers('${patient.id}')"> <i class="fa-solid fa-triangle-exclamation" style="color:var(--warning-color); font-size:0.6rem;"></i> Escludi outlier (${outlierCount})</label>` : ''}
-        <button onclick="toggleOverviewChartType('${patient.id}')" style="padding:4px 8px; border-radius:6px; font-size:0.7rem; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.03); color:var(--text-secondary); cursor:pointer; margin-left:${outlierCount > 0 ? '0' : 'auto'};" title="Cambia visualizzazione"><i class="fa-solid ${chartType === 'bar' ? 'fa-chart-line' : 'fa-chart-bar'}"></i></button>
+        <button onclick="toggleOverviewChartType('${patient.id}')" style="padding:4px 8px; border-radius:6px; font-size:0.7rem; border:1px solid rgba(var(--ink-rgb),0.1); background:rgba(var(--ink-rgb),0.03); color:var(--text-secondary); cursor:pointer; margin-left:${outlierCount > 0 ? '0' : 'auto'};" title="Cambia visualizzazione"><i class="fa-solid ${chartType === 'bar' ? 'fa-chart-line' : 'fa-chart-bar'}"></i></button>
     </div>
     ${timeFilter === 'custom' ? `
     <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center; flex-wrap:wrap;">
         <label style="font-size:0.75rem; color:var(--text-secondary);">Da:</label>
-        <input type="date" value="${state._overviewFilterFrom || ''}" onchange="state._overviewFilterFrom=this.value; renderOverviewTab(state.patients.find(p=>p.id==='${patient.id}'))" style="padding:4px 8px; border-radius:6px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.8rem;">
+        <input type="date" value="${state._overviewFilterFrom || ''}" onchange="state._overviewFilterFrom=this.value; renderOverviewTab(state.patients.find(p=>p.id==='${patient.id}'))" style="padding:4px 8px; border-radius:6px; background:rgba(var(--shade-rgb),0.3); border:1px solid var(--glass-border); color:var(--text-primary); font-size:0.8rem;">
         <label style="font-size:0.75rem; color:var(--text-secondary);">A:</label>
-        <input type="date" value="${state._overviewFilterTo || todayStr}" onchange="state._overviewFilterTo=this.value; renderOverviewTab(state.patients.find(p=>p.id==='${patient.id}'))" style="padding:4px 8px; border-radius:6px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.8rem;">
+        <input type="date" value="${state._overviewFilterTo || todayStr}" onchange="state._overviewFilterTo=this.value; renderOverviewTab(state.patients.find(p=>p.id==='${patient.id}'))" style="padding:4px 8px; border-radius:6px; background:rgba(var(--shade-rgb),0.3); border:1px solid var(--glass-border); color:var(--text-primary); font-size:0.8rem;">
     </div>` : ''}
 
     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(120px, 1fr)); gap:10px; margin-bottom:20px;">
@@ -834,11 +834,11 @@ function renderDailyLUChart(dailyData, outlierDays, chartType, dayTags) {
             const gl = document.createElementNS(svgNS, "line");
             gl.setAttribute("x1", padding.left); gl.setAttribute("x2", chartW - padding.right);
             gl.setAttribute("y1", gy); gl.setAttribute("y2", gy);
-            gl.setAttribute("stroke", "rgba(255,255,255,0.06)"); gl.setAttribute("stroke-dasharray", "3,4");
+            gl.setAttribute("stroke", "rgba(var(--ink-rgb),0.06)"); gl.setAttribute("stroke-dasharray", "3,4");
             svg.appendChild(gl);
             const gt = document.createElementNS(svgNS, "text");
             gt.setAttribute("x", padding.left - 4); gt.setAttribute("y", gy + 3);
-            gt.setAttribute("text-anchor", "end"); gt.setAttribute("fill", "rgba(255,255,255,0.25)"); gt.setAttribute("font-size", "7");
+            gt.setAttribute("text-anchor", "end"); gt.setAttribute("fill", "rgba(var(--ink-rgb),0.25)"); gt.setAttribute("font-size", "7");
             gt.textContent = pct + '%';
             svg.appendChild(gt);
         });
@@ -1096,7 +1096,7 @@ function renderDatesTab(patient) {
 
         html += `
         <div class="chart-wrapper" style="margin-bottom:10px; padding:0; overflow:hidden;${isOutlier ? ' border-left:3px solid var(--warning-color); opacity:0.8;' : ''}">
-            <div onclick="toggleDateExpand(this)" style="display:flex; justify-content:space-between; align-items:center; padding:12px 15px; cursor:pointer; transition:background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background=''">
+            <div onclick="toggleDateExpand(this)" style="display:flex; justify-content:space-between; align-items:center; padding:12px 15px; cursor:pointer; transition:background 0.2s;" onmouseover="this.style.background='rgba(var(--ink-rgb),0.03)'" onmouseout="this.style.background=''">
                 <div style="display:flex; align-items:center; gap:10px;">
                     <i class="fa-solid fa-chevron-right date-expand-icon" style="transition:transform 0.2s; font-size:0.7rem; color:var(--text-secondary);"></i>
                     <span style="font-weight:bold; font-size:1rem;">${formatDateEU(dk + 'T00:00:00')}</span>
@@ -1106,13 +1106,13 @@ function renderDatesTab(patient) {
                     <span style="color:var(--text-secondary); font-size:0.8rem;">${sessions.length} attivit&agrave;</span>
                 </div>
                 <div style="display:flex; gap:8px; align-items:center;">
-                    <button class="btn-icon" style="width:24px; height:24px; font-size:0.7rem; color:${dayTag ? dayTag.color : 'var(--text-secondary)'}; border-color:${dayTag ? dayTag.color + '66' : 'rgba(255,255,255,0.1)'}; ${dayTag ? 'background:' + dayTag.color + '22;' : ''}" onclick="event.stopPropagation(); openDayTagPicker('${patient.id}', '${dk}', this)" title="${dayTag ? 'Giornata ' + dayTag.label : 'Tagga giornata'}">${dayTag ? dayTag.symbol : '<i class="fa-solid fa-tag"></i>'}</button>
-                    <button class="btn-icon" style="width:24px; height:24px; font-size:0.6rem; color:${isOutlier ? 'var(--warning-color)' : 'var(--text-secondary)'}; border-color:${isOutlier ? 'rgba(245,158,11,0.4)' : 'rgba(255,255,255,0.1)'}; ${isOutlier ? 'background:rgba(245,158,11,0.15);' : ''}" onclick="event.stopPropagation(); toggleOutlierDay('${patient.id}', '${dk}')" title="${isOutlier ? 'Rimuovi outlier' : 'Segna come outlier'}"><i class="fa-solid fa-triangle-exclamation"></i></button>
+                    <button class="btn-icon" style="width:24px; height:24px; font-size:0.7rem; color:${dayTag ? dayTag.color : 'var(--text-secondary)'}; border-color:${dayTag ? dayTag.color + '66' : 'rgba(var(--ink-rgb),0.1)'}; ${dayTag ? 'background:' + dayTag.color + '22;' : ''}" onclick="event.stopPropagation(); openDayTagPicker('${patient.id}', '${dk}', this)" title="${dayTag ? 'Giornata ' + dayTag.label : 'Tagga giornata'}">${dayTag ? dayTag.symbol : '<i class="fa-solid fa-tag"></i>'}</button>
+                    <button class="btn-icon" style="width:24px; height:24px; font-size:0.6rem; color:${isOutlier ? 'var(--warning-color)' : 'var(--text-secondary)'}; border-color:${isOutlier ? 'rgba(245,158,11,0.4)' : 'rgba(var(--ink-rgb),0.1)'}; ${isOutlier ? 'background:rgba(245,158,11,0.15);' : ''}" onclick="event.stopPropagation(); toggleOutlierDay('${patient.id}', '${dk}')" title="${isOutlier ? 'Rimuovi outlier' : 'Segna come outlier'}"><i class="fa-solid fa-triangle-exclamation"></i></button>
                     <span style="font-size:0.85rem; color:var(--success-color);">${correctLU}<span style="color:var(--text-secondary);">/${totalLU}</span></span>
                     <span style="font-weight:bold; font-size:0.9rem; color:${pctColor(pct)};">${pct}%</span>
                 </div>
             </div>
-            <div class="date-detail-panel" style="display:none; padding:0 15px 12px; border-top:1px solid rgba(255,255,255,0.05);">
+            <div class="date-detail-panel" style="display:none; padding:0 15px 12px; border-top:1px solid rgba(var(--ink-rgb),0.05);">
                 ${hasDailyNote ? `
                 <div class="daily-note-card" style="margin:8px 0 12px; padding:12px; border-radius:10px; background:rgba(234,179,8,0.08); border:1px solid rgba(234,179,8,0.2); border-left:3px solid #eab308;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
@@ -1139,17 +1139,17 @@ function renderDatesTab(patient) {
                 if (daySet) {
                     const fi = daySet.items && daySet.items.length > 0 ? daySet.items.find(it => it.img || it.image || it.url) : null;
                     const dayThumbSrc = fi ? (fi.img || fi.image || fi.url) : (daySet.coverImage || null);
-                    if (dayThumbSrc) dayThumb = `<img src="${dayThumbSrc}" style="width:22px; height:22px; border-radius:4px; object-fit:cover; border:1px solid rgba(255,255,255,0.1); flex-shrink:0;" alt="">`;
+                    if (dayThumbSrc) dayThumb = `<img src="${dayThumbSrc}" style="width:22px; height:22px; border-radius:4px; object-fit:cover; border:1px solid rgba(var(--ink-rgb),0.1); flex-shrink:0;" alt="">`;
                 }
             }
             return `
-                    <div style="margin-top:8px; border:1px solid rgba(255,255,255,0.05); border-radius:10px; overflow:hidden;">
-                        <div onclick="toggleDaySessionDetail(this, '${patient.id}', ${s.originalIndex}, '${activityKey}')" style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; cursor:pointer; transition:background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background=''">
+                    <div style="margin-top:8px; border:1px solid rgba(var(--ink-rgb),0.05); border-radius:10px; overflow:hidden;">
+                        <div onclick="toggleDaySessionDetail(this, '${patient.id}', ${s.originalIndex}, '${activityKey}')" style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; cursor:pointer; transition:background 0.15s;" onmouseover="this.style.background='rgba(var(--ink-rgb),0.02)'" onmouseout="this.style.background=''">
                             <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:0;">
                                 <i class="fa-solid fa-chevron-right day-act-icon" style="transition:transform 0.2s; font-size:0.6rem; color:#555;"></i>
                                 ${dayThumb}
                                 <span style="background:rgba(99,102,241,0.15); padding:2px 8px; border-radius:6px; font-size:0.7rem; color:var(--accent-color); flex-shrink:0; display:inline-flex; align-items:center; gap:4px;"><i class="fa-solid ${dayModeIcon}" style="font-size:0.65rem;"></i>${modeName}</span>
-                                <span style="font-size:0.9rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.setName}</span>${s.setCat ? `<span style="font-size:0.65rem; color:var(--text-secondary); background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:4px; flex-shrink:0;">${s.setCat}</span>` : ''}${typeTag}${fieldTag}${variantTag}${sessionNoteIcon}
+                                <span style="font-size:0.9rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.setName}</span>${s.setCat ? `<span style="font-size:0.65rem; color:var(--text-secondary); background:rgba(var(--ink-rgb),0.05); padding:1px 6px; border-radius:4px; flex-shrink:0;">${s.setCat}</span>` : ''}${typeTag}${fieldTag}${variantTag}${sessionNoteIcon}
                             </div>
                             <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
                                 <span style="font-size:0.85rem;">${s.correct}/${s.total}</span>
@@ -1158,7 +1158,7 @@ function renderDatesTab(patient) {
                                 <button class="btn-icon" style="width:24px; height:24px; font-size:0.65rem; display:inline-flex; color:var(--danger-color); border-color:rgba(239,68,68,0.3);" onclick="event.stopPropagation(); deleteSession('${patient.id}', ${s.originalIndex})"><i class="fa-solid fa-trash"></i></button>
                             </div>
                         </div>
-                        <div class="day-activity-chart-panel" style="display:none; padding:8px 12px 12px; border-top:1px solid rgba(255,255,255,0.03);"></div>
+                        <div class="day-activity-chart-panel" style="display:none; padding:8px 12px 12px; border-top:1px solid rgba(var(--ink-rgb),0.03);"></div>
                     </div>`;
         }).join('')}
             </div>
@@ -1258,7 +1258,7 @@ window.toggleDaySessionDetail = (header, patientId, sessionIdx, activityKeyEncod
                     if (x > 0) parts.push(`<span style="color:var(--danger-color)">${x}X</span>`);
                     if (p > 0) parts.push(`<span style="color:var(--warning-color)">${p}P</span>`);
                     if (parts.length === 0 && na > 0) parts.push(`<span style="color:#888">N/A</span>`);
-                    let bg = 'rgba(255,255,255,0.05)', border = 'rgba(255,255,255,0.1)';
+                    let bg = 'rgba(var(--ink-rgb),0.05)', border = 'rgba(var(--ink-rgb),0.1)';
                     if (v > 0 && x === 0 && p === 0) { bg = 'rgba(16,185,129,0.1)'; border = 'rgba(16,185,129,0.3)'; }
                     else if (x > 0) { bg = 'rgba(239,68,68,0.1)'; border = 'rgba(239,68,68,0.3)'; }
                     else if (p > 0) { bg = 'rgba(245,158,11,0.1)'; border = 'rgba(245,158,11,0.3)'; }
@@ -1346,7 +1346,7 @@ window.toggleDaySessionDetail = (header, patientId, sessionIdx, activityKeyEncod
                 s.memLavTrials.forEach((t, i) => {
                     const icon = t.result === true ? '✅' : t.result === 'prompt' ? '🟡' : '❌';
                     const errText = t.totalErrors > 0 ? ` ${t.totalErrors}err` : '';
-                    html += `<span style="display:inline-block; padding:2px 8px; border-radius:6px; font-size:0.75rem; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);">${icon} T${i + 1} (span ${t.span})${errText}</span>`;
+                    html += `<span style="display:inline-block; padding:2px 8px; border-radius:6px; font-size:0.75rem; background:rgba(var(--ink-rgb),0.05); border:1px solid rgba(var(--ink-rgb),0.1);">${icon} T${i + 1} (span ${t.span})${errText}</span>`;
                 });
                 html += `</div></div>`;
             }
@@ -1381,7 +1381,7 @@ window.toggleDaySessionDetail = (header, patientId, sessionIdx, activityKeyEncod
                 h.setName === setName && h.mode === modeCode && getSessionTypeGroup(h) === typeGroup
             ).sort((a, b) => new Date(a.date) - new Date(b.date));
             if (allSessions.length > 1) {
-                html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.05);">
+                html += `<div style="margin-top:6px; padding-top:6px; border-top:1px solid rgba(var(--ink-rgb),0.05);">
                     <div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:4px;"><i class="fa-solid fa-chart-line"></i> Andamento (${allSessions.length} sess.)</div>
                     <div id="day-chart-${sessionIdx}"></div>
                 </div>`;
@@ -1421,7 +1421,7 @@ function renderItemDetailsCollapsible(s, patientId, sessionIdx, isTD) {
 
     return `
         <tr class="item-details-row" style="display:table-row;">
-            <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(0,0,0,0.15);">
+            <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(var(--shade-rgb),0.15);">
                 <div style="font-size:0.7rem; color:${wrongColor}; margin-bottom:4px; font-weight:bold;">${wrongLabel} (${wrong.length}):</div>
                 <div style="display:flex; flex-wrap:wrap; gap:2px;">${chips}</div>
             </td>
@@ -1444,8 +1444,8 @@ function renderTaskStepDetailsCollapsible(s, patientId, sessionIdx, isTD) {
         if (p > 0) parts.push(`<span style="color:var(--warning-color)">${p}P</span>`);
         if (parts.length === 0 && na > 0) parts.push(`<span style="color:#888">N/A</span>`);
 
-        let bg = 'rgba(255,255,255,0.05)';
-        let border = 'rgba(255,255,255,0.1)';
+        let bg = 'rgba(var(--ink-rgb),0.05)';
+        let border = 'rgba(var(--ink-rgb),0.1)';
 
         if (v > 0 && x === 0 && p === 0) { bg = 'rgba(16,185,129,0.1)'; border = 'rgba(16,185,129,0.3)'; }
         else if (x > 0) { bg = 'rgba(239,68,68,0.1)'; border = 'rgba(239,68,68,0.3)'; }
@@ -1459,7 +1459,7 @@ function renderTaskStepDetailsCollapsible(s, patientId, sessionIdx, isTD) {
 
     return `
         <tr class="item-details-row" style="display:table-row;">
-            <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(0,0,0,0.15);">
+            <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(var(--shade-rgb),0.15);">
                 <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-list-ol"></i> Dettaglio Passaggi (V/X/P):</div>
                 <div style="display:flex; flex-direction:column; gap:2px;">${chips}</div>
             </td>
@@ -1489,7 +1489,7 @@ function renderSetBreakdownCollapsible(s, patientId, sessionIdx, isTD) {
 
     return `
         <tr class="item-details-row" style="display:table-row;">
-            <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(0,0,0,0.15);">
+            <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(var(--shade-rgb),0.15);">
                 <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-images"></i> Dettaglio per Set (${s.setBreakdown.length}):</div>
                 <div style="display:flex; flex-direction:column; gap:2px;">${chips}</div>
             </td>
@@ -1522,7 +1522,7 @@ function renderTopoBreakdownCollapsible(s, patientId, sessionIdx, isTD) {
 
     return `
         <tr class="item-details-row" style="display:table-row;">
-            <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(0,0,0,0.15);">
+            <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(var(--shade-rgb),0.15);">
                 <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-layer-group"></i> Dettaglio Topologie (${s.topoBreakdown.length}):</div>
                 ${header}
                 <div style="display:flex; flex-direction:column; gap:2px;">${chips}</div>
@@ -1550,7 +1550,7 @@ function renderGoNogoBreakdownCollapsible(s, patientId, sessionIdx, isTD) {
 
     return `
         <tr class="item-details-row" style="display:table-row;">
-            <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(0,0,0,0.15);">
+            <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(var(--shade-rgb),0.15);">
                 <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-traffic-light"></i> Breakdown Go / No-Go${s.goNogoTag ? ` <span style="opacity:0.7;">(No-Go: ${s.goNogoTag})</span>` : ''}:</div>
                 ${row('Go', b.go, 'var(--success-color)')}
                 ${row('No-Go', b.nogo, 'var(--danger-color)')}
@@ -1576,7 +1576,7 @@ function renderMemLavCollapsible(s, patientId, sessionIdx, isTD) {
 
     return `
         <tr class="item-details-row" style="display:table-row;">
-            <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(0,0,0,0.15);">
+            <td colspan="${colSpan}" style="padding:6px 10px; background:rgba(var(--shade-rgb),0.15);">
                 <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px; font-weight:bold;"><i class="fa-solid fa-cubes-stacked"></i> Memoria di Lavoro · <span style="color:var(--accent-color);">${themeLabel}</span> · Span ${s.memLavSpan || '?'} · ${s.memLavTrials.length} trial:</div>
                 <div style="display:flex; flex-direction:column; gap:2px;">${trialChips}</div>
             </td>
@@ -1636,7 +1636,7 @@ function renderActivitiesTab(patient, sortBy) {
 
     // Sort toolbar
     let html = `
-    <div style="display:flex; gap:6px; margin-bottom:12px; align-items:center; flex-wrap:wrap; background:rgba(0,0,0,0.2); padding:8px; border-radius:10px;">
+    <div style="display:flex; gap:6px; margin-bottom:12px; align-items:center; flex-wrap:wrap; background:rgba(var(--shade-rgb),0.2); padding:8px; border-radius:10px;">
         <span style="font-size:0.75rem; color:var(--text-secondary); margin-right:4px;"><i class="fa-solid fa-sort"></i> Ordina:</span>
         ${[
             ['recent-desc', 'Recenti ↓'],
@@ -1646,7 +1646,7 @@ function renderActivitiesTab(patient, sortBy) {
             ['criterion-asc', 'Criterio ↑'],
             ['pct-desc', '% ↓'],
             ['pct-asc', '% ↑']
-        ].map(([val, label]) => `<button onclick="changeActivitiesSort('${val}', '${patient.id}')" style="padding:4px 10px; border-radius:6px; font-size:0.7rem; border:1px solid ${sortBy === val ? 'var(--accent-color)' : 'rgba(255,255,255,0.1)'}; background:${sortBy === val ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.03)'}; color:${sortBy === val ? 'var(--accent-color)' : 'var(--text-secondary)'}; cursor:pointer; font-weight:${sortBy === val ? 'bold' : 'normal'};">${label}</button>`).join('')}
+        ].map(([val, label]) => `<button onclick="changeActivitiesSort('${val}', '${patient.id}')" style="padding:4px 10px; border-radius:6px; font-size:0.7rem; border:1px solid ${sortBy === val ? 'var(--accent-color)' : 'rgba(var(--ink-rgb),0.1)'}; background:${sortBy === val ? 'rgba(99,102,241,0.2)' : 'rgba(var(--ink-rgb),0.03)'}; color:${sortBy === val ? 'var(--accent-color)' : 'var(--text-secondary)'}; cursor:pointer; font-weight:${sortBy === val ? 'bold' : 'normal'};">${label}</button>`).join('')}
     </div>`;
 
     chartList.forEach(item => {
@@ -1676,7 +1676,7 @@ function renderActivitiesTab(patient, sortBy) {
                 const firstImg = setObj.items && setObj.items.length > 0 ? setObj.items.find(it => it.img || it.image || it.url) : null;
                 const imgSrc = firstImg ? (firstImg.img || firstImg.image || firstImg.url) : (setObj.coverImage || null);
                 if (imgSrc) {
-                    setThumbHtml = `<img src="${imgSrc}" style="width:28px; height:28px; border-radius:6px; object-fit:cover; border:1px solid rgba(255,255,255,0.1); flex-shrink:0;" alt="">`;
+                    setThumbHtml = `<img src="${imgSrc}" style="width:28px; height:28px; border-radius:6px; object-fit:cover; border:1px solid rgba(var(--ink-rgb),0.1); flex-shrink:0;" alt="">`;
                 }
             }
         }
@@ -1729,13 +1729,13 @@ function renderActivitiesTab(patient, sortBy) {
                 <h4 style="margin:0; color:var(--accent-color); font-size:0.95rem; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
                     ${setThumbHtml}
                     <i class="fa-solid ${modeIconClass}" style="font-size:0.85rem; opacity:0.7;"></i>
-                    ${setName} ${setCat ? `<span style="color:var(--text-secondary); font-size:0.7em; background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:4px;">${setCat}</span>` : ''}<span style="color:#666; font-size:0.8em;">(${modeName})</span> ${badgeHtml} ${fluenzaObiettivoHtml} ${variantBadgesHtml}
+                    ${setName} ${setCat ? `<span style="color:var(--text-secondary); font-size:0.7em; background:rgba(var(--ink-rgb),0.05); padding:1px 6px; border-radius:4px;">${setCat}</span>` : ''}<span style="color:#666; font-size:0.8em;">(${modeName})</span> ${badgeHtml} ${fluenzaObiettivoHtml} ${variantBadgesHtml}
                 </h4>
                 <div style="display:flex; align-items:center; gap:6px;">
                     ${lastNoteHtml}
                     <span style="font-size:0.65rem; background:rgba(${typeGroup === 'timedelay' ? '245,158,11' : '16,185,129'},0.15); color:${typeColor}; padding:2px 8px; border-radius:6px; font-weight:bold;">${typeLbl}</span>
                     <span style="font-size:0.75rem; color:var(--text-secondary);">${sessions.length} sess.</span>
-                    <button class="btn-icon" onclick="toggleActivityDetails(this)" style="width:28px; height:28px; background:rgba(255,255,255,0.05);" title="Dettagli">
+                    <button class="btn-icon" onclick="toggleActivityDetails(this)" style="width:28px; height:28px; background:rgba(var(--ink-rgb),0.05);" title="Dettagli">
                         <i class="fa-solid fa-chevron-down" style="font-size:0.7rem;"></i>
                     </button>
                 </div>
@@ -1746,7 +1746,7 @@ function renderActivitiesTab(patient, sortBy) {
             </div>
             ${lastNoteContentHtml}
             <div id="${chartId}"></div>
-            <div class="activity-details-panel" style="display:none; margin-top:10px; border-top:1px solid rgba(255,255,255,0.05); padding-top:8px;">
+            <div class="activity-details-panel" style="display:none; margin-top:10px; border-top:1px solid rgba(var(--ink-rgb),0.05); padding-top:8px;">
                 ${taskStepsAnalysisHtml}
                 ${setBreakdownAnalysisHtml}
                 ${topoAnalysisHtml}
@@ -1806,7 +1806,7 @@ function renderActivitiesTab(patient, sortBy) {
                             </td>
                         </tr>` : '';
             return `
-                        <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <tr style="border-bottom:1px solid rgba(var(--ink-rgb),0.05);">
                             <td style="padding:6px 5px;">${formatDateEU(s.date)}${noteIcon}${tagsChip}</td>
                             <td>${s.correct}/${s.total}${scoreExtra}</td>
                             <td style="font-weight:bold; color:${pctColor(s.percentage, item.threshold)}">${s.percentage}%</td>
@@ -1922,14 +1922,14 @@ function renderActivitySVGChart(container, sessions, typeGroup, modeCode, thresh
             const gl = document.createElementNS(svgNS, "line");
             gl.setAttribute("x1", "20"); gl.setAttribute("x2", "300");
             gl.setAttribute("y1", gy); gl.setAttribute("y2", gy);
-            gl.setAttribute("stroke", "rgba(255,255,255,0.08)");
+            gl.setAttribute("stroke", "rgba(var(--ink-rgb),0.08)");
             gl.setAttribute("stroke-width", "1");
             gl.setAttribute("stroke-dasharray", "3,4");
             svg.appendChild(gl);
             const gt = document.createElementNS(svgNS, "text");
             gt.setAttribute("x", "17"); gt.setAttribute("y", gy + 3);
             gt.setAttribute("text-anchor", "end");
-            gt.setAttribute("fill", "rgba(255,255,255,0.25)");
+            gt.setAttribute("fill", "rgba(var(--ink-rgb),0.25)");
             gt.setAttribute("font-size", "7");
             gt.textContent = pct + '%';
             svg.appendChild(gt);
@@ -1950,14 +1950,14 @@ function renderActivitySVGChart(container, sessions, typeGroup, modeCode, thresh
             const gl = document.createElementNS(svgNS, "line");
             gl.setAttribute("x1", "20"); gl.setAttribute("x2", "300");
             gl.setAttribute("y1", gy); gl.setAttribute("y2", gy);
-            gl.setAttribute("stroke", "rgba(255,255,255,0.08)");
+            gl.setAttribute("stroke", "rgba(var(--ink-rgb),0.08)");
             gl.setAttribute("stroke-width", "1");
             gl.setAttribute("stroke-dasharray", "3,4");
             svg.appendChild(gl);
             const gt = document.createElementNS(svgNS, "text");
             gt.setAttribute("x", "17"); gt.setAttribute("y", gy + 3);
             gt.setAttribute("text-anchor", "end");
-            gt.setAttribute("fill", "rgba(255,255,255,0.25)");
+            gt.setAttribute("fill", "rgba(var(--ink-rgb),0.25)");
             gt.setAttribute("font-size", "7");
             gt.textContent = val;
             svg.appendChild(gt);
@@ -2175,12 +2175,12 @@ window.openDayTagPicker = (pid, dateKey, anchorEl) => {
 
     const pop = document.createElement('div');
     pop.className = 'day-tag-popover';
-    pop.style.cssText = 'position:fixed; z-index:100000; background:var(--bg-elevated, #1e1e2e); border:1px solid rgba(255,255,255,0.12); border-radius:12px; padding:6px; box-shadow:0 8px 24px rgba(0,0,0,0.5); display:flex; flex-direction:column; gap:2px; min-width:150px;';
+    pop.style.cssText = 'position:fixed; z-index:100000; background:var(--bg-elevated, #1e1e2e); border:1px solid rgba(var(--ink-rgb),0.12); border-radius:12px; padding:6px; box-shadow:0 8px 24px rgba(var(--shadow-rgb),0.5); display:flex; flex-direction:column; gap:2px; min-width:150px;';
     pop.innerHTML = Object.entries(DAY_TAGS).map(([key, t]) => `
-        <button onclick="event.stopPropagation(); setDayTag('${pid}', '${dateKey}', '${key}')" style="display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:8px; border:none; cursor:pointer; background:${current === key ? 'rgba(99,102,241,0.2)' : 'transparent'}; color:#eee; font-size:0.82rem; text-align:left;" onmouseover="this.style.background='rgba(255,255,255,0.07)'" onmouseout="this.style.background='${current === key ? 'rgba(99,102,241,0.2)' : 'transparent'}'">
+        <button onclick="event.stopPropagation(); setDayTag('${pid}', '${dateKey}', '${key}')" style="display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:8px; border:none; cursor:pointer; background:${current === key ? 'rgba(99,102,241,0.2)' : 'transparent'}; color:#eee; font-size:0.82rem; text-align:left;" onmouseover="this.style.background='rgba(var(--ink-rgb),0.07)'" onmouseout="this.style.background='${current === key ? 'rgba(99,102,241,0.2)' : 'transparent'}'">
             <span style="font-size:1rem;">${t.symbol}</span> Giornata ${t.label}${current === key ? ' <i class="fa-solid fa-check" style="margin-left:auto; color:var(--success-color); font-size:0.7rem;"></i>' : ''}
         </button>`).join('') +
-        `<button onclick="event.stopPropagation(); setDayTag('${pid}', '${dateKey}', null)" style="display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:8px; border:none; cursor:pointer; background:transparent; color:#888; font-size:0.82rem; text-align:left; border-top:1px solid rgba(255,255,255,0.06); margin-top:2px;" onmouseover="this.style.background='rgba(255,255,255,0.07)'" onmouseout="this.style.background='transparent'">
+        `<button onclick="event.stopPropagation(); setDayTag('${pid}', '${dateKey}', null)" style="display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:8px; border:none; cursor:pointer; background:transparent; color:#888; font-size:0.82rem; text-align:left; border-top:1px solid rgba(var(--ink-rgb),0.06); margin-top:2px;" onmouseover="this.style.background='rgba(var(--ink-rgb),0.07)'" onmouseout="this.style.background='transparent'">
             <i class="fa-solid fa-ban" style="width:16px; text-align:center;"></i> Nessun tag
         </button>`;
 
@@ -2376,11 +2376,11 @@ window._noteToolbarHtml = (opts) => {
     h += btn('bold', 'Grassetto', '<i class="fa-solid fa-bold"></i>');
     h += btn('italic', 'Corsivo', '<i class="fa-solid fa-italic"></i>');
     h += btn('strike', 'Barrato', '<i class="fa-solid fa-strikethrough"></i>');
-    h += `<span style="width:1px; background:rgba(255,255,255,0.1); margin:0 4px;"></span>`;
+    h += `<span style="width:1px; background:rgba(var(--ink-rgb),0.1); margin:0 4px;"></span>`;
     h += btn('h1', 'Titolo', '<i class="fa-solid fa-heading"></i>');
     h += btn('h2', 'Sottotitolo', 'H2');
     h += btn('h3', 'Sottotitolo piccolo', 'H3');
-    h += `<span style="width:1px; background:rgba(255,255,255,0.1); margin:0 4px;"></span>`;
+    h += `<span style="width:1px; background:rgba(var(--ink-rgb),0.1); margin:0 4px;"></span>`;
     h += btn('ul', 'Lista puntata', '<i class="fa-solid fa-list-ul"></i>');
     h += btn('ol', 'Lista numerata', '<i class="fa-solid fa-list-ol"></i>');
     return h;
@@ -2414,7 +2414,7 @@ window.openDailyNoteEditor = (patientId, dateKey) => {
                     <h3 style="margin:0; font-size:1rem;">Nota della Giornata</h3>
                 </div>
                 <div style="display:flex; align-items:center; gap:10px;">
-                    <input type="date" id="daily-note-date" value="${dateKey}" style="padding:4px 8px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:white; font-size:0.85rem;">
+                    <input type="date" id="daily-note-date" value="${dateKey}" style="padding:4px 8px; border-radius:8px; background:rgba(var(--shade-rgb),0.3); border:1px solid var(--glass-border); color:var(--text-primary); font-size:0.85rem;">
                     <button onclick="document.getElementById('daily-note-editor-overlay').remove()" style="background:none; border:none; color:var(--text-secondary); cursor:pointer; font-size:1.2rem;"><i class="fa-solid fa-xmark"></i></button>
                 </div>
             </div>
@@ -2590,8 +2590,8 @@ function renderDiaryTab(patient) {
         const dayActivityNotes = history.filter(h => getDateKey(h.date) === dk && h.note);
 
         html += `
-        <div class="diary-entry" style="margin-bottom:16px; border-radius:12px; overflow:hidden; border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02);">
-            <div style="padding:12px 16px; background:rgba(0,0,0,0.15); display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05);">
+        <div class="diary-entry" style="margin-bottom:16px; border-radius:12px; overflow:hidden; border:1px solid rgba(var(--ink-rgb),0.06); background:rgba(var(--ink-rgb),0.02);">
+            <div style="padding:12px 16px; background:rgba(var(--shade-rgb),0.15); display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(var(--ink-rgb),0.05);">
                 <div style="display:flex; align-items:center; gap:10px;">
                     <i class="fa-solid fa-calendar-day" style="color:var(--accent-color); font-size:0.9rem;"></i>
                     <span style="font-weight:bold; font-size:1rem;">${formatDateEU(dk + 'T00:00:00')}</span>
@@ -2605,7 +2605,7 @@ function renderDiaryTab(patient) {
         // Daily note
         if (hasDailyNote) {
             html += `
-            <div style="padding:14px 16px; border-bottom:${dayActivityNotes.length > 0 ? '1px solid rgba(255,255,255,0.05)' : 'none'};">
+            <div style="padding:14px 16px; border-bottom:${dayActivityNotes.length > 0 ? '1px solid rgba(var(--ink-rgb),0.05)' : 'none'};">
                 <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
                     <span style="display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:5px; background:rgba(234,179,8,0.15);"><i class="fa-solid fa-book-medical" style="color:#eab308; font-size:0.6rem;"></i></span>
                     <span style="font-size:0.75rem; color:#eab308; font-weight:600;">Nota della Giornata</span>
@@ -2624,7 +2624,7 @@ function renderDiaryTab(patient) {
                 const escapedMode = (s.mode || '').replace(/'/g, "\\'");
                 const escapedSetName = (s.setName || '').replace(/'/g, "\\'");
                 html += `
-                <div style="padding:10px 16px; border-bottom:1px solid rgba(255,255,255,0.03);">
+                <div style="padding:10px 16px; border-bottom:1px solid rgba(var(--ink-rgb),0.03);">
                     <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px; flex-wrap:wrap;">
                         <span style="display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:5px; background:rgba(99,102,241,0.15);"><i class="fa-solid ${modeIcon}" style="color:var(--accent-color); font-size:0.6rem;"></i></span>
                         <span style="font-size:0.75rem; color:var(--accent-color); font-weight:600;">${modeName}</span>
@@ -2827,10 +2827,10 @@ function renderTaskStepsAnalysis(sessions) {
             const _clr = pctColor(sPct);
 
             html += `
-            <div style="border:1px solid rgba(255,255,255,0.05); border-radius:8px; margin-bottom:6px; overflow:hidden;">
+            <div style="border:1px solid rgba(var(--ink-rgb),0.05); border-radius:8px; margin-bottom:6px; overflow:hidden;">
                 <div onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? '' : 'none'; this.querySelector('.ta-sess-icon').style.transform = this.nextElementSibling.style.display === 'none' ? '' : 'rotate(90deg)';"
-                     style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; cursor:pointer; background:rgba(255,255,255,0.02);"
-                     onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='rgba(255,255,255,0.02)'">
+                     style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; cursor:pointer; background:rgba(var(--ink-rgb),0.02);"
+                     onmouseover="this.style.background='rgba(var(--ink-rgb),0.04)'" onmouseout="this.style.background='rgba(var(--ink-rgb),0.02)'">
                     <div style="display:flex; align-items:center; gap:8px;">
                         <i class="fa-solid fa-chevron-right ta-sess-icon" style="font-size:0.6rem; color:var(--text-secondary); transition:transform 0.2s;"></i>
                         <span style="font-size:0.8rem; font-weight:600;">${formatDateEU(session.date)}</span>
@@ -2871,7 +2871,7 @@ function renderTaskStepTable(stepAggregates, title) {
         const barWidth = step.pctCorrect;
         const barColor = pctColor(step.pctCorrect);
         html += `
-        <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
+        <tr style="border-bottom:1px solid rgba(var(--ink-rgb),0.03);">
             <td style="padding:5px 4px; color:var(--text-secondary); font-weight:bold;">${i + 1}</td>
             <td style="padding:5px 4px; font-weight:600;">${step.name}</td>
             <td style="text-align:center; color:var(--success-color);">${step.totalV}</td>
@@ -2879,7 +2879,7 @@ function renderTaskStepTable(stepAggregates, title) {
             <td style="text-align:center; color:var(--text-secondary);">${step.totalScored}</td>
             <td style="text-align:right; width:90px;">
                 <div style="display:flex; align-items:center; gap:4px; justify-content:flex-end;">
-                    <div style="width:50px; height:6px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden;">
+                    <div style="width:50px; height:6px; background:rgba(var(--ink-rgb),0.1); border-radius:3px; overflow:hidden;">
                         <div style="width:${barWidth}%; height:100%; background:${barColor}; border-radius:3px;"></div>
                     </div>
                     <span style="font-weight:bold; color:${barColor}; min-width:30px; text-align:right;">${step.pctCorrect}%</span>
@@ -2964,10 +2964,10 @@ function renderSetBreakdownAnalysis(sessions) {
             }));
 
             html += `
-            <div style="border:1px solid rgba(255,255,255,0.05); border-radius:8px; margin-bottom:6px; overflow:hidden;">
+            <div style="border:1px solid rgba(var(--ink-rgb),0.05); border-radius:8px; margin-bottom:6px; overflow:hidden;">
                 <div onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? '' : 'none'; this.querySelector('.sb-sess-icon').style.transform = this.nextElementSibling.style.display === 'none' ? '' : 'rotate(90deg)';"
-                     style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; cursor:pointer; background:rgba(255,255,255,0.02);"
-                     onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='rgba(255,255,255,0.02)'">
+                     style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; cursor:pointer; background:rgba(var(--ink-rgb),0.02);"
+                     onmouseover="this.style.background='rgba(var(--ink-rgb),0.04)'" onmouseout="this.style.background='rgba(var(--ink-rgb),0.02)'">
                     <div style="display:flex; align-items:center; gap:8px;">
                         <i class="fa-solid fa-chevron-right sb-sess-icon" style="font-size:0.6rem; color:var(--text-secondary); transition:transform 0.2s;"></i>
                         <span style="font-size:0.8rem; font-weight:600;">${formatDateEU(session.date)}</span>
@@ -3009,7 +3009,7 @@ function renderSetBreakdownTable(setAggregates, title) {
         const barWidth = s.pctCorrect;
         const barColor = pctColor(s.pctCorrect);
         html += `
-        <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
+        <tr style="border-bottom:1px solid rgba(var(--ink-rgb),0.03);">
             <td style="padding:5px 4px; color:var(--text-secondary); font-weight:bold;">${i + 1}</td>
             <td style="padding:5px 4px; font-weight:600;">${s.setName}${s.setCat ? ` <span style="color:var(--text-secondary); font-size:0.65rem;">(${s.setCat})</span>` : ''}</td>
             <td style="text-align:center; color:var(--success-color);">${s.totalV}</td>
@@ -3017,7 +3017,7 @@ function renderSetBreakdownTable(setAggregates, title) {
             <td style="text-align:center; color:var(--text-secondary);">${s.totalScored}</td>
             <td style="text-align:right; width:90px;">
                 <div style="display:flex; align-items:center; gap:4px; justify-content:flex-end;">
-                    <div style="width:50px; height:6px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden;">
+                    <div style="width:50px; height:6px; background:rgba(var(--ink-rgb),0.1); border-radius:3px; overflow:hidden;">
                         <div style="width:${barWidth}%; height:100%; background:${barColor}; border-radius:3px;"></div>
                     </div>
                     <span style="font-weight:bold; color:${barColor}; min-width:30px; text-align:right;">${s.pctCorrect}%</span>
@@ -3087,14 +3087,14 @@ function renderTopoAnalysis(sessions) {
     posAggregates.sort((a, b) => a.pctCorrect - b.pctCorrect).forEach(p => {
         const barColor = pctColor(p.pctCorrect);
         html += `
-        <tr style="border-bottom:1px solid rgba(255,255,255,0.03);">
+        <tr style="border-bottom:1px solid rgba(var(--ink-rgb),0.03);">
             <td style="padding:5px 4px; font-weight:600;">${p.label}</td>
             <td style="text-align:center; color:var(--success-color);">${p.totalV}</td>
             <td style="text-align:center; color:var(--danger-color);">${p.totalX + p.totalP}</td>
             <td style="text-align:center;">${p.totalScored}</td>
             <td style="text-align:right; width:90px;">
                 <div style="display:flex; align-items:center; gap:4px; justify-content:flex-end;">
-                    <div style="width:50px; height:6px; background:rgba(255,255,255,0.1); border-radius:3px; overflow:hidden;">
+                    <div style="width:50px; height:6px; background:rgba(var(--ink-rgb),0.1); border-radius:3px; overflow:hidden;">
                         <div style="width:${p.pctCorrect}%; height:100%; background:${barColor}; border-radius:3px;"></div>
                     </div>
                     <span style="font-weight:bold; color:${barColor}; min-width:30px; text-align:right;">${p.pctCorrect}%</span>
@@ -3268,7 +3268,7 @@ window.generateAIReport = async (pid) => {
                 <div style="max-width:700px; margin:0 auto; display:flex; gap:8px; align-items:center;">
                     <i class="fa-solid fa-comments" style="color:var(--accent-color); font-size:1rem;"></i>
                     <input type="text" id="ai-report-chat-input" placeholder="Chiedi altro sul report..."
-                        style="flex:1; padding:10px 14px; border-radius:10px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.05); color:var(--text-primary); font-size:0.85rem; outline:none;"
+                        style="flex:1; padding:10px 14px; border-radius:10px; border:1px solid var(--glass-border); background:rgba(var(--ink-rgb),0.05); color:var(--text-primary); font-size:0.85rem; outline:none;"
                         onkeydown="if(event.key==='Enter')askReportFollowUp()">
                     <button class="btn btn-primary" style="padding:8px 14px; border-radius:10px; font-size:0.85rem;" onclick="askReportFollowUp()">
                         <i class="fa-solid fa-paper-plane"></i>
@@ -3360,7 +3360,7 @@ function _renderAIReport(body, pid, finalReport, reportId) {
                 <i class="fa-solid fa-clock-rotate-left"></i> Storico
             </button>
         </div>
-        <div id="ai-report-content" style="background:rgba(0,0,0,0.2); border:1px solid var(--glass-border); border-radius:12px; padding:20px; line-height:1.7; font-size:0.9rem; color:var(--text-primary);">
+        <div id="ai-report-content" style="background:rgba(var(--shade-rgb),0.2); border:1px solid var(--glass-border); border-radius:12px; padding:20px; line-height:1.7; font-size:0.9rem; color:var(--text-primary);">
             ${_markdownToHtml(finalReport)}
         </div>
         <div id="ai-report-followup-area"></div>
@@ -3445,7 +3445,7 @@ window.askReportFollowUp = async () => {
 
         if (followupArea) {
             followupArea.innerHTML += `
-                <div style="margin-top:8px; padding:14px 16px; background:rgba(0,0,0,0.2); border:1px solid var(--glass-border); border-radius:10px; font-size:0.85rem; line-height:1.6;">
+                <div style="margin-top:8px; padding:14px 16px; background:rgba(var(--shade-rgb),0.2); border:1px solid var(--glass-border); border-radius:10px; font-size:0.85rem; line-height:1.6;">
                     <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px; color:var(--accent-color); font-weight:600; font-size:0.75rem;">
                         <i class="fa-solid fa-wand-magic-sparkles"></i> Risposta AI
                     </div>
@@ -3592,7 +3592,7 @@ window.openReportHistoryStandalone = (pid) => {
                 <div style="max-width:700px; margin:0 auto; display:flex; gap:8px; align-items:center;">
                     <i class="fa-solid fa-comments" style="color:var(--accent-color); font-size:1rem;"></i>
                     <input type="text" id="ai-report-chat-input" placeholder="Chiedi altro sul report..."
-                        style="flex:1; padding:10px 14px; border-radius:10px; border:1px solid var(--glass-border); background:rgba(255,255,255,0.05); color:var(--text-primary); font-size:0.85rem; outline:none;"
+                        style="flex:1; padding:10px 14px; border-radius:10px; border:1px solid var(--glass-border); background:rgba(var(--ink-rgb),0.05); color:var(--text-primary); font-size:0.85rem; outline:none;"
                         onkeydown="if(event.key==='Enter')askReportFollowUp()">
                     <button class="btn btn-primary" style="padding:8px 14px; border-radius:10px; font-size:0.85rem;" onclick="askReportFollowUp()">
                         <i class="fa-solid fa-paper-plane"></i>
@@ -3653,7 +3653,7 @@ window.openReportHistory = (pid) => {
         const preview = r.text.substring(0, 120).replace(/[#*\n]/g, ' ').trim() + '...';
 
         html += `
-            <div style="background:rgba(0,0,0,0.2); border:1px solid var(--glass-border); border-radius:10px; padding:12px 14px; cursor:pointer; transition:all 0.2s;"
+            <div style="background:rgba(var(--shade-rgb),0.2); border:1px solid var(--glass-border); border-radius:10px; padding:12px 14px; cursor:pointer; transition:all 0.2s;"
                  onclick="viewSavedReport('${pid}', ${i})"
                  onmouseover="this.style.borderColor='var(--accent-color)'" onmouseout="this.style.borderColor='var(--glass-border)'">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
@@ -3709,7 +3709,7 @@ window.viewSavedReport = (pid, index) => {
             ${new Date(r.date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
             &middot; <i class="fa-solid fa-robot"></i> ${r.model || '?'}
         </div>
-        <div style="background:rgba(0,0,0,0.2); border:1px solid var(--glass-border); border-radius:12px; padding:20px; line-height:1.7; font-size:0.9rem; color:var(--text-primary);">
+        <div style="background:rgba(var(--shade-rgb),0.2); border:1px solid var(--glass-border); border-radius:12px; padding:20px; line-height:1.7; font-size:0.9rem; color:var(--text-primary);">
             ${_markdownToHtml(r.text)}
         </div>
     `;
@@ -3728,7 +3728,7 @@ window.viewSavedReport = (pid, index) => {
                     </div>
                     ${fu.question}
                 </div>
-                <div style="margin-bottom:12px; padding:10px 14px; background:rgba(0,0,0,0.15); border-radius:8px; font-size:0.83rem; line-height:1.5;">
+                <div style="margin-bottom:12px; padding:10px 14px; background:rgba(var(--shade-rgb),0.15); border-radius:8px; font-size:0.83rem; line-height:1.5;">
                     <div style="font-weight:600; color:var(--accent-color); font-size:0.75rem; margin-bottom:4px;">
                         <i class="fa-solid fa-wand-magic-sparkles"></i> Risposta
                     </div>

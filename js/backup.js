@@ -406,7 +406,7 @@ window.exportAllSets = async () => {
 
         // --- SETS ---
         html += `
-        <div style="background:rgba(0,0,0,0.2); border-radius:12px; padding:12px; margin-bottom:12px;">
+        <div style="background:rgba(var(--shade-rgb),0.2); border-radius:12px; padding:12px; margin-bottom:12px;">
             <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:bold; font-size:1rem; margin-bottom:8px;">
                 <input type="checkbox" id="exp-all-sets" checked onchange="toggleExportSection('sets', this.checked)" style="width:18px; height:18px;">
                 <i class="fa-solid fa-layer-group"></i> Set (${sets.length})
@@ -433,7 +433,7 @@ window.exportAllSets = async () => {
 
         // --- PATIENTS ---
         html += `
-        <div style="background:rgba(0,0,0,0.2); border-radius:12px; padding:12px; margin-bottom:12px;">
+        <div style="background:rgba(var(--shade-rgb),0.2); border-radius:12px; padding:12px; margin-bottom:12px;">
             <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:bold; font-size:1rem; margin-bottom:8px;">
                 <input type="checkbox" id="exp-all-patients" checked onchange="toggleExportSection('patients', this.checked)" style="width:18px; height:18px;">
                 <i class="fa-solid fa-user-doctor"></i> Pazienti (${patients.length})
@@ -453,7 +453,7 @@ window.exportAllSets = async () => {
         patients.forEach(p => { totalReports += _getReportsForBackup(p.id).length; });
         if (totalReports > 0) {
             html += `
-            <div style="background:rgba(0,0,0,0.2); border-radius:12px; padding:12px; margin-bottom:12px;">
+            <div style="background:rgba(var(--shade-rgb),0.2); border-radius:12px; padding:12px; margin-bottom:12px;">
                 <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:bold; font-size:1rem;">
                     <input type="checkbox" id="exp-reports" checked style="width:18px; height:18px;">
                     <i class="fa-solid fa-wand-magic-sparkles"></i> Report AI (${totalReports})
@@ -466,7 +466,7 @@ window.exportAllSets = async () => {
 
         // --- CONFIG ---
         html += `
-        <div style="background:rgba(0,0,0,0.2); border-radius:12px; padding:12px; margin-bottom:12px;">
+        <div style="background:rgba(var(--shade-rgb),0.2); border-radius:12px; padding:12px; margin-bottom:12px;">
             <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:bold; font-size:1rem;">
                 <input type="checkbox" id="exp-config" checked style="width:18px; height:18px;">
                 <i class="fa-solid fa-sliders"></i> Configurazione (attivit&agrave;, quaderno, tag)

@@ -70,7 +70,7 @@ function renderTagEditor(tags) {
             ${chipsHtml}
             <input type="text" id="tag-input" placeholder="Aggiungi tag..."
                 onkeydown="handleTagKeydown(event)"
-                style="border:none; background:transparent; color:white; padding:4px; font-size:0.85rem; flex:1; min-width:100px;">
+                style="border:none; background:transparent; color:var(--text-primary); padding:4px; font-size:0.85rem; flex:1; min-width:100px;">
         </div>
         ${suggestionsHtml ? `<div class="tag-suggestions">${suggestionsHtml}</div>` : ''}
     `;
@@ -286,20 +286,28 @@ function renderEditorList() {
     // Counters refer to the variant being edited: a variant is an independent
     // picture set, so "missing image" / "cut out" must be judged on ITS images.
     const visible = state.editingItems.filter(i => !i.hidden);
-    const withImg = visible.filter(i => getItemVariantUrl(i, editVariant)).length;
-    const withMask = visible.filter(i => getItemVariantMasked(i, editVariant)).length;
+    // NB: getItemVariantUrl() falls back to the base picture, so it can never be
+    // used to count coverage — it would report a variant as complete while the
+    // modes silently play the base images. Ask for the variant's OWN picture.
+    const withImg = visible.filter(i => hasOwnVariantImage(i, editVariant)).length;
+    const withMask = visible.filter(i => hasOwnVariantImage(i, editVariant) && getItemVariantMasked(i, editVariant)).length;
+    const missingInVariant = visible.length - withImg;
     const vName = editVariant > 0
         ? ((state._editingVariantNames || [])[editVariant - 1] || ('Variante ' + editVariant))
         : 'Base';
 
     const counterHtml = `
-        <div style="position:sticky; top:0; z-index:10; background:#1e1e2f; padding:10px; margin-bottom:10px; border-bottom:1px solid var(--glass-border); display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; color:#ccc; font-size:0.9rem;">
+        <div style="position:sticky; top:0; z-index:10; background:var(--modal-bg); padding:10px; margin-bottom:10px; border-bottom:1px solid var(--glass-border); display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; color:#ccc; font-size:0.9rem;">
             <span><i class="fa-solid fa-list-ol"></i> Item Attivi: <b style="color:${activeItems >= 20 ? 'var(--success-color)' : 'var(--warning-color)'}">${activeItems}</b> / ${totalItems}</span>
             <span style="font-size:0.78rem; display:flex; gap:10px; align-items:center;">
                 <span style="background:rgba(139,92,246,0.18); color:#a78bfa; padding:2px 8px; border-radius:6px;"><i class="fa-solid fa-layer-group" style="font-size:0.7rem;"></i> ${vName}</span>
                 <span title="Item con immagine in questa variante"><i class="fa-solid fa-image" style="opacity:0.7;"></i> <b style="color:${withImg === visible.length ? 'var(--success-color)' : 'var(--warning-color)'}">${withImg}</b>/${visible.length}</span>
                 <span title="Item scontornati in questa variante"><i class="fa-solid fa-eraser" style="opacity:0.7;"></i> <b style="color:${withMask === withImg && withImg > 0 ? 'var(--success-color)' : 'var(--text-secondary)'}">${withMask}</b>/${withImg}</span>
             </span>
+            ${editVariant > 0 && missingInVariant > 0 ? `
+            <span style="flex-basis:100%; font-size:0.75rem; background:rgba(245,158,11,0.12); color:var(--warning-color); border:1px solid rgba(245,158,11,0.3); padding:5px 9px; border-radius:8px;">
+                <i class="fa-solid fa-triangle-exclamation"></i> <b>${missingInVariant}</b> item senza immagine propria in questa variante (marcati <b>BASE</b>): nelle attivit&agrave; mostreranno l&rsquo;immagine base.
+            </span>` : ''}
         </div>
     `;
     const listHtml = state.editingItems.map((item, idx) => {
@@ -314,7 +322,14 @@ function renderEditorList() {
 
         // Resolve display URL based on active editing variant
         let displayUrl = getItemVariantUrl(item, editVariant);
-        const hasVariantImg = editVariant > 0 && item.variantUrls && item.variantUrls[editVariant];
+        const hasVariantImg = hasOwnVariantImage(item, editVariant);
+        // The thumbnail falls back to the base picture so the row is never empty —
+        // say so out loud, otherwise a borrowed image reads as a real one.
+        const borrowedBadge = editVariant > 0 && !hasVariantImg
+            ? `<span title="Nessuna immagine per questa variante: in attivit&agrave; verr&agrave; usata quella base"
+                     style="position:absolute; left:2px; top:2px; font-size:0.5rem; font-weight:700; letter-spacing:0.3px;
+                            background:var(--warning-color); color:#000; padding:1px 4px; border-radius:4px;">BASE</span>`
+            : '';
         // When "show cut-outs" is on, preview the masked (scontornata) version so
         // the AI/bulk results are visible. Checkerboard makes transparency obvious.
         const itemMasked = getItemVariantMasked(item, editVariant);
@@ -326,8 +341,9 @@ function renderEditorList() {
         <div class="editor-item" style="${activeStyle} ${opacityStyle} transition:0.2s; cursor:pointer;" onclick="setActiveItem(${idx})">
             <div class="editor-thumb" style="cursor:pointer; position:relative;${thumbBg}${editVariant > 0 && !hasVariantImg ? ' outline:2px dashed var(--warning-color); outline-offset:-2px;' : ''}" onclick="triggerItemUpload(${idx}); event.stopPropagation();" title="Clicca per caricare">
                 <img src="${displayUrl || getPlaceholderUrl(item.label)}" style="width:100%; height:100%; object-fit:${showMasked ? 'contain' : 'cover'}; pointer-events:none;">
-                <div style="position:absolute; inset:0; background:rgba(0,0,0,0.3); display:flex; justify-content:center; align-items:center; opacity:0;">
-                    <i class="fa-solid fa-camera" style="color:white;"></i>
+                ${borrowedBadge}
+                <div style="position:absolute; inset:0; background:rgba(0,0,0,0.35); display:flex; justify-content:center; align-items:center; opacity:0;">
+                    <i class="fa-solid fa-camera" style="color:#fff;"></i>
                 </div>
             </div>
             <div style="flex:1">
@@ -344,7 +360,7 @@ function renderEditorList() {
                 onclick="event.stopPropagation();"
                 placeholder="#"
                 title="N. Sequenza"
-                style="width:38px; padding:4px; border-radius:6px; background:${item.seqNumber ? 'rgba(99,102,241,0.2)' : 'rgba(0,0,0,0.2)'}; border:1px solid ${item.seqNumber ? 'var(--accent-color)' : 'var(--glass-border)'}; color:${item.seqNumber ? 'var(--accent-color)' : '#888'}; font-size:0.8rem; text-align:center; font-weight:bold;">
+                style="width:38px; padding:4px; border-radius:6px; background:${item.seqNumber ? 'rgba(99,102,241,0.2)' : 'rgba(var(--shade-rgb),0.2)'}; border:1px solid ${item.seqNumber ? 'var(--accent-color)' : 'var(--glass-border)'}; color:${item.seqNumber ? 'var(--accent-color)' : '#888'}; font-size:0.8rem; text-align:center; font-weight:bold;">
             <button class="btn btn-ghost" style="padding:6px;" onclick="openPollinationsGenerator(${idx}); event.stopPropagation();" title="Cerca o genera immagine">
                 <i class="fa-solid fa-wand-magic-sparkles" style="font-size:0.8rem; ${item.url ? 'opacity:0.4' : 'color:var(--accent-color); opacity:0.8'}"></i>
             </button>
@@ -358,7 +374,7 @@ function renderEditorList() {
                 <i class="fa-solid fa-eraser" style="font-size:0.8rem; ${itemMasked ? 'color:var(--success-color)' : 'opacity:0.4'}"></i>
             </button>
             <button class="btn btn-ghost" style="padding:6px;" onclick="highlightEditorItem(${idx}); event.stopPropagation();" title="Evidenzia soggetto (resto in bianco e nero)">
-                <i class="fa-solid fa-highlighter" style="font-size:0.8rem; ${item.originalUrl ? 'color:var(--warning-color)' : 'opacity:0.4'}"></i>
+                <i class="fa-solid fa-highlighter" style="font-size:0.8rem; ${(editVariant > 0 ? (item.variantOriginalUrls && item.variantOriginalUrls[editVariant]) : item.originalUrl) ? 'color:var(--warning-color)' : 'opacity:0.4'}"></i>
             </button>
             <button class="btn btn-ghost" style="padding:6px;" onclick="openZoomEditor(${idx}); event.stopPropagation();" title="Imposta Area Zoom">
                 <i class="fa-solid fa-crop" style="font-size:0.8rem; ${item.zoomArea ? 'color:var(--warning-color)' : 'opacity:0.4'}"></i>
@@ -380,6 +396,10 @@ window.scontornaEditorItem = async (idx) => {
     const item = state.editingItems[idx];
     const v = state._editingVariant || 0;
     if (!item || !getItemVariantUrl(item, v)) return;
+    if (v > 0 && !hasOwnVariantImage(item, v)) {
+        alert('Questo item non ha ancora un\'immagine propria in questa variante: caricala prima di scontornarla.');
+        return;
+    }
     if (typeof removeBackground !== 'function') return;
 
     // Open preview overlay with tolerance slider (acts on the active variant)
@@ -412,6 +432,10 @@ window.openFrontMaskEditor = (item, onDone) => {
 window.openManualCutout = (item, onDone, variantIndex) => {
     if (typeof openMaskEditor !== 'function') { alert('Editor non disponibile.'); return; }
     const v = variantIndex || 0;
+    if (v > 0 && !hasOwnVariantImage(item, v)) {
+        alert('Questo item non ha ancora un\'immagine propria in questa variante: caricala prima di scontornarla.');
+        return;
+    }
     const vLabel = v > 0 ? ((state._editingVariantNames || [])[v - 1] || ('Variante ' + v)) : 'Base';
     openMaskEditor({
         imageUrl: getItemVariantUrl(item, v),
@@ -429,22 +453,43 @@ window.openManualCutout = (item, onDone, variantIndex) => {
 // The result replaces item.url; item.originalUrl preserves the source for restore.
 window.highlightEditorItem = (idx) => {
     const item = state.editingItems[idx];
-    if (!item || !item.url) { alert('Nessuna immagine da evidenziare.'); return; }
+    const v = state._editingVariant || 0;
+    const curUrl = getItemVariantUrl(item, v);
+    if (!item || !curUrl) { alert('Nessuna immagine da evidenziare.'); return; }
+    if (v > 0 && !hasOwnVariantImage(item, v)) {
+        alert('Questo item non ha ancora un\'immagine propria in questa variante: caricala prima di evidenziarla.');
+        return;
+    }
     if (typeof openMaskEditor !== 'function') { alert('Editor non disponibile.'); return; }
-    const source = item.originalUrl || item.url; // always edit from the clean image
+    const vLabel = v > 0 ? ((state._editingVariantNames || [])[v - 1] || ('Variante ' + v)) : 'Base';
+    const origForVariant = v > 0 ? (item.variantOriginalUrls && item.variantOriginalUrls[v]) : item.originalUrl;
+    const source = origForVariant || curUrl; // always edit from the clean image
     openMaskEditor({
         imageUrl: source,
         mode: 'highlight',
-        title: 'Evidenzia — ' + (item.label || 'Item'),
+        title: 'Evidenzia — ' + (item.label || 'Item') + ' · ' + vLabel,
         onApply: (result) => {
             if (result === null) {
-                // Remove effect: restore original
-                if (item.originalUrl) { item.url = item.originalUrl; delete item.originalUrl; }
+                // Remove effect: restore the original picture of THIS variant
+                if (v > 0) {
+                    if (item.variantOriginalUrls && item.variantOriginalUrls[v]) {
+                        setItemVariantUrl(item, v, item.variantOriginalUrls[v]);
+                        delete item.variantOriginalUrls[v];
+                        if (Object.keys(item.variantOriginalUrls).length === 0) delete item.variantOriginalUrls;
+                    }
+                } else if (item.originalUrl) { item.url = item.originalUrl; delete item.originalUrl; }
             } else {
-                if (!item.originalUrl) item.originalUrl = item.url;
-                item.url = result;
-                // Base image changed; any cached scontorno no longer matches
-                delete item.maskedUrl;
+                if (v > 0) {
+                    if (!item.variantOriginalUrls) item.variantOriginalUrls = {};
+                    if (!item.variantOriginalUrls[v]) item.variantOriginalUrls[v] = curUrl;
+                    setItemVariantUrl(item, v, result);
+                    setItemVariantMasked(item, v, null);
+                } else {
+                    if (!item.originalUrl) item.originalUrl = item.url;
+                    item.url = result;
+                    // Base image changed; any cached scontorno no longer matches
+                    delete item.maskedUrl;
+                }
             }
             renderEditorList();
         }
@@ -557,7 +602,10 @@ function _openScontornoPreview(item, onDone, variantIndex) {
 window.batchScontornoEditor = async () => {
     if (typeof removeBackground !== 'function') return;
     const v = state._editingVariant || 0;
-    const items = state.editingItems.filter(i => getItemVariantUrl(i, v) && !getItemVariantMasked(i, v));
+    // Only items that own a picture in this variant: getItemVariantUrl() would
+    // hand back the BASE image, and we would store a cut-out of the wrong
+    // picture under this variant.
+    const items = state.editingItems.filter(i => hasOwnVariantImage(i, v) && !getItemVariantMasked(i, v));
     if (items.length === 0) return;
 
     const tolerance = getScontornoTolerance();
@@ -582,6 +630,7 @@ window.aiBatchScontornoEditor = async () => {
     if (typeof aiCutoutDataUrl !== 'function') { alert('Editor AI non disponibile.'); return; }
     const v = state._editingVariant || 0;
     const items = state.editingItems.filter(i => {
+        if (!hasOwnVariantImage(i, v)) return false; // never cut out the borrowed base image
         const u = getItemVariantUrl(i, v);
         return u && u.startsWith('data:') && !getItemVariantMasked(i, v);
     });
@@ -622,7 +671,12 @@ window.aiBatchScontornoEditor = async () => {
 // The result replaces item.url; item.originalUrl preserves the source.
 window.aiBatchHighlightEditor = async () => {
     if (typeof aiHighlightDataUrl !== 'function') { alert('Editor AI non disponibile.'); return; }
-    const items = state.editingItems.filter(i => i.url && i.url.startsWith('data:'));
+    const hv = state._editingVariant || 0;
+    const items = state.editingItems.filter(i => {
+        if (!hasOwnVariantImage(i, hv)) return false; // never edit the borrowed base image
+        const u = getItemVariantUrl(i, hv);
+        return u && u.startsWith('data:');
+    });
     if (items.length === 0) { alert('Nessuna immagine da evidenziare.'); return; }
     const proceed = (typeof themedConfirm === 'function')
         ? await themedConfirm(`Evidenziare il soggetto in ${items.length} immagini?\nLo sfondo diventa bianco e nero. L'originale resta recuperabile.`)
@@ -636,8 +690,18 @@ window.aiBatchHighlightEditor = async () => {
         try {
             const pct = (done / items.length) * 100;
             showBackupProgress(`Evidenzia AI: ${label} (${done + 1}/${items.length})`, pct);
-            const res = await aiHighlightDataUrl(item.url, (t) => showBackupProgress(`${t} — ${label} (${done + 1}/${items.length})`, pct));
-            if (res) { if (!item.originalUrl) item.originalUrl = item.url; item.url = res; delete item.maskedUrl; }
+            const res = await aiHighlightDataUrl(getItemVariantUrl(item, hv), (t) => showBackupProgress(`${t} — ${label} (${done + 1}/${items.length})`, pct));
+            if (res) {
+                if (hv > 0) {
+                    if (!item.variantOriginalUrls) item.variantOriginalUrls = {};
+                    if (!item.variantOriginalUrls[hv]) item.variantOriginalUrls[hv] = getItemVariantUrl(item, hv);
+                    setItemVariantUrl(item, hv, res);
+                    setItemVariantMasked(item, hv, null);
+                } else {
+                    if (!item.originalUrl) item.originalUrl = item.url;
+                    item.url = res; delete item.maskedUrl;
+                }
+            }
             else failed++;
         } catch (e) {
             console.warn('bulk AI highlight failed for', label, e);
@@ -831,7 +895,7 @@ window.openZoomEditor = (index) => {
     const currentArea = item.zoomArea || null;
 
     modal.innerHTML = `
-        <div style="color:white; margin-bottom:15px; text-align:center;">
+        <div style="color:#fff; margin-bottom:15px; text-align:center;">
             <h3 style="margin:0 0 5px 0;"><i class="fa-solid fa-crop"></i> Definisci Area Zoom</h3>
             <p style="margin:0; opacity:0.7; font-size:0.85rem;">Trascina sull'immagine per selezionare l'area da zoomare</p>
         </div>
@@ -976,8 +1040,8 @@ function renderEditorCover() {
     box.innerHTML = `
         <div onclick="focusSetCover()" title="${cover ? 'Tocca, poi Ctrl+V per sostituire la copertina' : 'Tocca, poi Ctrl+V per incollare la copertina'}"
              style="position:relative; width:62px; height:62px; border-radius:10px; overflow:hidden; cursor:pointer;
-                    border:2px ${active ? 'solid var(--accent-color)' : 'dashed rgba(255,255,255,0.22)'};
-                    background:rgba(0,0,0,0.25); display:flex; align-items:center; justify-content:center;
+                    border:2px ${active ? 'solid var(--accent-color)' : 'dashed rgba(var(--ink-rgb),0.22)'};
+                    background:rgba(var(--shade-rgb),0.25); display:flex; align-items:center; justify-content:center;
                     ${active ? 'box-shadow:0 0 0 3px rgba(99,102,241,0.25);' : ''}">
             ${cover
                 ? `<img src="${cover}" style="width:100%; height:100%; object-fit:cover;">`
@@ -1121,6 +1185,17 @@ function getItemVariantUrl(item, variantIndex) {
 }
 window.getItemVariantUrl = getItemVariantUrl;
 
+// Does this item have a picture of its OWN for the variant? Use this — never
+// getItemVariantUrl() — whenever the answer drives a count, a badge or a
+// "what's missing" decision: getItemVariantUrl() falls back to the base image,
+// so it answers "will something be shown", not "is this variant covered".
+function hasOwnVariantImage(item, variantIndex) {
+    if (!item) return false;
+    if (!variantIndex || variantIndex === 0) return !!item.url;
+    return !!(item.variantUrls && item.variantUrls[variantIndex]);
+}
+window.hasOwnVariantImage = hasOwnVariantImage;
+
 // --- Per-variant cut-outs -------------------------------------------------
 // Each variant is a DIFFERENT picture, so it needs its OWN cut-out. Base keeps
 // item.maskedUrl; variants store theirs in item.variantMaskedUrls[index].
@@ -1167,6 +1242,64 @@ function setItemVariantUrl(item, variantIndex, url) {
 }
 window.setItemVariantUrl = setItemVariantUrl;
 
+// --- Repair of variant data written by older builds -----------------------
+// There was a window (per-variant cut-outs shipped before per-variant pictures)
+// in which a picture pasted or generated with a variant open was written to the
+// item's BASE url, while its cut-out and its pre-highlight original were already
+// filed under the variant. The variant then looks right in the editor — the
+// preview falls back to the base picture, and the cut-out really is the new one —
+// but it owns no picture, so the modes play the base images.
+//
+// Those orphans are recognisable, and the picture they were made from is known:
+//   variantOriginalUrls[v]  is literally this variant's own picture before the
+//                           highlight step, so it can be adopted as-is;
+//   variantMaskedUrls[v]    was cut out of whatever item.url held at the time,
+//                           which is the picture the editor is showing.
+function diagnoseVariantData(items, v) {
+    const report = { ok: [], fromOriginal: [], fromBase: [], empty: [] };
+    if (!v) return report;
+    (items || []).forEach((item, idx) => {
+        const entry = { idx, label: item.label || `#${idx + 1}` };
+        if (hasOwnVariantImage(item, v)) { report.ok.push(entry); return; }
+        if (item.variantOriginalUrls && item.variantOriginalUrls[v]) { report.fromOriginal.push(entry); return; }
+        if (item.variantMaskedUrls && item.variantMaskedUrls[v] && item.url) { report.fromBase.push(entry); return; }
+        report.empty.push(entry);
+    });
+    return report;
+}
+window.diagnoseVariantData = diagnoseVariantData;
+
+window.repairVariantData = async () => {
+    const v = state._editingVariant || 0;
+    if (!v) return;
+    const diag = diagnoseVariantData(state.editingItems, v);
+    const n = diag.fromOriginal.length + diag.fromBase.length;
+    if (n === 0) return;
+
+    const vName = (state._editingVariantNames || [])[v - 1] || ('Variante ' + v);
+    const sample = [...diag.fromOriginal, ...diag.fromBase].slice(0, 6).map(e => e.label).join(', ');
+    const msg = `Registrare in "${vName}" l'immagine che stai gia' vedendo, per ${n} item?\n\n`
+        + `${sample}${n > 6 ? `, +${n - 6} altri` : ''}\n\n`
+        + `Da questo momento le attivita' useranno quell'immagine (e il suo scontorno) invece di ripiegare sulla base. `
+        + `Le immagini base non vengono toccate. Nulla e' definitivo finche' non premi Salva.`;
+    const ok = (typeof themedConfirm === 'function') ? await themedConfirm(msg) : confirm(msg);
+    if (!ok) return;
+
+    diag.fromOriginal.forEach(e => {
+        const item = state.editingItems[e.idx];
+        setItemVariantUrl(item, v, item.variantOriginalUrls[v]);
+    });
+    diag.fromBase.forEach(e => {
+        const item = state.editingItems[e.idx];
+        setItemVariantUrl(item, v, item.url);
+    });
+
+    renderVariantEditor();
+    renderEditorList();
+    if (typeof _showImportToast === 'function') _showImportToast(`${n} item riparati in ${vName} \u2014 premi Salva per confermare`);
+    else alert(`${n} item riparati in ${vName} \u2014 premi Salva per confermare.`);
+};
+
 // Render variant editor UI in the editor modal
 function renderVariantEditor() {
     const container = document.getElementById('edit-variant-container');
@@ -1179,7 +1312,7 @@ function renderVariantEditor() {
 
     // Base variant chip
     html += `<span class="tag-chip" style="cursor:pointer; font-size:0.8rem; padding:5px 12px;
-        ${activeVar === 0 ? 'background:rgba(99,102,241,0.3); border-color:var(--accent-color); color:white; font-weight:bold;' : ''}"
+        ${activeVar === 0 ? 'background:rgba(99,102,241,0.3); border-color:var(--accent-color); color:var(--text-primary); font-weight:bold;' : ''}"
         onclick="selectEditingVariant(0)">
         <i class="fa-solid fa-image" style="margin-right:4px;"></i>Base
     </span>`;
@@ -1191,7 +1324,7 @@ function renderVariantEditor() {
         const filled = state.editingItems.filter(item => item.variantUrls && item.variantUrls[vIdx]).length;
         const total = state.editingItems.length;
         html += `<span class="tag-chip" style="cursor:pointer; font-size:0.8rem; padding:5px 12px;
-            ${isActive ? 'background:rgba(99,102,241,0.3); border-color:var(--accent-color); color:white; font-weight:bold;' : ''}"
+            ${isActive ? 'background:rgba(99,102,241,0.3); border-color:var(--accent-color); color:var(--text-primary); font-weight:bold;' : ''}"
             onclick="selectEditingVariant(${vIdx})">
             <i class="fa-solid fa-layer-group" style="margin-right:4px;"></i>${name}
             <span style="opacity:0.5; font-size:0.65rem; margin-left:4px;">${filled}/${total}</span>
@@ -1213,6 +1346,20 @@ function renderVariantEditor() {
             <i class="fa-solid fa-info-circle"></i> Stai modificando la variante <b>${varName}</b>. Le immagini caricate andranno in questa variante.
             Le immagini con bordo tratteggiato non hanno ancora un'immagine per questa variante (verr&agrave; usata l'immagine base).
         </div>`;
+
+        const diag = diagnoseVariantData(state.editingItems, activeVar);
+        const repairable = diag.fromOriginal.length + diag.fromBase.length;
+        if (repairable > 0) {
+            html += `<div style="margin-top:6px; font-size:0.75rem; color:var(--warning-color); background:rgba(245,158,11,0.12); border:1px solid rgba(245,158,11,0.3); padding:8px 10px; border-radius:8px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                <span style="flex:1; min-width:220px;">
+                    <i class="fa-solid fa-screwdriver-wrench"></i> <b>${repairable}</b> item hanno lo scontorno di questa variante ma nessuna immagine registrata:
+                    salvati da una versione precedente, che scriveva l&rsquo;immagine sulla base. In attivit&agrave; mostrano l&rsquo;immagine base.
+                </span>
+                <button class="btn btn-sm" onclick="repairVariantData()" style="background:var(--warning-color); color:#000; padding:5px 12px; font-size:0.75rem; white-space:nowrap;">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Ripara ${repairable} item
+                </button>
+            </div>`;
+        }
     }
 
     container.innerHTML = html;

@@ -114,7 +114,7 @@ window.quickSharePatientSelect = async () => {
                 ? `<img src="${p.photo}" style="width:32px; height:32px; border-radius:50%; object-fit:cover;">`
                 : `<div style="width:32px; height:32px; border-radius:50%; background:rgba(99,102,241,0.15); display:flex; align-items:center; justify-content:center;"><i class="fa-solid fa-user" style="color:var(--accent-color); font-size:0.7rem;"></i></div>`;
             html += `
-            <label style="display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:10px; cursor:pointer; border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02); margin-bottom:4px;">
+            <label style="display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:10px; cursor:pointer; border:1px solid rgba(var(--ink-rgb),0.06); background:rgba(var(--ink-rgb),0.02); margin-bottom:4px;">
                 <input type="checkbox" class="qs-patient-cb" data-id="${p.id}">
                 ${photoHtml}
                 <div style="flex:1;">
@@ -145,7 +145,7 @@ window.quickShareSetSelect = async () => {
         sets.forEach(s => {
             const itemCount = (s.items || []).length;
             html += `
-            <label style="display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:10px; cursor:pointer; border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02); margin-bottom:4px;">
+            <label style="display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:10px; cursor:pointer; border:1px solid rgba(var(--ink-rgb),0.06); background:rgba(var(--ink-rgb),0.02); margin-bottom:4px;">
                 <input type="checkbox" class="qs-set-cb" data-id="${s.id}">
                 <div style="flex:1;">
                     <div style="font-weight:600; font-size:0.85rem;">${s.name}</div>

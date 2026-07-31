@@ -101,7 +101,7 @@ window.openP2PSendSelect = async () => {
 
     // --- SETS ---
     html += `
-    <div style="background:rgba(0,0,0,0.2); border-radius:10px; padding:10px; margin-bottom:8px;">
+    <div style="background:rgba(var(--shade-rgb),0.2); border-radius:10px; padding:10px; margin-bottom:8px;">
         <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-weight:bold; font-size:0.9rem; margin-bottom:6px;">
             <input type="checkbox" id="p2p-all-sets" checked onchange="toggleP2PSection('sets', this.checked)" style="width:16px; height:16px;">
             <i class="fa-solid fa-layer-group"></i> Set (${sets.length})
@@ -129,7 +129,7 @@ window.openP2PSendSelect = async () => {
 
     // --- PATIENTS ---
     html += `
-    <div style="background:rgba(0,0,0,0.2); border-radius:10px; padding:10px; margin-bottom:8px;">
+    <div style="background:rgba(var(--shade-rgb),0.2); border-radius:10px; padding:10px; margin-bottom:8px;">
         <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-weight:bold; font-size:0.9rem; margin-bottom:6px;">
             <input type="checkbox" id="p2p-all-patients" checked onchange="toggleP2PSection('patients', this.checked)" style="width:16px; height:16px;">
             <i class="fa-solid fa-user-doctor"></i> Pazienti (${patients.length})
@@ -147,7 +147,7 @@ window.openP2PSendSelect = async () => {
 
     // --- CONFIG ---
     html += `
-    <div style="background:rgba(0,0,0,0.2); border-radius:10px; padding:10px;">
+    <div style="background:rgba(var(--shade-rgb),0.2); border-radius:10px; padding:10px;">
         <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-weight:bold; font-size:0.9rem;">
             <input type="checkbox" id="p2p-config" checked onchange="updateP2PSizeEstimate()" style="width:16px; height:16px;">
             <i class="fa-solid fa-sliders"></i> Configurazione (tag, quaderno, layout)
