@@ -55,6 +55,19 @@ HF_TOKEN = os.environ.get("HF_TOKEN") or None
 app = Flask(__name__)
 CORS(app)
 
+
+@app.after_request
+def _private_network(resp):
+    """Consente la chiamata da una pagina servita altrove (es. GitHub Pages).
+
+    Chrome non blocca 127.0.0.1 come "contenuto misto" (localhost e' considerato
+    attendibile), ma applica Private Network Access: prima della richiesta vera
+    manda un preflight che va autorizzato esplicitamente, altrimenti la chiamata
+    muore con un errore di rete generico e difficile da diagnosticare.
+    """
+    resp.headers["Access-Control-Allow-Private-Network"] = "true"
+    return resp
+
 _model = None
 _device = None
 _lock = threading.Lock()      # una passata GPU alla volta
