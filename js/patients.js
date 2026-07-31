@@ -1895,16 +1895,23 @@ window.variantColor = variantColor;
 // Il campo "Field" e' un residuo del selettore in alto: le modalita' che si
 // costruiscono da sole gli stimoli non lo usano mai, quindi segnarne i cambi
 // sul grafico mostrerebbe soltanto l'ultima modalita' usata prima.
-const ENGINES_WITHOUT_FIELD = [
+//
+// Le sedute salvate da qui in avanti portano usesField, deciso da chi applica
+// davvero il field agli item: e' l'unica fonte che non va tenuta allineata a
+// mano quando nasce una modalita' nuova. L'elenco sotto resta solo per le
+// sedute salvate PRIMA di quel flag, che il valore spurio ce l'hanno dentro.
+const LEGACY_ENGINES_WITHOUT_FIELD = [
     'memoria_lavoro', 'quaderno', 'quaderno_task', 'search_find', 'intraverbal_scenari',
     'pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione', 'ricorda',
     'singolare_plurale', 'stroop_numerico', 'stroop_etichetta', 'go_nogo', 'topologia_comp',
 ];
-function engineUsesField(modeCode) {
+function sessionsUseField(sessions, modeCode) {
+    const tagged = (sessions || []).filter(s => s.usesField !== undefined);
+    if (tagged.length > 0) return tagged.some(s => s.usesField);   // dato, non congettura
     const engine = (typeof getModeEngine === 'function') ? getModeEngine(modeCode) : modeCode;
-    return !ENGINES_WITHOUT_FIELD.includes(engine) && !ENGINES_WITHOUT_FIELD.includes(modeCode);
+    return !LEGACY_ENGINES_WITHOUT_FIELD.includes(engine) && !LEGACY_ENGINES_WITHOUT_FIELD.includes(modeCode);
 }
-window.engineUsesField = engineUsesField;
+window.sessionsUseField = sessionsUseField;
 
 // Memoria di lavoro: la domanda clinica non e' "quanto ha fatto oggi" ma "fino
 // a che span regge". Ogni prova porta con se' il suo span, quindi si aggrega su
@@ -2091,7 +2098,7 @@ function renderActivitySVGChart(container, sessions, typeGroup, modeCode, thresh
     }
 
     // Field size vertical markers (solo dove il field viene davvero applicato)
-    if (engineUsesField(modeCode)) {
+    if (sessionsUseField(sessions, modeCode)) {
         let lastField = null;
         sessions.forEach((s, i) => {
             const fs = s.fieldSize || null;
@@ -2157,7 +2164,7 @@ function renderActivitySVGChart(container, sessions, typeGroup, modeCode, thresh
             : `${formatDateEU(s.date)}\nScore: ${s.percentage}% (${s.correct}/${s.total})`;
         if (s.rawP) tooltipText += `\nPrompt: ${s.rawP}`;
         if (s.timeDelaySeconds) tooltipText += `\nTime Delay: ${s.timeDelaySeconds}s`;
-        if (s.fieldSize && engineUsesField(modeCode)) tooltipText += `\nField: ${s.fieldSize}`;
+        if (s.fieldSize && sessionsUseField(sessions, modeCode)) tooltipText += `\nField: ${s.fieldSize}`;
         if (vIdx > 0) tooltipText += `\nVariante: ${_chartVariantName(sessions, vIdx)}`;
         if (s.memLavSpan) tooltipText += `\nSpan: ${s.memLavSpan} elementi`;
 
@@ -2204,7 +2211,7 @@ function renderActivitySVGChart(container, sessions, typeGroup, modeCode, thresh
     }
 
     // Memoria di lavoro: percentuale di prove corrette per span.
-    if (!engineUsesField(modeCode)) {
+    if (!sessionsUseField(sessions, modeCode)) {
         const spans = memLavSpanStats(sessions);
         if (spans.length > 0) {
             const box = document.createElement('div');
