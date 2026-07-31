@@ -1314,6 +1314,10 @@ window.startGame = () => {
         if (numStimuli > 0 && playItems.length > numStimuli) {
             playItems = playItems.slice(0, numStimuli);
         }
+        // Il selettore "Field" conta solo qui: le modalita' che si costruiscono da
+        // sole gli stimoli non lo leggono mai, e registrarlo lo stesso lasciava nei
+        // dati il valore rimasto in tendina dalla modalita' precedente.
+        state.session.usesField = true;
     }
 
     // Grid size (for visual layout in grids)
@@ -1918,7 +1922,9 @@ async function _doSaveSession(p, noteText) {
 
         // Capture field size
         const fieldVal = parseInt(document.getElementById('num-stimuli').value);
-        const fieldSize = fieldVal > 0 ? fieldVal : (state.session.playItems ? state.session.playItems.length : totalAll);
+        const fieldSize = state.session.usesField
+            ? (fieldVal > 0 ? fieldVal : (state.session.playItems ? state.session.playItems.length : totalAll))
+            : null;
 
         const sessionData = {
             date: new Date().toISOString(),
@@ -1931,8 +1937,8 @@ async function _doSaveSession(p, noteText) {
             total: totalAll,
             percentage: Math.round((totalV / totalAll) * 100),
             sessionType: type,
-            fieldSize: fieldSize,
             variant: parseInt(document.getElementById('variant-select').value) || 0,
+            ...(fieldSize ? { fieldSize } : {}),
             rawV: totalV,
             rawP: totalP,
             rawX: totalX,
@@ -2024,7 +2030,9 @@ async function _doSaveSession(p, noteText) {
 
     // Capture field size
     const fieldVal = parseInt(document.getElementById('num-stimuli').value);
-    const fieldSize = fieldVal > 0 ? fieldVal : (state.session.playItems ? state.session.playItems.length : rawTotal);
+    const fieldSize = state.session.usesField
+        ? (fieldVal > 0 ? fieldVal : (state.session.playItems ? state.session.playItems.length : rawTotal))
+        : null;
 
     const sessionData = {
         date: new Date().toISOString(),
@@ -2037,8 +2045,8 @@ async function _doSaveSession(p, noteText) {
         total: rawTotal,
         percentage: Math.round((correct / rawTotal) * 100),
         sessionType: type,
-        fieldSize: fieldSize,
         variant: parseInt(document.getElementById('variant-select').value) || 0,
+        ...(fieldSize ? { fieldSize } : {}),
         rawV: rawV,
         rawP: rawP,
         rawX: rawX

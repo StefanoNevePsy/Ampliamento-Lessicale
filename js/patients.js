@@ -1883,6 +1883,72 @@ function renderActivitiesTab(patient, sortBy) {
 }
 
 // --- ACTIVITY SVG CHART with Time Delay vertical markers ---
+// Colore stabile per variante: la Base tiene l'accento, le varianti prendono
+// tinte distinte. Serve a leggere il grafico senza tooltip, quindi conta che
+// siano distinguibili tra loro, non che siano belle.
+const VARIANT_COLORS = ['var(--accent-color)', '#f59e0b', '#22d3ee', '#ec4899', '#84cc16', '#a78bfa'];
+function variantColor(v) {
+    return VARIANT_COLORS[(v || 0) % VARIANT_COLORS.length];
+}
+window.variantColor = variantColor;
+
+// Il campo "Field" e' un residuo del selettore in alto: le modalita' che si
+// costruiscono da sole gli stimoli non lo usano mai, quindi segnarne i cambi
+// sul grafico mostrerebbe soltanto l'ultima modalita' usata prima.
+const ENGINES_WITHOUT_FIELD = [
+    'memoria_lavoro', 'quaderno', 'quaderno_task', 'search_find', 'intraverbal_scenari',
+    'pool_random', 'pool_intraverbal', 'intruso', 'categorizzazione', 'ricorda',
+    'singolare_plurale', 'stroop_numerico', 'stroop_etichetta', 'go_nogo', 'topologia_comp',
+];
+function engineUsesField(modeCode) {
+    const engine = (typeof getModeEngine === 'function') ? getModeEngine(modeCode) : modeCode;
+    return !ENGINES_WITHOUT_FIELD.includes(engine) && !ENGINES_WITHOUT_FIELD.includes(modeCode);
+}
+window.engineUsesField = engineUsesField;
+
+// Memoria di lavoro: la domanda clinica non e' "quanto ha fatto oggi" ma "fino
+// a che span regge". Ogni prova porta con se' il suo span, quindi si aggrega su
+// quello. Le sedute vecchie senza dettaglio per prova ricadono su memLavSpan.
+function memLavSpanStats(sessions) {
+    const bySpan = {};
+    let anyTrial = false;
+    (sessions || []).forEach(s => {
+        (s.memLavTrials || []).forEach(t => {
+            const sp = t.span;
+            if (!sp) return;
+            anyTrial = true;
+            if (!bySpan[sp]) bySpan[sp] = { n: 0, ok: 0, prompt: 0 };
+            bySpan[sp].n++;
+            if (t.result === true) bySpan[sp].ok++;
+            else if (t.result === 'prompt') bySpan[sp].prompt++;
+        });
+    });
+    if (!anyTrial) {
+        // Ripiego: una riga per span con la media delle percentuali di seduta.
+        (sessions || []).forEach(s => {
+            const sp = s.memLavSpan;
+            if (!sp) return;
+            if (!bySpan[sp]) bySpan[sp] = { n: 0, ok: 0, prompt: 0, pctSum: 0, sessions: 0 };
+            bySpan[sp].sessions = (bySpan[sp].sessions || 0) + 1;
+            bySpan[sp].pctSum = (bySpan[sp].pctSum || 0) + (s.percentage || 0);
+        });
+    }
+    return Object.keys(bySpan).map(Number).sort((a, b) => a - b).map(sp => {
+        const d = bySpan[sp];
+        const pct = d.n > 0 ? Math.round(100 * d.ok / d.n)
+                            : (d.sessions ? Math.round(d.pctSum / d.sessions) : 0);
+        return { span: sp, n: d.n, ok: d.ok, prompt: d.prompt, sessions: d.sessions || 0, pct, approx: d.n === 0 };
+    });
+}
+window.memLavSpanStats = memLavSpanStats;
+
+function _chartVariantName(sessions, v) {
+    if (!v) return 'Base';
+    const setName = (sessions.find(s => s.setName) || {}).setName;
+    const set = (state.savedSets || []).find(x => x.name === setName);
+    return (set && set.variantNames && set.variantNames[v - 1]) || ('Variante ' + v);
+}
+
 function renderActivitySVGChart(container, sessions, typeGroup, modeCode, threshold) {
     if (threshold === undefined) threshold = DEFAULT_CRITERION;
     const svgNS = "http://www.w3.org/2000/svg";
@@ -2024,8 +2090,8 @@ function renderActivitySVGChart(container, sessions, typeGroup, modeCode, thresh
         });
     }
 
-    // Field size vertical markers
-    {
+    // Field size vertical markers (solo dove il field viene davvero applicato)
+    if (engineUsesField(modeCode)) {
         let lastField = null;
         sessions.forEach((s, i) => {
             const fs = s.fieldSize || null;
@@ -2079,14 +2145,21 @@ function renderActivitySVGChart(container, sessions, typeGroup, modeCode, thresh
         const dot = document.createElementNS(svgNS, "circle");
         dot.setAttribute("cx", x); dot.setAttribute("cy", y);
         dot.setAttribute("r", "5"); dot.setAttribute("fill", "white");
-        dot.setAttribute("stroke", "var(--accent-color)"); dot.setAttribute("stroke-width", "2");
+        // Il contorno dice CON QUALE variante e' stata fatta la seduta: la media
+        // per variante non basta a vedere quando e' stata introdotta o se le
+        // sedute su una variante cadono in un periodo preciso.
+        const vIdx = s.variant || 0;
+        dot.setAttribute("stroke", variantColor(vIdx));
+        dot.setAttribute("stroke-width", vIdx > 0 ? "2.5" : "2");
 
         let tooltipText = isFluenza
             ? `${formatDateEU(s.date)}\nCorrette: ${s.correct}/${s.total}${s.rawX ? ' (Errori: ' + s.rawX + ')' : ''}\nDurata: ${s.fluenzaDuration || '?'}s`
             : `${formatDateEU(s.date)}\nScore: ${s.percentage}% (${s.correct}/${s.total})`;
         if (s.rawP) tooltipText += `\nPrompt: ${s.rawP}`;
         if (s.timeDelaySeconds) tooltipText += `\nTime Delay: ${s.timeDelaySeconds}s`;
-        if (s.fieldSize) tooltipText += `\nField: ${s.fieldSize}`;
+        if (s.fieldSize && engineUsesField(modeCode)) tooltipText += `\nField: ${s.fieldSize}`;
+        if (vIdx > 0) tooltipText += `\nVariante: ${_chartVariantName(sessions, vIdx)}`;
+        if (s.memLavSpan) tooltipText += `\nSpan: ${s.memLavSpan} elementi`;
 
         const title = document.createElementNS(svgNS, "title");
         title.textContent = tooltipText;
@@ -2111,6 +2184,52 @@ function renderActivitySVGChart(container, sessions, typeGroup, modeCode, thresh
     });
 
     container.appendChild(svg);
+
+    // Legenda delle varianti: compare solo quando ce n'e' piu' di una, altrimenti
+    // sarebbe rumore su ogni singolo grafico.
+    const variantsHere = [...new Set(sessions.map(s => s.variant || 0))].sort((a, b) => a - b);
+    if (variantsHere.length > 1) {
+        const leg = document.createElement('div');
+        leg.style.cssText = 'display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:6px; font-size:0.7rem; color:var(--text-secondary);';
+        leg.innerHTML = variantsHere.map(v => {
+            const ss = sessions.filter(x => (x.variant || 0) === v);
+            const avg = ss.length ? Math.round(ss.reduce((a, x) => a + (x.percentage || 0), 0) / ss.length) : 0;
+            return `<span style="display:inline-flex; align-items:center; gap:4px;">
+                <span style="width:10px; height:10px; border-radius:50%; background:var(--modal-bg); border:2.5px solid ${variantColor(v)}; display:inline-block;"></span>
+                ${escapeHtml(_chartVariantName(sessions, v))} <b style="color:var(--text-primary);">${avg}%</b>
+                <span style="opacity:0.6;">(${ss.length})</span>
+            </span>`;
+        }).join('');
+        container.appendChild(leg);
+    }
+
+    // Memoria di lavoro: percentuale di prove corrette per span.
+    if (!engineUsesField(modeCode)) {
+        const spans = memLavSpanStats(sessions);
+        if (spans.length > 0) {
+            const box = document.createElement('div');
+            box.style.cssText = 'margin-top:10px; background:rgba(var(--shade-rgb),0.18); border:1px solid var(--glass-border); border-radius:10px; padding:10px;';
+            const approx = spans.some(x => x.approx);
+            box.innerHTML = `<div style="font-size:0.7rem; color:var(--text-secondary); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">
+                    <i class="fa-solid fa-layer-group"></i> Corrette per span${approx ? ' <span style="text-transform:none; opacity:0.7;">(sedute vecchie: media della seduta)</span>' : ''}
+                </div>` +
+                spans.map(x => {
+                    const col = x.pct >= 80 ? 'var(--success-color)' : x.pct >= 50 ? 'var(--warning-color)' : 'var(--danger-color)';
+                    const detail = x.n > 0
+                        ? `${x.ok}/${x.n} prove${x.prompt ? ` &middot; ${x.prompt} con aiuto` : ''}`
+                        : `${x.sessions} sedute`;
+                    return `<div style="display:flex; align-items:center; gap:8px; margin-bottom:5px;">
+                        <span style="min-width:64px; font-size:0.75rem; font-weight:700;">Span ${x.span}</span>
+                        <span style="flex:1; height:8px; background:rgba(var(--ink-rgb),0.1); border-radius:4px; overflow:hidden;">
+                            <span style="display:block; height:100%; width:${x.pct}%; background:${col}; border-radius:4px;"></span>
+                        </span>
+                        <b style="min-width:38px; text-align:right; font-size:0.75rem; color:${col};">${x.pct}%</b>
+                        <span style="font-size:0.68rem; color:var(--text-secondary); min-width:96px;">${detail}</span>
+                    </div>`;
+                }).join('');
+            container.appendChild(box);
+        }
+    }
 }
 
 // --- Overview filter handlers ---
