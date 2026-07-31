@@ -565,6 +565,17 @@
                 </label>
                 <h4 style="margin:18px 0 10px; color:#22d3ee;"><i class="fa-solid fa-desktop"></i> Scontorno sul PC <span class="modal-label-sm">(opzionale, molto pi&ugrave; veloce in blocco)</span></h4>
                 <p class="modal-hint" style="margin:0 0 8px;">Se sul computer tieni acceso <b>tools/rmbg_server.py</b>, l&rsquo;app gli manda le immagini a lotti e usa la sua GPU: sullo scontorno in blocco &egrave; la differenza tra minuti e secondi. Se il PC &egrave; spento o irraggiungibile, si continua da soli sul dispositivo.</p>
+                <div id="ai-desktop-rmbg" style="display:none; background:rgba(34,211,238,0.08); border:1px solid rgba(34,211,238,0.3); border-radius:10px; padding:12px; margin-bottom:10px;">
+                    <b style="font-size:0.85rem;"><i class="fa-solid fa-microchip"></i> Su questo computer</b>
+                    <p class="modal-hint" style="margin:6px 0 8px;">Indica la cartella del modello che hai gi&agrave; scaricato (quella con <i>config.json</i> e i pesi). L&rsquo;app avvia da sola lo scontorno sulla GPU di questo PC: nessun dato esce dal computer.</p>
+                    <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                        <input type="text" id="ai-rmbg-modelpath" placeholder="F:\Stable Diffusion\RMBG-2.0" style="flex:1; min-width:200px;">
+                        <button class="btn btn-ghost" onclick="pickRmbgFolder()" style="font-size:0.8rem;"><i class="fa-solid fa-folder-open"></i> Sfoglia</button>
+                        <button class="btn btn-ghost" onclick="startDesktopRmbg()" style="font-size:0.8rem; color:#22d3ee;"><i class="fa-solid fa-play"></i> Avvia</button>
+                    </div>
+                    <p class="modal-hint" id="ai-rmbg-desktop-status" style="margin:8px 0 0;"></p>
+                </div>
+                <label class="modal-label">Oppure un altro PC in rete <span class="modal-label-sm">(es. dal tablet)</span></label>
                 <input type="text" id="ai-engine-server" placeholder="http://192.168.1.10:7865 &mdash; vuoto = disattivato">
                 <div style="margin-top:8px;">
                     <button class="btn btn-ghost" onclick="testAiServer()" style="font-size:0.8rem; color:#22d3ee;"><i class="fa-solid fa-plug"></i> Prova collegamento</button>

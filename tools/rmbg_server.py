@@ -19,7 +19,9 @@ USO
   il server stampa all'avvio, e premi "Prova collegamento".
 
 VARIABILI D'AMBIENTE (tutte facoltative)
-  RMBG_MODEL        default briaai/RMBG-2.0
+  RMBG_MODEL        nome del repo in cache OPPURE percorso di una cartella
+                    scaricata a mano (es. F:\\Stable Diffusion\\RMBG-2.0).
+                    Default briaai/RMBG-2.0
   RMBG_PORT         default 7865
   RMBG_BATCH        immagini per passata GPU, default 4 (alzalo se hai VRAM)
   RMBG_IDLE_MIN     minuti di inattivita' prima di liberare la VRAM, default 10
@@ -43,6 +45,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 MODEL_ID = os.environ.get("RMBG_MODEL", "briaai/RMBG-2.0")
+IS_LOCAL_DIR = os.path.isdir(MODEL_ID)
 PORT = int(os.environ.get("RMBG_PORT", "7865"))
 BATCH = max(1, int(os.environ.get("RMBG_BATCH", "4")))
 IDLE_MIN = float(os.environ.get("RMBG_IDLE_MIN", "10"))
@@ -68,7 +71,11 @@ _TRANSFORM = transforms.Compose([
 # Modello: caricamento dalla cache locale, scarico su richiesta o per inattivita'
 # --------------------------------------------------------------------------
 def load_model():
-    """Carica dal modello gia' presente sul PC. Niente rete, niente token."""
+    """Carica il modello gia' presente sul PC. Niente rete, niente token.
+
+    RMBG_MODEL puo' essere il nome di un repo gia' in cache OPPURE il percorso
+    di una cartella scaricata a mano, es. F:\\Stable Diffusion\\RMBG-2.0.
+    """
     global _model, _device, _last_use
     _last_use = time.time()
     if _model is not None:
@@ -76,13 +83,20 @@ def load_model():
 
     _device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     where = torch.cuda.get_device_name(0) if _device.type == "cuda" else "CPU"
-    print(f"[rmbg] carico {MODEL_ID} dalla cache locale su {where}...")
+    src = "cartella locale" if IS_LOCAL_DIR else "cache locale"
+    print(f"[rmbg] carico {MODEL_ID} dalla {src} su {where}...")
 
     try:
         m = AutoModelForImageSegmentation.from_pretrained(
             MODEL_ID, trust_remote_code=True, local_files_only=True
         )
     except Exception as e:
+        if IS_LOCAL_DIR:
+            raise RuntimeError(
+                f"La cartella {MODEL_ID} non contiene un modello caricabile ({e}). "
+                "Servono config.json, i pesi (.safetensors o .bin) e i moduli .py "
+                "del repo, cioe' esattamente quello che scarica from_pretrained."
+            )
         if not ALLOW_DOWNLOAD:
             raise RuntimeError(
                 f"{MODEL_ID} non e' nella cache di questo PC ({e}). "
@@ -187,7 +201,7 @@ def health():
     vram = None
     if torch.cuda.is_available():
         vram = round(torch.cuda.memory_allocated() / (1024 ** 3), 2)
-    return jsonify(ok=True, model=MODEL_ID, loaded=_model is not None,
+    return jsonify(ok=True, model=MODEL_ID, local_dir=IS_LOCAL_DIR, loaded=_model is not None,
                    device="cuda" if torch.cuda.is_available() else "cpu",
                    gpu=(torch.cuda.get_device_name(0) if torch.cuda.is_available() else None),
                    batch=BATCH, idle_minutes=IDLE_MIN, vram_gb=vram)

@@ -41,6 +41,7 @@ window.AIEngine = (function () {
             useLocalFirst: false,  // try local folder before the network
             libUrl: '',            // override transformers.js URL (e.g. local copy)
             serverUrl: '',         // optional PC running tools/rmbg_server.py
+            serverModelPath: '',   // desktop only: model folder the app starts itself
         }, c);
     }
     function setConfig(patch) {
@@ -941,6 +942,9 @@ window.populateAiEngineSettings = function () {
     set('ai-engine-model', cfg.modelId);
     set('ai-engine-localpath', cfg.localModelPath);
     set('ai-engine-server', cfg.serverUrl);
+    set('ai-rmbg-modelpath', cfg.serverModelPath);
+    const dk = document.getElementById('ai-desktop-rmbg');
+    if (dk && window.desktopRmbg) { dk.style.display = ''; refreshDesktopRmbgStatus(); }
     chk('ai-engine-localfirst', cfg.useLocalFirst);
     if (typeof getUseScontornoEverywhere === 'function') chk('scontorno-everywhere', getUseScontornoEverywhere());
     const capsEl = document.getElementById('ai-engine-caps');
@@ -963,6 +967,7 @@ window.saveAiEngineSettings = function () {
         localModelPath: ((document.getElementById('ai-engine-localpath') || {}).value || '').trim(),
         useLocalFirst: !!(document.getElementById('ai-engine-localfirst') || {}).checked,
         serverUrl: ((document.getElementById('ai-engine-server') || {}).value || '').trim(),
+        serverModelPath: ((document.getElementById('ai-rmbg-modelpath') || {}).value || '').trim(),
     });
     if (window.populateAiEngineSettings) populateAiEngineSettings(); // refresh the active-engine readout
     const s = document.getElementById('ai-engine-status');
@@ -986,6 +991,68 @@ window.testAiServer = async function () {
     say(`<span style="color:var(--success-color);">Collegato</span> &middot; ${info.model || 'RMBG'} su <b>${dev}</b>`
         + (info.loaded ? ' &middot; modello gi&agrave; in memoria' : ' &middot; si carica alla prima immagine'));
 };
+
+// --- Scontorno locale sul desktop (Electron avvia tools/rmbg_server.py) -----
+// Il modello che l'utente ha gia' sul PC e' un repo PyTorch: il motore web
+// legge solo ONNX, quindi quella cartella la puo' usare solo il processo
+// Python, che pero' viene avviato dall'app e parla su 127.0.0.1.
+function _dkStatusEl() { return document.getElementById('ai-rmbg-desktop-status'); }
+
+window.refreshDesktopRmbgStatus = async function () {
+    const el = _dkStatusEl();
+    if (!el || !window.desktopRmbg) return;
+    const st = await window.desktopRmbg.status();
+    if (st && st.running) {
+        const i = st.info || {};
+        const dev = (i.device || '') === 'cuda' ? (i.gpu || 'GPU NVIDIA') : 'CPU';
+        el.innerHTML = `<span style="color:var(--success-color);">Attivo</span> su <b>${dev}</b>`
+            + (i.model ? ` &middot; ${i.model}` : '')
+            + (i.loaded ? ' &middot; modello in memoria' : ' &middot; si carica alla prima immagine');
+    } else {
+        el.innerHTML = st && st.error
+            ? `<span style="color:var(--danger-color);">${st.error}</span>`
+            : '<span style="color:var(--text-secondary);">Non avviato.</span>';
+    }
+};
+
+window.pickRmbgFolder = async function () {
+    if (!window.desktopRmbg) return;
+    const dir = await window.desktopRmbg.pickFolder();
+    if (!dir) return;
+    const el = document.getElementById('ai-rmbg-modelpath');
+    if (el) el.value = dir;
+    saveAiEngineSettings();
+};
+
+window.startDesktopRmbg = async function () {
+    if (!window.desktopRmbg) return;
+    saveAiEngineSettings();
+    const el = _dkStatusEl();
+    const modelPath = (AIEngine.getConfig().serverModelPath || '').trim();
+    if (el) el.innerHTML = 'Avvio in corso... il primo caricamento di torch pu&ograve; richiedere qualche decina di secondi.';
+    const r = await window.desktopRmbg.start(modelPath);
+    if (r && r.ok) {
+        // Da qui in poi lo scontorno passa di li' senza altre impostazioni.
+        AIEngine.setConfig({ serverUrl: r.url });
+        const su = document.getElementById('ai-engine-server');
+        if (su) su.value = r.url;
+        await refreshDesktopRmbgStatus();
+    } else if (el) {
+        el.innerHTML = `<span style="color:var(--danger-color);">${(r && r.error) || 'Avvio non riuscito.'}</span>`;
+    }
+};
+
+// All'apertura dell'app sul desktop: se una cartella e' gia' configurata, alza
+// il processo in sottofondo. Non carica il modello (lo fa alla prima immagine),
+// quindi non costa VRAM finche' non serve.
+document.addEventListener('DOMContentLoaded', () => {
+    if (!window.desktopRmbg || !window.AIEngine) return;
+    const cfg = AIEngine.getConfig();
+    if (!cfg.serverModelPath) return;
+    window.desktopRmbg.start(cfg.serverModelPath).then(r => {
+        if (r && r.ok) AIEngine.setConfig({ serverUrl: r.url });
+    }).catch(() => {});
+});
 
 window.freeAiServer = async function () {
     const el = document.getElementById('ai-engine-server-status');

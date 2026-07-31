@@ -29,7 +29,8 @@
       "css/**/*",
       "js/**/*",
       "electron/**/*",
-      "build/icon.svg"
+      "build/icon.svg",
+      "tools/**/*"
     ],
     "mac": {
       "category": "public.app-category.medical",
