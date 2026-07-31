@@ -40,6 +40,7 @@ window.AIEngine = (function () {
             localModelPath: '',    // e.g. './models/' (used if remote fails)
             useLocalFirst: false,  // try local folder before the network
             libUrl: '',            // override transformers.js URL (e.g. local copy)
+            serverUrl: '',         // optional PC running tools/rmbg_server.py
         }, c);
     }
     function setConfig(patch) {
@@ -740,8 +741,71 @@ window.AIEngine = (function () {
         return { masks: result, dims: m0.dims.join('x'), planar };
     }
 
+    // ===== Optional PC helper (tools/rmbg_server.py) =====
+    // A desktop GPU running the full RMBG-2.0 weights is far faster and cleaner
+    // than anything the tablet can do, which matters when cutting out a whole
+    // set at once. When an address is configured we ask it for the MASK only,
+    // so edge feathering and compositing stay in the app and the result is
+    // interchangeable with the other engines. Any failure falls through to the
+    // normal on-device path — the PC is an accelerator, never a dependency.
+    function serverBase() {
+        const u = (getConfig().serverUrl || '').trim();
+        if (!u) return '';
+        return (/^https?:\/\//i.test(u) ? u : 'http://' + u).replace(/\/+$/, '');
+    }
+
+    async function serverPing(timeoutMs) {
+        const base = serverBase();
+        if (!base) return null;
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), timeoutMs || 2500);
+        try {
+            const r = await fetch(base + '/health', { signal: ctrl.signal });
+            return r.ok ? await r.json() : null;
+        } catch (e) { return null; } finally { clearTimeout(t); }
+    }
+
+    // Grayscale PNG mask -> Uint8Array(w*h), resampled to the requested size.
+    async function _maskPngToArray(pngDataUrl, w, h) {
+        const im = await _loadImg(pngDataUrl);
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        const ctx = c.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(im, 0, 0, w, h);
+        const d = ctx.getImageData(0, 0, w, h).data;
+        const mask = new Uint8Array(w * h);
+        for (let i = 0; i < w * h; i++) mask[i] = d[i * 4];
+        return mask;
+    }
+
+    async function serverSegment(imageUrl, w, h, onStatus) {
+        const base = serverBase();
+        if (!base) return null;
+        try {
+            onStatus && onStatus('Scontorno sul PC...');
+            const r = await fetch(base + '/mask', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: imageUrl }),
+            });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const j = await r.json();
+            if (!j || !j.mask) throw new Error('risposta senza maschera');
+            onStatus && onStatus('Scontorno dal PC completato.');
+            return await _maskPngToArray(j.mask, w, h);
+        } catch (e) {
+            console.warn('RMBG server non raggiungibile:', e);
+            onStatus && onStatus('PC non raggiungibile, uso il motore locale...');
+            return null;
+        }
+    }
+
     // Segment the subject. Returns a Uint8 grayscale mask (length w*h), 255=subject.
     async function segmentSubject(imageUrl, w, h, onStatus) {
+        // A configured PC wins over everything: same model, desktop GPU.
+        if (serverBase()) {
+            const sm = await serverSegment(imageUrl, w, h, onStatus);
+            if (sm) return sm;
+        }
         // Per-model routing: native only when it's actually the better path
         if (effectiveEngine() === 'native') {
             const nm = await nativeSegment(imageUrl, w, h, onStatus);
@@ -815,6 +879,7 @@ window.AIEngine = (function () {
         getConfig, setConfig, capabilities, deviceChain, nativeAvailable,
         effectiveEngine, effectiveEngineLabel,
         loadTransformers, getSegmenter, segmentSubject, preload, preloadNative, preloadWeb, status, unload,
+        serverBase, serverPing, serverSegment,
         samPredict, samDebugMasks, preloadSam,
         panopticSegment, panopticReset, preloadPanoptic,
         nativeSubjects, objectSegments, objectSegmentsReset,
@@ -834,6 +899,7 @@ window.populateAiEngineSettings = function () {
     set('ai-engine-device', cfg.device);
     set('ai-engine-model', cfg.modelId);
     set('ai-engine-localpath', cfg.localModelPath);
+    set('ai-engine-server', cfg.serverUrl);
     chk('ai-engine-localfirst', cfg.useLocalFirst);
     if (typeof getUseScontornoEverywhere === 'function') chk('scontorno-everywhere', getUseScontornoEverywhere());
     const capsEl = document.getElementById('ai-engine-caps');
@@ -855,10 +921,29 @@ window.saveAiEngineSettings = function () {
         modelId: ((document.getElementById('ai-engine-model') || {}).value || '').trim(),
         localModelPath: ((document.getElementById('ai-engine-localpath') || {}).value || '').trim(),
         useLocalFirst: !!(document.getElementById('ai-engine-localfirst') || {}).checked,
+        serverUrl: ((document.getElementById('ai-engine-server') || {}).value || '').trim(),
     });
     if (window.populateAiEngineSettings) populateAiEngineSettings(); // refresh the active-engine readout
     const s = document.getElementById('ai-engine-status');
     if (s) s.innerHTML = '<span style="color:var(--success-color);">Impostazioni salvate. Premi "Carica/Test" per verificare.</span>';
+};
+
+window.testAiServer = async function () {
+    const el = document.getElementById('ai-engine-server-status');
+    const say = (html) => { if (el) el.innerHTML = html; };
+    if (!window.AIEngine) return;
+    saveAiEngineSettings();
+    if (!AIEngine.serverBase()) { say('<span style="color:var(--text-secondary);">Nessun indirizzo: si usa il motore del dispositivo.</span>'); return; }
+    say('Provo...');
+    const info = await AIEngine.serverPing(4000);
+    if (!info) {
+        say('<span style="color:var(--danger-color);">Non raggiungibile.</span> Controlla che lo script sia in esecuzione, '
+            + 'che PC e tablet siano sulla stessa rete e che il firewall di Windows consenta la porta.');
+        return;
+    }
+    const dev = (info.device || '').toLowerCase() === 'cuda' ? 'GPU NVIDIA' : 'CPU';
+    say(`<span style="color:var(--success-color);">Collegato</span> &middot; ${info.model || 'RMBG'} su <b>${dev}</b>`
+        + (info.loaded ? ' &middot; modello gi&agrave; in memoria' : ' &middot; si carica alla prima immagine'));
 };
 
 window.testAiEngine = async function () {

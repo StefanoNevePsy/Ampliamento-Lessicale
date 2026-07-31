@@ -1,0 +1,66 @@
+name: Deploy su GitHub Pages
+
+# Sostituisce il deploy automatico "da branch" di GitHub, che non e' avviabile
+# a mano ne' configurabile. Perche' faccia effetto, in Settings > Pages la
+# sorgente va messa su "GitHub Actions" (una volta sola).
+
+on:
+  # Avvio manuale: dalla tab Actions, con la possibilita' di scegliere il branch
+  # da pubblicare. Nota: "Use workflow from" sceglie da dove viene letto QUESTO
+  # file; il campo "branch" qui sotto sceglie il codice che finisce online, e
+  # puo' essere un branch diverso.
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch da pubblicare (vuoto = quello da cui lanci il workflow)'
+        required: false
+        type: string
+  # Deploy automatico su main, come prima
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Un deploy alla volta; le richieste in coda vengono sostituite dall'ultima.
+# Non annulla un deploy gia' in corso, per non lasciare Pages a meta'.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout del branch scelto
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+
+      - name: Cosa sto pubblicando
+        run: |
+          echo "Branch richiesto : ${{ inputs.branch || github.ref_name }}"
+          echo "Commit           : $(git rev-parse --short HEAD)"
+          echo "Messaggio        : $(git log -1 --pretty=%s)"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build del sito in www/
+        run: node build.js
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: www
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
