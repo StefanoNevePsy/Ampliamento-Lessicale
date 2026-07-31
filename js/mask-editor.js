@@ -588,6 +588,57 @@
         return url;
     };
 
+    // Same as aiCutoutDataUrl but for a whole list, in one round trip to the PC
+    // helper. Only worth it when a server is configured — on-device the model
+    // runs one image at a time anyway, so the caller keeps its own loop there.
+    // Returns an array aligned with `urls` (null where segmentation failed), or
+    // null when there is no server, so the caller falls back to its loop.
+    window.aiCutoutDataUrlMany = async function (urls, onStatus) {
+        if (!window.AIEngine || !AIEngine.serverBase || !AIEngine.serverBase()) return null;
+
+        // Downscale to the working resolution BEFORE sending: the model resizes
+        // to 1024 internally, so a bigger upload costs Wi-Fi time and buys nothing.
+        const prepared = [];
+        for (const u of urls) {
+            const img = await _loadImage(u);
+            let w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+            if (w > MAX_DIM || h > MAX_DIM) {
+                const s = MAX_DIM / Math.max(w, h);
+                w = Math.round(w * s); h = Math.round(h * s);
+            }
+            const c = document.createElement('canvas');
+            c.width = w; c.height = h;
+            c.getContext('2d').drawImage(img, 0, 0, w, h);
+            prepared.push({ img, w, h, url: c.toDataURL('image/webp', 0.92) });
+            c.width = c.height = 0;
+        }
+
+        const masks = await AIEngine.serverSegmentMany(prepared, onStatus);
+        if (!masks) return null;
+
+        return prepared.map((p, idx) => {
+            const mask = masks[idx];
+            if (!mask) return null;
+            const c = document.createElement('canvas');
+            c.width = p.w; c.height = p.h;
+            const cx = c.getContext('2d', { willReadFrequently: true });
+            cx.drawImage(p.img, 0, 0, p.w, p.h);
+            const im = cx.getImageData(0, 0, p.w, p.h);
+            const d = im.data;
+            // Identical edge treatment to the single-image path, so a set cut out
+            // on the PC looks the same as one cut out on the tablet.
+            for (let i = 0; i < p.w * p.h; i++) {
+                const raw = mask[i];
+                const m = raw <= 50 ? 0 : raw >= 150 ? 255 : ((raw - 50) * 255 / 100) | 0;
+                d[i * 4 + 3] = (d[i * 4 + 3] * m / 255) | 0;
+            }
+            cx.putImageData(im, 0, 0);
+            const out = c.toDataURL('image/png');
+            c.width = c.height = 0;
+            return out;
+        });
+    };
+
     // Headless AI highlight: keep the subject coloured, desaturate the background.
     // Uses native ML Kit subject mask when available (stable), else RMBG. For bulk.
     window.aiHighlightDataUrl = async function (imageUrl, onStatus) {

@@ -645,6 +645,43 @@ window.aiBatchScontornoEditor = async () => {
 
     let done = 0, failed = 0;
     showBackupProgress('Preparazione modello AI...', 0);
+
+    // With a PC helper configured, send the images in chunks: each chunk is one
+    // GPU batch over there, which is where the time on a whole set goes. Chunks
+    // (not one giant request) keep progress moving and memory bounded, and any
+    // failure just drops through to the per-image loop below.
+    if (typeof aiCutoutDataUrlMany === 'function' && window.AIEngine
+        && AIEngine.serverBase && AIEngine.serverBase()) {
+        const CHUNK = 8;
+        const groups = [];
+        for (let i = 0; i < items.length; i += CHUNK) groups.push(items.slice(i, i + CHUNK));
+        let sent = 0, serverOk = true;
+        for (const group of groups) {
+            const pct = (sent / items.length) * 100;
+            showBackupProgress(`Scontorno sul PC: ${sent + 1}-${sent + group.length} di ${items.length}`, pct);
+            let res = null;
+            try {
+                res = await aiCutoutDataUrlMany(group.map(it => getItemVariantUrl(it, v)),
+                    (t) => showBackupProgress(`${t} (${sent + group.length}/${items.length})`, pct));
+            } catch (e) { console.warn('bulk PC cutout failed', e); }
+            if (!res) { serverOk = false; break; }   // PC down: finish on-device
+            res.forEach((url, k) => {
+                if (url) setItemVariantMasked(group[k], v, url); else failed++;
+                done++;
+            });
+            sent += group.length;
+            await new Promise(r => setTimeout(r, 0));
+        }
+        if (serverOk) {
+            hideBackupProgress();
+            renderEditorList();
+            alert(`Scontorno completato sul PC: ${done - failed} riuscite${failed ? `, ${failed} fallite` : ''}.`);
+            return;
+        }
+        showBackupProgress('PC non raggiungibile: continuo sul dispositivo...', 0);
+        done = 0; failed = 0;
+    }
+
     for (const item of items) {
         const label = item.label || `#${done + 1}`;
         try {

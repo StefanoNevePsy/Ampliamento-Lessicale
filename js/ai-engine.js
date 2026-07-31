@@ -777,6 +777,47 @@ window.AIEngine = (function () {
         return mask;
     }
 
+    // Masks for many images in one round trip: the PC runs them as a single GPU
+    // batch, which is where the speed-up on a whole set actually comes from.
+    // Returns an array aligned with `images` (null for anything that failed), or
+    // null if the server can't be reached at all — the caller then falls back to
+    // the on-device path image by image.
+    async function serverSegmentMany(images, onStatus) {
+        const base = serverBase();
+        if (!base || !images.length) return null;
+        try {
+            onStatus && onStatus(`Scontorno sul PC: ${images.length} immagini...`);
+            const r = await fetch(base + '/mask', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ images: images.map(i => i.url) }),
+            });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const j = await r.json();
+            if (!j || !Array.isArray(j.masks)) throw new Error('risposta senza maschere');
+            const out = [];
+            for (let i = 0; i < images.length; i++) {
+                out.push(j.masks[i] ? await _maskPngToArray(j.masks[i], images[i].w, images[i].h) : null);
+            }
+            onStatus && onStatus(`PC: ${images.length} immagini in ${j.ms || '?'} ms.`);
+            return out;
+        } catch (e) {
+            console.warn('RMBG server (batch) non raggiungibile:', e);
+            return null;
+        }
+    }
+
+    // Ask the PC to drop the model from VRAM. Fire-and-forget: it's a courtesy,
+    // and the server unloads on its own after being idle anyway.
+    async function serverUnload() {
+        const base = serverBase();
+        if (!base) return false;
+        try {
+            const r = await fetch(base + '/unload', { method: 'POST' });
+            return r.ok;
+        } catch (e) { return false; }
+    }
+
     async function serverSegment(imageUrl, w, h, onStatus) {
         const base = serverBase();
         if (!base) return null;
@@ -879,7 +920,7 @@ window.AIEngine = (function () {
         getConfig, setConfig, capabilities, deviceChain, nativeAvailable,
         effectiveEngine, effectiveEngineLabel,
         loadTransformers, getSegmenter, segmentSubject, preload, preloadNative, preloadWeb, status, unload,
-        serverBase, serverPing, serverSegment,
+        serverBase, serverPing, serverSegment, serverSegmentMany, serverUnload,
         samPredict, samDebugMasks, preloadSam,
         panopticSegment, panopticReset, preloadPanoptic,
         nativeSubjects, objectSegments, objectSegmentsReset,
@@ -944,6 +985,16 @@ window.testAiServer = async function () {
     const dev = (info.device || '').toLowerCase() === 'cuda' ? 'GPU NVIDIA' : 'CPU';
     say(`<span style="color:var(--success-color);">Collegato</span> &middot; ${info.model || 'RMBG'} su <b>${dev}</b>`
         + (info.loaded ? ' &middot; modello gi&agrave; in memoria' : ' &middot; si carica alla prima immagine'));
+};
+
+window.freeAiServer = async function () {
+    const el = document.getElementById('ai-engine-server-status');
+    if (!window.AIEngine || !AIEngine.serverBase()) { if (el) el.textContent = 'Nessun PC configurato.'; return; }
+    if (el) el.textContent = 'Chiedo al PC di liberare la memoria...';
+    const ok = await AIEngine.serverUnload();
+    if (el) el.innerHTML = ok
+        ? '<span style="color:var(--success-color);">Memoria del PC liberata.</span> Si ricarica da solo alla prossima immagine.'
+        : '<span style="color:var(--danger-color);">Non raggiungibile.</span>';
 };
 
 window.testAiEngine = async function () {

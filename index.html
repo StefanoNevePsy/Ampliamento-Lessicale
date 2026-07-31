@@ -564,10 +564,11 @@
                     <span>Usa prima la cartella locale (offline)</span>
                 </label>
                 <h4 style="margin:18px 0 10px; color:#22d3ee;"><i class="fa-solid fa-desktop"></i> Scontorno sul PC <span class="modal-label-sm">(opzionale, molto pi&ugrave; veloce in blocco)</span></h4>
-                <p class="modal-hint" style="margin:0 0 8px;">Se sul computer tieni acceso <b>tools/rmbg_server.py</b>, l&rsquo;app gli manda le immagini e usa la sua GPU. Se il PC &egrave; spento o irraggiungibile, si torna da soli al motore del dispositivo.</p>
+                <p class="modal-hint" style="margin:0 0 8px;">Se sul computer tieni acceso <b>tools/rmbg_server.py</b>, l&rsquo;app gli manda le immagini a lotti e usa la sua GPU: sullo scontorno in blocco &egrave; la differenza tra minuti e secondi. Se il PC &egrave; spento o irraggiungibile, si continua da soli sul dispositivo.</p>
                 <input type="text" id="ai-engine-server" placeholder="http://192.168.1.10:7865 &mdash; vuoto = disattivato">
                 <div style="margin-top:8px;">
                     <button class="btn btn-ghost" onclick="testAiServer()" style="font-size:0.8rem; color:#22d3ee;"><i class="fa-solid fa-plug"></i> Prova collegamento</button>
+                    <button class="btn btn-ghost" onclick="freeAiServer()" style="font-size:0.8rem;" title="Il PC libera subito la memoria video. Si ricarica da solo alla prossima immagine."><i class="fa-solid fa-memory"></i> Ho finito, libera la GPU</button>
                     <span class="modal-hint" id="ai-engine-server-status" style="margin-left:8px;"></span>
                 </div>
 
