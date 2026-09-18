@@ -13,8 +13,10 @@
     <link rel="icon" type="image/svg+xml" href="build/icon.svg">
     <link rel="apple-touch-icon" href="build/icon.svg">
 
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+    <!-- Icone e font serviti dall'app, non da un CDN: l'app deve funzionare
+         offline e senza dipendere dal fatto che una rete esterna risponda. -->
+    <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css">
+    <link rel="stylesheet" href="vendor/css/noto-sans.css">
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -1186,15 +1188,18 @@
     </div>
 
     <!-- Firebase SDK (compat for global scope) -->
+    <!-- Firebase e PeerJS restano su CDN: servono a funzioni che la rete la
+         richiedono comunque (sync cloud, P2P con signalling). Tutto il resto
+         e' servito dall'app, cosi' offline restano icone, font e backup. -->
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
     <!-- P2P Sync libs (PeerJS + QR) -->
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="vendor/js/qrcode.min.js"></script>
+    <script src="vendor/js/html5-qrcode.min.js"></script>
+    <script src="vendor/js/pako.min.js"></script>
+    <script src="vendor/js/jszip.min.js"></script>
 
     <!-- JS MODULES -->
     <script src="js/db.js"></script>

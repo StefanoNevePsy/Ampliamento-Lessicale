@@ -29,6 +29,7 @@
       "css/**/*",
       "js/**/*",
       "electron/**/*",
+      "vendor/**/*",
       "build/icon.svg",
       "tools/**/*"
     ],
