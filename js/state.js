@@ -149,6 +149,32 @@ function setCriterionThreshold(patientId, value, mode, setName) {
     DB.savePatient(p);
 }
 
+// --- LEARN UNIT ---
+// Le sedute importate da fogli che registravano percentuali (scala
+// 'percentuale': V+P = 100) non sono conteggi di prove: valgono per grafici e
+// criterio, non per le learn unit.
+function luTotali(s) { return s && s.scala !== 'percentuale' ? (s.total || 0) : 0; }
+function luCorrette(s) { return s && s.scala !== 'percentuale' ? (s.correct || 0) : 0; }
+// Learn unit di un giorno. Per i giorni ricopiati dai quaderni Numbers vale la
+// tabella "Learn unit giornaliere" del quaderno, se c'è: è il conteggio fatto
+// dal centro, mentre le righe importate possono non coprire tutte le attività.
+function luDelGiorno(patient, dk, sessions) {
+    let tot = 0, ok = 0;
+    (sessions || []).forEach(s => { tot += luTotali(s); ok += luCorrette(s); });
+    const soloImport = !(sessions || []).length || sessions.every(s => s.fonte === 'numbers');
+    if (soloImport && patient && patient.learnUnitStoriche) {
+        let best = null;
+        patient.learnUnitStoriche.forEach(r => { if (r.data === dk && r.totali > 0 && (!best || r.totali > best.totali)) best = r; });
+        if (best) return { tot: best.totali, ok: best.corrette != null ? best.corrette : ok, storico: true };
+    }
+    return { tot, ok };
+}
+// Giorni che hanno solo la tabella storica delle learn unit, senza sedute
+function giorniSoloStorico(patient) {
+    const conSedute = new Set((patient.history || []).map(h => getDateKey(h.date)));
+    return [...new Set((patient.learnUnitStoriche || []).filter(r => r.totali > 0).map(r => r.data))].filter(d => !conSedute.has(d));
+}
+
 function pctColor(pct, threshold) {
     if (threshold === undefined) threshold = DEFAULT_CRITERION;
     const mid = Math.max(threshold - 20, 30);

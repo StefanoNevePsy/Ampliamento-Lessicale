@@ -1,0 +1,305 @@
+/* === Centro TICE: presa dati, programma, import ===
+   Usa le variabili dei temi dell'app, quindi funziona con tutti; i due temi
+   "TICE" hanno i colori del centro (verde acqua, arancio, antracite). */
+
+[data-theme="tice"] {
+    --bg-gradient: linear-gradient(160deg, #eef2f3 0%, #e4ebec 100%);
+    --glass-bg: rgba(255, 255, 255, 0.96);
+    --glass-border: rgba(var(--ink-rgb), 0.12);
+    --text-primary: #1c1f24;
+    --text-secondary: #5b626e;
+    --text-muted: #8a919c;
+    --accent-color: #1f8a85;
+    --accent-rgb: 31, 138, 133;
+    --success-color: #1f8f55;
+    --danger-color: #c93c3c;
+    --warning-color: #c56a0f;
+    --input-bg: rgba(var(--ink-rgb), 0.05);
+    --dropdown-bg: #ffffff;
+    --dropdown-deeper: #f0f3f4;
+    --modal-bg: #f6f8f8;
+    --cat-1: #1f8a85; --cat-2: #fb8e28; --cat-3: #1f8f55; --cat-4: #c93c3c; --cat-5: #6d5bd0; --cat-6: #c2408c;
+    --ink-rgb: 28, 31, 36;
+    --shade-rgb: 150, 160, 170;
+    --shadow-rgb: 60, 70, 80;
+    --shadow: 0 8px 26px rgba(60, 70, 80, 0.14);
+    --tice-arancio: #fb8e28;
+    --tice-antracite: #363a43;
+}
+[data-theme="tice"] .custom-dropdown-trigger,
+[data-theme="tice"] .mode-dd-label,
+[data-theme="tice"] .set-item-name,
+[data-theme="tice"] .patient-dd-name { color: #1c1f24; }
+[data-theme="tice"] .custom-ac-item { color: #5b626e; }
+[data-theme="tice"] .btn-float { background: rgba(255,255,255,0.95); color: #1c1f24; border-color: rgba(var(--ink-rgb),0.12); }
+
+[data-theme="tice-scuro"] {
+    --bg-gradient: linear-gradient(160deg, #1b1e23 0%, #22262d 100%);
+    --glass-bg: rgba(33, 36, 42, 0.96);
+    --glass-border: rgba(var(--ink-rgb), 0.1);
+    --text-primary: #eceef1;
+    --text-secondary: #a1a8b3;
+    --text-muted: #7c838e;
+    --accent-color: #39b2ad;
+    --accent-rgb: 57, 178, 173;
+    --success-color: #45c283;
+    --danger-color: #f07171;
+    --warning-color: #f0a04b;
+    --input-bg: #2a2e35;
+    --dropdown-bg: #262a31;
+    --dropdown-deeper: #1d2025;
+    --modal-bg: #1d2025;
+    --cat-1: #39b2ad; --cat-2: #fb8e28; --cat-3: #45c283; --cat-4: #f07171; --cat-5: #9d8cf0; --cat-6: #e377b4;
+    --tice-arancio: #fb8e28;
+    --tice-antracite: #363a43;
+}
+
+/* --- contenitore ----------------------------------------------------------- */
+.tice {
+    --t-v: var(--success-color);
+    --t-p: var(--warning-color);
+    --t-x: var(--danger-color);
+    --t-arancio: var(--tice-arancio, #fb8e28);
+    --t-sup: var(--glass-bg);
+    --t-sup-2: rgba(var(--ink-rgb), 0.05);
+    --t-bordo: rgba(var(--ink-rgb), 0.12);
+    position: fixed; inset: 0; z-index: 9000;
+    background: var(--bg-gradient); color: var(--text-primary);
+    overflow-y: auto; overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    font-size: 16px;
+}
+.tice[hidden] { display: none; }
+body.tice-aperto .global-floating-controls,
+body.tice-aperto #visual-prompt-bar,
+body.tice-aperto #notebook-tab-handle { display: none !important; }
+.tice * { user-select: none; }
+.tice input, .tice textarea { user-select: text; }
+
+.tice-barra {
+    position: sticky; top: 0; z-index: 5;
+    display: flex; align-items: center; gap: 8px;
+    padding: calc(env(safe-area-inset-top, 0px) + 8px) 12px 8px;
+    background: var(--tice-antracite, #363a43); color: #fff;
+    min-height: 56px;
+}
+.tice-barra .marchio { display: flex; align-items: center; gap: 8px; background: none; border: 0; color: #fff; padding: 4px; cursor: pointer; flex-shrink: 0; }
+.tice-barra .marchio img { height: 28px; width: auto; display: block; }
+.tice-barra .titolo { flex: 1; min-width: 0; font-weight: 700; font-size: 1.02rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tice-barra .sotto-titolo { display: block; font-weight: 500; font-size: 0.78rem; opacity: 0.75; }
+.tice-barra button.ib { color: #fff; background: rgba(255,255,255,0.1); border-color: transparent; }
+
+.tice-main { max-width: 760px; margin: 0 auto; padding: 14px 12px calc(env(safe-area-inset-bottom, 0px) + 120px); }
+.tice h2 { font-size: 1.15rem; margin: 18px 2px 8px; }
+.tice h3 { font-size: 0.78rem; margin: 18px 4px 6px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; }
+.tice .sotto { color: var(--text-secondary); font-size: 0.88rem; }
+.tice .piccolo { font-size: 0.8rem; }
+.tice .vuoto { text-align: center; color: var(--text-secondary); padding: 28px 12px; }
+
+/* --- bottoni --------------------------------------------------------------- */
+.tice .bt {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    min-height: 46px; padding: 10px 16px; border-radius: 12px;
+    border: 1px solid var(--t-bordo); background: var(--t-sup); color: var(--text-primary);
+    font: inherit; font-weight: 650; cursor: pointer; text-decoration: none;
+}
+.tice .bt:active { transform: scale(0.98); }
+.tice .bt.primario { background: var(--accent-color); border-color: var(--accent-color); color: #fff; }
+.tice .bt.arancio { background: var(--t-arancio); border-color: var(--t-arancio); color: #1c1f24; }
+.tice .bt.fantasma { background: transparent; }
+.tice .bt.pericolo { color: var(--danger-color); border-color: rgba(201,60,60,0.35); background: transparent; }
+.tice .bt.piccolo { min-height: 36px; padding: 6px 12px; font-size: 0.85rem; border-radius: 10px; }
+.tice .bt.largo { width: 100%; }
+.tice .bt[disabled] { opacity: 0.5; pointer-events: none; }
+.tice .ib {
+    width: 42px; height: 42px; flex-shrink: 0; display: grid; place-items: center;
+    border-radius: 12px; border: 1px solid var(--t-bordo); background: var(--t-sup); color: var(--text-primary);
+    cursor: pointer; font-size: 1rem;
+}
+.tice .bottoni { display: flex; gap: 8px; flex-wrap: wrap; }
+.tice .bottoni > .bt { flex: 1 1 auto; }
+
+/* --- schede e righe -------------------------------------------------------- */
+.tice .scheda { background: var(--t-sup); border: 1px solid var(--t-bordo); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; }
+.tice .scheda + .scheda { margin-top: 10px; }
+.tice .imbottita { padding: 14px; }
+.tice .riga {
+    display: flex; align-items: center; gap: 12px; width: 100%;
+    padding: 12px 14px; min-height: 64px;
+    background: none; border: 0; border-top: 1px solid var(--t-bordo);
+    color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.tice .riga:first-child { border-top: 0; }
+.tice .riga:active { background: var(--t-sup-2); }
+.tice .riga .corpo { flex: 1; min-width: 0; }
+.tice .riga .t1 { display: block; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tice .riga .t2 { display: block; color: var(--text-secondary); font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tice .avatar {
+    width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0; overflow: hidden;
+    display: grid; place-items: center; font-weight: 800; color: #fff; background: var(--accent-color);
+}
+.tice .avatar img { width: 100%; height: 100%; object-fit: cover; }
+.tice .pill {
+    display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700;
+    background: rgba(var(--accent-rgb), 0.14); color: var(--accent-color); vertical-align: 1px; white-space: nowrap;
+}
+.tice .pill.arancio { background: rgba(251,142,40,0.18); color: var(--warning-color); }
+.tice .pill.grigia { background: var(--t-sup-2); color: var(--text-secondary); }
+.tice .pill.verde { background: rgba(31,143,85,0.15); color: var(--t-v); }
+.tice .cerca {
+    width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--t-bordo);
+    background: var(--t-sup); color: var(--text-primary); font: inherit; margin-bottom: 10px;
+}
+.tice .banda { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; background: rgba(251,142,40,0.14); margin-bottom: 10px; font-size: 0.9rem; }
+
+/* --- presa dati ------------------------------------------------------------ */
+.tice .att { background: var(--t-sup); border: 1px solid var(--t-bordo); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; }
+.tice .att + .att { margin-top: 10px; }
+.tice .att.con-dati { border-color: rgba(var(--accent-rgb), 0.55); }
+.tice .att-testa {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    padding: 12px 14px; min-height: 66px; background: none; border: 0;
+    color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.tice .att-testa .corpo { flex: 1; min-width: 0; }
+.tice .att-testa .nome { display: block; font-weight: 750; }
+.tice .att-testa .target { display: block; color: var(--text-secondary); font-size: 0.86rem; margin-top: 2px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.tice .conto { text-align: right; flex-shrink: 0; min-width: 58px; line-height: 1.2; }
+.tice .conto b { font-size: 1.15rem; }
+.tice .pct-ok { color: var(--t-v); }
+.tice .pct-medio { color: var(--t-p); }
+.tice .pct-basso { color: var(--t-x); }
+.tice .att-corpo { padding: 0 12px 12px; }
+.tice .tasti { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.tice .tasti.due { grid-template-columns: 1fr 1fr; }
+.tice .tasto {
+    min-height: 74px; border-radius: 14px; border: 0; cursor: pointer;
+    font: inherit; font-size: 1.7rem; font-weight: 800; color: #fff;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    touch-action: manipulation;
+}
+.tice .tasto small { font-size: 0.72rem; font-weight: 650; opacity: 0.92; }
+.tice .tasto.v { background: var(--t-v); }
+.tice .tasto.p { background: var(--t-p); }
+.tice .tasto.x { background: var(--t-x); }
+.tice .tasto.e { background: var(--t-sup-2); color: var(--text-primary); font-size: 1rem; min-height: 54px; }
+.tice .tasto:active { filter: brightness(0.9); transform: scale(0.97); }
+.tice .sotto-tasti { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.tice .sequenza { flex: 1; display: flex; flex-wrap: wrap; gap: 4px; min-height: 14px; }
+.tice .sequenza i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+.tice .sequenza i.V { background: var(--t-v); }
+.tice .sequenza i.P { background: var(--t-p); }
+.tice .sequenza i.X { background: var(--t-x); }
+.tice .avviso-criterio { margin: 10px 0 0; padding: 8px 10px; border-radius: 10px; background: rgba(251,142,40,0.16); font-size: 0.86rem; }
+.tice .nota-voce { margin: 8px 0 0; font-size: 0.85rem; color: var(--text-secondary); }
+
+.tice .piede {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 6;
+    padding: 10px 12px calc(env(safe-area-inset-bottom, 0px) + 10px);
+    background: var(--t-sup); border-top: 1px solid var(--t-bordo);
+    box-shadow: 0 -6px 20px rgba(var(--shadow-rgb), 0.12);
+}
+.tice .piede-dentro { max-width: 760px; margin: 0 auto; display: flex; align-items: center; gap: 10px; }
+.tice .piede .riassunto { flex: 1; min-width: 0; font-size: 0.88rem; color: var(--text-secondary); }
+.tice .piede .riassunto b { color: var(--text-primary); }
+
+/* --- programma --------------------------------------------------------------- */
+.tice .targets { list-style: none; margin: 0; padding: 0 14px 12px; }
+.tice .targets li { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px dashed var(--t-bordo); }
+.tice .targets li:first-child { border-top: 0; }
+.tice .targets .tt { flex: 1; min-width: 0; font-size: 0.92rem; }
+.tice .targets .tt small { display: block; color: var(--text-secondary); font-size: 0.76rem; }
+.tice .targets li.chiuso .tt { color: var(--text-secondary); }
+.tice .punto { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; background: var(--t-bordo); }
+.tice .punto.attivo { background: var(--accent-color); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.25); }
+.tice .punto.criterio, .tice .punto.repertorio { background: var(--t-v); }
+.tice .punto.chiuso { background: var(--text-muted); }
+
+/* --- import ------------------------------------------------------------------ */
+.tice .file-scelta { display: block; border: 2px dashed rgba(var(--accent-rgb), 0.45); border-radius: 16px; padding: 22px 14px; text-align: center; cursor: pointer; background: rgba(var(--accent-rgb), 0.05); }
+.tice .file-scelta input { display: none; }
+.tice .tabella { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+.tice .tabella td, .tice .tabella th { padding: 6px 4px; border-top: 1px solid var(--t-bordo); text-align: left; }
+.tice .tabella .num { text-align: right; white-space: nowrap; }
+.tice details summary { cursor: pointer; font-weight: 650; padding: 6px 0; }
+.tice details ul { margin: 4px 0 0; padding-left: 18px; font-size: 0.84rem; color: var(--text-secondary); }
+
+/* --- campi e fogli (anche fuori da .tice) ---------------------------------------- */
+.tice-foglio-sfondo {
+    position: fixed; inset: 0; z-index: 9500; background: rgba(0,0,0,0.45);
+    display: flex; align-items: flex-end; justify-content: center;
+    animation: tice-sfuma 0.15s ease-out;
+}
+.tice-foglio {
+    width: 100%; max-width: 620px; max-height: 92vh; overflow-y: auto;
+    background: var(--modal-bg); color: var(--text-primary);
+    border-radius: 20px 20px 0 0; padding: 18px 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
+    box-shadow: 0 -10px 40px rgba(0,0,0,0.3);
+    animation: tice-sale 0.2s ease-out;
+}
+@media (min-width: 700px) {
+    .tice-foglio-sfondo { align-items: center; }
+    .tice-foglio { border-radius: 20px; }
+}
+@keyframes tice-sale { from { transform: translateY(40px); } to { transform: none; } }
+@keyframes tice-sfuma { from { background: rgba(0,0,0,0); } }
+.tice-foglio h2 { margin: 0 0 12px; font-size: 1.15rem; }
+.tice-foglio .campo { display: block; margin-bottom: 12px; }
+.tice-foglio .campo > span { display: block; font-size: 0.8rem; font-weight: 650; color: var(--text-secondary); margin-bottom: 4px; }
+.tice-foglio input:not([type=checkbox]):not([type=radio]), .tice-foglio select, .tice-foglio textarea, .tice .campo-in {
+    width: 100%; padding: 11px 12px; border-radius: 10px; border: 1px solid rgba(var(--ink-rgb),0.16);
+    background: var(--input-bg); color: var(--text-primary); font: inherit; font-size: 16px;
+}
+.tice-foglio textarea { min-height: 88px; resize: vertical; }
+.tice-foglio .riga-campi { display: flex; gap: 10px; }
+.tice-foglio .riga-campi > * { flex: 1; min-width: 0; }
+.tice-foglio .scelta { display: flex; gap: 6px; }
+.tice-foglio .scelta label { flex: 1; }
+.tice-foglio .scelta input { display: none; }
+.tice-foglio .scelta span { display: block; text-align: center; padding: 10px 6px; border-radius: 10px; border: 1px solid rgba(var(--ink-rgb),0.16); font-weight: 650; font-size: 0.9rem; cursor: pointer; }
+.tice-foglio .scelta input:checked + span { background: var(--accent-color); border-color: var(--accent-color); color: #fff; }
+.tice-foglio .bottoni { display: flex; gap: 8px; margin-top: 16px; }
+.tice-foglio .bottoni > * { flex: 1; }
+.tice-foglio .bt {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; padding: 10px 14px;
+    border-radius: 12px; border: 1px solid rgba(var(--ink-rgb),0.16); background: transparent; color: var(--text-primary);
+    font: inherit; font-weight: 650; cursor: pointer;
+}
+.tice-foglio .bt.primario { background: var(--accent-color); border-color: var(--accent-color); color: #fff; }
+.tice-foglio .bt.pericolo { background: var(--danger-color); border-color: var(--danger-color); color: #fff; }
+.tice-foglio .opzioni { display: flex; flex-direction: column; gap: 6px; }
+.tice-foglio .opzione {
+    display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px; min-height: 52px;
+    border-radius: 12px; border: 1px solid rgba(var(--ink-rgb),0.12); background: rgba(var(--ink-rgb),0.03);
+    color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.tice-foglio .opzione small { display: block; color: var(--text-secondary); font-size: 0.8rem; }
+.tice-foglio .opzione .corpo { flex: 1; min-width: 0; }
+.tice-foglio .sotto { color: var(--text-secondary); font-size: 0.86rem; }
+.tice-foglio h3 { font-size: 0.78rem; margin: 14px 0 6px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; }
+.tice-foglio .tabella { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.tice-foglio .tabella td, .tice-foglio .tabella th { padding: 6px 4px; border-top: 1px solid rgba(var(--ink-rgb),0.1); text-align: left; }
+.tice-foglio .tabella .num { text-align: right; }
+
+.tice-avviso {
+    position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 66px); transform: translateX(-50%);
+    z-index: 9800; background: #1c1f24; color: #fff; padding: 12px 16px; border-radius: 12px;
+    font-size: 0.92rem; max-width: calc(100vw - 32px); box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    animation: tice-sale 0.2s ease-out;
+}
+.tice-avviso.errore { background: #a52c2c; }
+
+/* Nel resto dell'app: il logo che riporta alla presa dati */
+.tice-torna { display: inline-flex; align-items: center; gap: 8px; background: none; border: 0; padding: 0; color: inherit; font: inherit; font-weight: 800; cursor: pointer; }
+.tice-torna img { height: 26px; width: auto; }
+.tice-torna .logo-chiaro { display: none; }
+[data-theme="tice"] .tice-torna .logo-chiaro,
+[data-theme="light"] .tice-torna .logo-chiaro,
+[data-theme="arctic"] .tice-torna .logo-chiaro,
+[data-theme="sand"] .tice-torna .logo-chiaro { display: block; }
+[data-theme="tice"] .tice-torna .logo-scuro,
+[data-theme="light"] .tice-torna .logo-scuro,
+[data-theme="arctic"] .tice-torna .logo-scuro,
+[data-theme="sand"] .tice-torna .logo-scuro { display: none; }
+@media (max-width: 700px) { .tice-torna span { display: none; } }
+header h1:has(.tice-torna) { flex-shrink: 0; }

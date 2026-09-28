@@ -5,9 +5,9 @@ name: Test Quaderno TICE
 on:
   push:
     branches: [claude/quaderno-tice]
-    paths: ['custode/**', 'centro/**', 'tools/test-*.js', 'tools/custode-mock.js']
+    paths: ['custode/**', 'centro/**', 'js/tice-*.js', 'js/numbers-reader.js', 'tools/test-*.js', 'tools/custode-mock.js']
   pull_request:
-    paths: ['custode/**', 'centro/**', 'tools/test-*.js', 'tools/custode-mock.js']
+    paths: ['custode/**', 'centro/**', 'js/tice-*.js', 'js/numbers-reader.js', 'tools/test-*.js', 'tools/custode-mock.js']
   workflow_dispatch:
 
 jobs:
@@ -24,5 +24,9 @@ jobs:
         run: node tools/test-appsscript.js
       - name: Calcoli clinici (percentuali, criterio, learn unit)
         run: node tools/test-modello.js
+      - name: Import dei quaderni Numbers e programma (quaderno sintetico)
+        run: node tools/test-tice-import.js
+      - name: Sintassi della presa dati
+        run: for f in js/numbers-reader.js js/tice-import.js js/tice-programma.js js/tice-home.js js/state.js js/patients.js js/dataviz.js js/gemini.js; do node --check "$f"; done
       - name: Sintassi dell'app
         run: for f in centro/js/*.js centro/js/viste/*.js centro/sw.js; do node --check "$f"; done

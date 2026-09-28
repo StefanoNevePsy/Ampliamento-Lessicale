@@ -106,8 +106,9 @@ function vizDailyData(patient) {
     const outliers = patient.outlierDays || {};
     return Object.keys(byDate).sort().map(dk => {
         const ss = byDate[dk];
-        const totalLU = ss.reduce((s, x) => s + (x.total || 0), 0);
-        const correctLU = ss.reduce((s, x) => s + (x.correct || 0), 0);
+        const lu = luDelGiorno(patient, dk, ss);
+        const totalLU = lu.tot;
+        const correctLU = lu.ok;
         // V/P/X: prefer raw fields, fall back to correct/error split.
         let v = 0, p = 0, x = 0;
         ss.forEach(srec => {

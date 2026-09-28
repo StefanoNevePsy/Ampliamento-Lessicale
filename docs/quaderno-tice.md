@@ -5,6 +5,12 @@ file Numbers su Drive con un quaderno digitale condiviso, usabile da telefono,
 tablet e computer. Vive nella cartella `centro/` di questa branch e non tocca
 l'app personale (radice del repository).
 
+> **Direzione attuale.** La presa dati del centro si sta spostando dentro l'app
+> completa (radice del repository), che su questa branch si apre sulla
+> schermata *Presa dati* e mantiene tutte le altre funzioni. `centro/` resta
+> finché la sincronizzazione con il custode non passa all'app completa.
+> Vedi [Presa dati nell'app completa](#presa-dati-nellapp-completa).
+
 ## Obiettivi
 
 - Registrare le sedute direttamente sul dispositivo, senza conti a mano.
@@ -243,10 +249,50 @@ Il controllo avviene all'apertura e con "Aggiorna materiali".
 dell'aula ognuno vede solo i propri pazienti. Quando un bambino viene tolto a un
 utente, la sua copia locale viene cancellata alla prima connessione.
 
+## Presa dati nell'app completa
+
+All'avvio l'app mostra i bambini; toccandone uno compaiono le attività del suo
+**programma**, ognuna con il target in corso, e si segna ✓ / P / ✗ con un tocco.
+Si possono aggiungere attività solo per quella seduta (anche prese dalle liste
+del Quaderno). "Salva seduta" scrive nello storico una seduta Quaderno per
+attività, con `setName` "Attività · Target": cartella clinica, grafici, criterio,
+giornate ed export le trattano come tutte le altre. La bozza resta sul
+dispositivo finché non si salva, anche chiudendo l'app.
+
+Il programma sta nel paziente:
+
+```
+patient.programma.attivita[] = { id, nome, area, descrizione, sessionType,
+  criterio: { soglia, sedute }, prove, stato: attivo|sospeso|terminato,
+  target[]: { id, testo, stato: attivo|pianificato|criterio|repertorio|chiuso, inizio, fine } }
+```
+
+Le sedute registrate da qui hanno anche `attivitaId`, `targetId`, `operatore` e
+`fonte: 'app'`. Quando un target raggiunge il criterio (N giorni di fila sopra
+soglia, come il resto dell'app) l'app propone di passare al successivo: non lo
+fa da sola.
+
+| File | Contenuto |
+|---|---|
+| `js/numbers-reader.js` | lettore dei file `.numbers` nel browser (Snappy + protobuf) |
+| `js/tice-import.js` | quaderno Numbers → programma + storico dell'app |
+| `js/tice-programma.js` | target corrente, criterio, passaggio al target successivo |
+| `js/tice-home.js`, `css/tice.css` | schermate di presa dati, programma, import |
+
 ## Import dai file Numbers
 
-`tools/import_numbers.py` legge un file `.numbers` e produce un JSON da caricare
-dall'app (Admin → Importa). Riconosce:
+Dall'app: **Presa dati → Importa quaderni**, anche più file insieme e anche
+scelti direttamente da Drive. Il file si legge sul dispositivo, si controlla
+l'anteprima (bambino nuovo o esistente, attività, sedute, prove da confermare,
+avvisi) e si importa. Reimportare lo stesso file sostituisce le sedute
+importate da quel file; le sedute registrate nell'app e i target chiusi o
+aggiunti nell'app restano. Le misure in percentuale sono marcate
+`scala: 'percentuale'` e non entrano nelle learn unit; per i giorni del
+quaderno le learn unit vengono dalla tabella "Learn unit giornaliere".
+
+`tools/import_numbers.py` fa lo stesso da riga di comando per il Quaderno in
+`centro/`. Le due versioni danno risultati identici sul quaderno di esempio
+(`tools/test-tice-import.js`). Riconoscono:
 
 - un foglio per area, una tabella per programma, intestazione su tre righe;
 - STO scritti su più righe e STO paralleli nella stessa tabella;

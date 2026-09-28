@@ -662,14 +662,16 @@ function renderOverviewTab(patient) {
         if (!byDate[dk]) byDate[dk] = [];
         byDate[dk].push(h);
     });
+    giorniSoloStorico(patient).forEach(dk => { byDate[dk] = []; });
 
     const dates = Object.keys(byDate).sort();
     // Check which days have notes (daily notes or activity notes)
     const dailyNotes = patient.dailyNotes || {};
     const dailyData = dates.map(dk => {
         const sessions = byDate[dk];
-        const totalLU = sessions.reduce((sum, s) => sum + s.total, 0);
-        const correctLU = sessions.reduce((sum, s) => sum + s.correct, 0);
+        const lu = luDelGiorno(patient, dk, sessions);
+        const totalLU = lu.tot;
+        const correctLU = lu.ok;
         const hasDailyNote = !!dailyNotes[dk];
         const hasActivityNotes = sessions.some(s => s.note);
         return { date: dk, totalLU, correctLU, incorrectLU: totalLU - correctLU, sessions: sessions.length, hasNote: hasDailyNote || hasActivityNotes };
@@ -715,8 +717,8 @@ function renderOverviewTab(patient) {
     const lastSession = [...history].sort((a, b) => new Date(b.date) - new Date(a.date))[0];
     const numDays = metricsDaily.length;
     const totalSessions = filteredHistory.length;
-    const totalLUAll = filteredHistory.reduce((sum, s) => sum + s.total, 0);
-    const correctLUAll = filteredHistory.reduce((sum, s) => sum + s.correct, 0);
+    const totalLUAll = metricsDaily.reduce((sum, d) => sum + d.totalLU, 0);
+    const correctLUAll = metricsDaily.reduce((sum, d) => sum + d.correctLU, 0);
 
     const avgSessionsPerDay = numDays > 0 ? (totalSessions / numDays).toFixed(1) : 0;
     const avgCorrectPerDay = numDays > 0 ? Math.round(correctLUAll / numDays) : 0;
@@ -1084,8 +1086,9 @@ function renderDatesTab(patient) {
     let html = '';
     dates.forEach((dk) => {
         const sessions = byDate[dk];
-        const totalLU = sessions.reduce((sum, s) => sum + s.total, 0);
-        const correctLU = sessions.reduce((sum, s) => sum + s.correct, 0);
+        const lu = luDelGiorno(patient, dk, sessions);
+        const totalLU = lu.tot;
+        const correctLU = lu.ok;
         const pct = totalLU > 0 ? Math.round((correctLU / totalLU) * 100) : 0;
         const hasDailyNote = !!dailyNotes[dk];
         const isOutlier = !!outlierDays[dk];
@@ -2138,7 +2141,7 @@ function renderActivitySVGChart(container, sessions, typeGroup, modeCode, thresh
         const path = document.createElementNS(svgNS, "path");
         path.setAttribute("d", pathD);
         path.setAttribute("fill", "none");
-        path.setAttribute("stroke", "white");
+        path.setAttribute("stroke", "var(--text-primary)");
         path.setAttribute("stroke-width", "1.5");
         path.setAttribute("opacity", "0.6");
         svg.appendChild(path);
@@ -2822,8 +2825,9 @@ th { background: #4472c4; color: white; font-weight: bold; }
     });
 
     Object.entries(byDate).sort(([a], [b]) => a.localeCompare(b)).forEach(([dk, sessions]) => {
-        const totalLU = sessions.reduce((acc, s) => acc + s.total, 0);
-        const totalCorrect = sessions.reduce((acc, s) => acc + s.correct, 0);
+        const lu = luDelGiorno(p, dk, sessions);
+        const totalLU = lu.tot;
+        const totalCorrect = lu.ok;
         const avgPct = totalLU > 0 ? Math.round((totalCorrect / totalLU) * 100) : 0;
         const d = new Date(dk);
         const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;

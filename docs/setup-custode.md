@@ -129,7 +129,11 @@ l'app cancella anche la copia locale dei bambini non più assegnati.
 
 ## 6. Importare i quaderni Numbers
 
-Su un computer, per ogni bambino:
+**Nell'app completa** (consigliato): *Presa dati → Importa quaderni*, scegli
+uno o più file `.numbers` (anche da Drive, dal telefono), controlla l'anteprima
+e premi **Importa**. Il file non esce dal dispositivo.
+
+Per il Quaderno in `centro/`, su un computer, per ogni bambino:
 
 ```bash
 pip install numbers-parser

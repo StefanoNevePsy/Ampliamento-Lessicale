@@ -154,6 +154,8 @@ function saveGeminiApiKey(key) {
 
 // --- THEME SYSTEM ---
 const APP_THEMES = [
+    { id: 'tice', name: 'TICE', icon: 'fa-leaf', colors: ['#eef2f3', '#363a43', '#39b2ad', '#fb8e28'] },
+    { id: 'tice-scuro', name: 'TICE scuro', icon: 'fa-moon', colors: ['#1b1e23', '#363a43', '#39b2ad', '#fb8e28'] },
     { id: 'default', name: 'Indigo', icon: 'fa-gem', colors: ['#1e1e2f', '#2d2b55', '#6366f1', '#10b981'] },
     { id: 'ocean', name: 'Oceano', icon: 'fa-water', colors: ['#0f172a', '#1e3a5f', '#38bdf8', '#34d399'] },
     { id: 'forest', name: 'Foresta', icon: 'fa-tree', colors: ['#1a2e1a', '#2d4a2d', '#4ade80', '#34d399'] },
@@ -170,7 +172,8 @@ const APP_THEMES = [
 ];
 
 function getCurrentTheme() {
-    return localStorage.getItem('app_theme') || 'default';
+    // Edizione Centro TICE: senza una scelta salvata si parte dal tema del centro
+    return localStorage.getItem('app_theme') || 'tice';
 }
 
 function applyTheme(themeId) {
