@@ -60,7 +60,8 @@ Quaderno TICE/                      (Drive condiviso: membri = solo admin)
 │       ├── paziente.json           anagrafica pseudonima, programmi, STO
 │       ├── _sedute.json            tutte le sedute in un file (cache ricostruibile)
 │       └── sedute/
-│           └── 2026-06-18_sd_xxxx.json   una seduta = un file, mai riscritto da altri
+│           ├── sd_xxxx.json        una seduta = un file
+│           └── import-AAAA-MM-GG.json   lo storico importato, in un file solo
 └── Materiali/
     ├── indice.json                 elenco set con versione e hash delle immagini
     ├── set/<id>.json               set con le immagini sostituite da riferimenti
@@ -68,8 +69,13 @@ Quaderno TICE/                      (Drive condiviso: membri = solo admin)
 ```
 
 I file `_elenco.json` e `_sedute.json` servono solo alla velocità: leggere un file
-è molto più rapido che leggerne trecento. La fonte di verità sono i file delle
-singole sedute; un admin può ricostruire le cache in ogni momento.
+è molto più rapido che leggerne trecento. La fonte di verità sono i file in
+`sedute/`; un admin può ricostruire le cache in ogni momento (e se mancano si
+ricostruiscono da sole).
+
+Lo storico importato da Numbers sta in un solo file per paziente: scriverne
+trecento su Drive richiederebbe minuti. Se una seduta importata viene corretta,
+la correzione diventa un file a sé e prevale sull'originale.
 
 ## Ruoli
 
@@ -130,7 +136,7 @@ La tabella è in `custode/core.js` (`PERMESSI`) ed è l'unico posto da cambiare.
 - `learnUnitStoriche`: le tabelle "Frequenze" e "Learn unit giornaliere"
   importate così come sono, per non perdere lo storico prima dell'app.
 
-### Seduta — `sedute/<data>_<id>.json`
+### Seduta — `sedute/<id>.json`
 
 ```json
 {
