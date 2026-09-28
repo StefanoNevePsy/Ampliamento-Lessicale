@@ -105,6 +105,12 @@
   // --- Stato della sincronizzazione nella barra ---------------------------------
   var faseVista = null;
   function aggiornaIndicatore(st) {
+    if (st.fase === 'negato') {
+      App.erroreAccesso = st.messaggio;
+      st.fase = 'fermo';
+      App.esci(false);
+      return;
+    }
     var el = document.getElementById('stato-sync');
     var stato, testo;
     if (st.fase === 'lavoro') { stato = 'lavoro'; testo = 'Sincronizzo'; }
@@ -139,7 +145,7 @@
     }
     if (!u) { emailAperta = null; Sync.chiudi(); }
     if (u && /^#\/accesso/.test(location.hash)) { history.replaceState(null, '', '#/pazienti'); }
-    App.erroreAccesso = '';
+    if (u) App.erroreAccesso = '';
     await mostra();
     if (u) Sync.esegui();
   }

@@ -122,7 +122,7 @@ var QT = (function () {
   }
   function isoV(v, campo) {
     if (v === null || v === undefined || v === '') return null;
-    if (typeof v !== 'string' || v.length > 40 || isNaN(Date.parse(v))) throw err('richiesta-non-valida', campo + ' non e\' una data/ora valida');
+    if (typeof v !== 'string' || v.length > 40 || isNaN(Date.parse(v))) throw err('richiesta-non-valida', campo + ' non è una data/ora valida');
     return v;
   }
   function unoTra(v, valori, campo, predefinito) {
@@ -361,9 +361,9 @@ var QT = (function () {
         // configurazioni a mano e nessuno puo' chiuderlo fuori per errore.
         return { email: email, nome: (voce && voce.nome) || identita.nome || email, ruolo: 'admin', pazienti: '*', proprietario: true, scadenza: null };
       }
-      if (!voce) throw err('non-autorizzato', 'L\'account ' + email + ' non e\' abilitato. Chiedi a un amministratore di aggiungerti.');
-      if (voce.attivo === false) throw err('disattivato', 'L\'account ' + email + ' e\' stato disattivato.');
-      if (voce.scadenza && oggi() > voce.scadenza) throw err('scaduto', 'L\'accesso di ' + email + ' e\' scaduto il ' + voce.scadenza + '.');
+      if (!voce) throw err('non-autorizzato', 'L\'account ' + email + ' non è abilitato. Chiedi a un amministratore di aggiungerti.');
+      if (voce.attivo === false) throw err('disattivato', 'L\'account ' + email + ' è stato disattivato.');
+      if (voce.scadenza && oggi() > voce.scadenza) throw err('scaduto', 'L\'accesso di ' + email + ' è scaduto il ' + voce.scadenza + '.');
       return { email: email, nome: voce.nome || identita.nome || email, ruolo: voce.ruolo, pazienti: voce.pazienti, proprietario: false, scadenza: voce.scadenza || null };
     }
 
@@ -484,7 +484,7 @@ var QT = (function () {
         if (esistente) {
           // Reinvio della stessa creazione (rete caduta dopo il salvataggio)
           if (esistente.creatoDa === u.email && esistente.codice === paz.codice) return esistente;
-          throw err('conflitto', 'Esiste gia\' un paziente con questo identificativo.');
+          throw err('conflitto', 'Esiste già un paziente con questo identificativo.');
         }
         var ora = amb.ora();
         paz.version = 1;
@@ -541,7 +541,7 @@ var QT = (function () {
         if (s.pazienteId !== paz.id) throw err('richiesta-non-valida', 'Una seduta appartiene a un altro paziente.');
       });
       return conLock(function () {
-        if (A.esiste(P.paziente(paz.id))) throw err('conflitto', 'Questo paziente e\' gia\' stato importato.');
+        if (A.esiste(P.paziente(paz.id))) throw err('conflitto', 'Questo paziente è già stato importato.');
         var ora = amb.ora();
         paz.version = 1;
         paz.creato = ora; paz.creatoDa = u.email;
@@ -570,7 +570,7 @@ var QT = (function () {
         var prima = indice.sedute[s.id];
         var ora = amb.ora();
         if (prima) {
-          if (prima.pazienteId !== pid) throw err('conflitto', 'Identificativo di seduta gia\' usato.');
+          if (prima.pazienteId !== pid) throw err('conflitto', 'Identificativo di seduta già usato.');
           var puoModificare = prima.operatore === u.email || permessi(u).modificaSeduteAltrui;
           // Reinvio identico dello stesso autore: nessuna scrittura, stessa risposta.
           var confronto = JSON.parse(JSON.stringify(prima));
@@ -689,7 +689,7 @@ var QT = (function () {
         var prima = indice.sets[set.id];
         var versioneAttuale = prima ? prima.versione : 0;
         if (versioneAttuale !== base) {
-          throw err('conflitto', 'Questo set e\' stato aggiornato da ' + (prima && prima.aggiornatoDa) + ' nel frattempo.', { versioneAttuale: versioneAttuale });
+          throw err('conflitto', 'Questo set è stato aggiornato da ' + (prima && prima.aggiornatoDa) + ' nel frattempo.', { versioneAttuale: versioneAttuale });
         }
         var ora = amb.ora();
         set.versione = versioneAttuale + 1;

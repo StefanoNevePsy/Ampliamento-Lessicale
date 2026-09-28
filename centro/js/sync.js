@@ -247,7 +247,12 @@ var Sync = (function () {
         await meta('ultimoSync', stato.ultimoSync);
         stato.fase = 'fermo';
       } catch (e) {
-        if (e && e.rete) { stato.fase = 'offline'; stato.messaggio = e.message; }
+        if (e && e.custode && ['non-autorizzato', 'disattivato', 'scaduto'].indexOf(e.codice) >= 0) {
+          // Account non (piu') abilitato: si esce, ma i dati locali restano,
+          // comprese le sedute in coda, nel caso l'accesso venga ripristinato.
+          stato.fase = 'negato'; stato.messaggio = e.message;
+        }
+        else if (e && e.rete) { stato.fase = 'offline'; stato.messaggio = e.message; }
         else if (e && e.accesso) { stato.fase = 'accesso'; stato.messaggio = e.message; }
         else { stato.fase = 'errore'; stato.messaggio = (e && e.message) || String(e); console.error(e); }
       } finally {

@@ -16,7 +16,7 @@ var Grafici = (function () {
   function programma(serie, opzioni) {
     opzioni = opzioni || {};
     var soglia = opzioni.soglia || 90;
-    var L = 640, H = 240, sx = 36, dx = 12, su = 14, giu = 34;
+    var L = 640, H = 250, sx = 36, dx = 14, su = 26, giu = 34;
     var n = serie.length;
     if (!n) return h`<p class="sotto">Ancora nessuna seduta.</p>`;
     var X = function (i) { return n === 1 ? (sx + L - dx) / 2 : scala(i, 0, n - 1, sx + 6, L - dx - 6); };
@@ -50,7 +50,8 @@ var Grafici = (function () {
     var bandiere = (opzioni.criteri || []).map(function (d) {
       var i = serie.findIndex(function (m) { return m.data === d; });
       if (i < 0) return '';
-      return h`<path class="criterio" d="M${X(i) - 1} ${su - 2} v-10 h9 l-3 3.5 3 3.5 h-9"/>`;
+      return h`<line class="confine" x1="${X(i)}" x2="${X(i)}" y1="${su - 4}" y2="${Y(serie[i].pct == null ? 100 : serie[i].pct)}"/>
+        <path class="criterio" d="M${X(i)} ${su - 4} v-16 h11 l-3.5 4 3.5 4 h-11z"><title>Criterio raggiunto il ${Modello.formatoData(d)}</title></path>`;
     });
     return h`<svg class="grafico" viewBox="0 0 ${L} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Percentuale di risposte corrette per seduta">
       ${griglia}${confini}
