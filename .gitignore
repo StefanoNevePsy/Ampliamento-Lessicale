@@ -3,3 +3,9 @@ dist/
 android/
 www/
 .DS_Store
+
+# Quaderno TICE: dati clinici, mai nel repository
+.custode-dati/
+import-*.json
+*.numbers
+__pycache__/

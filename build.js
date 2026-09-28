@@ -8,7 +8,7 @@ if (!fs.existsSync(dest)) {
     fs.mkdirSync(dest);
 }
 
-const itemsToCopy = ['index.html', 'css', 'js', 'build', 'models', 'vendor'];
+const itemsToCopy = ['index.html', 'css', 'js', 'build', 'models', 'vendor', 'centro'];
 
 function copyRecursiveSync(src, destPath) {
     const exists = fs.existsSync(src);

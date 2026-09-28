@@ -165,9 +165,26 @@ sola richiesta a fine seduta.
 L'`id` è generato sul dispositivo. Se la rete cade dopo che il custode ha salvato
 ma prima della conferma, l'app riprova e il custode riconosce l'id: niente doppioni.
 
+### Decisioni prese sui dati reali
+
+Tre scelte sono venute dal confronto con il quaderno Numbers di esempio, non
+dalla teoria:
+
+- **Il criterio si segnala, non si applica da solo.** Sul file di esempio il
+  criterio calcolato coincide con il "CRITERIO" scritto a mano in 24 casi su 30;
+  nelle altre 6 il professionista ha scelto di aspettare una seduta in più (o
+  c'era un refuso). L'app mostra "criterio raggiunto" e propone di chiudere lo
+  STO, ma è il professionista a farlo.
+- **Mantenimento.** Dopo il criterio, sui fogli si continua spesso a registrare
+  sullo stesso STO finché non si scrive il successivo. In seduta l'app lo
+  permette e lo segnala come "mantenimento".
+- **La scala appartiene alla misura, non al programma.** Lo storico importato da
+  un foglio in percentuale resta in percentuale (`voce.scala`), le sedute
+  registrate con l'app sono conteggi, e lo stesso grafico li unisce.
+
 ### Calcoli (identici a quelli dell'app personale)
 
-- **Percentuale** di una voce: `v / (v + p + x)`; con `scala: percentuale` è `v`.
+- **Percentuale** di una voce: `v / (v + p + x)`; se la voce ha `scala: percentuale` è `v`.
 - **Criterio** di uno STO: le ultime `criterio.sedute` sedute di quello STO, in
   giorni diversi e consecutive, tutte ≥ `criterio.soglia`.
 - **Repertorio**: la prima seduta in assoluto di uno STO è già sopra soglia.
@@ -255,3 +272,14 @@ invece di inventarlo.
   l'accesso: per i dispositivi condivisi serve il blocco schermo.
 - Nome e cognome dei bambini non servono all'app: consigliato usare codici e
   iniziali.
+
+## Dove sta cosa
+
+| Percorso | Contenuto |
+|---|---|
+| `centro/` | l'app (pubblicata su `/centro/` del sito) |
+| `custode/` | il custode: `core.js` (regole), `Code.gs` (Google), `appsscript.json` |
+| `tools/import_numbers.py` | import dai quaderni Numbers |
+| `tools/custode-mock.js` | custode locale per provare senza Google |
+| `tools/test-*.js` | test automatici, anche su GitHub a ogni push |
+| `docs/setup-custode.md` | installazione passo per passo |

@@ -1,0 +1,28 @@
+name: Test Quaderno TICE
+
+# Le regole di sicurezza del custode e i calcoli clinici vengono verificati a
+# ogni modifica: una regola rotta deve fermarsi qui, non arrivare al centro.
+on:
+  push:
+    branches: [claude/quaderno-tice]
+    paths: ['custode/**', 'centro/**', 'tools/test-*.js', 'tools/custode-mock.js']
+  pull_request:
+    paths: ['custode/**', 'centro/**', 'tools/test-*.js', 'tools/custode-mock.js']
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Logica del custode (permessi, idempotenza, conflitti, materiali)
+        run: node tools/test-custode.js
+      - name: Custode su Apps Script (servizi Google simulati)
+        run: node tools/test-appsscript.js
+      - name: Calcoli clinici (percentuali, criterio, learn unit)
+        run: node tools/test-modello.js
+      - name: Sintassi dell'app
+        run: for f in centro/js/*.js centro/js/viste/*.js centro/sw.js; do node --check "$f"; done
