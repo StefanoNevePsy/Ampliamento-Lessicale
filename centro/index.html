@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#363a43">
+  <meta name="description" content="Quaderno digitale delle sedute del Centro TICE">
+  <title>Quaderno TICE</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="img/favicon.png">
+  <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <header class="barra">
+    <a class="marchio" href="#/pazienti" aria-label="Quaderno TICE, pazienti">
+      <img src="img/logo-bianco.png" alt="" width="28" height="28">
+      <span>Quaderno</span>
+    </a>
+    <div class="barra-titolo" id="barra-titolo"></div>
+    <button class="stato-sync" id="stato-sync" type="button" aria-live="polite" data-azione-globale="vai-profilo">
+      <span class="pallino"></span><span class="etichetta">…</span>
+    </button>
+  </header>
+
+  <main id="vista" tabindex="-1"></main>
+
+  <nav class="navigazione" id="navigazione" aria-label="Sezioni">
+    <a href="#/pazienti" data-sezione="pazienti"><span class="icona" data-icona="persone"></span><span>Pazienti</span></a>
+    <a href="#/materiali" data-sezione="materiali"><span class="icona" data-icona="cartella"></span><span>Materiali</span></a>
+    <a href="#/admin" data-sezione="admin" hidden><span class="icona" data-icona="chiave"></span><span>Admin</span></a>
+    <a href="#/profilo" data-sezione="profilo"><span class="icona" data-icona="ingranaggio"></span><span>Profilo</span></a>
+  </nav>
+
+  <div id="foglio-sfondo" class="foglio-sfondo" hidden></div>
+  <section id="foglio" class="foglio" role="dialog" aria-modal="true" hidden></section>
+  <div id="avvisi" class="avvisi" aria-live="assertive"></div>
+
+  <noscript>Il Quaderno TICE ha bisogno di JavaScript.</noscript>
+
+  <script src="config.js"></script>
+  <script src="js/modello.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/sync.js"></script>
+  <script src="js/grafici.js"></script>
+  <script src="js/viste/accesso.js"></script>
+  <script src="js/viste/pazienti.js"></script>
+  <script src="js/viste/paziente.js"></script>
+  <script src="js/viste/seduta.js"></script>
+  <script src="js/viste/programma.js"></script>
+  <script src="js/viste/materiali.js"></script>
+  <script src="js/viste/admin.js"></script>
+  <script src="js/viste/profilo.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

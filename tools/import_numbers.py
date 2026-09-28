@@ -306,6 +306,7 @@ def deduci_scala(prog, voci, da_confermare, avvisi):
     if ha_p and a_cento / len(somme) >= 0.8:
         prog["scala"] = "percentuale"
         for x in utili:
+            x["scala"] = "percentuale"
             tot = x["v"] + (x["p"] or 0)
             if abs(tot - 100) > 1:
                 pct = round(100 * x["v"] / tot) if tot else 0
@@ -322,6 +323,7 @@ def deduci_scala(prog, voci, da_confermare, avvisi):
         # Una sola colonna con valori oltre 20: sono percentuali (57, 91, 100…)
         prog["scala"] = "percentuale"
         for x in utili:
+            x["scala"] = "percentuale"
             x["p"] = 0
             x["x"] = max(0.0, 100 - x["v"])
         return

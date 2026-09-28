@@ -16,12 +16,25 @@ var Modello = (function () {
     return (paziente.programmi || []).find(function (p) { return p.id === id; }) || null;
   }
 
+  /**
+   * La scala appartiene alla singola misura, non al programma: lo storico
+   * importato da un foglio in percentuale resta in percentuale, mentre le sedute
+   * registrate con l'app sono sempre conteggi, anche sullo stesso programma.
+   * (Le misure importate prima di questa regola non hanno "scala": per quelle
+   * decide il programma, ma mai per una seduta registrata con l'app.)
+   */
+  function inPercentuale(voce, programma, seduta) {
+    if (voce.scala) return voce.scala === 'percentuale';
+    if (seduta && seduta.fonte === 'app') return false;
+    return !!(programma && programma.scala === 'percentuale');
+  }
+
   /** Corrette e totale di una voce, gestendo i dati importati. */
-  function contiVoce(voce, programma) {
+  function contiVoce(voce, programma, seduta) {
     var v = Number(voce.v) || 0;
     var p = Number(voce.p) || 0;
     var x = voce.x;
-    if (programma && programma.scala === 'percentuale') {
+    if (inPercentuale(voce, programma, seduta)) {
       return { v: v, p: p, x: x == null ? Math.max(0, 100 - v - p) : Number(x), tot: 100, percentuale: true };
     }
     if (x == null) {
@@ -32,8 +45,8 @@ var Modello = (function () {
     return { v: v, p: p, x: x, tot: v + p + x, percentuale: false };
   }
 
-  function pctVoce(voce, programma) {
-    var c = contiVoce(voce, programma);
+  function pctVoce(voce, programma, seduta) {
+    var c = contiVoce(voce, programma, seduta);
     if (c.percentuale) return Math.round(c.v);
     return c.tot > 0 ? Math.round(100 * c.v / c.tot) : null;
   }
@@ -51,20 +64,22 @@ var Modello = (function () {
       (s.voci || []).forEach(function (voce) {
         if (voce.programmaId !== programmaId) return;
         if (stoId && voce.stoId !== stoId) return;
-        var c = contiVoce(voce, programma);
+        var c = contiVoce(voce, programma, s);
         if (!c.percentuale && c.tot === 0) return;
-        var g = perGiorno[s.data] || (perGiorno[s.data] = { data: s.data, v: 0, p: 0, x: 0, tot: 0, n: 0, pctSomma: 0, sedute: [], stoId: voce.stoId, decisioni: [] });
-        g.v += c.v; g.p += c.p; g.x += c.x; g.tot += c.tot; g.n += 1;
-        g.pctSomma += c.percentuale ? c.v : 0;
-        g.percentuale = c.percentuale;
+        var g = perGiorno[s.data] || (perGiorno[s.data] = { data: s.data, v: 0, p: 0, x: 0, tot: 0, n: 0, pctSomma: 0, nPct: 0, sedute: [], stoId: voce.stoId, decisioni: [] });
+        if (c.percentuale) { g.pctSomma += c.v; g.nPct += 1; }
+        else { g.v += c.v; g.p += c.p; g.x += c.x; g.tot += c.tot; g.n += 1; }
         g.sedute.push(s.id);
         if (voce.decisione) g.decisioni.push(voce.decisione);
       });
     });
     return Object.keys(perGiorno).sort().map(function (d) {
       var g = perGiorno[d];
-      g.pct = g.percentuale ? Math.round(g.pctSomma / g.n) : (g.tot ? Math.round(100 * g.v / g.tot) : null);
-      delete g.pctSomma;
+      // In un giorno con misure a conteggio e in percentuale valgono i conteggi
+      g.percentuale = g.n === 0 && g.nPct > 0;
+      if (g.percentuale) { g.pct = Math.round(g.pctSomma / g.nPct); g.v = g.pct; g.tot = 100; }
+      else g.pct = g.tot ? Math.round(100 * g.v / g.tot) : null;
+      delete g.pctSomma; delete g.nPct;
       return g;
     });
   }
@@ -97,6 +112,20 @@ var Modello = (function () {
   function stoAttivo(programma) {
     var sto = programma.sto || [];
     return sto.find(function (s) { return s.stato === 'attivo'; }) || null;
+  }
+
+  /**
+   * Lo STO su cui si registra in seduta. Di solito quello in corso; se non c'e'
+   * ma l'ultimo e' gia' a criterio, si continua su quello come mantenimento:
+   * sui fogli del centro si registrano sedute anche dopo "CRITERIO", finche'
+   * qualcuno non scrive lo STO successivo.
+   */
+  function stoCorrente(programma) {
+    var attivo = stoAttivo(programma);
+    if (attivo) return { sto: attivo, mantenimento: false };
+    var ultimo = (programma.sto || []).slice().reverse().find(function (s) { return s.stato !== 'pianificato'; });
+    if (ultimo && (ultimo.stato === 'criterio' || ultimo.stato === 'repertorio')) return { sto: ultimo, mantenimento: true };
+    return null;
   }
 
   /** Riepilogo di un programma per le liste: STO in corso, ultima %, criterio. */
@@ -133,7 +162,7 @@ var Modello = (function () {
       var giorno = g(s.data);
       var contate = false;
       (s.voci || []).forEach(function (voce) {
-        var c = contiVoce(voce, prog(paziente, voce.programmaId));
+        var c = contiVoce(voce, prog(paziente, voce.programmaId), s);
         if (c.percentuale) return;
         giorno.corrette += c.v; giorno.totali += c.tot; contate = true;
       });
@@ -173,9 +202,9 @@ var Modello = (function () {
     var corrette = 0, totali = 0;
     var righe = (seduta.voci || []).map(function (voce) {
       var programma = prog(paziente, voce.programmaId);
-      var c = contiVoce(voce, programma);
+      var c = contiVoce(voce, programma, seduta);
       if (!c.percentuale) { corrette += c.v; totali += c.tot; }
-      return { programma: programma, voce: voce, conti: c, pct: pctVoce(voce, programma) };
+      return { programma: programma, voce: voce, conti: c, pct: pctVoce(voce, programma, seduta) };
     });
     return { righe: righe, corrette: corrette, totali: totali, pct: totali ? Math.round(100 * corrette / totali) : null };
   }
@@ -220,7 +249,7 @@ var Modello = (function () {
 
   return {
     contiVoce: contiVoce, pctVoce: pctVoce, misure: misure, criterio: criterio,
-    stoAttivo: stoAttivo, riepilogoProgramma: riepilogoProgramma,
+    stoAttivo: stoAttivo, stoCorrente: stoCorrente, riepilogoProgramma: riepilogoProgramma,
     learnUnit: learnUnit, riepilogoSeduta: riepilogoSeduta, programma: prog,
     oggiISO: oggiISO, formatoData: formatoData, giorniFa: giorniFa, quando: quando, nuovoId: nuovoId,
   };

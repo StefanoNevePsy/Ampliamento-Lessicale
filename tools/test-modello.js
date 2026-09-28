@@ -33,6 +33,17 @@ prova('dati importati senza errate: le ricava dalle prove per seduta', () => {
 prova('programma in percentuale: la % e\' il valore scritto', () => {
   assert.strictEqual(M.pctVoce({ v: 57, p: 0, x: 43 }, { scala: 'percentuale' }), 57);
 });
+prova('programma importato in % + seduta nuova a conteggio: 8 su 10 e\' l\'80%, non l\'8%', () => {
+  const pr = { id: 'pr_p', scala: 'percentuale', criterio: { soglia: 90, sedute: 2 }, sto: [{ id: 'st_p', stato: 'attivo' }] };
+  const pz = { programmi: [pr] };
+  const vecchia = { id: 'sd_a', data: '2026-03-01', fonte: 'import-numbers', voci: [{ programmaId: 'pr_p', stoId: 'st_p', v: 93, p: 7, x: 0, scala: 'percentuale' }] };
+  const legacy = { id: 'sd_l', data: '2026-03-02', fonte: 'import-numbers', voci: [{ programmaId: 'pr_p', stoId: 'st_p', v: 92, p: 8, x: 0 }] };
+  const nuova = { id: 'sd_b', data: '2026-03-03', fonte: 'app', voci: [{ programmaId: 'pr_p', stoId: 'st_p', v: 8, p: 1, x: 1 }] };
+  const serie = M.misure(pz, [vecchia, legacy, nuova], 'pr_p', 'st_p');
+  assert.deepStrictEqual(serie.map((m) => m.pct), [93, 92, 80]);
+  assert.strictEqual(M.riepilogoSeduta(pz, nuova).pct, 80);
+  assert.strictEqual(M.learnUnit(pz, [vecchia, nuova]).find((g) => g.data === '2026-03-03').totali, 10);
+});
 prova('criterio: 2 sedute consecutive >= 90% in giorni diversi', () => {
   const s = [sed('2026-01-01', 9, 1, 0), sed('2026-01-02', 7, 3, 0), sed('2026-01-03', 9, 0, 1), sed('2026-01-05', 10, 0, 0)];
   const c = M.criterio(M.misure(paz, s, 'pr_1', 'st_1'), PR.criterio);

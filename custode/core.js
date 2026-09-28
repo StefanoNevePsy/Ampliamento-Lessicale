@@ -218,6 +218,7 @@ var QT = (function () {
       programmaId: idV(v.programmaId, RE.pr, 'voce.programmaId'),
       stoId: v.stoId ? idV(v.stoId, RE.st, 'voce.stoId') : null,
       strategia: unoTra(v.strategia, ['indipendente', 'timedelay'], 'voce.strategia', 'indipendente'),
+      scala: unoTra(v.scala, ['conteggio', 'percentuale'], 'voce.scala', 'conteggio'),
       v: numeroV(v.v, 0, 10000, 'voce.v', true),
       p: numeroV(v.p, 0, 10000, 'voce.p', true),
       x: numeroV(v.x, 0, 10000, 'voce.x', true),
