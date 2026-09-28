@@ -385,10 +385,16 @@ var QT = (function () {
     function voceElenco(paz, indice) {
       var sedute = Object.keys(indice.sedute).map(function (k) { return indice.sedute[k]; }).filter(function (s) { return !s.eliminata; });
       var ultima = sedute.reduce(function (m, s) { return s.data > m ? s.data : m; }, '');
+      // Quando e' cambiato qualcosa (anche una seduta eliminata o corretta):
+      // l'app lo confronta con la sua copia e riscarica solo i pazienti cambiati.
+      var ultimaModifica = Object.keys(indice.sedute).reduce(function (m, k) {
+        var t = (indice.sedute[k]._srv && indice.sedute[k]._srv.modificato) || '';
+        return t > m ? t : m;
+      }, paz.aggiornato || '');
       return {
         id: paz.id, codice: paz.codice, etichetta: paz.etichetta, aula: paz.aula,
         stato: paz.stato || 'attivo', version: paz.version, aggiornato: paz.aggiornato,
-        nSedute: sedute.length, ultimaSeduta: ultima || null,
+        nSedute: sedute.length, ultimaSeduta: ultima || null, ultimaModifica: ultimaModifica || null,
         programmiAttivi: (paz.programmi || []).filter(function (p) { return p.stato === 'attivo'; }).length,
       };
     }
