@@ -242,6 +242,15 @@ prova('un set con l\'immagine dentro (non per riferimento) e\' rifiutato', () =>
   const s = JSON.parse(JSON.stringify(SET)); s.items[0].url = 'data:image/png;base64,' + PNG;
   ko(chiama(PROPRIETARIO, 'materiali.pubblica', { set: s, versioneBase: 0 }), 'richiesta-non-valida');
 });
+prova('...neanche annidata (varianti, maschere)', () => {
+  const s = JSON.parse(JSON.stringify(SET)); s.items[0].variantUrls = { 1: 'data:image/png;base64,' + PNG };
+  ko(chiama(PROPRIETARIO, 'materiali.pubblica', { set: s, versioneBase: 0 }), 'richiesta-non-valida');
+});
+prova('un SVG (puo\' contenere script) non e\' ammesso tra i materiali', () => {
+  const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>').toString('base64');
+  const h = sha256Hex(svg);
+  ko(chiama(PROPRIETARIO, 'materiali.caricaImmagini', { immagini: { [h]: 'data:image/svg+xml;base64,' + svg } }), 'richiesta-non-valida');
+});
 prova('caricamento, pubblicazione e scaricamento', () => {
   assert.deepStrictEqual(ok(chiama(PROPRIETARIO, 'materiali.mancanti', { hashes: [H] })), [H]);
   ok(chiama(PROPRIETARIO, 'materiali.caricaImmagini', { immagini: { [H]: 'data:image/png;base64,' + PNG } }));

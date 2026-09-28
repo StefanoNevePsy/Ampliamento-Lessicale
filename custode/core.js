@@ -60,9 +60,13 @@ var QT = (function () {
     data: /^\d{4}-\d{2}-\d{2}$/,
     email: /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/,
     sequenza: /^[VPX]*$/,
-    dataUrl: /^data:(image\/(png|jpeg|webp|gif|svg\+xml));base64,([A-Za-z0-9+/=]+)$/,
+    dataUrl: /^data:((?:image\/(?:png|jpeg|webp|gif))|(?:audio\/(?:mpeg|mp4|webm|ogg|wav|x-m4a)));base64,([A-Za-z0-9+/=]+)$/,
   };
-  var EST = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'image/svg+xml': 'svg' };
+  // Tipi ammessi nell'archivio dei materiali. Niente SVG: puo' contenere script.
+  var EST = {
+    'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif',
+    'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/wav': 'wav',
+  };
 
   // ------------------------------------------------------------------------
   // Errori
@@ -271,18 +275,18 @@ var QT = (function () {
     var id = idV(s.id, RE.set, 'set.id');
     var items = listaV(s.items, 2000, 'set.items').map(function (it, i) {
       oggettoV(it, 'items[' + i + ']');
-      var o = {};
-      Object.keys(it).forEach(function (k) {
-        if (k.length > 40) return;
-        var v = it[k];
-        // Le immagini viaggiano per riferimento: niente dataURL dentro il set.
-        if (typeof v === 'string' && v.indexOf('data:') === 0) {
-          throw err('richiesta-non-valida', 'items[' + i + '].' + k + ': le immagini vanno caricate a parte e riferite come img:<hash>');
-        }
-        o[k] = v;
-      });
-      return o;
+      return it;
     });
+    // Immagini e audio viaggiano per riferimento (img:<hash>), mai incorporati:
+    // si controlla ogni stringa, anche annidata (variantUrls, maschere, audio...).
+    (function visita(v, percorso) {
+      if (typeof v === 'string') {
+        if (v.indexOf('data:') === 0) {
+          throw err('richiesta-non-valida', percorso + ': immagini e audio vanno caricati a parte e riferiti come img:<hash>');
+        }
+      } else if (Array.isArray(v)) v.forEach(function (x, j) { visita(x, percorso + '[' + j + ']'); });
+      else if (v && typeof v === 'object') Object.keys(v).forEach(function (k) { visita(v[k], percorso + '.' + k); });
+    })(s, 'set');
     var testo = JSON.stringify(s);
     if (testo.length > 2 * 1024 * 1024) throw err('richiesta-non-valida', 'Set troppo grande');
     var o = JSON.parse(testo);
@@ -642,11 +646,12 @@ var QT = (function () {
       chiavi.forEach(function (h) {
         idV(h, RE.hash, 'hash');
         var m = RE.dataUrl.exec(String(imm[h] || ''));
-        if (!m) throw err('richiesta-non-valida', 'Immagine ' + h.slice(0, 8) + ' non e\' un dataURL valido.');
-        // L'hash lo ricalcola il custode: un client non puo' salvare un'immagine
-        // sotto il nome di un'altra e contaminare le cache degli altri.
-        if (amb.sha256Hex(m[3]) !== h) throw err('richiesta-non-valida', 'L\'hash dell\'immagine ' + h.slice(0, 8) + ' non corrisponde al contenuto.');
-        if (!immagineEsiste(h)) A.scriviBinario(P.immagine(h, EST[m[1]]), m[3], m[1]);
+        if (!m) throw err('richiesta-non-valida', 'File ' + h.slice(0, 8) + ': solo immagini PNG/JPEG/WebP/GIF o audio.');
+        if (m[2].length > 14 * 1024 * 1024) throw err('richiesta-non-valida', 'File ' + h.slice(0, 8) + ' troppo grande (max ~10 MB).');
+        // L'hash lo ricalcola il custode: un client non puo' salvare un file
+        // sotto il nome di un altro e contaminare le cache degli altri.
+        if (amb.sha256Hex(m[2]) !== h) throw err('richiesta-non-valida', 'L\'hash del file ' + h.slice(0, 8) + ' non corrisponde al contenuto.');
+        if (!immagineEsiste(h)) A.scriviBinario(P.immagine(h, EST[m[1]]), m[2], m[1]);
         caricate.push(h);
       });
       return caricate;
