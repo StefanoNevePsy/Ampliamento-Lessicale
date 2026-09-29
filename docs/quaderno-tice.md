@@ -46,31 +46,52 @@ dispositivo, come l'app personale.
 ## Cifratura
 
 - **Chiave del centro.** È una frase di 25 caratteri (125 bit), generata
-  dall'app per l'amministratore alla prima configurazione. L'amministratore la
-  conserva (gestore di password e carta) e la dà alle persone autorizzate, che
-  la inseriscono una volta per dispositivo. Il custode non la conosce.
+  dall'app alla prima configurazione. **La conoscono solo gli admin**: la
+  conservano (gestore di password e carta) e sui loro dispositivi la possono
+  rivedere ("Mostra la chiave"). Il custode non la conosce.
 - **Derivazione.** Dalla frase si ricava la chiave con PBKDF2-SHA256
   (600 000 iterazioni) e il sale del centro (`_config/cifratura.json`, non
-  segreto). Sul dispositivo si conserva solo la chiave derivata, in IndexedDB
-  come chiave non esportabile.
+  segreto).
+- **Consegna agli altri dispositivi, senza mostrarla.** Ogni dispositivo, al
+  primo accesso, crea una coppia di chiavi RSA-OAEP 3072 la cui parte privata
+  non si può esportare, e registra la parte pubblica sul custode
+  (`_config/dispositivi.json`). Alla prima sincronizzazione, l'app di un admin
+  cifra la chiave del centro con quella parte pubblica, se la persona è
+  abilitata. Il dispositivo la apre come chiave non esportabile: la usa per
+  leggere e scrivere, ma non la può mostrare né copiare, e non c'è niente da
+  trascrivere. L'abilitazione è automatica. Gli admin vedono l'elenco dei
+  dispositivi (persona, tipo, ultimo accesso) e possono toglierli.
 - **Buste.** Ogni bambino è compresso (gzip) e cifrato con AES-256-GCM, con un
   IV casuale per salvataggio. Il testo aggiuntivo autenticato `tice:paziente:<id>`
   lega la busta al suo bambino: un file spostato o alterato non si apre.
   Anche il nome nell'elenco è cifrato.
 - **Cosa resta in chiaro sul Drive.** Identificativi numerici, numero di
-  versione, email e ora di chi ha salvato, l'elenco degli accessi (email e
-  identificativi assegnati), i materiali (set e immagini, non dati clinici).
-- **Revoca.** A chi viene tolto l'accesso, il custode non risponde più e l'app
-  cancella dal suo dispositivo i dati del centro e la chiave. Conoscere la
-  chiave senza accesso al Drive non serve a niente: il Drive vero lo vede solo
-  l'account del centro.
+  versione, email e ora di chi ha salvato, l'elenco degli accessi e dei
+  dispositivi (email, identificativi assegnati, chiavi pubbliche), i materiali
+  (set e immagini, non dati clinici).
+- **Revoca.** A chi viene tolto l'accesso, il custode non risponde più e
+  cancella i suoi dispositivi. La sua app cancella dati del centro e chiave. Non
+  avendo mai visto la chiave, non ha niente da conservare.
+- **Cambio della chiave.** Un admin può generare una chiave nuova. L'app
+  ricifra tutti i bambini, consegna la nuova chiave ai dispositivi abilitati, e
+  il custode rifiuta i salvataggi con la vecchia. Le versioni salvate prima del
+  cambio restano con la chiave di allora: le aprono gli admin che la hanno, o
+  che ne inseriscono la frase.
+- **Limiti da conoscere.**
+  - Una persona tecnicamente esperta, mentre ha l'accesso, potrebbe estrarre la
+    chiave dal browser con gli strumenti per sviluppatori: in un'app web non si
+    può impedire del tutto. Il cambio della chiave serve a chiudere questa porta
+    quando serve.
+  - L'abilitazione automatica si fida dell'elenco degli accessi. Chi prendesse
+    il controllo dell'account del custode potrebbe aggiungersi e farsi
+    consegnare la chiave: per questo gli admin vedono ogni dispositivo
+    abilitato, con data e persona.
+  - Se si perdono tutte le copie della frase, i dati sul Drive restano
+    leggibili solo finché qualche dispositivo ha ancora la chiave.
 - **Aprire i file senza l'app.** Si usa `strumenti/apri-dati.html` (un file
   solo, funziona offline: frase + file scaricati dal Drive → dati leggibili,
   JSON o CSV per Excel) oppure `tools/decifra_tice.py`. Il file della chiave
-  che l'app fa scaricare alla creazione contiene anche sale e iterazioni.
-- **Rischio da conoscere.** Se si perdono tutte le copie della frase, i dati sul
-  Drive non si recuperano più. Restano leggibili le copie locali sui
-  dispositivi che l'hanno inserita.
+  che l'app fa scaricare contiene anche sale e iterazioni.
 
 ## Versioni precedenti
 
@@ -106,7 +127,13 @@ partendo dall'ultima versione che entrambi conoscevano:
 | Registra sedute, vede lo storico | ✓ | ✓ | ✓ |
 | Modifica i programmi, crea e importa bambini | ✓ | ✓ | — |
 | Pubblica materiali | ✓ | ✓ | — |
-| Archivia bambini, gestisce persone e chiave | ✓ | — | — |
+| Archivio set, impostazioni, condivisioni, export, report AI | ✓ | ✓ | — |
+| Conosce la chiave, archivia bambini, gestisce persone e dispositivi | ✓ | — | — |
+
+La **versione per le tirocinanti** è più semplice: presa dati, giochi con i set
+e cartella clinica in sola lettura. Non ci sono import, programmi, archivio dei
+set, impostazioni, Quick Share, sincronizzazioni dirette, Firebase, export
+Excel né report AI: tutto ciò che potrebbe far uscire dati dal centro.
 
 Il proprietario del custode è sempre admin. Gli accessi possono avere una data
 di scadenza (tirocini). Il custode controlla chi può leggere e salvare ogni

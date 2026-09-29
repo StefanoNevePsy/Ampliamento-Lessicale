@@ -126,10 +126,20 @@ torna quella.
    - riscrivi l'ultimo gruppo per confermare.
 
    Da questo momento i dati dei bambini escono dai dispositivi solo cifrati:
-   sul Drive nessuno li può leggere senza la frase, nemmeno chi amministra
-   centrotice.it. **Se la frase si perde, i dati sul Drive non si recuperano.**
-3. Su ogni altro dispositivo, dopo l'accesso, si inserisce la frase una volta
-   (**Inserisci la chiave**). Dalla a voce o su carta, non per email o chat.
+   sul Drive nessuno li può leggere senza la chiave, nemmeno chi amministra
+   centrotice.it.
+3. **La frase la conoscono solo gli admin.** Professioniste e tirocinanti non
+   inseriscono niente: al primo accesso il loro dispositivo resta "in attesa",
+   e riceve la chiave appena l'app di un admin è aperta e collegata. La usa
+   senza mostrarla. Gli altri admin possono inserire la frase o aspettare che
+   gliela consegni l'app di un admin.
+4. In **Collegamento con il centro → Dispositivi** vedi ogni dispositivo
+   abilitato (persona, tipo, ultimo accesso) e puoi toglierlo.
+5. **Cambia la chiave** quando qualcuno potrebbe averla conservata (per esempio
+   una persona tecnica che non collabora più). L'app ricifra tutti i bambini e
+   la riconsegna ai dispositivi abilitati. Conserva anche la frase vecchia: apre
+   le versioni salvate prima del cambio. Tieni l'app aperta finché non finisce;
+   se si interrompe, rilanciala e riprende da dove si era fermata.
 
 ## 6. Persone
 
@@ -137,10 +147,14 @@ Dal menu ⋮ → **Persone e accessi → Aggiungi una persona**, per ogni colleg
 tirocinante: email Google (del centro o personale), ruolo, bambini assegnati e,
 per i tirocini, la data di fine (dopo quella data l'accesso si chiude da solo).
 
-Togliere l'accesso ha effetto alla richiesta successiva: l'app di quella
-persona cancella dal dispositivo i dati del centro e la chiave. Anche un
-bambino tolto dagli assegnati sparisce dal suo dispositivo alla
-sincronizzazione successiva.
+Togliere l'accesso ha effetto alla richiesta successiva: i suoi dispositivi
+vengono tolti e la sua app cancella dati del centro e chiave (che comunque non
+ha mai visto). Anche un bambino tolto dagli assegnati sparisce dal suo
+dispositivo alla sincronizzazione successiva.
+
+Le tirocinanti hanno una versione semplice dell'app: presa dati, giochi e
+cartella clinica in sola lettura, senza import, programmi, archivio,
+impostazioni, condivisioni, export e report AI.
 
 ## 7. Importare i quaderni Numbers
 
@@ -212,6 +226,7 @@ node tools/test-tice-import.js
 |---|---|
 | Nessun riquadro "Collega l'app al Drive del centro" | `tice-config.js` vuoto (punto 4.1) |
 | "Questa non è la chiave del centro" | frase sbagliata: controlla O/0 e I/1 (l'app li tollera) e che sia quella del centro |
+| Un dispositivo resta "in attesa della chiave" | nessun admin ha ancora aperto l'app dopo il suo primo accesso, oppure la persona non è abilitata |
 | "Prima un amministratore deve creare la chiave" | punto 5 non ancora fatto |
 | Il pulsante Google non compare o dà errore di origine | l'indirizzo del sito non è tra le *Origini JavaScript autorizzate* (punto 2.3) |
 | "L'account ... non è abilitato" | la persona non è in Persone e accessi, o l'email è diversa |

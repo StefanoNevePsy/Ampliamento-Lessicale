@@ -175,8 +175,8 @@
     // Stato
     // =====================================================================
     const S = {
-        fase: 'spento',     // spento | fuori | chiave | pronto
-        io: null, cfg: null, chiave: null,
+        fase: 'spento',     // spento | fuori | chiave (admin: frase) | attesa (chiave in arrivo) | pronto
+        io: null, cfg: null, chiave: null, chiavi: {}, dispositivi: null,
         condivisi: new Set(), coda: new Set(),
         lavoro: false, errore: null, ultimo: null, etichette: {}
     };
@@ -252,7 +252,16 @@
             etichetta: await C.cifra(S.chiave, S.cfg.kid, { nome: p.name || '', categoria: p.category || '' }, aadE(p.id))
         };
     }
-    const apri = (record) => C.decifra(S.chiave, record.busta, aadP(record.id));
+    // Ogni busta dice con quale chiave è cifrata: dopo un cambio di chiave le
+    // versioni vecchie si aprono con quella di allora (solo sui dispositivi admin).
+    function chiavePer(busta) {
+        const k = busta && S.chiavi[busta.kid];
+        if (k) return k;
+        const e = new Error('Questi dati sono cifrati con una chiave del centro precedente, che questo dispositivo non ha.');
+        e.senzaChiave = busta && busta.kid;
+        throw e;
+    }
+    const apri = async (record) => C.decifra(chiavePer(record.busta), record.busta, aadP(record.id));
 
     // ---------- invio ----------
     async function spingi(pid) {
@@ -298,7 +307,7 @@
         recs.forEach((r) => { perId[r.id] = r; });
         for (const v of elenco) {
             visti.add(v.id);
-            try { S.etichette[v.id] = await C.decifra(S.chiave, v.etichetta, aadE(v.id)); } catch (e) { S.etichette[v.id] = { nome: '(illeggibile)' }; }
+            try { S.etichette[v.id] = await C.decifra(chiavePer(v.etichetta), v.etichetta, aadE(v.id)); } catch (e) { S.etichette[v.id] = { nome: '(in attesa della chiave)' }; }
             const r = perId[v.id];
             if (v.eliminato) {
                 if (r || S.condivisi.has(v.id)) { await togliLocale(v.id); await togliRec(v.id); S.condivisi.delete(v.id); cambiato('pazienti'); }
@@ -306,7 +315,9 @@
             }
             if (r && r.version >= v.version) { S.condivisi.add(v.id); continue; }
             const record = await chiama('paziente.leggi', { id: v.id });
-            const remoto = await apri(record);
+            let remoto;
+            try { remoto = await apri(record); }
+            catch (e) { if (e.senzaChiave) { S.condivisi.add(v.id); continue; } throw e; }   // in ricifratura: si riprova dopo
             const locale = await leggiLocale(v.id);
             let nuovo = remoto;
             if (locale && (S.coda.has(v.id) || !r)) {
@@ -338,15 +349,27 @@
         S.lavoro = true; cambiato('stato');
         incorso = (async () => {
             try {
+                // Ruolo, chiave attuale: possono essere cambiati da un'altra parte
+                if (!(opz && opz.soloCoda)) {
+                    const io = await chiama('io');
+                    S.io = io; await scriviMeta('io', io);
+                    if (!S.cfg || io.kid !== S.cfg.kid) { await preparaCentro(true); if (!pronto()) return false; }
+                }
                 for (const pid of [...S.coda]) await spingi(pid);
                 await scriviMeta('coda', [...S.coda]);
                 if (!(opz && opz.soloCoda)) await tira();
                 for (const pid of [...S.coda]) await spingi(pid);   // quanto unito in ricezione
                 await scriviMeta('coda', [...S.coda]);
+                if (!(opz && opz.soloCoda)) await consegnaChiavi();
                 S.errore = null;
                 S.ultimo = new Date().toISOString();
                 return true;
             } catch (e) {
+                if (e && e.custode && e.codice === 'chiave-cambiata') {
+                    // un admin ha cambiato la chiave: si prende la nuova e si riprova al giro dopo
+                    try { await preparaCentro(true); } catch (x) { gestisciErrore(x); }
+                    return false;
+                }
                 gestisciErrore(e);
                 return false;
             } finally {
@@ -370,21 +393,69 @@
         S.condivisi.clear(); S.coda.clear();
         await scriviMeta('coda', []);
         await scriviMeta('io', null);
-        await C.dimenticaChiave();
-        S.chiave = null; S.io = null;
+        await C.dimenticaTutto();
+        S.chiave = null; S.chiavi = {}; S.io = null;
+    }
+
+    // ---------- chiave del centro su questo dispositivo ----------
+    const eAdmin = () => !!(S.io && S.io.permessi && S.io.permessi.gestisciAccessi);
+    function nomeDispositivo() {
+        const ua = navigator.userAgent || '';
+        const so = /Android/.test(ua) ? 'Android' : /iPhone|iPad|iPod/.test(ua) ? 'iOS' : /Mac OS X/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows' : /Linux/.test(ua) ? 'Linux' : '';
+        const br = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Browser';
+        const tipo = /iPad|Tablet/.test(ua) || (/Android/.test(ua) && !/Mobile/.test(ua)) ? 'tablet' : /Mobile|iPhone/.test(ua) ? 'telefono' : 'computer';
+        return `${br} · ${so || '?'} · ${tipo}`;
+    }
+    /** Chiede al custode la chiave consegnata a questo dispositivo da un admin. */
+    async function ottieniChiave() {
+        const d = await C.dispositivo();
+        await chiama('dispositivo.registra', { id: d.id, nome: nomeDispositivo(), pubblica: d.pubblica });
+        const r = await chiama('dispositivo.chiave', { id: d.id });
+        const busta = S.cfg && r.chiavi && r.chiavi[S.cfg.kid];
+        if (!busta) return false;
+        // Gli admin la ricevono esportabile (per consegnarla ad altri), gli altri no;
+        // chi non è admin tiene solo la chiave attuale.
+        const k = await C.riceviChiave(busta, d.privata, eAdmin());
+        await C.ricordaChiave(S.cfg.kid, k, !eAdmin());
+        S.chiavi = await C.portachiavi();
+        return true;
+    }
+    function aggiornaFase() {
+        S.chiave = S.cfg ? S.chiavi[S.cfg.kid] || null : null;
+        S.fase = S.chiave ? 'pronto' : (eAdmin() ? 'chiave' : 'attesa');
+    }
+    /** Gli admin consegnano la chiave ai dispositivi delle persone abilitate che la aspettano. */
+    async function consegnaChiavi() {
+        if (!eAdmin() || !S.chiave || !S.chiave.extractable) return 0;
+        const el = await chiama('dispositivi.elenco');
+        S.dispositivi = el;
+        let n = 0;
+        for (const d of el) {
+            if (d.abilitato || !d.personaAbilitata) continue;
+            try {
+                const busta = await C.consegnaA(d.pubblica, S.chiave);
+                await chiama('dispositivi.abilita', { id: d.id, kid: S.cfg.kid, chiave: busta, pubblica: d.pubblica });
+                d.abilitato = true;
+                n++;
+            } catch (e) { console.warn('consegna della chiave', d.id, e); }
+        }
+        if (n) cambiato('dispositivi');
+        return n;
     }
 
     // ---------- avvio, accesso, chiave ----------
-    async function preparaCentro() {
+    async function preparaCentro(senzaSincronizzare) {
         S.io = await chiama('io');
         await scriviMeta('io', S.io);
         S.cfg = S.io.cifratura ? await chiama('cifratura.leggi') : null;
         await scriviMeta('cfg', S.cfg);
-        S.chiave = S.cfg ? await C.chiaveRicordata(S.cfg) : null;
+        S.chiavi = await C.portachiavi();
         S.negato = null;
-        S.fase = S.chiave ? 'pronto' : 'chiave';
+        aggiornaFase();
+        if (S.cfg && !S.chiave) { await ottieniChiave(); aggiornaFase(); }
+        else if (S.cfg) C.dispositivo().then((d) => chiama('dispositivo.registra', { id: d.id, nome: nomeDispositivo(), pubblica: d.pubblica })).catch(() => {});
         cambiato('stato');
-        if (S.fase === 'pronto') sincronizza();
+        if (S.fase === 'pronto' && !senzaSincronizzare) sincronizza();
     }
     async function avvia() {
         if (!cfgApp().custodeUrl) { S.fase = 'spento'; cambiato('stato'); return; }
@@ -396,11 +467,15 @@
         // Senza rete si lavora con quanto già noto: profilo e chiave ricordati
         S.io = await meta('io');
         S.cfg = await meta('cfg');
-        S.chiave = S.cfg ? await C.chiaveRicordata(S.cfg) : null;
-        S.fase = S.io && S.io.email === u.email ? (S.chiave ? 'pronto' : 'chiave') : 'fuori';
+        S.chiavi = await C.portachiavi();
+        if (S.io && S.io.email === u.email) aggiornaFase(); else S.fase = 'fuori';
         cambiato('stato');
         try { await preparaCentro(); } catch (e) { gestisciErrore(e); cambiato('stato'); }
-        setInterval(() => { if (document.visibilityState === 'visible' && navigator.onLine !== false) sincronizza(); }, 90000);
+        setInterval(() => {
+            if (document.visibilityState !== 'visible' || navigator.onLine === false) return;
+            if (S.fase === 'attesa') preparaCentro().catch(gestisciErrore);
+            else sincronizza();
+        }, 90000);
         window.addEventListener('online', () => sincronizza());
         document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') sincronizza({ soloCoda: false }); });
     }
@@ -411,30 +486,77 @@
         }
     });
 
+    /** Prima configurazione (admin): la frase la conoscono solo gli admin. */
     async function creaChiave(frase, preparata) {
-        const { cfg, chiave } = preparata || await C.nuovaConfigurazione(frase);
+        const { cfg, chiave } = preparata || await C.nuovaConfigurazione(frase, true);
         S.cfg = await chiama('cifratura.imposta', { cifratura: cfg });
-        await C.ricordaChiave(chiave, S.cfg);
+        await C.ricordaChiave(S.cfg.kid, chiave);
+        await C.salvaFrase(frase);
         await scriviMeta('cfg', S.cfg);
-        S.chiave = chiave;
-        S.io.cifratura = true;
-        S.fase = 'pronto';
+        S.chiavi = await C.portachiavi();
+        S.io.cifratura = true; S.io.kid = S.cfg.kid;
+        aggiornaFase();
         cambiato('stato');
         sincronizza();
     }
-    async function inserisciChiave(frase) {
+    /** Solo admin: la frase attuale, o quella di una chiave precedente per le versioni vecchie. */
+    async function inserisciChiave(frase, kid) {
         if (!S.cfg) S.cfg = await chiama('cifratura.leggi');
-        const chiave = await C.apriConFrase(frase, S.cfg);
-        await C.ricordaChiave(chiave, S.cfg);
+        const c = kid && kid !== S.cfg.kid ? (S.cfg.precedenti || []).find((x) => x.kid === kid) : S.cfg;
+        if (!c) throw new Error('Chiave sconosciuta.');
+        const chiave = await C.apriConFrase(frase, c, true);
+        await C.ricordaChiave(c.kid, chiave);
+        if (c === S.cfg) await C.salvaFrase(frase);
         await scriviMeta('cfg', S.cfg);
-        S.chiave = chiave;
-        S.fase = 'pronto';
+        S.chiavi = await C.portachiavi();
+        aggiornaFase();
         cambiato('stato');
         sincronizza();
     }
+    /**
+     * Cambio della chiave del centro (admin): chi aveva la vecchia non apre più
+     * niente di nuovo. Tutti i bambini vengono ricifrati con la nuova; i
+     * dispositivi abilitati la ricevono di nuovo, quelli tolti no.
+     */
+    async function cambiaChiave(frase, preparata, avanzamento) {
+        if (!eAdmin()) throw new Error('Solo un amministratore può cambiare la chiave.');
+        await sincronizza();
+        const vecchia = S.cfg.kid;
+        const cfg = await chiama('cifratura.imposta', { cifratura: preparata.cfg, sostituisci: true, kidAttuale: vecchia });
+        S.cfg = cfg;
+        await scriviMeta('cfg', cfg);
+        await C.ricordaChiave(cfg.kid, preparata.chiave);
+        await C.salvaFrase(frase);
+        S.chiavi = await C.portachiavi();
+        aggiornaFase();
+        cambiato('stato');
+        const elenco = await chiama('pazienti.elenco');
+        let i = 0, saltati = 0;
+        for (const v of elenco) {
+            if (avanzamento) avanzamento(++i, elenco.length);
+            for (let t = 0; t < 4; t++) {
+                const r0 = await chiama('paziente.leggi', { id: v.id });
+                if (r0.busta.kid === cfg.kid) break;
+                let p;
+                try { p = await apri(r0); } catch (e) { if (e.senzaChiave) { saltati++; break; } throw e; }
+                const b = await buste(p);
+                try {
+                    const r = await chiama('paziente.salva', Object.assign({ id: v.id, versioneBase: r0.version }, b));
+                    if (await rec(v.id)) await scriviRec(v.id, { version: r.version, base: p });
+                    break;
+                } catch (e) { if (!(e.custode && e.codice === 'conflitto')) throw e; }
+            }
+        }
+        await consegnaChiavi();
+        cambiato('stato');
+        return { bambini: elenco.length, saltati };
+    }
+    const mostraFrase = () => (eAdmin() ? C.frase() : Promise.resolve(null));
+    async function dispositivi() { S.dispositivi = await chiama('dispositivi.elenco'); return S.dispositivi; }
+    async function togliDispositivo(id) { await chiama('dispositivo.togli', { id }); return dispositivi(); }
     /** Porta sul Drive del centro un bambino che finora era solo su questo dispositivo. */
     async function condividi(pid) {
-        if (!pronto()) throw new Error('Prima accedi e inserisci la chiave del centro.');
+        if (!pronto()) throw new Error('Questo dispositivo non ha ancora la chiave del centro.');
         S.condivisi.add(pid);
         await scriviRec(pid, { version: 0, base: null });
         await inCoda(pid);
@@ -461,7 +583,8 @@
 
     window.TiceSync = {
         S, Auth, chiama, ErroreRete, ErroreCustode,
-        avvia, sincronizza, condividi, esci, creaChiave, inserisciChiave, ripristina, versioni, anteprimaVersione,
+        avvia, sincronizza, condividi, esci, creaChiave, inserisciChiave, cambiaChiave, mostraFrase, dispositivi, togliDispositivo,
+        ripristina, versioni, anteprimaVersione, preparaCentro, eAdmin, ruolo: () => (S.io && S.io.ruolo) || null,
         attivo: () => !!cfgApp().custodeUrl,
         pronto, condiviso: (pid) => S.condivisi.has(pid), inAttesa: (pid) => S.coda.has(pid),
         puo: (cosa) => !S.io || !S.io.permessi || !!S.io.permessi[cosa],

@@ -17,6 +17,10 @@
  *
  * Stesso formato in strumenti/apri-dati.html e tools/decifra_tice.py, per
  * aprire i file anche senza l'app.
+ *
+ * La frase la conoscono solo gli admin. Agli altri dispositivi la chiave
+ * arriva cifrata per loro (consegnaA / riceviChiave) e non è esportabile:
+ * la usano senza vederla, e quando perdono l'accesso non resta loro niente.
  */
 (function (radice, fabbrica) {
   if (typeof module === 'object' && module.exports) module.exports = fabbrica();
@@ -105,20 +109,20 @@
 
   // ---------- configurazione del centro ----------
   var VERIFICA = { tice: 'chiave-del-centro' };
-  /** Prima configurazione (la fa l'admin): sale, verifica e chiave derivata. */
-  function nuovaConfigurazione(frase) {
+  /** Nuova chiave del centro: sale, verifica e chiave derivata (esportabile per gli admin). */
+  function nuovaConfigurazione(frase, esportabile) {
     var r = casuali(4), kid = 'k' + Array.prototype.map.call(r, function (x) { return ALFABETO[x & 31].toLowerCase(); }).join('');
     var cfg = { kid: kid, kdf: { nome: 'PBKDF2-SHA256', iterazioni: ITERAZIONI, sale: aB64(casuali(16)) } };
-    return derivaChiave(frase, cfg).then(function (chiave) {
+    return derivaChiave(frase, cfg, esportabile).then(function (chiave) {
       return cifra(chiave, kid, VERIFICA, 'tice:verifica').then(function (b) {
         cfg.verifica = b;
         return { cfg: cfg, chiave: chiave };
       });
     });
   }
-  /** Deriva la chiave dalla frase e controlla che sia quella del centro. */
-  function apriConFrase(frase, cfg) {
-    return derivaChiave(frase, cfg).then(function (chiave) {
+  /** Deriva la chiave dalla frase e controlla che sia quella del centro (o una precedente). */
+  function apriConFrase(frase, cfg, esportabile) {
+    return derivaChiave(frase, cfg, esportabile).then(function (chiave) {
       return decifra(chiave, cfg.verifica, 'tice:verifica').then(function (v) {
         if (!v || v.tice !== VERIFICA.tice) throw new Error('x');
         return chiave;
@@ -126,7 +130,38 @@
     });
   }
 
-  // ---------- chiave sul dispositivo (IndexedDB, non esportabile) ----------
+  // ---------- consegna della chiave ai dispositivi ----------
+  // Ogni dispositivo ha una coppia RSA-OAEP creata qui, con la parte privata
+  // non esportabile. Un admin cifra la chiave del centro con la parte
+  // pubblica; il dispositivo la apre come chiave non esportabile: la usa per
+  // cifrare e decifrare, ma non la può mostrare né copiare.
+  var RSA = { name: 'RSA-OAEP', modulusLength: 3072, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' };
+  function nuovaCoppia() {
+    var S = sottile();
+    return S.generateKey(RSA, false, ['encrypt', 'decrypt', 'wrapKey', 'unwrapKey']).then(function (k) {
+      return S.exportKey('spki', k.publicKey).then(function (spki) {
+        var r = casuali(12), id = '';
+        for (var i = 0; i < 12; i++) id += ALFABETO[r[i] & 31].toLowerCase();
+        return { id: 'd' + id, privata: k.privateKey, pubblica: aB64(new Uint8Array(spki)) };
+      });
+    });
+  }
+  function consegnaA(pubblicaB64, chiave) {
+    var S = sottile();
+    return Promise.all([
+      S.importKey('spki', daB64(pubblicaB64), { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['encrypt']),
+      S.exportKey('raw', chiave)
+    ]).then(function (x) {
+      return S.encrypt({ name: 'RSA-OAEP' }, x[0], x[1]).then(function (c) { return aB64(new Uint8Array(c)); });
+    });
+  }
+  function riceviChiave(bustaB64, privata, esportabile) {
+    return sottile().unwrapKey('raw', daB64(bustaB64), privata, { name: 'RSA-OAEP' }, { name: 'AES-GCM', length: 256 }, !!esportabile, ['encrypt', 'decrypt']);
+  }
+
+  // ---------- sul dispositivo (IndexedDB) ----------
+  //   portachiavi: { kid → CryptoKey }   dispositivo: { id, privata, pubblica }
+  //   frase: la frase cifrata con una chiave locale non esportabile (solo admin)
   function db() {
     return new Promise(function (ok, ko) {
       var r = indexedDB.open('tice-chiavi', 1);
@@ -144,19 +179,49 @@
       });
     });
   }
-  function ricordaChiave(chiave, cfg) { return operazione('readwrite', function (s) { return s.put({ chiave: chiave, kid: cfg.kid, sale: cfg.kdf.sale }, 'centro'); }); }
-  function chiaveRicordata(cfg) {
-    return operazione('readonly', function (s) { return s.get('centro'); }).then(function (r) {
-      return r && cfg && r.kid === cfg.kid && r.sale === cfg.kdf.sale ? r.chiave : null;
+  var leggi = function (k) { return operazione('readonly', function (s) { return s.get(k); }); };
+  var scrivi = function (k, v) { return operazione('readwrite', function (s) { return s.put(v, k); }); };
+  var togli = function (k) { return operazione('readwrite', function (s) { return s.delete(k); }); };
+
+  function portachiavi() { return leggi('portachiavi').then(function (p) { return p || {}; }); }
+  function ricordaChiave(kid, chiave, soloQuesta) {
+    return portachiavi().then(function (p) {
+      if (soloQuesta) p = {};
+      p[kid] = chiave;
+      return scrivi('portachiavi', p);
     });
   }
-  function dimenticaChiave() { return operazione('readwrite', function (s) { return s.delete('centro'); }); }
+  function dispositivo() {
+    return leggi('dispositivo').then(function (d) {
+      if (d && d.privata) return d;
+      return nuovaCoppia().then(function (n) { return scrivi('dispositivo', n).then(function () { return n; }); });
+    });
+  }
+  function salvaFrase(frase) {
+    return leggi('locale').then(function (k) {
+      return k || sottile().generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt'])
+        .then(function (n) { return scrivi('locale', n).then(function () { return n; }); });
+    }).then(function (k) {
+      return cifra(k, 'locale', { frase: frase }, 'tice:frase').then(function (b) { return scrivi('frase', b); });
+    });
+  }
+  function frase() {
+    return Promise.all([leggi('locale'), leggi('frase')]).then(function (x) {
+      return x[0] && x[1] ? decifra(x[0], x[1], 'tice:frase').then(function (o) { return o.frase; }) : null;
+    });
+  }
+  /** Tutto ciò che riguarda il centro, via da questo dispositivo. */
+  function dimenticaTutto() {
+    return Promise.all(['portachiavi', 'dispositivo', 'frase', 'locale', 'centro'].map(togli));
+  }
 
   return {
     ITERAZIONI: ITERAZIONI,
     generaFrase: generaFrase, normalizzaFrase: normalizzaFrase, derivaChiave: derivaChiave,
     cifra: cifra, decifra: decifra, nuovaConfigurazione: nuovaConfigurazione, apriConFrase: apriConFrase,
-    ricordaChiave: ricordaChiave, chiaveRicordata: chiaveRicordata, dimenticaChiave: dimenticaChiave,
+    nuovaCoppia: nuovaCoppia, consegnaA: consegnaA, riceviChiave: riceviChiave,
+    portachiavi: portachiavi, ricordaChiave: ricordaChiave, dispositivo: dispositivo,
+    salvaFrase: salvaFrase, frase: frase, dimenticaTutto: dimenticaTutto,
     aB64: aB64, daB64: daB64
   };
 });

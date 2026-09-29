@@ -210,10 +210,10 @@
                 ${pazienti().length > 6 ? h`<input class="cerca" type="search" placeholder="Cerca un bambino" value="${T.cerca}" data-cambio="cerca" aria-label="Cerca">` : ''}
                 ${righe.length ? h`<div class="scheda">${righe}</div>`
                     : h`<div class="vuoto">${q ? 'Nessun bambino con questo nome.' : 'Ancora nessun bambino.'}</div>`}
-                <div class="bottoni" style="margin-top:14px">
+                ${limitato() ? '' : h`<div class="bottoni" style="margin-top:14px">
                     <button class="bt" data-a="nuovo-bambino">${icona('user-plus')} Nuovo bambino</button>
                     <button class="bt" data-a="vai-import">${icona('file-import')} Importa quaderni</button>
-                </div>
+                </div>`}
             </main>`;
     }
 
@@ -316,8 +316,8 @@
                 ${!P.programma(p).attivita.length ? h`<div class="scheda imbottita">
                     <b>Nessun programma per ${p.name}.</b>
                     <p class="sotto">Crea le attività su cui lavorate, con i loro target, oppure importa il suo quaderno Numbers. Intanto puoi aggiungere attività solo per oggi.</p>
-                    <div class="bottoni"><button class="bt primario" data-a="vai-programma">${icona('list-check')} Crea il programma</button>
-                    <button class="bt" data-a="vai-import">${icona('file-import')} Importa quaderno</button></div></div>` : ''}
+                    ${limitato() ? '' : h`<div class="bottoni"><button class="bt primario" data-a="vai-programma">${icona('list-check')} Crea il programma</button>
+                    <button class="bt" data-a="vai-import">${icona('file-import')} Importa quaderno</button></div>`}</div>` : ''}
                 ${perArea.map((g) => h`${perArea.length > 1 ? h`<h3>${g.area}</h3>` : ''}${g.att.map((a) => schedaAttivita(p, a))}`)}
                 <button class="bt largo fantasma" style="margin-top:12px" data-a="aggiungi-oggi">${icona('plus')} Aggiungi un'attività per questa seduta</button>
             </main>
@@ -460,6 +460,8 @@
     // Chi può cambiare il programma: sul dispositivo tutti; per i bambini del
     // centro lo decide il ruolo (le tirocinanti registrano, non modificano).
     const puoProgrammi = (p) => !EST.puoProgrammi || EST.puoProgrammi(p);
+    // Versione semplice per le tirocinanti: presa dati, giochi e storico
+    const limitato = () => !!(EST.limitato && EST.limitato());
 
     // ---------- disegno ----------
     function disegna() {
@@ -486,16 +488,16 @@
         'vai-bambini': () => vai('bambini'),
         'vai-seduta': () => vai('seduta'),
         'vai-programma': () => vai('programma'),
-        'vai-import': () => vai('import'),
+        'vai-import': () => { if (!limitato()) vai('import'); },
         'apri-bambino': (b) => { T.aperte = {}; vai('seduta', b.dataset.pid); },
         giochi: () => chiudi(),
         menu: async () => {
             const r = await foglio(h`<h2>Centro TICE</h2><div class="opzioni">
                 <button class="opzione" data-foglio="giochi">${icona('gamepad')}<span class="corpo">Giochi e attività<small>Tutte le attività dell'app, con i set</small></span></button>
                 <button class="opzione" data-foglio="cartelle">${icona('chart-line')}<span class="corpo">Cartelle cliniche<small>Grafici, giornate, diario, report</small></span></button>
-                <button class="opzione" data-foglio="import">${icona('file-import')}<span class="corpo">Importa quaderni Numbers</span></button>
+                ${limitato() ? '' : h`<button class="opzione" data-foglio="import">${icona('file-import')}<span class="corpo">Importa quaderni Numbers</span></button>
                 <button class="opzione" data-foglio="archivio">${icona('folder-open')}<span class="corpo">Archivio set</span></button>
-                <button class="opzione" data-foglio="opzioni">${icona('gear')}<span class="corpo">Impostazioni e tema</span></button>
+                <button class="opzione" data-foglio="opzioni">${icona('gear')}<span class="corpo">Impostazioni e tema</span></button>`}
                 ${EST.opzioniMenu ? EST.opzioniMenu() : ''}
             </div><div class="bottoni"><button class="bt" data-foglio="chiudi">Chiudi</button></div>`);
             if (r && r.indexOf('est:') === 0 && EST.sceltaMenu) return EST.sceltaMenu(r.slice(4));
@@ -523,6 +525,7 @@
             else if (r === 'annulla') azioni['annulla-seduta']();
         },
         'nuovo-bambino': async () => {
+            if (limitato()) return;
             const r = await foglio(h`<form><h2>Nuovo bambino</h2>
                 <label class="campo"><span>Nome (o iniziali)</span><input name="nome" required maxlength="80" autofocus autocomplete="off"></label>
                 <label class="campo"><span>Categoria (facoltativa)</span><input name="cat" maxlength="60" placeholder="es. Aula 1" list="tice-categorie"></label>

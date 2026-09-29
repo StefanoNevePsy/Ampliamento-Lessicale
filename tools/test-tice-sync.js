@@ -65,6 +65,34 @@ const copia = (x) => JSON.parse(JSON.stringify(x));
     assert.strictEqual(JSON.parse(chiaro).name, 'Mario Rossi');
   });
 
+  console.log('Chiave consegnata a un dispositivo');
+  const S = crypto.webcrypto.subtle;
+  const adminK = await C.apriConFrase(frase, cfg, true);
+  const disp = await C.nuovaCoppia();
+  const consegnata = await C.consegnaA(disp.pubblica, adminK);
+  const kDisp = await C.riceviChiave(consegnata, disp.privata, false);
+  await prova('il dispositivo apre i dati con la chiave ricevuta', async () => {
+    assert.deepStrictEqual(await C.decifra(kDisp, b, 'tice:paziente:1727'), paziente);
+    const nuova = await C.cifra(kDisp, cfg.kid, { x: 1 }, 'a');
+    assert.deepStrictEqual(await C.decifra(chiave, nuova, 'a'), { x: 1 });
+  });
+  await prova('...ma non la può esportare né mostrare', async () => {
+    assert.strictEqual(kDisp.extractable, false);
+    await assert.rejects(S.exportKey('raw', kDisp));
+    assert.strictEqual(disp.privata.extractable, false);
+    await assert.rejects(S.exportKey('pkcs8', disp.privata));
+  });
+  await prova('la busta consegnata non si apre con un altro dispositivo', async () => {
+    const altro = await C.nuovaCoppia();
+    await assert.rejects(C.riceviChiave(consegnata, altro.privata, false));
+  });
+  await prova('la busta è compatibile con la cifratura RSA-OAEP standard', async () => {
+    const raw = Buffer.from(await S.exportKey('raw', adminK));
+    const pub = crypto.createPublicKey({ key: Buffer.from(disp.pubblica, 'base64'), format: 'der', type: 'spki' });
+    const k2 = await C.riceviChiave(crypto.publicEncrypt({ key: pub, oaepHash: 'sha256' }, raw).toString('base64'), disp.privata, false);
+    assert.deepStrictEqual(await C.decifra(k2, b, 'tice:paziente:1727'), paziente);
+  });
+
   console.log('Fusione tra due dispositivi');
   const base = {
     id: '1727', name: 'Mario', category: 'Aula 1',

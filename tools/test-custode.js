@@ -238,6 +238,80 @@ prova('l\'elenco si ricostruisce dai file dei pazienti', () => {
   assert.strictEqual(ok(chiama(PROPRIETARIO, 'pazienti.elenco')).length, 3);
 });
 
+console.log('\nDispositivi e chiave consegnata');
+// Il dispositivo della tirocinante crea una coppia RSA; l'admin gli consegna la chiave cifrata
+const coppia = crypto.generateKeyPairSync('rsa', { modulusLength: 3072 });
+const PUB = coppia.publicKey.export({ type: 'spki', format: 'der' }).toString('base64');
+const DEV = 'dev' + crypto.randomBytes(8).toString('hex');
+const consegna = (pub) => crypto.publicEncrypt({ key: crypto.createPublicKey({ key: Buffer.from(pub, 'base64'), format: 'der', type: 'spki' }), oaepHash: 'sha256' }, CHIAVE).toString('base64');
+prova('la tirocinante registra il dispositivo: in attesa, senza chiave', () => {
+  const r = ok(chiama(TIR, 'dispositivo.registra', { id: DEV, nome: 'Chrome · Android', pubblica: PUB }));
+  assert.strictEqual(r.abilitato, false);
+  assert.deepStrictEqual(ok(chiama(TIR, 'dispositivo.chiave', { id: DEV })).chiavi, {});
+});
+prova('solo un admin vede i dispositivi e consegna la chiave', () => {
+  ko(chiama(TIR, 'dispositivi.elenco'), 'vietato');
+  ko(chiama(TIR, 'dispositivi.abilita', { id: DEV, kid: 'k1', chiave: consegna(PUB), pubblica: PUB }), 'vietato');
+  const el = ok(chiama(PROPRIETARIO, 'dispositivi.elenco'));
+  const d = el.find((x) => x.id === DEV);
+  assert.strictEqual(d.personaAbilitata, true);
+  ok(chiama(PROPRIETARIO, 'dispositivi.abilita', { id: DEV, kid: 'k1', chiave: consegna(d.pubblica), pubblica: d.pubblica }));
+});
+prova('il dispositivo riceve la chiave e solo lui la apre', () => {
+  const r = ok(chiama(TIR, 'dispositivo.chiave', { id: DEV }));
+  const chiave = crypto.privateDecrypt({ key: coppia.privateKey, oaepHash: 'sha256' }, Buffer.from(r.chiavi.k1, 'base64'));
+  assert.ok(chiave.equals(CHIAVE));
+  // sul Drive c'e' solo la busta, non la chiave
+  const disp = fs.readFileSync(path.join(dir, '_config', 'dispositivi.json'), 'utf8');
+  assert.ok(!disp.includes(CHIAVE.toString('base64')));
+});
+prova('il dispositivo di un altro non si legge ne\' si usurpa', () => {
+  ko(chiama(PROF, 'dispositivo.chiave', { id: DEV }), 'non-trovato');
+  ko(chiama(PROF, 'dispositivo.registra', { id: DEV, nome: 'x', pubblica: PUB }), 'conflitto');
+});
+prova('con chiavi nuove il dispositivo torna in attesa', () => {
+  const altra = crypto.generateKeyPairSync('rsa', { modulusLength: 3072 }).publicKey.export({ type: 'spki', format: 'der' }).toString('base64');
+  const DEV2 = 'dev' + crypto.randomBytes(8).toString('hex');
+  ok(chiama(TIR, 'dispositivo.registra', { id: DEV2, nome: 'Safari · iPad', pubblica: PUB }));
+  ok(chiama(PROPRIETARIO, 'dispositivi.abilita', { id: DEV2, kid: 'k1', chiave: consegna(PUB), pubblica: PUB }));
+  assert.strictEqual(ok(chiama(TIR, 'dispositivo.registra', { id: DEV2, nome: 'Safari · iPad', pubblica: altra })).abilitato, false);
+  ko(chiama(PROPRIETARIO, 'dispositivi.abilita', { id: DEV2, kid: 'k1', chiave: consegna(PUB), pubblica: PUB }), 'conflitto');
+  ok(chiama(TIR, 'dispositivo.togli', { id: DEV2 }));
+});
+
+console.log('\nCambio della chiave');
+const CHIAVE2 = crypto.randomBytes(32);
+prova('senza dire quale chiave si sostituisce non si cambia', () => {
+  const nuova = { kid: 'k2', kdf: CIFRATURA.kdf, verifica: busta({ tice: 'ok2' }) };
+  ko(chiama(PROPRIETARIO, 'cifratura.imposta', { cifratura: nuova, sostituisci: true, kidAttuale: 'kX' }), 'conflitto');
+  ko(chiama(PROF, 'cifratura.imposta', { cifratura: nuova, sostituisci: true, kidAttuale: 'k1' }), 'vietato');
+});
+prova('l\'admin cambia la chiave: la precedente resta descritta, le consegne si azzerano', () => {
+  const nuova = { kid: 'k2', kdf: { nome: 'PBKDF2-SHA256', iterazioni: 600000, sale: crypto.randomBytes(16).toString('base64') }, verifica: busta({ tice: 'ok2' }) };
+  const c = ok(chiama(PROPRIETARIO, 'cifratura.imposta', { cifratura: nuova, sostituisci: true, kidAttuale: 'k1' }));
+  assert.strictEqual(c.kid, 'k2');
+  assert.strictEqual(c.precedenti[0].kid, 'k1');
+  assert.deepStrictEqual(ok(chiama(TIR, 'dispositivo.chiave', { id: DEV })).chiavi, {});
+});
+prova('dopo il cambio non si salva con la chiave vecchia', () => {
+  const v = ok(chiama(PROPRIETARIO, 'paziente.leggi', { id: PZ1 })).version;
+  ko(salvaP(PROPRIETARIO, PZ1, paziente(PZ1, 'Mario Rossi'), v), 'chiave-cambiata');
+  const conK2 = (o, aad) => Object.assign(busta(o, aad), { kid: 'k2' });
+  ok(chiama(PROPRIETARIO, 'paziente.salva', { id: PZ1, versioneBase: v, busta: conK2({ name: 'Mario Rossi' }, 'tice:paziente:' + PZ1), etichetta: conK2({ nome: 'Mario Rossi' }) }));
+  ko(chiama(PROPRIETARIO, 'dispositivi.abilita', { id: DEV, kid: 'k1', chiave: consegna(PUB), pubblica: PUB }), 'chiave-cambiata');
+  ok(chiama(PROPRIETARIO, 'dispositivi.abilita', { id: DEV, kid: 'k2', chiave: consegna(PUB), pubblica: PUB }));
+});
+prova('chi esce dall\'elenco perde anche i dispositivi', () => {
+  const a = ok(chiama(PROPRIETARIO, 'accessi.leggi'));
+  const salvata = a.utenti[TIR];
+  delete a.utenti[TIR];
+  ok(chiama(PROPRIETARIO, 'accessi.salva', { accessi: a, versioneBase: a.version }));
+  assert.ok(!ok(chiama(PROPRIETARIO, 'dispositivi.elenco')).some((x) => x.email === TIR));
+  const b = ok(chiama(PROPRIETARIO, 'accessi.leggi'));
+  b.utenti[TIR] = salvata;
+  ok(chiama(PROPRIETARIO, 'accessi.salva', { accessi: b, versioneBase: b.version }));
+});
+
 console.log('\nScadenza');
 prova('dopo la scadenza la tirocinante non entra piu\'', () => {
   const salvato = adesso;

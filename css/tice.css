@@ -331,3 +331,27 @@ header h1:has(.tice-torna) { flex-shrink: 0; }
     letter-spacing: 0.02em; text-align: center; padding: 16px 6px; border-radius: 12px; white-space: nowrap; overflow-x: auto;
     background: rgba(var(--accent-rgb), 0.1); border: 2px dashed rgba(var(--accent-rgb), 0.5); user-select: all;
 }
+
+/* Versione per le tirocinanti: nel resto dell'app restano giochi e cartella in sola lettura */
+body.tice-tirocinante [onclick^="openLibrary"],
+body.tice-tirocinante [onclick^="openFirebaseSettings"],
+body.tice-tirocinante [onclick^="openSettings"],
+body.tice-tirocinante [onclick^="openActivityLayout"],
+body.tice-tirocinante [onclick^="createNewPatient"],
+body.tice-tirocinante [onclick^="renamePatient"],
+body.tice-tirocinante [onclick^="editPatientCategory"],
+body.tice-tirocinante [onclick^="deletePatient"],
+body.tice-tirocinante [onclick^="deleteSession"],
+body.tice-tirocinante [onclick^="editSession"],
+body.tice-tirocinante [onclick^="startPatientPhotoUpload"],
+body.tice-tirocinante [onclick^="openThresholdEditor"],
+body.tice-tirocinante [onclick^="generateAIReport"],
+body.tice-tirocinante [onclick^="openReportHistory"],
+body.tice-tirocinante [onclick^="exportPatientExcel"],
+body.tice-tirocinante [onclick^="quickSharePatientDirect"],
+body.tice-tirocinante [onclick^="offlineSharePatient"],
+body.tice-tirocinante [onclick^="openDailyNoteEditor"],
+body.tice-tirocinante [onclick^="deleteDailyNote"],
+body.tice-tirocinante [onclick^="openSessionNoteEditor"],
+body.tice-tirocinante [onclick^="toggleOutlierDay"],
+body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; }

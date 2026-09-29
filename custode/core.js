@@ -52,6 +52,7 @@ var QT = (function () {
   var P = {
     accessi: '_config/accessi.json',
     cifratura: '_config/cifratura.json',
+    dispositivi: '_config/dispositivi.json',
     elenco: 'Pazienti/_elenco.json',
     paziente: function (pid) { return 'Pazienti/' + pid + '/paziente.json'; },
     versioni: function (pid) { return 'Pazienti/' + pid + '/versioni'; },
@@ -68,6 +69,7 @@ var QT = (function () {
     data: /^\d{4}-\d{2}-\d{2}$/,
     email: /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/,
     kid: /^[a-z0-9-]{1,40}$/,
+    dispositivo: /^[a-z0-9]{8,40}$/,
     b64: /^[A-Za-z0-9+/]*={0,2}$/,
     versione: /^v(\d{8})\.json$/,
     dataUrl: /^data:((?:image\/(?:png|jpeg|webp|gif))|(?:audio\/(?:mpeg|mp4|webm|ogg|wav|x-m4a)));base64,([A-Za-z0-9+/=]+)$/,
@@ -362,6 +364,7 @@ var QT = (function () {
         email: u.email, nome: u.nome, ruolo: u.ruolo, pazienti: u.pazienti,
         proprietario: u.proprietario, scadenza: u.scadenza, permessi: permessi(u),
         cifratura: !!A.leggiJSON(P.cifratura),
+        kid: (A.leggiJSON(P.cifratura) || {}).kid || null,
       };
     };
 
@@ -377,7 +380,21 @@ var QT = (function () {
         if (attuale) {
           // Reinvio identico (rete caduta dopo il salvataggio)
           if (stabile(attuale.verifica) === stabile(c.verifica) && attuale.kid === c.kid) return attuale;
-          throw err('conflitto', 'La chiave del centro esiste già: non si può sostituire da qui.', { attuale: attuale });
+          // Cambio della chiave: solo dichiarando quale si sostituisce. La
+          // precedente resta descritta (non la chiave: sale e verifica) per
+          // aprire le versioni vecchie con la frase di allora.
+          if (!d.sostituisci || d.kidAttuale !== attuale.kid) {
+            throw err('conflitto', 'La chiave del centro esiste già.', { attuale: attuale });
+          }
+          if (c.kid === attuale.kid || (attuale.precedenti || []).some(function (x) { return x.kid === c.kid; })) {
+            throw err('richiesta-non-valida', 'Identificativo della chiave già usato.');
+          }
+          c.precedenti = [{ kid: attuale.kid, kdf: attuale.kdf, verifica: attuale.verifica, creato: attuale.creato, sostituita: amb.ora() }]
+            .concat(attuale.precedenti || []);
+          // I dispositivi abilitati con la vecchia chiave la perdono: gli admin la riconsegnano
+          var disp = leggiDispositivi();
+          Object.keys(disp.dispositivi).forEach(function (id) { disp.dispositivi[id].chiavi = {}; });
+          A.scriviJSON(P.dispositivi, disp);
         }
         c.creato = amb.ora();
         c.creatoDa = u.email;
@@ -387,8 +404,122 @@ var QT = (function () {
     };
 
     function richiediCifratura() {
-      if (!A.leggiJSON(P.cifratura)) throw err('senza-chiave', 'Prima un amministratore deve creare la chiave del centro.');
+      var c = A.leggiJSON(P.cifratura);
+      if (!c) throw err('senza-chiave', 'Prima un amministratore deve creare la chiave del centro.');
+      return c;
     }
+    // Dopo un cambio di chiave nessuno salva piu' con quella vecchia
+    function richiediChiaveAttuale(cfg) {
+      for (var i = 1; i < arguments.length; i++) {
+        var b = arguments[i];
+        if (b && b.kid !== cfg.kid) throw err('chiave-cambiata', 'La chiave del centro è cambiata: l\'app si aggiorna e riprova.', { kid: cfg.kid });
+      }
+    }
+
+    // --- Dispositivi ------------------------------------------------------------
+    // Ogni dispositivo ha una coppia di chiavi RSA creata nel browser: la parte
+    // privata non esce dal dispositivo. Un admin gli consegna la chiave del
+    // centro cifrata con la parte pubblica: il dispositivo la usa senza che
+    // nessuno la veda. Il custode conserva solo buste che non puo' aprire.
+    function leggiDispositivi() {
+      return A.leggiJSON(P.dispositivi) || { schema: SCHEMA, dispositivi: {} };
+    }
+    function abilitato(email) {
+      if (email === String(amb.proprietario() || '').toLowerCase()) return true;
+      var v = leggiAccessi().utenti[email];
+      return !!v && v.attivo !== false && !(v.scadenza && oggi() > v.scadenza);
+    }
+    function mioDispositivo(u, id) {
+      var disp = leggiDispositivi();
+      var r = disp.dispositivi[id];
+      if (!r || r.email !== u.email) throw err('non-trovato', 'Dispositivo non registrato.');
+      return { disp: disp, r: r };
+    }
+    function b64V(v, max, campo) {
+      var t = testoV(v, max, true, campo);
+      if (!RE.b64.test(t) || t.length % 4) throw err('richiesta-non-valida', campo + ' non valido');
+      return t;
+    }
+
+    azioni['dispositivo.registra'] = function (u, d) {
+      var id = idV(d.id, RE.dispositivo, 'id');
+      var pubblica = b64V(d.pubblica, 2000, 'pubblica');
+      var nome = testoV(d.nome, 80, false, 'nome') || 'Dispositivo';
+      return conLock(function () {
+        var disp = leggiDispositivi();
+        var r = disp.dispositivi[id];
+        if (r && r.email !== u.email) throw err('conflitto', 'Identificativo di dispositivo già usato.');
+        var ora = amb.ora();
+        if (!r) r = disp.dispositivi[id] = { email: u.email, creato: ora, chiavi: {} };
+        if (r.pubblica !== pubblica) { r.pubblica = pubblica; r.chiavi = {}; }
+        r.nome = nome;
+        r.ultimoAccesso = ora;
+        A.scriviJSON(P.dispositivi, disp);
+        return { id: id, abilitato: Object.keys(r.chiavi).length > 0 };
+      });
+    };
+
+    azioni['dispositivo.chiave'] = function (u, d) {
+      var id = idV(d.id, RE.dispositivo, 'id');
+      var m = mioDispositivo(u, id);
+      var cfg = A.leggiJSON(P.cifratura);
+      // l'ultimo accesso si aggiorna al massimo una volta l'ora: non si riscrive a ogni sincronizzazione
+      if (!m.r.ultimoAccesso || Date.parse(amb.ora()) - Date.parse(m.r.ultimoAccesso) > 3600000) {
+        conLock(function () {
+          var disp = leggiDispositivi();
+          if (disp.dispositivi[id]) { disp.dispositivi[id].ultimoAccesso = amb.ora(); A.scriviJSON(P.dispositivi, disp); }
+        });
+      }
+      return { kid: cfg ? cfg.kid : null, chiavi: m.r.chiavi || {} };
+    };
+
+    azioni['dispositivi.elenco'] = function (u) {
+      puo(u, 'gestisciAccessi');
+      var disp = leggiDispositivi(), cfg = A.leggiJSON(P.cifratura);
+      return Object.keys(disp.dispositivi).map(function (id) {
+        var r = disp.dispositivi[id];
+        return {
+          id: id, email: r.email, nome: r.nome, pubblica: r.pubblica, creato: r.creato, ultimoAccesso: r.ultimoAccesso,
+          abilitato: !!(cfg && r.chiavi && r.chiavi[cfg.kid]), abilitatoDa: r.abilitatoDa || null, abilitatoIl: r.abilitatoIl || null,
+          personaAbilitata: abilitato(r.email),
+        };
+      });
+    };
+
+    azioni['dispositivi.abilita'] = function (u, d) {
+      puo(u, 'gestisciAccessi');
+      var id = idV(d.id, RE.dispositivo, 'id');
+      var kid = idV(d.kid, RE.kid, 'kid');
+      var busta = b64V(d.chiave, 2000, 'chiave');
+      return conLock(function () {
+        var cfg = richiediCifratura();
+        if (kid !== cfg.kid) throw err('chiave-cambiata', 'La chiave del centro è cambiata nel frattempo.');
+        var disp = leggiDispositivi();
+        var r = disp.dispositivi[id];
+        if (!r) throw err('non-trovato', 'Dispositivo non registrato.');
+        if (!abilitato(r.email)) throw err('vietato', 'La persona di questo dispositivo non è abilitata.');
+        if (d.pubblica !== r.pubblica) throw err('conflitto', 'Il dispositivo ha cambiato chiavi: riprova.');
+        r.chiavi = {};
+        r.chiavi[kid] = busta;
+        r.abilitatoDa = u.email;
+        r.abilitatoIl = amb.ora();
+        A.scriviJSON(P.dispositivi, disp);
+        return { id: id, abilitato: true };
+      });
+    };
+
+    azioni['dispositivo.togli'] = function (u, d) {
+      var id = idV(d.id, RE.dispositivo, 'id');
+      return conLock(function () {
+        var disp = leggiDispositivi();
+        var r = disp.dispositivi[id];
+        if (!r) return true;
+        if (r.email !== u.email) puo(u, 'gestisciAccessi');
+        delete disp.dispositivi[id];
+        A.scriviJSON(P.dispositivi, disp);
+        return true;
+      });
+    };
 
     azioni['pazienti.elenco'] = function (u) {
       var elenco = leggiElenco();
@@ -405,10 +536,11 @@ var QT = (function () {
 
     azioni['paziente.crea'] = function (u, d) {
       puo(u, 'creaPazienti');
-      richiediCifratura();
+      var cfg = richiediCifratura();
       var pid = idV(d.id, RE.pz, 'id');
       var busta = bustaV(d.busta, MAX_PAZIENTE, 'busta');
       var etichetta = bustaV(d.etichetta, MAX_ETICHETTA, 'etichetta');
+      richiediChiaveAttuale(cfg, busta, etichetta);
       return conLock(function () {
         var esistente = A.leggiJSON(P.paziente(pid));
         if (esistente) {
@@ -445,11 +577,12 @@ var QT = (function () {
     // l'app unisce le due (lei puo' leggerle, il custode no) e riprova.
     azioni['paziente.salva'] = function (u, d) {
       puo(u, 'registraSedute');
-      richiediCifratura();
+      var cfg = richiediCifratura();
       var pid = idV(d.id, RE.pz, 'id');
       richiediVisibile(u, pid);
       var busta = bustaV(d.busta, MAX_PAZIENTE, 'busta');
       var etichetta = d.etichetta ? bustaV(d.etichetta, MAX_ETICHETTA, 'etichetta') : null;
+      richiediChiaveAttuale(cfg, busta, etichetta);
       var base = interoV(d.versioneBase, 0, 1e9, 'versioneBase');
       return conLock(function () {
         var attuale = leggiRecord(pid);
@@ -461,6 +594,7 @@ var QT = (function () {
         var ora = amb.ora();
         var r = { schema: SCHEMA, id: pid, version: attuale.version + 1, busta: busta, etichetta: etichetta || attuale.etichetta,
           creato: attuale.creato, creatoDa: attuale.creatoDa, aggiornato: ora, aggiornatoDa: u.email };
+        if (attuale.eliminato) r.eliminato = true;   // resta archiviato anche se ricifrato
         A.scriviJSON(P.paziente(pid), r);
         aggiornaElenco(r);
         return { id: r.id, version: r.version, aggiornato: r.aggiornato, aggiornatoDa: r.aggiornatoDa };
@@ -640,6 +774,13 @@ var QT = (function () {
         nuovo.aggiornato = amb.ora();
         nuovo.aggiornatoDa = u.email;
         A.scriviJSON(P.accessi, nuovo);
+        // Chi esce dall'elenco perde anche la chiave consegnata ai suoi dispositivi
+        var disp = leggiDispositivi(), cambiati = false;
+        Object.keys(disp.dispositivi).forEach(function (id) {
+          var e = disp.dispositivi[id].email;
+          if (e !== String(amb.proprietario() || '').toLowerCase() && !nuovo.utenti[e]) { delete disp.dispositivi[id]; cambiati = true; }
+        });
+        if (cambiati) A.scriviJSON(P.dispositivi, disp);
         return nuovo;
       });
     };

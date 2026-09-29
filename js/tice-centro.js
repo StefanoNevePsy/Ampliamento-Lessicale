@@ -26,6 +26,7 @@
         let stato = 'ok', testo = '';
         if (S.fase === 'fuori') { stato = 'spento'; testo = 'Accedi'; }
         else if (S.fase === 'chiave') { stato = 'attesa'; testo = 'Chiave'; }
+        else if (S.fase === 'attesa') { stato = 'attesa'; testo = 'In attesa'; }
         else if (S.lavoro) { stato = 'lavoro'; }
         else if (S.errore) { stato = 'errore'; }
         else if (S.coda.size) { stato = 'attesa'; testo = String(S.coda.size); }
@@ -45,16 +46,25 @@
                     <button class="bt primario">Entra</button></form>` : h`<div id="tice-gis" style="min-height:44px"></div>`}
             </div>`;
         }
+        if (S.fase === 'attesa') {
+            return h`<div class="scheda imbottita" style="margin-bottom:12px">
+                <b>${icona('hourglass-half')} Questo dispositivo aspetta la chiave del centro</b>
+                <p class="sotto">${io().cifratura
+                    ? 'Non devi inserire niente: la riceve da solo appena un amministratore apre l\'app. Intanto puoi lavorare sui bambini di questo dispositivo.'
+                    : 'Un amministratore deve ancora creare la chiave del centro.'}</p>
+                <button class="bt piccolo" data-a="controlla-chiave">${icona('rotate')} Controlla adesso</button>
+            </div>`;
+        }
         if (S.fase === 'chiave') {
             const serveCrearla = !io().cifratura;
             return h`<div class="scheda imbottita" style="margin-bottom:12px">
-                <b>${icona('key')} ${serveCrearla ? 'Manca la chiave del centro' : 'Inserisci la chiave del centro'}</b>
+                <b>${icona('key')} ${serveCrearla ? 'Manca la chiave del centro' : 'Chiave del centro su questo dispositivo'}</b>
                 <p class="sotto">${serveCrearla
-                    ? (admin() ? 'I dati dei bambini sul Drive sono cifrati con una chiave che conosce solo il centro. Creala adesso: la dovrai conservare e dare alle persone autorizzate.'
-                        : 'Un amministratore deve ancora creare la chiave del centro.')
-                    : 'I dati sul Drive sono cifrati. Inserisci la chiave del centro (25 caratteri) una volta su questo dispositivo: chiedila a un amministratore.'}</p>
-                ${serveCrearla ? (admin() ? h`<button class="bt primario" data-a="crea-chiave">${icona('key')} Crea la chiave del centro</button>` : '')
-                    : h`<button class="bt primario" data-a="inserisci-chiave">${icona('key')} Inserisci la chiave</button>`}
+                    ? 'I dati dei bambini sul Drive sono cifrati con una chiave che conoscono solo gli amministratori. Creala adesso: conservala tu, agli altri dispositivi l\'app la consegna senza mostrarla.'
+                    : 'Sei amministratore: inserisci la chiave del centro, oppure aspetta che la consegni l\'app di un altro amministratore.'}</p>
+                ${serveCrearla ? h`<button class="bt primario" data-a="crea-chiave">${icona('key')} Crea la chiave del centro</button>`
+                    : h`<div class="bottoni"><button class="bt primario" data-a="inserisci-chiave">${icona('key')} Inserisci la chiave</button>
+                        <button class="bt" data-a="controlla-chiave">${icona('rotate')} Controlla se è arrivata</button></div>`}
             </div>`;
         }
         if (S.errore && !S.lavoro) {
@@ -115,6 +125,32 @@
     }
     const puoProgrammi = (p) => !Y.attivo() || !Y.condiviso(p.id) || Y.puo('programmi');
 
+    // =====================================================================
+    // Versione semplice per le tirocinanti: presa dati, giochi, storico in
+    // sola lettura. Niente import, programmi, archivio dei set, impostazioni,
+    // condivisioni, export e report esterni.
+    // =====================================================================
+    const tirocinante = () => Y.attivo() && S.fase !== 'fuori' && Y.ruolo() === 'tirocinante';
+    const VIETATE = ['openLibrary', 'openSettings', 'openFirebaseSettings', 'openActivityLayout', 'createNewPatient',
+        'renamePatient', 'editPatientCategory', 'deletePatient', 'deleteSession', 'editSession', 'startPatientPhotoUpload',
+        'openThresholdEditor', 'addCriterionOverride', 'generateAIReport', 'openReportHistoryStandalone', 'openReportHistory',
+        'exportPatientExcel', 'quickSharePatientDirect', 'offlineSharePatient', 'openQuickShare', 'openP2PSync', 'openOfflineShare',
+        'openDailyNoteEditor', 'deleteDailyNote', 'openSessionNoteEditor', 'toggleOutlierDay', 'openDayTagPicker', 'setDayTag',
+        'exportAllSets', 'importSets', 'createEmptySet', 'openGeminiGenerator'];
+    function limitaApp() {
+        VIETATE.forEach((nome) => {
+            const f = window[nome];
+            if (typeof f !== 'function' || f._tice) return;
+            const g = function () {
+                if (tirocinante()) { avviso('Non disponibile nella versione per le tirocinanti.'); return undefined; }
+                return f.apply(this, arguments);
+            };
+            g._tice = true;
+            window[nome] = g;
+        });
+    }
+    function aggiornaRuolo() { document.body.classList.toggle('tice-tirocinante', tirocinante()); }
+
     function dopo(vista, r) {
         const gis = r.querySelector('#tice-gis');
         if (gis) Y.Auth.pulsante(gis).catch((e) => { gis.innerHTML = String(h`<p class="sotto">${e.message}</p>`); });
@@ -137,19 +173,16 @@
             `Dati tecnici (non segreti, servono ad aprire i file anche senza _config/cifratura.json):\n` +
             `    identificativo ${cfg.kid} · PBKDF2-SHA256 ${cfg.kdf.iterazioni} iterazioni · sale ${cfg.kdf.sale}\n\n` +
             `Serve ad aprire i dati dei bambini salvati sul Drive del centro.\n` +
-            `- Si inserisce una volta per dispositivo, nell'app.\n` +
+            `- La conoscono solo gli amministratori: agli altri dispositivi l'app la consegna senza mostrarla.\n` +
             `- Senza questa chiave i dati NON si possono recuperare: nessuno la conosce oltre al centro,\n  nemmeno Google o gli amministratori del Drive.\n` +
             `- Per aprire un file senza l'app: strumenti/apri-dati.html (anche offline) oppure tools/decifra_tice.py.\n` +
             `- Conservala in un gestore di password e su carta in un luogo chiuso. Non mandarla per email o chat.\n\n` +
             `Creata il ${new Date().toLocaleDateString('it-IT')} da ${io().email || ''}.\n`;
     }
-    async function creaChiave() {
-        const frase = C.generaFrase();
-        avviso('Preparazione della chiave…');
-        const preparata = await C.nuovaConfigurazione(frase);
-        const cfg = preparata.cfg;
-        const r = await foglio(h`<form><h2>${icona('key')} La chiave del centro</h2>
-            <p class="sotto">Questa è l'unica chiave che apre i dati dei bambini. Conservala adesso, prima di continuare: l'app non la mostrerà più.</p>
+    // Mostra una frase nuova da conservare; conferma riscrivendo l'ultimo gruppo
+    function foglioFrase(frase, cfg, { titolo, intro, bottone }) {
+        return foglio(h`<form><h2>${icona('key')} ${titolo}</h2>
+            <p class="sotto">${intro}</p>
             <div class="chiave-grande" aria-label="Chiave del centro">${frase}</div>
             <div class="bottoni" style="margin-top:8px">
                 <button type="button" class="bt" data-copia>${icona('copy')} Copia</button>
@@ -157,12 +190,12 @@
                 <button type="button" class="bt" data-stampa>${icona('print')} Stampa</button>
             </div>
             <ul class="sotto piccolo" style="padding-left:18px">
-                <li>Mettila in un gestore di password e su carta in un luogo chiuso.</li>
-                <li>La dai a voce, o su carta, alle persone autorizzate: la inseriscono una volta sul loro dispositivo.</li>
-                <li>Se si perde, i dati sul Drive non si recuperano più.</li>
+                <li>Mettila in un gestore di password e su carta in un luogo chiuso. Il file scaricato serve anche ad aprire i dati senza l'app.</li>
+                <li>La conoscono solo gli amministratori. Agli altri dispositivi l'app la consegna da sola, senza mostrarla.</li>
+                <li>Se si perdono tutte le copie, i dati sul Drive non si recuperano più.</li>
             </ul>
             <label class="campo"><span>Per conferma, riscrivi l'ultimo gruppo (${'•'.repeat(5)})</span><input name="conferma" required autocomplete="off" maxlength="5" style="text-transform:uppercase;font-family:monospace;letter-spacing:2px"></label>
-            <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Crea la chiave</button></div></form>`,
+            <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">${bottone}</button></div></form>`,
         {
             invia: (f) => {
                 const v = C.normalizzaFrase(frase.slice(0, -5) + f.conferma.value);
@@ -171,7 +204,7 @@
             },
             dopo: (f) => {
                 f.querySelector('[data-copia]').onclick = () => navigator.clipboard && navigator.clipboard.writeText(frase).then(() => avviso('Chiave copiata'));
-                f.querySelector('[data-scarica]').onclick = () => scaricaTesto('chiave-centro-tice.txt', testoChiave(frase, cfg));
+                f.querySelector('[data-scarica]').onclick = () => scaricaTesto('chiave-centro-tice-' + cfg.kid + '.txt', testoChiave(frase, cfg));
                 f.querySelector('[data-stampa]').onclick = () => {
                     const w = window.open('', '_blank');
                     if (!w) return;
@@ -180,6 +213,13 @@
                 };
             }
         });
+    }
+    async function creaChiave() {
+        const frase = C.generaFrase();
+        avviso('Preparazione della chiave…');
+        const preparata = await C.nuovaConfigurazione(frase, true);
+        const r = await foglioFrase(frase, preparata.cfg, { titolo: 'La chiave del centro', bottone: 'Crea la chiave',
+            intro: 'Questa è la chiave che apre i dati dei bambini. Conservala adesso: su questo dispositivo potrai rivederla, ma se lo perdi resta solo la tua copia.' });
         if (!r) return;
         try {
             await Y.creaChiave(frase, preparata);
@@ -187,16 +227,46 @@
         } catch (e) { avviso(e.message, 'errore'); }
         TiceHome.ridisegna();
     }
-    async function inserisciChiave() {
-        const r = await foglio(h`<form><h2>${icona('key')} Chiave del centro</h2>
-            <p class="sotto">25 caratteri, anche senza trattini. Si inserisce una volta su questo dispositivo.</p>
+    async function cambiaChiave() {
+        const ok = await conferma('Cambiare la chiave del centro?',
+            'Serve quando qualcuno potrebbe averla conservata (per esempio una persona che non collabora più). Tutti i bambini vengono cifrati con una chiave nuova; i dispositivi delle persone abilitate la ricevono da soli, quelli tolti no. La chiave vecchia apre ancora le versioni precedenti al cambio: conservala. Tieni l\'app aperta finché non finisce.',
+            { ok: 'Continua' });
+        if (!ok) return;
+        const frase = C.generaFrase();
+        avviso('Preparazione della chiave…');
+        const preparata = await C.nuovaConfigurazione(frase, true);
+        const r = await foglioFrase(frase, preparata.cfg, { titolo: 'Nuova chiave del centro', bottone: 'Cambia la chiave',
+            intro: 'Questa sostituisce la chiave attuale. Conservala come la precedente, e tieni anche la vecchia: serve ad aprire le versioni salvate prima del cambio.' });
+        if (!r) return;
+        try {
+            T.lavoroChiave = 'Cambio della chiave…'; TiceHome.ridisegna();
+            const esito = await Y.cambiaChiave(frase, preparata, (i, n) => { T.lavoroChiave = `Ricifratura dei bambini: ${i} di ${n}…`; TiceHome.ridisegna(); });
+            avviso(`Chiave cambiata: ${esito.bambini} bambini ricifrati`);
+        } catch (e) { avviso('Cambio non completato: ' + e.message + '. Riprova: riprende da dove si è fermato.', 'errore'); }
+        T.lavoroChiave = null;
+        TiceHome.ridisegna();
+    }
+    async function mostraChiave() {
+        const frase = await Y.mostraFrase();
+        if (!frase) { avviso('Su questo dispositivo la chiave è arrivata già pronta: la frase non c\'è. Inseriscila una volta per poterla rivedere qui.', 'errore'); return; }
+        const kid = S.cfg && S.cfg.kid;
+        await foglio(h`<h2>${icona('key')} Chiave del centro</h2>
+            <div class="chiave-grande">${frase}</div>
+            <p class="sotto piccolo">Identificativo ${kid}. Serve agli amministratori e per aprire i file senza l'app: non darla a professioniste e tirocinanti (la ricevono dall'app) e non mandarla per email o chat.</p>
+            <div class="bottoni"><button class="bt" data-foglio="scarica">${icona('download')} Scarica</button><button class="bt primario" data-foglio="chiudi">Chiudi</button></div>`)
+            .then((v) => { if (v === 'scarica') scaricaTesto('chiave-centro-tice-' + kid + '.txt', testoChiave(frase, S.cfg)); });
+    }
+    async function inserisciChiave(b, kid) {
+        const r = await foglio(h`<form><h2>${icona('key')} ${kid ? 'Chiave precedente' : 'Chiave del centro'}</h2>
+            <p class="sotto">${kid ? `Questa versione è cifrata con la chiave ${kid}, sostituita in seguito. Inserisci quella frase: resta su questo dispositivo per le versioni vecchie.`
+                : '25 caratteri, anche senza trattini. Si inserisce una volta su questo dispositivo.'}</p>
             <label class="campo"><input name="frase" required autocomplete="off" autofocus placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX" style="font-family:monospace;letter-spacing:1px;text-transform:uppercase"></label>
             <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Apri</button></div></form>`);
         if (!r) return;
         try {
             avviso('Controllo della chiave…');
-            await Y.inserisciChiave(r.frase);
-            avviso('Chiave corretta: sincronizzazione in corso');
+            await Y.inserisciChiave(r.frase, kid);
+            avviso(kid ? 'Chiave precedente aggiunta' : 'Chiave corretta: sincronizzazione in corso');
         } catch (e) { avviso(e.message, 'errore'); }
         TiceHome.ridisegna();
     }
@@ -223,12 +293,20 @@
                     </tbody></table>
                     ${S.errore ? h`<p class="sotto">${icona('triangle-exclamation')} ${S.errore}</p>` : ''}
                     <button class="bt primario largo" style="margin-top:10px" data-a="sincronizza" ${S.lavoro ? grezzo('disabled') : ''}>${icona('rotate')} ${S.lavoro ? 'Sincronizzazione…' : 'Sincronizza ora'}</button>
-                </div>
-                <div class="scheda imbottita" style="margin-top:10px">
-                    <b>${icona('key')} Chiave del centro</b>
-                    <p class="sotto">Salvata su questo dispositivo in forma non leggibile. I dati sul Drive sono cifrati: senza la chiave nessuno, nemmeno chi amministra il Drive, può leggerli.</p>
-                    <button class="bt piccolo fantasma" data-a="dimentica-chiave">Togli la chiave da questo dispositivo</button>
                 </div>` : ''}
+                ${!u ? '' : admin() ? h`<div class="scheda imbottita" style="margin-top:10px">
+                    <b>${icona('key')} Chiave del centro</b> <span class="sotto piccolo">${S.cfg ? S.cfg.kid : ''}</span>
+                    <p class="sotto">La conoscono solo gli amministratori. Ai dispositivi delle persone abilitate l'app la consegna da sola, senza mostrarla: chi perde l'accesso non ha niente da conservare.</p>
+                    ${T.lavoroChiave ? h`<p class="sotto">${icona('spinner fa-spin')} ${T.lavoroChiave}</p>` : ''}
+                    <div class="bottoni">
+                        <button class="bt" data-a="mostra-chiave">${icona('eye')} Mostra la chiave</button>
+                        <button class="bt" data-a="vai-dispositivi">${icona('mobile-screen')} Dispositivi</button>
+                        <button class="bt pericolo" data-a="cambia-chiave" ${T.lavoroChiave ? grezzo('disabled') : ''}>${icona('arrows-rotate')} Cambia la chiave</button>
+                    </div>
+                </div>` : !Y.pronto() ? '' : h`<div class="scheda imbottita" style="margin-top:10px">
+                    <b>${icona('shield-halved')} Dati protetti</b>
+                    <p class="sotto">Questo dispositivo ha ricevuto la chiave del centro e la usa senza mostrarla. I dati dei bambini sul Drive sono cifrati.</p>
+                </div>`}
                 <div class="bottoni" style="margin-top:14px">
                     ${admin() ? h`<button class="bt" data-a="vai-persone">${icona('users')} Persone e accessi</button>` : ''}
                     ${Y.pronto() ? h`<button class="bt" data-a="vai-materiali">${icona('layer-group')} Materiali del centro</button>` : ''}
@@ -313,6 +391,31 @@
     }
 
     // =====================================================================
+    // Dispositivi (admin)
+    // =====================================================================
+    function vistaDispositivi() {
+        if (!T.elencoDisp) {
+            Y.dispositivi().then((d) => { T.elencoDisp = d; TiceHome.ridisegna(); }).catch((e) => avviso(e.message, 'errore'));
+            return h`${barra({ indietro: 'vai-account', titolo: 'Dispositivi' })}<main class="tice-main"><p class="sotto">${icona('spinner fa-spin')} Caricamento…</p></main>`;
+        }
+        const perPersona = {};
+        T.elencoDisp.forEach((d) => { (perPersona[d.email] = perPersona[d.email] || []).push(d); });
+        return h`${barra({ indietro: 'vai-account', titolo: 'Dispositivi' })}
+            <main class="tice-main">
+                <p class="sotto">Ogni dispositivo che accede riceve la chiave del centro dall'app di un amministratore, senza vederla. Qui controlli quali sono: se ne vedi uno che non riconosci, toglilo e valuta di cambiare la chiave.</p>
+                ${Object.keys(perPersona).sort().map((em) => h`<h3>${em}</h3><div class="scheda">
+                    ${perPersona[em].map((d) => h`<div class="riga" style="cursor:default">
+                        <span class="corpo"><span class="t1">${d.nome}${!d.personaAbilitata ? h` <span class="pill grigia">persona non abilitata</span>` : ''}</span>
+                        <span class="t2">${d.abilitato ? `chiave consegnata${d.abilitatoIl ? ' il ' + dataOra(d.abilitatoIl) : ''}` : 'in attesa della chiave'} · ultimo accesso ${dataOra(d.ultimoAccesso)}</span></span>
+                        ${d.abilitato ? h`<span class="pill verde">${icona('check')}</span>` : h`<span class="pill arancio">attesa</span>`}
+                        <button class="ib" data-a="togli-dispositivo" data-id="${d.id}" aria-label="Togli il dispositivo">${icona('trash')}</button>
+                    </div>`)}
+                </div>`)}
+                ${!T.elencoDisp.length ? h`<div class="vuoto">Nessun dispositivo registrato.</div>` : ''}
+            </main>`;
+    }
+
+    // =====================================================================
     // Versioni precedenti
     // =====================================================================
     function vistaVersioni() {
@@ -336,7 +439,11 @@
     async function versione(b) {
         const pid = T.versioniDi, n = +b.dataset.v;
         let vecchia;
-        try { vecchia = await Y.anteprimaVersione(pid, n); } catch (e) { avviso(e.message, 'errore'); return; }
+        try { vecchia = await Y.anteprimaVersione(pid, n); }
+        catch (e) {
+            if (e.senzaChiave && admin()) { await inserisciChiave(null, e.senzaChiave); return; }
+            avviso(e.message, 'errore'); return;
+        }
         const ora = paz(pid) || {};
         const conta = (p) => (p.history || []).length;
         const ultima = (p) => (p.history || []).reduce((m, s) => (s.date > m ? s.date : m), '');
@@ -503,7 +610,7 @@
     // Registrazione
     // =====================================================================
     TiceHome.estendi({
-        viste: { account: vistaAccount, persone: vistaPersone, versioni: vistaVersioni, materiali: vistaMateriali },
+        viste: { account: vistaAccount, persone: vistaPersone, versioni: vistaVersioni, materiali: vistaMateriali, dispositivi: vistaDispositivi },
         azioni: {
             'vai-account': () => vai('account'),
             'vai-persone': () => { T.accessi = null; vai('persone'); },
@@ -511,10 +618,13 @@
             'crea-chiave': creaChiave,
             'inserisci-chiave': inserisciChiave,
             sincronizza: () => Y.sincronizza().then((ok) => avviso(ok ? 'Sincronizzato' : (S.errore || 'Sincronizzazione non riuscita'), ok ? undefined : 'errore')),
-            'dimentica-chiave': async () => {
-                if (!await conferma('Togliere la chiave da questo dispositivo?', 'Per sincronizzare di nuovo andrà reinserita.', { ok: 'Togli', pericolo: true })) return;
-                await C.dimenticaChiave();
-                S.chiave = null; S.fase = 'chiave';
+            'controlla-chiave': () => Y.preparaCentro().then(() => { if (!Y.pronto()) avviso('La chiave non è ancora arrivata.'); }).catch((e) => avviso(e.message, 'errore')),
+            'mostra-chiave': mostraChiave,
+            'cambia-chiave': cambiaChiave,
+            'vai-dispositivi': () => { T.elencoDisp = null; vai('dispositivi'); },
+            'togli-dispositivo': async (b) => {
+                if (!await conferma('Togliere questo dispositivo?', 'Perde la chiave del centro. Se la persona è ancora abilitata e rientra, il dispositivo si registra di nuovo e la riceve. Per chiudere fuori qualcuno, toglila da Persone e accessi.', { ok: 'Togli', pericolo: true })) return;
+                try { T.elencoDisp = await Y.togliDispositivo(b.dataset.id); } catch (e) { avviso(e.message, 'errore'); }
                 TiceHome.ridisegna();
             },
             esci: async () => {
@@ -534,10 +644,11 @@
             'scarica-set': scaricaSet,
             'pubblica-set': pubblicaSet
         },
-        aggancio: { chip, banner, pillola, opzioniBambino, sceltaBambino, opzioniMenu, sceltaMenu, nuovoBambino, puoProgrammi, dopo }
+        aggancio: { chip, banner, pillola, opzioniBambino, sceltaBambino, opzioniMenu, sceltaMenu, nuovoBambino, puoProgrammi, dopo, limitato: tirocinante }
     });
 
     Y.alCambio((cosa) => {
+        if (cosa === 'stato') aggiornaRuolo();
         if (cosa === 'stato' || cosa === 'coda' || cosa === 'pazienti' || String(cosa).indexOf('paziente:') === 0) {
             if (cosa === 'pazienti' && typeof populateGlobalPatientSelect === 'function') populateGlobalPatientSelect();
             // non si ridisegna sotto le dita di chi sta segnando: solo il chip e gli elenchi
@@ -550,6 +661,6 @@
             TiceHome.ridisegna();
         }
     });
-    const parti = () => Y.avvia().catch((e) => console.error('avvio sincronizzazione', e));
+    const parti = () => { limitaApp(); Y.avvia().catch((e) => console.error('avvio sincronizzazione', e)); };
     if (document.readyState === 'complete') parti(); else window.addEventListener('load', parti);
 })();
