@@ -303,3 +303,15 @@ body.tice-aperto #notebook-tab-handle { display: none !important; }
 [data-theme="sand"] .tice-torna .logo-scuro { display: none; }
 @media (max-width: 700px) { .tice-torna span { display: none; } }
 header h1:has(.tice-torna) { flex-shrink: 0; }
+
+/* Linguetta in alto: riporta alla presa dati mentre si usa il resto dell'app */
+.tice-linguetta {
+    position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 9100;
+    display: flex; align-items: center; gap: 6px; max-width: min(92vw, 520px);
+    padding: calc(env(safe-area-inset-top, 0px) + 4px) 16px 6px; border: 0; border-radius: 0 0 14px 14px;
+    background: var(--tice-antracite, #363a43); color: #fff; font: inherit; font-size: 0.82rem; cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.25); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    touch-action: none;
+}
+.tice-linguetta[hidden] { display: none; }
+.tice-linguetta span { opacity: 0.8; overflow: hidden; text-overflow: ellipsis; }

@@ -54,7 +54,14 @@
     return programma(p).attivita.filter(function (a) { return a.id === id; })[0] || null;
   }
   function nomeSet(att, target) {
+    // Un target collegato a un set dell'archivio si chiama come il set: così le
+    // sedute registrate qui e quelle dei giochi finiscono nello stesso grafico.
+    if (target && target.setId) return target.testo;
     return target && target.testo ? att.nome + ' · ' + target.testo : att.nome;
+  }
+  /** Modalità di gioco di un target collegato a un set (es. 'tact', 'ran'). */
+  function modoTarget(att, target) {
+    return (target && target.mode) || att.mode || null;
   }
 
   /**
@@ -78,6 +85,10 @@
   function sedute(p, att, target) {
     var nome = target ? nomeSet(att, target) : null;
     return (p.history || []).filter(function (s) {
+      if (target && target.setId) {
+        // anche le sedute di quel set giocate prima che entrasse nel programma
+        return s.targetId ? s.targetId === target.id : (s.setId === target.setId && s.mode === modoTarget(att, target));
+      }
       if (target) return s.targetId ? s.targetId === target.id : (s.mode === 'quaderno' && s.setName === nome);
       return s.attivitaId === att.id || (s.mode === 'quaderno' && (s.setName === att.nome || String(s.setName).indexOf(att.nome + ' · ') === 0));
     }).sort(function (a, b) { return new Date(a.date) - new Date(b.date); });
@@ -109,10 +120,10 @@
     var s = {
       id: nuovoId('sx'),
       date: quando,
-      setId: 'tice_' + (target ? target.id : att.id),
+      setId: target && target.setId ? target.setId : 'tice_' + (target ? target.id : att.id),
       setName: nomeSet(att, target),
       setCat: att.area || '',
-      mode: 'quaderno',
+      mode: (target && target.setId && modoTarget(att, target)) || 'quaderno',
       correct: v,
       prompts: pp,
       total: tot,
@@ -151,18 +162,21 @@
       modificato: new Date().toISOString()
     };
     if (dati.tdSeconds) att.tdSeconds = +dati.tdSeconds;
-    if (dati.setId) att.setId = dati.setId;
+    if (dati.mode) att.mode = String(dati.mode);
     programma(p).attivita.push(att);
     if (dati.target) aggiungiTarget(att, dati.target, true);
     return att;
   }
-  function aggiungiTarget(att, testo, attiva) {
+  /** dati: il testo, oppure { testo, setId, mode } per un set dell'archivio. */
+  function aggiungiTarget(att, dati, attiva) {
     var corrente = (att.target || []).filter(function (x) { return x.stato === 'attivo'; })[0];
+    var d = typeof dati === 'object' && dati ? dati : { testo: dati };
     var t = {
-      id: nuovoId('tg'), testo: String(testo).trim(),
+      id: nuovoId('tg'), testo: String(d.testo || '').trim(),
       stato: attiva && !corrente ? 'attivo' : 'pianificato',
       inizio: null, fine: null, origine: 'app', modificato: new Date().toISOString()
     };
+    if (d.setId) { t.setId = String(d.setId); if (d.mode) t.mode = String(d.mode); }
     (att.target || (att.target = [])).push(t);
     att.modificato = t.modificato;
     return t;
@@ -208,7 +222,7 @@
   return {
     STATI_TARGET: STATI_TARGET,
     nuovoId: nuovoId, giorno: giorno, oggi: oggi,
-    programma: programma, attivita: attivita, nomeSet: nomeSet,
+    programma: programma, attivita: attivita, nomeSet: nomeSet, modoTarget: modoTarget,
     targetCorrente: targetCorrente, prossimoTarget: prossimoTarget,
     sedute: sedute, criterioRaggiunto: criterioRaggiunto, seduta: seduta,
     nuovaAttivita: nuovaAttivita, aggiungiTarget: aggiungiTarget,

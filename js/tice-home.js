@@ -45,7 +45,8 @@
         if (!pazienti().length) state.patients = await DB.getAllPatients();
     }
     async function salvaPaziente(p) {
-        await DB.savePatient(p);
+        T.salvandoQui = true;
+        try { await DB.savePatient(p); } finally { T.salvandoQui = false; }
         // se il resto dell'app ha ricaricato l'elenco nel frattempo, rimette questo oggetto
         const i = state.patients.findIndex((x) => x.id === p.id);
         if (i >= 0) state.patients[i] = p; else state.patients.push(p);
@@ -238,6 +239,9 @@
         const soglia = (att.criterio && att.criterio.soglia) || 90;
         const tipo = (v && v.sessionType) || att.sessionType;
         const aCriterio = !att.temporanea && t && t.stato === 'attivo' && P.criterioRaggiunto(P.sedute(p, att, t), att.criterio);
+        const giocabile = t && t.setId && setArchivio().some((x) => x.id === t.setId);
+        const giaOggi = !att.temporanea && t ? P.sedute(p, att, t).filter((x) => P.giorno(x.date) === b.data) : [];
+        const oggiV = giaOggi.reduce((n, x) => n + (x.correct || 0), 0), oggiT = giaOggi.reduce((n, x) => n + (x.total || 0), 0);
         const prev = previsione(p, att, v);
         return h`<div class="att ${haDati(v) ? 'con-dati' : ''}" data-att="${att.id}">
             <button class="att-testa" data-a="apri-att" data-id="${att.id}" aria-expanded="${aperta ? 'true' : 'false'}">
@@ -249,12 +253,15 @@
                         ${mant ? h` <span class="pill arancio" title="Il target ha già raggiunto il criterio: si registra come mantenimento finché non si apre il prossimo">mantenimento</span>` : ''}
                         ${aCriterio ? h` <span class="pill verde">${icona('flag-checkered')} criterio</span>` : ''}
                     </span>
-                    ${t ? h`<span class="target">${t.testo}</span>` : (!att.temporanea ? h`<span class="target"><i>Nessun target in corso: aggiungilo dal programma.</i></span>` : '')}
+                    ${t ? h`<span class="target">${t.setId ? h`${icona(giocabile ? 'layer-group' : 'triangle-exclamation')} ` : ''}${t.testo}${t.setId ? h` · ${etichettaModo(P.modoTarget(att, t))}` : ''}</span>` : (!att.temporanea ? h`<span class="target"><i>Nessun target in corso: aggiungilo dal programma.</i></span>` : '')}
+                    ${oggiT ? h`<span class="target">${icona('circle-check')} già oggi: ${oggiV}/${oggiT} (${Math.round(100 * oggiV / oggiT)}%)</span>` : ''}
                 </span>
                 <span class="conto">${tot ? h`<b class="${classePct(pct, soglia)}">${pct}%</b><br><span class="piccolo sotto">${v.v}/${tot}${att.prove ? ' di ' + att.prove : ''}</span>`
                     : h`<span class="piccolo sotto">${att.prove ? att.prove + ' prove' : 'tocca'}</span>`}</span>
             </button>
             ${aperta ? h`<div class="att-corpo">
+                ${giocabile ? h`<button class="bt primario largo" style="margin-bottom:10px" data-a="gioca" data-id="${att.id}">${icona('play')} Somministra con l'app · ${etichettaModo(P.modoTarget(att, t))}</button>` : ''}
+                ${t && t.setId && !giocabile ? h`<p class="sotto piccolo">Il set «${t.testo}» non è su questo dispositivo: scaricalo dai materiali o segna qui sotto.</p>` : ''}
                 <div class="tasti">
                     <button class="tasto v" data-a="segna" data-id="${att.id}" data-r="V">✓<small>Corretta</small></button>
                     <button class="tasto p" data-a="segna" data-id="${att.id}" data-r="P">P<small>${att.nomeP || (tipo === 'timedelay' ? 'Promptata' : 'Con aiuto')}</small></button>
@@ -287,7 +294,9 @@
         if (!p) { T.vista = 'bambini'; return vistaBambini(); }
         const b = bozza(p.id);
         const lista = attivitaSeduta(p);
-        if (lista.length === 1 && T.aperte[lista[0].id] === undefined) T.aperte[lista[0].id] = true;
+        const unica = lista.length === 1 && lista[0];
+        const unicaGioco = unica && !unica.temporanea && schermoGrande() && ((P.targetCorrente(unica) || {}).target || {}).setId;
+        if (unica && !unicaGioco && T.aperte[unica.id] === undefined) T.aperte[unica.id] = true;
         const perArea = [];
         lista.forEach((a) => {
             const area = a.temporanea ? 'Aggiunte per oggi' : (a.area || 'Altre attività');
@@ -510,6 +519,14 @@
         },
         'apri-att': (b) => {
             const id = b.dataset.id;
+            // Su tablet e computer un'attività collegata a un set si apre direttamente nel gioco
+            const p0 = paz(T.pid), a0 = attivitaDi(p0, id);
+            const c0 = a0 && !a0.temporanea && P.targetCorrente(a0);
+            const v0 = bozza(p0.id).voci[id];
+            if (c0 && c0.target.setId && !haDati(v0) && schermoGrande() && setArchivio().some((x) => x.id === c0.target.setId)) {
+                lancia(p0, a0, c0.target);
+                return;
+            }
             T.aperte[id] = !T.aperte[id];
             aggiornaScheda(paz(T.pid), id);
         },
@@ -524,6 +541,13 @@
             if (navigator.vibrate) navigator.vibrate(r === 'V' ? 8 : 18);
             salvaBozza();
             aggiornaScheda(p, att.id);
+        },
+        gioca: (b) => {
+            const p = paz(T.pid);
+            const att = attivitaDi(p, b.dataset.id);
+            const v = bozza(p.id).voci[att.id];
+            const t = v && v.targetId ? att.target.find((x) => x.id === v.targetId) : (P.targetCorrente(att) || {}).target;
+            if (t) lancia(p, att, t);
         },
         annulla: (b) => {
             const p = paz(T.pid);
@@ -691,6 +715,11 @@
             const att = P.nuovaAttivita(p, Object.assign({}, r, { target: null }));
             righe.forEach((x, i) => P.aggiungiTarget(att, x, i === 0));
             await salvaPaziente(p);
+            if (!righe.length) {
+                // nessun target scritto: si sceglie subito da set, liste o a mano
+                const rt = await moduloTarget(att);
+                if (rt) { aggiungiTargetDaModulo(att, rt); await salvaPaziente(p); }
+            }
             T.mantieniScroll = true;
             disegna();
         },
@@ -724,11 +753,9 @@
         'nuovo-target': async (b) => {
             const p = paz(T.pid);
             const att = P.attivita(p, b.dataset.id);
-            const r = await foglio(h`<form><h2>Nuovi target · ${att.nome}</h2>
-                <label class="campo"><span>Un target per riga, nell'ordine in cui lavorarli</span><textarea name="t" required autofocus placeholder="es. Animali: cane, gatto, mucca"></textarea></label>
-                <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Aggiungi</button></div></form>`);
+            const r = await moduloTarget(att);
             if (!r) return;
-            String(r.t).split('\n').map((x) => x.trim()).filter(Boolean).forEach((x) => P.aggiungiTarget(att, x, true));
+            aggiungiTargetDaModulo(att, r);
             await salvaPaziente(p);
             T.mantieniScroll = true;
             disegna();
@@ -745,12 +772,14 @@
                     ${t.stato !== 'attivo' ? h`<button class="opzione" data-foglio="corrente">${icona('play')}<span class="corpo">Lavora su questo target<small>Diventa quello della presa dati</small></span></button>` : ''}
                     ${t.stato === 'attivo' ? h`<button class="opzione" data-foglio="criterio">${icona('flag-checkered')}<span class="corpo">Chiudi a criterio<small>E passa al successivo</small></span></button>` : ''}
                     ${t.stato === 'attivo' || t.stato === 'pianificato' ? h`<button class="opzione" data-foglio="repertorio">${icona('star')}<span class="corpo">Già in repertorio</span></button>` : ''}
-                    <button class="opzione" data-foglio="testo">${icona('pen')}<span class="corpo">Modifica il testo</span></button>
+                    ${t.setId ? h`<button class="opzione" data-foglio="gioca">${icona('play')}<span class="corpo">Somministra con l'app<small>${etichettaModo(P.modoTarget(att, t))} · set ${t.testo}</small></span></button>`
+                        : h`<button class="opzione" data-foglio="testo">${icona('pen')}<span class="corpo">Modifica il testo</span></button>`}
                     <button class="opzione" data-foglio="su">${icona('arrow-up')}<span class="corpo">Sposta prima</span></button>
                     <button class="opzione" data-foglio="giu">${icona('arrow-down')}<span class="corpo">Sposta dopo</span></button>
                     ${!n ? h`<button class="opzione" data-foglio="elimina">${icona('trash')}<span class="corpo">Elimina</span></button>` : ''}
                 </div><div class="bottoni"><button class="bt" data-foglio="chiudi">Chiudi</button></div>`);
             if (!r) return;
+            if (r === 'gioca') { lancia(p, att, t); return; }
             if (r === 'corrente') P.rendiCorrente(att, t.id);
             else if (r === 'criterio') { await proponiProssimo(p, att, t, crit); T.mantieniScroll = true; disegna(); return; }
             else if (r === 'repertorio') P.chiudiTarget(att, t.id, 'repertorio');
@@ -781,6 +810,70 @@
         }
     };
 
+    // ---------- target: scritti a mano, set dell'archivio, liste del Quaderno ----------
+    const MODI_ESCLUSI = ['quaderno', 'quaderno_task', 'pool_random', 'pool_intraverbal'];
+    const eLista = (s) => (s.modes || []).some((m) => m === 'quaderno' || m === 'quaderno_task');
+    function setArchivio() {
+        return ((typeof state !== 'undefined' && state.savedSets) || []).filter((s) => !eLista(s))
+            .sort((a, b) => String(a.cat || a.category || '').localeCompare(String(b.cat || b.category || ''), 'it') || String(a.name).localeCompare(String(b.name), 'it'));
+    }
+    function listeQuaderno() {
+        return ((typeof state !== 'undefined' && state.savedSets) || []).filter((s) => (s.modes || []).includes('quaderno') && !(s.modes || []).includes('quaderno_task'));
+    }
+    const etichettaModo = (m) => (typeof getModeLabel === 'function' ? getModeLabel(m) : m);
+    function moduloTarget(att) {
+        const sets = setArchivio();
+        const liste = listeQuaderno();
+        const modi = [...new Set(sets.flatMap((x) => x.modes || []))].filter((m) => !MODI_ESCLUSI.includes(m));
+        const modoPred = att.mode || (modi.includes('tact') ? 'tact' : modi[0]);
+        return foglio(h`<form><h2>Nuovi target · ${att.nome}</h2>
+            <label class="campo"><span>Scritti a mano, uno per riga, nell'ordine in cui lavorarli</span><textarea name="t" placeholder="es. Battere le mani&#10;Toccare la testa"></textarea></label>
+            ${sets.length ? h`<h3>Dall'archivio dei set</h3>
+                <p class="sotto piccolo">Su tablet e computer, toccando l'attività si apre direttamente il gioco con il set, pronto da somministrare.</p>
+                <input type="search" placeholder="Cerca un set" data-filtro-set autocomplete="off" style="margin-bottom:6px">
+                <div class="opzioni" style="max-height:34vh;overflow-y:auto" data-elenco-set>
+                    ${sets.map((x) => h`<label class="opzione" data-nome="${String(x.name + ' ' + (x.cat || x.category || '')).toLowerCase()}">
+                        <input type="checkbox" name="s" value="${x.id}"><span class="corpo">${x.name}<small>${x.cat || x.category || ''}${x.items ? ' · ' + x.items.length + ' elementi' : ''}</small></span></label>`)}
+                </div>
+                <label class="campo" style="margin-top:8px"><span>Con il gioco</span><select name="modo">
+                    ${modi.map((m) => h`<option value="${m}" ${m === modoPred ? grezzo('selected') : ''}>${etichettaModo(m)}</option>`)}</select></label>` : ''}
+            ${liste.length ? h`<label class="campo"><span>Da una lista del Quaderno</span><select name="lista"><option value="">—</option>
+                ${liste.map((x) => h`<option value="${x.id}">${x.name} (${(x.items || []).length})</option>`)}</select></label>` : ''}
+            <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Aggiungi</button></div></form>`,
+        {
+            invia: (f) => {
+                const fd = new FormData(f);
+                return { t: fd.get('t') || '', set: fd.getAll('s'), modo: fd.get('modo') || '', lista: fd.get('lista') || '' };
+            },
+            dopo: (f) => {
+                const filtro = f.querySelector('[data-filtro-set]');
+                if (filtro) filtro.addEventListener('input', () => {
+                    const q = filtro.value.trim().toLowerCase();
+                    f.querySelectorAll('[data-elenco-set] > label').forEach((l) => { l.hidden = !!q && !l.dataset.nome.includes(q) && !l.querySelector('input').checked; });
+                });
+            }
+        });
+    }
+    function aggiungiTargetDaModulo(att, r) {
+        String(r.t || '').split('\n').map((x) => x.trim()).filter(Boolean).forEach((x) => P.aggiungiTarget(att, x, true));
+        const sets = setArchivio();
+        r.set.forEach((id) => {
+            const x = sets.find((y) => y.id === id);
+            if (!x) return;
+            const modi = (x.modes || []).filter((m) => !MODI_ESCLUSI.includes(m));
+            const modo = modi.includes(r.modo) ? r.modo : (modi[0] || r.modo);
+            P.aggiungiTarget(att, { testo: x.name, setId: x.id, mode: modo }, true);
+            if (!att.mode && modo) att.mode = modo;
+        });
+        if (r.lista) {
+            const l = listeQuaderno().find((y) => y.id === r.lista);
+            ((l && l.items) || []).forEach((it) => {
+                const n = String(it.name || it.label || '').trim();
+                if (n) P.aggiungiTarget(att, n, true);
+            });
+        }
+    }
+
     // Il nome delle sedute segue quello dell'attività e del target
     function rinominaSedute(p, att) {
         const perTarget = {};
@@ -788,6 +881,7 @@
         (p.history || []).forEach((s) => {
             if (s.attivitaId !== att.id) return;
             const t = s.targetId ? perTarget[s.targetId] : null;
+            if (t && t.setId) return; // le sedute di un set portano il nome del set
             s.setName = P.nomeSet(att, t);
             s.setCat = att.area || s.setCat;
         });
@@ -809,7 +903,8 @@
                 <label class="campo"><span>Giorni di fila</span><input name="sedute" type="number" min="1" max="10" inputmode="numeric" value="${a.criterio.sedute}"></label>
                 <label class="campo"><span>Prove</span><input name="prove" type="number" min="1" max="200" inputmode="numeric" value="${a.prove || ''}" placeholder="—"></label>
             </div>
-            ${att ? '' : h`<label class="campo"><span>Target, uno per riga (il primo è quello da cui si parte)</span><textarea name="target" placeholder="es. Animali: cane, gatto&#10;Frutta: mela, banana"></textarea></label>`}
+            ${att ? '' : h`<label class="campo"><span>Target, uno per riga (il primo è quello da cui si parte)</span><textarea name="target" placeholder="es. Animali: cane, gatto&#10;Frutta: mela, banana"></textarea>
+                <span class="sotto piccolo">Lascia vuoto per sceglierli dall'archivio dei set o da una lista del Quaderno.</span></label>`}
             ${att ? h`<div class="opzioni" style="margin-top:6px">
                 ${att.stato === 'attivo' ? h`<button type="button" class="opzione" data-foglio="sospeso">${icona('pause')}<span class="corpo">Sospendi<small>Non compare più nella presa dati</small></span></button>
                     <button type="button" class="opzione" data-foglio="terminato">${icona('flag-checkered')}<span class="corpo">Termina l'attività</span></button>`
@@ -937,6 +1032,86 @@
         disegna();
     }
 
+    // ---------- somministrare con l'app un target collegato a un set ----------
+    const schermoGrande = () => window.matchMedia('(min-width: 768px)').matches;
+    function lancia(p, att, t) {
+        const modo = P.modoTarget(att, t);
+        const set = setArchivio().find((x) => x.id === t.setId);
+        if (!set || !modo) { avviso('Set o gioco non disponibili su questo dispositivo.', 'errore'); return; }
+        const v = bozza(p.id).voci[att.id];
+        const tipo = (v && v.sessionType) || att.sessionType || 'independent';
+        T.lancio = { pid: p.id, attId: att.id, targetId: t.id, setId: t.setId, mode: modo, n: (p.history || []).length, nome: att.nome, testo: t.testo };
+        salvaLancio();
+        chiudi();
+        try {
+            if (typeof setGlobalPatient === 'function') setGlobalPatient(p.id);
+            if (typeof populateGlobalPatientSelect === 'function') populateGlobalPatientSelect();
+            selectModeFromDropdown(modo);
+            const campo = document.getElementById('session-type-select');
+            if (campo) { campo.value = tipo === 'timedelay' ? 'timedelay' : 'independent'; onSessionTypeChange(); }
+            const sec = document.getElementById('td-seconds-ctrl');
+            if (sec && (t.tdSeconds || att.tdSeconds)) sec.value = t.tdSeconds || att.tdSeconds;
+            selectSetFromDropdown(t.setId);
+        } catch (e) {
+            console.error(e);
+            avviso('Non sono riuscito ad aprire il gioco: ' + e.message, 'errore');
+        }
+        aggiornaLinguetta();
+    }
+    function salvaLancio() {
+        try { if (T.lancio) sessionStorage.setItem('tice_lancio', JSON.stringify(T.lancio)); else sessionStorage.removeItem('tice_lancio'); } catch (e) { /* niente */ }
+    }
+    function aggiornaLinguetta() {
+        let l = document.getElementById('tice-linguetta');
+        if (!l) {
+            l = document.createElement('button');
+            l.id = 'tice-linguetta';
+            l.className = 'tice-linguetta';
+            l.type = 'button';
+            l.addEventListener('click', () => apri());
+            // trascinandola verso il basso si apre la presa dati, come una tendina
+            let y0 = null;
+            l.addEventListener('touchstart', (e) => { y0 = e.touches[0].clientY; }, { passive: true });
+            l.addEventListener('touchmove', (e) => { if (y0 != null && e.touches[0].clientY - y0 > 30) { y0 = null; apri(); } }, { passive: true });
+            document.body.appendChild(l);
+        }
+        const L = T.lancio;
+        l.innerHTML = String(h`${icona('chevron-down')} <b>Presa dati</b>${L ? h` <span>· ${L.nome} · ${L.testo}</span>` : ''}`);
+        l.hidden = !radice().hidden;
+    }
+    // Le sedute salvate dal gioco lanciato da qui vengono collegate all'attività
+    // e al target del programma; poi si torna alla presa dati.
+    function agganciaSalvataggi() {
+        if (typeof DB === 'undefined' || DB._tice) return;
+        const originale = DB.savePatient.bind(DB);
+        DB._tice = true;
+        DB.savePatient = async (p) => {
+            const L = T.lancio;
+            let nuove = [];
+            if (L && p && p.id === L.pid && !T.salvandoQui) {
+                nuove = (p.history || []).slice(L.n).filter((s) => !s.attivitaId && (s.setId === L.setId || s.mode === L.mode));
+                nuove.forEach((s) => { s.attivitaId = L.attId; s.targetId = L.targetId; s.fonte = 'app-gioco'; });
+            }
+            const r = await originale(p);
+            if (nuove.length) {
+                T.lancio = null;
+                salvaLancio();
+                const tot = nuove.reduce((n, s) => n + (s.total || 0), 0), ok = nuove.reduce((n, s) => n + (s.correct || 0), 0);
+                setTimeout(async () => {
+                    await apri();
+                    vai('seduta', L.pid);
+                    avviso(`${L.nome}: ${ok}/${tot} salvato dal gioco`);
+                    const pp = paz(L.pid), att = pp && P.attivita(pp, L.attId), t = att && att.target.find((x) => x.id === L.targetId);
+                    if (t && t.stato === 'attivo') {
+                        const data = P.criterioRaggiunto(P.sedute(pp, att, t), att.criterio);
+                        if (data === P.oggi()) { await proponiProssimo(pp, att, t, data); disegna(); }
+                    }
+                }, 350);
+            }
+            return r;
+        };
+    }
+
     // Cartelle, archivio e impostazioni aperti da qui: alla chiusura si torna qui
     let tornaQui = false;
     function apriDaQui(apertura) { chiudi(); tornaQui = true; return apertura(); }
@@ -996,12 +1171,14 @@
         r.hidden = false;
         document.body.classList.add('tice-aperto');
         disegna();
+        aggiornaLinguetta();
     }
     function chiudi() {
         salvaBozza();
         radice().hidden = true;
         document.body.classList.remove('tice-aperto');
         if (typeof populateGlobalPatientSelect === 'function') populateGlobalPatientSelect();
+        aggiornaLinguetta();
     }
     async function avvia() {
         const r = radice();
@@ -1012,7 +1189,8 @@
         r.addEventListener('toggle', (e) => { const d = e.target; if (d.dataset && d.dataset.chiusi) T.chiusiAperti[d.dataset.chiusi] = d.open; }, true);
         window.addEventListener('pagehide', salvaBozza);
         document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') salvaBozza(); });
-        // Tornando dalla cartella clinica o dai giochi, i dati possono essere cambiati
+        agganciaSalvataggi();
+        try { T.lancio = JSON.parse(sessionStorage.getItem('tice_lancio') || 'null'); } catch (e) { T.lancio = null; }
         await apri();
     }
 
