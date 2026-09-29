@@ -32,6 +32,9 @@ jobs:
       contents: write
     env:
       NATIVE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.native || 'false' }}
+      # Edizione Centro TICE: APK e release separati da quelli dell'app personale
+      APK_NOME: ${{ github.ref_name == 'claude/quaderno-tice' && 'centro-tice' || 'terapia-attiva' }}
+      APK_TAG: ${{ github.ref_name == 'claude/quaderno-tice' && 'centro-tice-latest' || 'tablet-latest' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -167,8 +170,8 @@ jobs:
           mkdir -p out
           SHORT=$(git rev-parse --short HEAD)
           STAMP=$(date -u +%Y%m%d-%H%M)
-          cp android/app/build/outputs/apk/debug/app-debug.apk "out/terapia-attiva.apk"
-          cp android/app/build/outputs/apk/debug/app-debug.apk "out/terapia-attiva-${STAMP}-${SHORT}.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "out/${APK_NOME}.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "out/${APK_NOME}-${STAMP}-${SHORT}.apk"
           echo "APK_STAMP=${STAMP}" >> $GITHUB_ENV
           echo "APK_SHORT=${SHORT}" >> $GITHUB_ENV
           ls -la out/
@@ -176,14 +179,14 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: terapia-attiva-apk
+          name: ${{ env.APK_NOME }}-apk
           path: out/*.apk
 
       - name: Publish to rolling release (tablet-latest)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: tablet-latest
-          name: 'App tablet — ultima build'
+          tag_name: ${{ env.APK_TAG }}
+          name: ${{ env.APK_NOME == 'centro-tice' && 'Centro TICE — ultima build' || 'App tablet — ultima build' }}
           prerelease: true
           body: |
             APK aggiornato automaticamente.
@@ -192,7 +195,7 @@ jobs:
             - Branch: `${{ github.ref_name }}`
             - Moduli nativi: `${{ env.NATIVE }}`
 
-            **Scarica `terapia-attiva.apk`** qui sotto e installalo sul tablet:
+            **Scarica `${{ env.APK_NOME }}.apk`** qui sotto e installalo sul tablet:
             aggiorna l'app conservando dati e modelli (stessa firma).
           files: out/*.apk
           fail_on_unmatched_files: true

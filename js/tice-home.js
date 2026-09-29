@@ -173,7 +173,7 @@
     function barra({ indietro, titolo, sotto, destra }) {
         return h`<header class="tice-barra">
             ${indietro ? h`<button class="ib" data-a="${indietro}" aria-label="Indietro">${icona('arrow-left')}</button>`
-                : h`<button class="marchio" data-a="vai-bambini" aria-label="Centro TICE"><img src="img/tice/logo-bianco.png" alt="TICE"></button>`}
+                : h`<button class="marchio" data-a="vai-bambini" aria-label="Centro TICE"><img src="img/tice/logo-bianco.svg" alt="TICE"></button>`}
             <div class="titolo">${titolo}${sotto ? h`<span class="sotto-titolo" ${sotto.azione ? grezzo(`data-a="${sotto.azione}" style="cursor:pointer"`) : ''}>${sotto.testo}</span>` : ''}</div>
             ${EST.chip ? EST.chip() : ''}
             ${destra || ''}

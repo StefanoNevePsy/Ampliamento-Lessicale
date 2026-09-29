@@ -39,19 +39,19 @@
     ],
     "mac": {
       "category": "public.app-category.medical",
-      "icon": "img/tice/icona-512.png",
+      "icon": "build/icon.icns",
       "target": [
         "dmg"
       ]
     },
     "win": {
-      "icon": "img/tice/icona-512.png",
+      "icon": "build/icon.ico",
       "target": [
         "nsis"
       ]
     },
     "linux": {
-      "icon": "img/tice/icona-512.png",
+      "icon": "build/icon.png",
       "target": [
         "AppImage"
       ]
@@ -59,7 +59,8 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
-    }
+    },
+    "afterPack": "build/dopo-impacchettamento.js"
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",

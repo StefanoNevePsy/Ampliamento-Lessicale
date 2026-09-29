@@ -1,6 +1,6 @@
 {
-  "appId": "com.stimolatore.clinico",
-  "appName": "Terapia Attiva",
+  "appId": "it.centrotice.app",
+  "appName": "Centro TICE",
   "webDir": "www",
   "server": {
     "androidScheme": "https"

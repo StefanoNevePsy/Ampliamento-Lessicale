@@ -207,6 +207,28 @@ file; quanto registrato o cambiato nell'app resta.
   Electron e servirebbe il login nativo di Android. Su telefoni e tablet Android si
   usa la PWA.
 
+## Logo e icone
+
+Il logo è ridisegnato con forme esatte dal tracciato fornito dal centro
+(`img/tice/logo-tracciato-originale.svg`): stesse proporzioni, differenza sotto lo
+0,5% dei pixel, ma bordi netti a qualunque dimensione. È antracite (o bianco sugli
+sfondi scuri) con il punto della "i" arancio. Tutte le icone escono da
+`tools/genera-icone.js`:
+- **PWA**: icone normali e "maskable", icona per iPhone, favicon SVG e PNG.
+- **Android**: icona adattiva (sfondo antracite, logo nella zona sicura di 66 dp)
+  con livello monocromatico, che il sistema colora con Material You; icone
+  classiche per le versioni vecchie.
+- **macOS**:
+  - `icon.icns` per macOS 15 e precedenti;
+  - `CentroTICE.icon` (Icon Composer) per macOS 26 e successivi, da cui il sistema
+    ricava le versioni chiara, scura, trasparente e colorata. La compila `actool`
+    di Xcode 26 durante la creazione dell'installatore
+    (`build/dopo-impacchettamento.js`); senza Xcode 26 resta l'icona classica.
+- **Windows**: `icon.ico` con tutte le misure.
+
+L'APK e l'app desktop di questa branch si chiamano **Centro TICE** (identificativo
+`it.centrotice.app`) e si installano accanto all'app personale.
+
 ## Materiali
 
 I set si pubblicano sul Drive del centro e le colleghe li scaricano una volta.
@@ -223,6 +245,7 @@ aggiornato scarica solo le novità. Niente SVG (possono contenere script).
 | `js/tice-cifra.js`, `js/tice-unisci.js` | cifratura, fusione |
 | `js/tice-programma.js`, `js/tice-import.js`, `js/numbers-reader.js` | programma, import Numbers |
 | `tice-config.js` | indirizzo del custode e Client ID Google |
+| `tools/genera-icone.js` | logo e icone da un'unica geometria: `img/tice/` (app, PWA, favicon), `build/` (macOS, Windows, Android adattive e Material You, icona a livelli `CentroTICE.icon` per macOS 26+) |
 | `custode/` | il custode: `core.js` (regole), `Code.gs` (Google), `custode-completo.gs` (i due insieme, da incollare), `appsscript.json` |
 | `strumenti/apri-dati.html`, `tools/decifra_tice.py` | aprire i dati senza l'app |
 | `tools/custode-mock.js` | custode locale per provare senza Google |
