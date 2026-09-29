@@ -7,59 +7,69 @@
  *   - su Google Apps Script (Code.gs le passa Drive, LockService, UrlFetch);
  *   - in locale con tools/custode-mock.js, dove viene testata.
  *
- * Qui dentro stanno le regole che contano davvero per la sicurezza: chi e'
- * autorizzato, a quali pazienti, cosa puo' modificare. L'app mostra; decide il
- * custode.
+ * Qui dentro stanno le regole che contano per la sicurezza: chi e'
+ * autorizzato, a quali pazienti, cosa puo' fare. L'app mostra; decide il custode.
+ *
+ * I dati dei pazienti arrivano GIA' CIFRATI dall'app (AES-256-GCM, con la
+ * chiave del centro che il custode non conosce): qui si vedono solo buste
+ * opache con qualche metadato (identificativo, versione, chi e quando ha
+ * salvato). Chi apre il Drive, compresi gli amministratori del dominio, vede
+ * solo quelle. Per ogni paziente il custode tiene anche le versioni precedenti.
  *
  * Tutto e' sincrono di proposito: in Apps Script lo sono anche Drive e UrlFetch.
  */
 var QT = (function () {
   'use strict';
 
-  var SCHEMA = 1;
+  var SCHEMA = 2;
 
   // Chi puo' fare cosa. E' l'unico posto da cambiare per modificare i ruoli.
+  // "programmi" e "importa" sono rispettati dall'app: il custode non legge il
+  // contenuto cifrato, quindi controlla chi puo' salvare un paziente, non cosa.
   var PERMESSI = {
     admin: {
       vediTutti: true, registraSedute: true, modificaSeduteAltrui: true,
-      programmi: true, creaPazienti: true, importa: true,
+      programmi: true, creaPazienti: true, importa: true, eliminaPazienti: true,
       pubblicaMateriali: true, eliminaMateriali: true, gestisciAccessi: true,
     },
     professionista: {
       vediTutti: false, registraSedute: true, modificaSeduteAltrui: true,
-      programmi: true, creaPazienti: true, importa: false,
+      programmi: true, creaPazienti: true, importa: true, eliminaPazienti: false,
       pubblicaMateriali: true, eliminaMateriali: false, gestisciAccessi: false,
     },
     tirocinante: {
       vediTutti: false, registraSedute: true, modificaSeduteAltrui: false,
-      programmi: false, creaPazienti: false, importa: false,
+      programmi: false, creaPazienti: false, importa: false, eliminaPazienti: false,
       pubblicaMateriali: false, eliminaMateriali: false, gestisciAccessi: false,
     },
   };
   var RUOLI = Object.keys(PERMESSI);
 
+  // Versioni precedenti di ogni paziente: le ultime RECENTI, piu' l'ultima di
+  // ciascun giorno per GIORNI giorni. Un errore si recupera anche settimane dopo.
+  var VERSIONI = { recenti: 20, giorni: 60 };
+
   var P = {
     accessi: '_config/accessi.json',
+    cifratura: '_config/cifratura.json',
     elenco: 'Pazienti/_elenco.json',
     paziente: function (pid) { return 'Pazienti/' + pid + '/paziente.json'; },
-    indiceSedute: function (pid) { return 'Pazienti/' + pid + '/_sedute.json'; },
-    cartellaSedute: function (pid) { return 'Pazienti/' + pid + '/sedute'; },
-    seduta: function (pid, sid) { return 'Pazienti/' + pid + '/sedute/' + sid + '.json'; },
+    versioni: function (pid) { return 'Pazienti/' + pid + '/versioni'; },
+    versione: function (pid, v) { return 'Pazienti/' + pid + '/versioni/v' + ('00000000' + v).slice(-8) + '.json'; },
     indiceMateriali: 'Materiali/indice.json',
     set: function (id) { return 'Materiali/set/' + id + '.json'; },
     immagine: function (hash, ext) { return 'Materiali/immagini/' + hash + '.' + ext; },
   };
 
   var RE = {
-    pz: /^pz_[A-Za-z0-9]{6,40}$/,
-    sd: /^sd_[A-Za-z0-9]{6,40}$/,
-    pr: /^pr_[A-Za-z0-9]{6,40}$/,
-    st: /^st_[A-Za-z0-9]{6,40}$/,
+    pz: /^[A-Za-z0-9][A-Za-z0-9_-]{5,63}$/,
     set: /^[A-Za-z0-9_-]{1,80}$/,
     hash: /^[a-f0-9]{64}$/,
     data: /^\d{4}-\d{2}-\d{2}$/,
     email: /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/,
-    sequenza: /^[VPX]*$/,
+    kid: /^[a-z0-9-]{1,40}$/,
+    b64: /^[A-Za-z0-9+/]*={0,2}$/,
+    versione: /^v(\d{8})\.json$/,
     dataUrl: /^data:((?:image\/(?:png|jpeg|webp|gif))|(?:audio\/(?:mpeg|mp4|webm|ogg|wav|x-m4a)));base64,([A-Za-z0-9+/=]+)$/,
   };
   // Tipi ammessi nell'archivio dei materiali. Niente SVG: puo' contenere script.
@@ -101,16 +111,7 @@ var QT = (function () {
     }
     return v;
   }
-  function numeroV(v, min, max, campo, nullable) {
-    if (v === null || v === undefined) {
-      if (nullable) return null;
-      throw err('richiesta-non-valida', 'Manca ' + campo);
-    }
-    if (typeof v !== 'number' || !isFinite(v) || v < min || v > max) {
-      throw err('richiesta-non-valida', campo + ' deve essere un numero tra ' + min + ' e ' + max);
-    }
-    return v;
-  }
+
   function idV(v, re, campo) {
     if (typeof v !== 'string' || !re.test(v)) throw err('richiesta-non-valida', campo + ' non valido');
     return v;
@@ -120,11 +121,7 @@ var QT = (function () {
     if (typeof v !== 'string' || !RE.data.test(v)) throw err('richiesta-non-valida', campo + ' deve essere AAAA-MM-GG');
     return v;
   }
-  function isoV(v, campo) {
-    if (v === null || v === undefined || v === '') return null;
-    if (typeof v !== 'string' || v.length > 40 || isNaN(Date.parse(v))) throw err('richiesta-non-valida', campo + ' non è una data/ora valida');
-    return v;
-  }
+
   function unoTra(v, valori, campo, predefinito) {
     if ((v === undefined || v === null) && predefinito !== undefined) return predefinito;
     if (valori.indexOf(v) < 0) throw err('richiesta-non-valida', campo + ' deve essere uno tra: ' + valori.join(', '));
@@ -141,113 +138,32 @@ var QT = (function () {
     return v;
   }
 
-  function validaSTO(s, i) {
-    oggettoV(s, 'sto[' + i + ']');
-    return {
-      id: idV(s.id, RE.st, 'sto.id'),
-      testo: testoV(s.testo, 1000, false, 'sto.testo') || '',
-      stato: unoTra(s.stato, ['attivo', 'pianificato', 'criterio', 'repertorio', 'chiuso', 'sospeso'], 'sto.stato', 'attivo'),
-      inizio: dataV(s.inizio, 'sto.inizio', true),
-      fine: dataV(s.fine, 'sto.fine', true),
-    };
+  // Busta cifrata prodotta dall'app: il custode ne controlla solo la forma.
+  function bustaV(b, maxCaratteri, campo) {
+    oggettoV(b, campo);
+    if (b.v !== 1 || b.alg !== 'A256GCM') throw err('richiesta-non-valida', campo + ': formato di cifratura non supportato');
+    var kid = idV(b.kid, RE.kid, campo + '.kid');
+    var iv = testoV(b.iv, 24, true, campo + '.iv');
+    var dati = testoV(b.dati, maxCaratteri, true, campo + '.dati');
+    if (!RE.b64.test(iv) || iv.length !== 16) throw err('richiesta-non-valida', campo + '.iv non valido');
+    if (!RE.b64.test(dati) || dati.length % 4) throw err('richiesta-non-valida', campo + '.dati non valido');
+    return { v: 1, alg: 'A256GCM', kid: kid, iv: iv, comp: unoTra(b.comp, ['gzip', 'no'], campo + '.comp', 'no'), dati: dati };
   }
+  var MAX_PAZIENTE = 30 * 1024 * 1024;   // caratteri base64 (~22 MB): anni di sedute
+  var MAX_ETICHETTA = 4096;
 
-  function validaProgramma(p, i) {
-    oggettoV(p, 'programmi[' + i + ']');
-    var crit = oggettoV(p.criterio || { soglia: 90, sedute: 2 }, 'criterio');
-    var evento = null;
-    if (p.evento !== null && p.evento !== undefined) {
-      var ev = listaV(p.evento, 2, 'evento');
-      if (ev.length !== 2) throw err('richiesta-non-valida', 'evento deve avere due etichette');
-      evento = [testoV(ev[0], 40, true, 'evento'), testoV(ev[1], 40, true, 'evento')];
-    }
-    return {
-      id: idV(p.id, RE.pr, 'programma.id'),
-      area: testoV(p.area, 60, false, 'area'),
-      nome: testoV(p.nome, 120, true, 'programma.nome'),
-      descrizione: testoV(p.descrizione, 500, false, 'descrizione') || '',
-      criterio: {
-        soglia: interoV(crit.soglia, 1, 100, 'criterio.soglia'),
-        sedute: interoV(crit.sedute, 1, 10, 'criterio.sedute'),
-      },
-      strategia: unoTra(p.strategia, ['indipendente', 'timedelay'], 'strategia', 'indipendente'),
-      prove: interoV(p.prove, 1, 1000, 'prove', true),
-      scala: unoTra(p.scala, ['conteggio', 'percentuale'], 'scala', 'conteggio'),
-      evento: evento,
-      nomeP: testoV(p.nomeP, 30, false, 'nomeP'),
-      stato: unoTra(p.stato, ['attivo', 'terminato', 'sospeso'], 'programma.stato', 'attivo'),
-      sto: listaV(p.sto, 300, 'sto').map(validaSTO),
-    };
-  }
-
-  function validaStorico(r) {
-    oggettoV(r, 'learnUnitStoriche');
-    var o = { data: dataV(r.data, 'storico.data') };
-    ['criteri', 'assessment', 'corrette', 'totali', 'durata'].forEach(function (k) {
-      if (r[k] !== undefined && r[k] !== null) o[k] = numeroV(r[k], 0, 100000, 'storico.' + k);
-    });
-    ['operatori', 'tipologia', 'compilatore', 'fonte'].forEach(function (k) {
-      if (r[k]) o[k] = testoV(r[k], 200, false, 'storico.' + k);
-    });
-    return o;
-  }
-
-  function validaPaziente(p) {
-    oggettoV(p, 'paziente');
+  function validaCifratura(c) {
+    oggettoV(c, 'cifratura');
+    var kdf = oggettoV(c.kdf, 'cifratura.kdf');
+    if (kdf.nome !== 'PBKDF2-SHA256') throw err('richiesta-non-valida', 'Derivazione della chiave non supportata');
+    var sale = testoV(kdf.sale, 100, true, 'sale');
+    if (!RE.b64.test(sale) || sale.length < 22) throw err('richiesta-non-valida', 'sale non valido');
     return {
       schema: SCHEMA,
-      id: idV(p.id, RE.pz, 'paziente.id'),
-      codice: testoV(p.codice, 30, true, 'codice'),
-      etichetta: testoV(p.etichetta, 60, false, 'etichetta') || '',
-      aula: testoV(p.aula, 60, false, 'aula') || '',
-      note: testoV(p.note, 5000, false, 'note') || '',
-      stato: unoTra(p.stato, ['attivo', 'archiviato'], 'paziente.stato', 'attivo'),
-      programmi: listaV(p.programmi, 300, 'programmi').map(validaProgramma),
-      learnUnitStoriche: listaV(p.learnUnitStoriche, 10000, 'learnUnitStoriche').map(validaStorico),
-    };
-  }
-
-  function validaVoce(v, i) {
-    oggettoV(v, 'voci[' + i + ']');
-    var eventi = null;
-    if (v.eventi !== null && v.eventi !== undefined) {
-      var e = listaV(v.eventi, 2, 'eventi');
-      eventi = [interoV(e[0] || 0, 0, 10000, 'eventi'), interoV(e[1] || 0, 0, 10000, 'eventi')];
-    }
-    return {
-      programmaId: idV(v.programmaId, RE.pr, 'voce.programmaId'),
-      stoId: v.stoId ? idV(v.stoId, RE.st, 'voce.stoId') : null,
-      strategia: unoTra(v.strategia, ['indipendente', 'timedelay'], 'voce.strategia', 'indipendente'),
-      scala: unoTra(v.scala, ['conteggio', 'percentuale'], 'voce.scala', 'conteggio'),
-      v: numeroV(v.v, 0, 10000, 'voce.v', true),
-      p: numeroV(v.p, 0, 10000, 'voce.p', true),
-      x: numeroV(v.x, 0, 10000, 'voce.x', true),
-      sequenza: (function () {
-        var s = testoV(v.sequenza, 5000, false, 'voce.sequenza');
-        if (s && !RE.sequenza.test(s)) throw err('richiesta-non-valida', 'voce.sequenza contiene caratteri non validi');
-        return s || null;
-      })(),
-      eventi: eventi,
-      decisione: testoV(v.decisione, 200, false, 'voce.decisione'),
-      nota: testoV(v.nota, 2000, false, 'voce.nota') || '',
-    };
-  }
-
-  function validaSeduta(s) {
-    oggettoV(s, 'seduta');
-    return {
-      schema: SCHEMA,
-      id: idV(s.id, RE.sd, 'seduta.id'),
-      pazienteId: idV(s.pazienteId, RE.pz, 'seduta.pazienteId'),
-      data: dataV(s.data, 'seduta.data'),
-      inizio: isoV(s.inizio, 'inizio'),
-      fine: isoV(s.fine, 'fine'),
-      operatoreNome: testoV(s.operatoreNome, 60, false, 'operatoreNome'),
-      coOperatori: listaV(s.coOperatori, 8, 'coOperatori').map(function (c) { return testoV(c, 60, true, 'coOperatori'); }),
-      voci: listaV(s.voci, 200, 'voci').map(validaVoce),
-      nota: testoV(s.nota, 5000, false, 'nota') || '',
-      fonte: unoTra(s.fonte, ['app', 'import-numbers'], 'fonte', 'app'),
-      eliminata: s.eliminata === true,
+      kid: idV(c.kid, RE.kid, 'kid'),
+      kdf: { nome: 'PBKDF2-SHA256', iterazioni: interoV(kdf.iterazioni, 100000, 5000000, 'iterazioni'), sale: sale },
+      verifica: bustaV(c.verifica, 1000, 'verifica'),
+      suggerimento: testoV(c.suggerimento, 200, false, 'suggerimento'),
     };
   }
 
@@ -323,7 +239,7 @@ var QT = (function () {
   // ------------------------------------------------------------------------
   /**
    * amb = {
-   *   archivio: { leggiJSON, scriviJSON, elenca, leggiBinario, scriviBinario, esiste, conLock },
+   *   archivio: { leggiJSON, scriviJSON, elenca, leggiBinario, scriviBinario, esiste, elimina, conLock },
    *   verificaToken(token) -> { email, nome }   (lancia se non valido)
    *   proprietario() -> email dell'account su cui gira il custode
    *   ora() -> ISO string
@@ -378,73 +294,64 @@ var QT = (function () {
       if (!vede(u, pid)) throw err('vietato', 'Non sei assegnato a questo paziente.');
     }
 
-    // --- Cache ricostruibili -------------------------------------------------
+    // --- Pazienti ---------------------------------------------------------------
+    // Un file per paziente: { id, version, busta, etichetta, creato..., aggiornato... }.
+    // L'elenco e' una cache ricostruibile dai file dei pazienti.
+    function leggiRecord(pid) {
+      var r = A.leggiJSON(P.paziente(pid));
+      if (!r) throw err('non-trovato', 'Paziente non trovato.');
+      return r;
+    }
+    function voceElenco(r) {
+      return {
+        id: r.id, version: r.version, etichetta: r.etichetta,
+        aggiornato: r.aggiornato, aggiornatoDa: r.aggiornatoDa, eliminato: !!r.eliminato,
+      };
+    }
     function leggiElenco() {
       var e = A.leggiJSON(P.elenco);
       return e || conLock(ricostruisciElenco);
-    }
-    function voceElenco(paz, indice) {
-      var sedute = Object.keys(indice.sedute).map(function (k) { return indice.sedute[k]; }).filter(function (s) { return !s.eliminata; });
-      var ultima = sedute.reduce(function (m, s) { return s.data > m ? s.data : m; }, '');
-      // Quando e' cambiato qualcosa (anche una seduta eliminata o corretta):
-      // l'app lo confronta con la sua copia e riscarica solo i pazienti cambiati.
-      var ultimaModifica = Object.keys(indice.sedute).reduce(function (m, k) {
-        var t = (indice.sedute[k]._srv && indice.sedute[k]._srv.modificato) || '';
-        return t > m ? t : m;
-      }, paz.aggiornato || '');
-      return {
-        id: paz.id, codice: paz.codice, etichetta: paz.etichetta, aula: paz.aula,
-        stato: paz.stato || 'attivo', version: paz.version, aggiornato: paz.aggiornato,
-        nSedute: sedute.length, ultimaSeduta: ultima || null, ultimaModifica: ultimaModifica || null,
-        programmiAttivi: (paz.programmi || []).filter(function (p) { return p.stato === 'attivo'; }).length,
-      };
     }
     function ricostruisciElenco() {
       var elenco = { schema: SCHEMA, pazienti: {} };
       A.elenca('Pazienti').cartelle.forEach(function (pid) {
         if (!RE.pz.test(pid)) return;
-        var paz = A.leggiJSON(P.paziente(pid));
-        if (!paz) return;
-        elenco.pazienti[pid] = voceElenco(paz, leggiIndiceSedute(pid));
+        var r = A.leggiJSON(P.paziente(pid));
+        if (r) elenco.pazienti[pid] = voceElenco(r);
       });
       A.scriviJSON(P.elenco, elenco);
       return elenco;
     }
-    function aggiornaElenco(paz) {
+    function aggiornaElenco(r) {
       var elenco = A.leggiJSON(P.elenco) || { schema: SCHEMA, pazienti: {} };
-      elenco.pazienti[paz.id] = voceElenco(paz, leggiIndiceSedute(paz.id));
+      elenco.pazienti[r.id] = voceElenco(r);
       A.scriviJSON(P.elenco, elenco);
     }
 
-    function leggiIndiceSedute(pid) {
-      return A.leggiJSON(P.indiceSedute(pid)) || conLock(function () { return ricostruisciIndiceSedute(pid); });
+    // Prima di sovrascrivere, la versione attuale va nelle versioni precedenti.
+    function archiviaVersione(r) {
+      A.scriviJSON(P.versione(r.id, r.version), r);
+      potaVersioni(r.id);
     }
-    // La fonte di verita' sono i file in sedute/. Un file contiene una seduta
-    // oppure un pacchetto { sedute: [...] } scritto dall'import; se lo stesso id
-    // compare piu' volte vince la versione modificata per ultima.
-    function ricostruisciIndiceSedute(pid) {
-      var indice = { schema: SCHEMA, sedute: {} };
-      var cartella = P.cartellaSedute(pid);
-      A.elenca(cartella).file.forEach(function (nome) {
-        var dati = A.leggiJSON(cartella + '/' + nome);
-        if (!dati) return;
-        var lista = Array.isArray(dati.sedute) ? dati.sedute : [dati];
-        lista.forEach(function (s) {
-          if (!s || !s.id) return;
-          var prima = indice.sedute[s.id];
-          var tNuovo = (s._srv && s._srv.modificato) || '';
-          var tPrima = (prima && prima._srv && prima._srv.modificato) || '';
-          if (!prima || tNuovo >= tPrima) indice.sedute[s.id] = s;
-        });
+    function elencoVersioni(pid) {
+      return A.elenca(P.versioni(pid)).file
+        .map(function (nome) { var m = RE.versione.exec(nome); return m ? { nome: nome, version: parseInt(m[1], 10) } : null; })
+        .filter(Boolean)
+        .sort(function (a, b) { return b.version - a.version; });
+    }
+    function potaVersioni(pid) {
+      var tutte = elencoVersioni(pid);
+      if (tutte.length <= VERSIONI.recenti) return;
+      var limite = new Date(Date.parse(amb.ora()) - VERSIONI.giorni * 86400000).toISOString().slice(0, 10);
+      var giorniVisti = {};
+      tutte.forEach(function (v, i) {
+        if (i < VERSIONI.recenti) return;
+        var r = A.leggiJSON(P.versioni(pid) + '/' + v.nome);
+        var giorno = r && r.aggiornato ? r.aggiornato.slice(0, 10) : '';
+        // si tiene la piu' recente di ogni giorno (le versioni sono in ordine decrescente)
+        if (giorno && giorno >= limite && !giorniVisti[giorno]) { giorniVisti[giorno] = true; return; }
+        A.elimina(P.versioni(pid) + '/' + v.nome);
       });
-      A.scriviJSON(P.indiceSedute(pid), indice);
-      return indice;
-    }
-
-    function leggiPaziente(pid) {
-      var paz = A.leggiJSON(P.paziente(pid));
-      if (!paz) throw err('non-trovato', 'Paziente non trovato.');
-      return paz;
     }
 
     // --- Azioni ---------------------------------------------------------------
@@ -454,8 +361,34 @@ var QT = (function () {
       return {
         email: u.email, nome: u.nome, ruolo: u.ruolo, pazienti: u.pazienti,
         proprietario: u.proprietario, scadenza: u.scadenza, permessi: permessi(u),
+        cifratura: !!A.leggiJSON(P.cifratura),
       };
     };
+
+    // La configurazione della chiave non e' segreta: sale e busta di verifica
+    // servono a derivare la chiave dalla frase e a controllare che sia giusta.
+    azioni['cifratura.leggi'] = function () { return A.leggiJSON(P.cifratura); };
+
+    azioni['cifratura.imposta'] = function (u, d) {
+      puo(u, 'gestisciAccessi');
+      var c = validaCifratura(d.cifratura);
+      return conLock(function () {
+        var attuale = A.leggiJSON(P.cifratura);
+        if (attuale) {
+          // Reinvio identico (rete caduta dopo il salvataggio)
+          if (stabile(attuale.verifica) === stabile(c.verifica) && attuale.kid === c.kid) return attuale;
+          throw err('conflitto', 'La chiave del centro esiste già: non si può sostituire da qui.', { attuale: attuale });
+        }
+        c.creato = amb.ora();
+        c.creatoDa = u.email;
+        A.scriviJSON(P.cifratura, c);
+        return c;
+      });
+    };
+
+    function richiediCifratura() {
+      if (!A.leggiJSON(P.cifratura)) throw err('senza-chiave', 'Prima un amministratore deve creare la chiave del centro.');
+    }
 
     azioni['pazienti.elenco'] = function (u) {
       var elenco = leggiElenco();
@@ -467,34 +400,29 @@ var QT = (function () {
     azioni['paziente.leggi'] = function (u, d) {
       var pid = idV(d.id, RE.pz, 'id');
       richiediVisibile(u, pid);
-      var ora = amb.ora();
-      var paz = leggiPaziente(pid);
-      var indice = leggiIndiceSedute(pid);
-      var dopo = d.dopo ? isoV(d.dopo, 'dopo') : null;
-      var sedute = Object.keys(indice.sedute).map(function (k) { return indice.sedute[k]; })
-        .filter(function (s) { return !dopo || ((s._srv && s._srv.modificato) || '') >= dopo; });
-      return { paziente: paz, sedute: sedute, ora: ora };
+      return leggiRecord(pid);
     };
 
     azioni['paziente.crea'] = function (u, d) {
       puo(u, 'creaPazienti');
-      var paz = validaPaziente(d.paziente);
+      richiediCifratura();
+      var pid = idV(d.id, RE.pz, 'id');
+      var busta = bustaV(d.busta, MAX_PAZIENTE, 'busta');
+      var etichetta = bustaV(d.etichetta, MAX_ETICHETTA, 'etichetta');
       return conLock(function () {
-        var esistente = A.leggiJSON(P.paziente(paz.id));
+        var esistente = A.leggiJSON(P.paziente(pid));
         if (esistente) {
           // Reinvio della stessa creazione (rete caduta dopo il salvataggio)
-          if (esistente.creatoDa === u.email && esistente.codice === paz.codice) return esistente;
-          throw err('conflitto', 'Esiste già un paziente con questo identificativo.');
+          if (esistente.creatoDa === u.email && esistente.version === 1 && stabile(esistente.busta) === stabile(busta)) return esistente;
+          throw err('conflitto', 'Esiste già un paziente con questo identificativo.', { attuale: vede(u, pid) ? esistente : null });
         }
         var ora = amb.ora();
-        paz.version = 1;
-        paz.creato = ora; paz.creatoDa = u.email;
-        paz.aggiornato = ora; paz.aggiornatoDa = u.email;
-        A.scriviJSON(P.paziente(paz.id), paz);
-        A.scriviJSON(P.indiceSedute(paz.id), { schema: SCHEMA, sedute: {} });
-        aggiornaElenco(paz);
-        assegnaSeServe(u, paz.id);
-        return paz;
+        var r = { schema: SCHEMA, id: pid, version: 1, busta: busta, etichetta: etichetta,
+          creato: ora, creatoDa: u.email, aggiornato: ora, aggiornatoDa: u.email };
+        A.scriviJSON(P.paziente(pid), r);
+        aggiornaElenco(r);
+        assegnaSeServe(u, pid);
+        return r;
       });
     };
 
@@ -512,109 +440,68 @@ var QT = (function () {
       u.pazienti = voce.pazienti;
     }
 
+    // Salvataggio con controllo di versione: se nel frattempo un altro
+    // dispositivo ha salvato, risponde "conflitto" con la versione attuale e
+    // l'app unisce le due (lei puo' leggerle, il custode no) e riprova.
     azioni['paziente.salva'] = function (u, d) {
-      puo(u, 'programmi');
-      var paz = validaPaziente(d.paziente);
-      richiediVisibile(u, paz.id);
+      puo(u, 'registraSedute');
+      richiediCifratura();
+      var pid = idV(d.id, RE.pz, 'id');
+      richiediVisibile(u, pid);
+      var busta = bustaV(d.busta, MAX_PAZIENTE, 'busta');
+      var etichetta = d.etichetta ? bustaV(d.etichetta, MAX_ETICHETTA, 'etichetta') : null;
       var base = interoV(d.versioneBase, 0, 1e9, 'versioneBase');
       return conLock(function () {
-        var attuale = leggiPaziente(paz.id);
+        var attuale = leggiRecord(pid);
         if (attuale.version !== base) {
           throw err('conflitto', 'Nel frattempo qualcun altro ha modificato questo paziente.', { attuale: attuale });
         }
+        if (attuale.eliminato && !permessi(u).eliminaPazienti) throw err('vietato', 'Questo paziente è stato archiviato.');
+        archiviaVersione(attuale);
         var ora = amb.ora();
-        paz.version = attuale.version + 1;
-        paz.creato = attuale.creato; paz.creatoDa = attuale.creatoDa;
-        paz.aggiornato = ora; paz.aggiornatoDa = u.email;
-        A.scriviJSON(P.paziente(paz.id), paz);
-        aggiornaElenco(paz);
-        return paz;
+        var r = { schema: SCHEMA, id: pid, version: attuale.version + 1, busta: busta, etichetta: etichetta || attuale.etichetta,
+          creato: attuale.creato, creatoDa: attuale.creatoDa, aggiornato: ora, aggiornatoDa: u.email };
+        A.scriviJSON(P.paziente(pid), r);
+        aggiornaElenco(r);
+        return { id: r.id, version: r.version, aggiornato: r.aggiornato, aggiornatoDa: r.aggiornatoDa };
       });
     };
 
-    azioni['paziente.importa'] = function (u, d) {
-      puo(u, 'importa');
-      var pacchetto = oggettoV(d.pacchetto, 'pacchetto');
-      var paz = validaPaziente(pacchetto.paziente);
-      var sedute = listaV(pacchetto.sedute, 20000, 'sedute').map(validaSeduta);
-      sedute.forEach(function (s) {
-        if (s.pazienteId !== paz.id) throw err('richiesta-non-valida', 'Una seduta appartiene a un altro paziente.');
-      });
-      return conLock(function () {
-        if (A.esiste(P.paziente(paz.id))) throw err('conflitto', 'Questo paziente è già stato importato.');
-        var ora = amb.ora();
-        paz.version = 1;
-        paz.creato = ora; paz.creatoDa = u.email;
-        paz.aggiornato = ora; paz.aggiornatoDa = u.email;
-        var indice = { schema: SCHEMA, sedute: {} };
-        sedute.forEach(function (s) {
-          s.operatore = null;
-          s._srv = { creato: ora, modificato: ora, da: u.email, importato: true };
-          indice.sedute[s.id] = s;
-        });
-        A.scriviJSON(P.paziente(paz.id), paz);
-        // Un solo file per tutto lo storico importato: scriverne centinaia
-        // richiederebbe minuti su Drive. Le correzioni successive creano file
-        // singoli, che in ricostruzione prevalgono su questo.
-        A.scriviJSON(P.cartellaSedute(paz.id) + '/import-' + ora.slice(0, 10) + '.json', { schema: SCHEMA, sedute: sedute });
-        A.scriviJSON(P.indiceSedute(paz.id), indice);
-        aggiornaElenco(paz);
-        return { paziente: paz, sedute: sedute.length };
-      });
-    };
-
-    function salvaSeduta(u, pid, s, eliminando) {
-      return conLock(function () {
-        leggiPaziente(pid);
-        var indice = leggiIndiceSedute(pid);
-        var prima = indice.sedute[s.id];
-        var ora = amb.ora();
-        if (prima) {
-          if (prima.pazienteId !== pid) throw err('conflitto', 'Identificativo di seduta già usato.');
-          var puoModificare = prima.operatore === u.email || permessi(u).modificaSeduteAltrui;
-          // Reinvio identico dello stesso autore: nessuna scrittura, stessa risposta.
-          var confronto = JSON.parse(JSON.stringify(prima));
-          delete confronto._srv; delete confronto.operatore;
-          if (!eliminando && prima.operatore === u.email && stabile(confronto) === stabile(s)) return prima;
-          if (!puoModificare) throw err('vietato', 'Puoi correggere solo le sedute che hai registrato tu.');
-          s.operatore = prima.operatore;
-          s._srv = { creato: prima._srv ? prima._srv.creato : ora, modificato: ora, da: u.email };
-        } else {
-          if (eliminando) throw err('non-trovato', 'Seduta non trovata.');
-          // L'autore lo decide il custode, non il dispositivo.
-          s.operatore = u.email;
-          if (!s.operatoreNome) s.operatoreNome = u.nome;
-          s._srv = { creato: ora, modificato: ora, da: u.email };
-        }
-        A.scriviJSON(P.seduta(pid, s.id), s);
-        indice.sedute[s.id] = s;
-        A.scriviJSON(P.indiceSedute(pid), indice);
-        aggiornaElenco(leggiPaziente(pid));
-        return s;
-      });
-    }
-
-    azioni['seduta.salva'] = function (u, d) {
-      puo(u, 'registraSedute');
-      var pid = idV(d.pazienteId, RE.pz, 'pazienteId');
+    azioni['paziente.versioni'] = function (u, d) {
+      var pid = idV(d.id, RE.pz, 'id');
       richiediVisibile(u, pid);
-      var s = validaSeduta(d.seduta);
-      if (s.pazienteId !== pid) throw err('richiesta-non-valida', 'La seduta appartiene a un altro paziente.');
-      return salvaSeduta(u, pid, s, false);
+      return elencoVersioni(pid).map(function (v) {
+        var r = A.leggiJSON(P.versioni(pid) + '/' + v.nome) || {};
+        return { version: v.version, aggiornato: r.aggiornato || null, aggiornatoDa: r.aggiornatoDa || null };
+      });
     };
 
-    azioni['seduta.elimina'] = function (u, d) {
-      puo(u, 'registraSedute');
-      var pid = idV(d.pazienteId, RE.pz, 'pazienteId');
+    azioni['paziente.versione'] = function (u, d) {
+      var pid = idV(d.id, RE.pz, 'id');
       richiediVisibile(u, pid);
-      var sid = idV(d.id, RE.sd, 'id');
-      var indice = leggiIndiceSedute(pid);
-      var prima = indice.sedute[sid];
-      if (!prima) throw err('non-trovato', 'Seduta non trovata.');
-      var s = JSON.parse(JSON.stringify(prima));
-      delete s._srv; delete s.operatore;
-      s.eliminata = true;
-      return salvaSeduta(u, pid, s, true);
+      var r = A.leggiJSON(P.versione(pid, interoV(d.version, 1, 1e9, 'version')));
+      if (!r) throw err('non-trovato', 'Versione non trovata.');
+      return r;
+    };
+
+    // Archivia (non cancella): il file resta, con tutte le versioni, e un admin
+    // puo' riattivarlo. Sparisce dai dispositivi alla sincronizzazione successiva.
+    azioni['paziente.archivia'] = function (u, d) {
+      puo(u, 'eliminaPazienti');
+      var pid = idV(d.id, RE.pz, 'id');
+      var archiviato = d.archiviato !== false;
+      return conLock(function () {
+        var r = leggiRecord(pid);
+        if (!!r.eliminato === archiviato) return voceElenco(r);
+        archiviaVersione(r);
+        r.version += 1;
+        r.eliminato = archiviato;
+        r.aggiornato = amb.ora();
+        r.aggiornatoDa = u.email;
+        A.scriviJSON(P.paziente(pid), r);
+        aggiornaElenco(r);
+        return voceElenco(r);
+      });
     };
 
     // --- Materiali ------------------------------------------------------------
@@ -757,15 +644,9 @@ var QT = (function () {
       });
     };
 
-    azioni['manutenzione.ricostruisci'] = function (u, d) {
+    azioni['manutenzione.ricostruisci'] = function (u) {
       puo(u, 'gestisciAccessi');
-      return conLock(function () {
-        var pids = d.pazienteId ? [idV(d.pazienteId, RE.pz, 'pazienteId')]
-          : A.elenca('Pazienti').cartelle.filter(function (x) { return RE.pz.test(x); });
-        pids.forEach(ricostruisciIndiceSedute);
-        ricostruisciElenco();
-        return { ricostruiti: pids.length };
-      });
+      return conLock(function () { return { ricostruiti: Object.keys(ricostruisciElenco().pazienti).length }; });
     };
 
     // --- Ingresso -------------------------------------------------------------
@@ -789,23 +670,16 @@ var QT = (function () {
 
     // Manutenzione richiamabile solo dal codice del server (editor di Apps
     // Script, test): non passa da gestisci, quindi non e' raggiungibile via HTTP.
-    function ricostruisci(pid) {
-      return conLock(function () {
-        var pids = pid ? [idV(pid, RE.pz, 'pazienteId')]
-          : A.elenca('Pazienti').cartelle.filter(function (x) { return RE.pz.test(x); });
-        pids.forEach(ricostruisciIndiceSedute);
-        ricostruisciElenco();
-        return pids.length;
-      });
+    function ricostruisci() {
+      return conLock(function () { return Object.keys(ricostruisciElenco().pazienti).length; });
     }
 
     return { gestisci: gestisci, azioni: Object.keys(azioni), ricostruisci: ricostruisci };
   }
 
   return {
-    SCHEMA: SCHEMA, PERMESSI: PERMESSI, RUOLI: RUOLI, PERCORSI: P, RE: RE,
-    creaCustode: creaCustode, stabile: stabile, hashRiferiti: hashRiferiti,
-    validaSeduta: validaSeduta, validaPaziente: validaPaziente,
+    SCHEMA: SCHEMA, PERMESSI: PERMESSI, RUOLI: RUOLI, PERCORSI: P, RE: RE, VERSIONI: VERSIONI,
+    creaCustode: creaCustode, stabile: stabile, hashRiferiti: hashRiferiti, bustaV: bustaV,
   };
 })();
 

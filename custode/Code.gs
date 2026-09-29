@@ -202,6 +202,14 @@ function archivioDrive_() {
       memoria['f:' + percorso] = nuovo;
     },
     esiste: function (percorso) { return !!file(percorso); },
+    // Nel cestino di Drive, non cancellato per sempre: resta recuperabile per 30 giorni
+    elimina: function (percorso) {
+      var f = file(percorso);
+      if (!f) return;
+      f.setTrashed(true);
+      cache.remove('f:' + percorso);
+      memoria['f:' + percorso] = null;
+    },
     conLock: function (fn) {
       var lock = LockService.getScriptLock();
       if (!lock.tryLock(25000)) throw new Error('Il custode e\' occupato: riprova tra qualche secondo.');
@@ -235,7 +243,7 @@ function configura() {
   Logger.log('Pronto. Ora: Distribuisci > Nuova distribuzione > App web.');
 }
 
-/** Ricostruisce le cache (elenco pazienti, indici delle sedute) dai file delle sedute. */
+/** Ricostruisce l'elenco dei pazienti dai loro file. */
 function ricostruisciCache() {
   var n = custode_().ricostruisci();
   Logger.log('Cache ricostruite per ' + n + ' pazienti.');

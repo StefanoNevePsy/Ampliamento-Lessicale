@@ -167,26 +167,26 @@ prova('il token valido viene verificato una volta sola e poi ricordato', () => {
   assert.strictEqual(chiamateTokeninfo - prima, 1);
 });
 
-const PID = 'pz_abcdefgh12', PR = 'pr_abcdefgh12', ST = 'st_abcdefgh12';
+const PID = '1727000000000';
+const busta = (t) => ({ v: 1, alg: 'A256GCM', kid: 'k1', iv: crypto.randomBytes(12).toString('base64'), comp: 'no', dati: Buffer.from(t).toString('base64') });
 prova('crea un paziente: i file finiscono nelle cartelle giuste', () => {
-  ok(post('tok-' + PROPRIETARIO, 'paziente.crea', { paziente: {
-    id: PID, codice: 'PZ-1', programmi: [{ id: PR, nome: 'TACT', sto: [{ id: ST, testo: 'oggetti' }] }],
-  } }));
+  ok(post('tok-' + PROPRIETARIO, 'cifratura.imposta', { cifratura: { kid: 'k1', kdf: { nome: 'PBKDF2-SHA256', iterazioni: 600000, sale: crypto.randomBytes(16).toString('base64') }, verifica: busta('ok') } }));
+  ok(post('tok-' + PROPRIETARIO, 'paziente.crea', { id: PID, busta: busta('uno'), etichetta: busta('e') }));
+  const conf = radice._cartelle.find((c) => c._nome === '_config');
+  assert.ok(conf._file.find((f) => f._nome === 'cifratura.json'));
   const paz = radice._cartelle.find((c) => c._nome === 'Pazienti');
   const cart = paz._cartelle.find((c) => c._nome === PID);
   assert.ok(cart, 'cartella del paziente');
-  assert.deepStrictEqual(cart._file.map((f) => f._nome).sort(), ['_sedute.json', 'paziente.json']);
+  assert.deepStrictEqual(cart._file.map((f) => f._nome), ['paziente.json']);
   assert.ok(paz._file.find((f) => f._nome === '_elenco.json'));
 });
-prova('una seduta salvata due volte resta un file solo (aggiornato, non duplicato)', () => {
-  const s = { id: 'sd_abcdefgh12', pazienteId: PID, data: '2026-10-01', voci: [{ programmaId: PR, stoId: ST, v: 8, p: 2, x: 0 }] };
-  ok(post('tok-' + PROPRIETARIO, 'seduta.salva', { pazienteId: PID, seduta: s }));
-  s.nota = 'corretta';
-  ok(post('tok-' + PROPRIETARIO, 'seduta.salva', { pazienteId: PID, seduta: s }));
+prova('un salvataggio aggiorna il file e mette la versione prima in versioni/', () => {
+  ok(post('tok-' + PROPRIETARIO, 'paziente.salva', { id: PID, versioneBase: 1, busta: busta('due') }));
   const cart = radice._cartelle.find((c) => c._nome === 'Pazienti')._cartelle.find((c) => c._nome === PID);
-  const sedute = cart._cartelle.find((c) => c._nome === 'sedute');
-  assert.strictEqual(sedute._file.length, 1);
-  assert.strictEqual(JSON.parse(sedute._file[0]._buf.toString()).nota, 'corretta');
+  assert.strictEqual(cart._file.length, 1);
+  assert.strictEqual(JSON.parse(cart._file[0]._buf.toString()).version, 2);
+  const ver = cart._cartelle.find((c) => c._nome === 'versioni');
+  assert.deepStrictEqual(ver._file.map((f) => f._nome), ['v00000001.json']);
 });
 prova('la cache degli id evita di cercare per nome a ogni richiesta', () => {
   const prima = statistiche.ricerche;

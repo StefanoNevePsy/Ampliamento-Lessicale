@@ -83,6 +83,7 @@ function archivioSuDisco(radice) {
     },
     scriviBinario(p, b64) { scriviAtomico(abs(p), Buffer.from(b64, 'base64')); },
     esiste(p) { return fs.existsSync(abs(p)); },
+    elimina(p) { try { fs.unlinkSync(abs(p)); } catch (e) { if (e.code !== 'ENOENT') throw e; } },
     // Il core e' sincrono e Node esegue una richiesta alla volta fino in fondo:
     // le scritture non possono sovrapporsi.
     conLock(fn) { return fn(); },
