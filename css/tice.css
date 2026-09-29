@@ -315,3 +315,19 @@ header h1:has(.tice-torna) { flex-shrink: 0; }
 }
 .tice-linguetta[hidden] { display: none; }
 .tice-linguetta span { opacity: 0.8; overflow: hidden; text-overflow: ellipsis; }
+
+/* Stato del collegamento con il centro, nella barra */
+.tice .tice-stato { width: auto; min-width: 42px; padding: 0 10px; gap: 6px; display: inline-flex; align-items: center; font-size: 0.85rem; font-weight: 700; color: #fff; background: rgba(255,255,255,0.1); border-color: transparent; }
+.tice .tice-stato .pallino { width: 9px; height: 9px; border-radius: 50%; background: #4cd08a; flex-shrink: 0; }
+.tice .tice-stato[data-stato="spento"] .pallino { background: #9aa1ab; }
+.tice .tice-stato[data-stato="attesa"] .pallino { background: #fb8e28; }
+.tice .tice-stato[data-stato="errore"] .pallino { background: #ff6b6b; }
+.tice .tice-stato[data-stato="lavoro"] .pallino { background: #39b2ad; animation: tice-pulsa 1s infinite; }
+@keyframes tice-pulsa { 50% { opacity: 0.3; } }
+
+/* La chiave del centro, da ricopiare */
+.tice-foglio .chiave-grande {
+    font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace; font-size: min(1.4rem, 4.1vw); font-weight: 700;
+    letter-spacing: 0.02em; text-align: center; padding: 16px 6px; border-radius: 12px; white-space: nowrap; overflow-x: auto;
+    background: rgba(var(--accent-rgb), 0.1); border: 2px dashed rgba(var(--accent-rgb), 0.5); user-select: all;
+}

@@ -1,331 +1,182 @@
-# Quaderno TICE — progetto
+# Edizione Centro TICE — progetto
 
-Edizione dell'app pensata per il Centro TICE: sostituisce i quaderni cartacei e i
-file Numbers su Drive con un quaderno digitale condiviso, usabile da telefono,
-tablet e computer. Vive nella cartella `centro/` di questa branch e non tocca
-l'app personale (radice del repository).
+Questa branch (`claude/quaderno-tice`) è l'app completa con in più ciò che serve
+al Centro TICE:
+- si apre sulla schermata **Presa dati**;
+- ha i **programmi** dei bambini;
+- **importa i quaderni Numbers**;
+- **condivide i dati** tra professioniste e tirocinanti tramite il Drive del
+  centro, cifrati e con le versioni precedenti.
 
-> **Direzione attuale.** La presa dati del centro si sta spostando dentro l'app
-> completa (radice del repository), che su questa branch si apre sulla
-> schermata *Presa dati* e mantiene tutte le altre funzioni. `centro/` resta
-> finché la sincronizzazione con il custode non passa all'app completa.
-> Vedi [Presa dati nell'app completa](#presa-dati-nellapp-completa).
+Giochi, set, cartelle cliniche, grafici e report restano quelli dell'app
+personale. Senza configurazione (`tice-config.js` vuoto) funziona solo sul
+dispositivo, come l'app personale.
 
 ## Obiettivi
 
-- Registrare le sedute direttamente sul dispositivo, senza conti a mano.
+- Registrare le sedute direttamente sul dispositivo, telefono compreso, senza conti a mano.
 - Avere storico, criteri e learn unit calcolati automaticamente.
-- Condividere i dati tra professionisti e tirocinanti, ciascuno solo sui bambini
-  che segue.
-- Condividere i materiali (set) tra professionisti, scaricandoli una volta sola.
-- Tenere i dati nel Drive del centro, senza server esterni.
+- Condividere i dati tra professioniste e tirocinanti, ciascuna solo sui bambini che segue.
+- Tenere i dati nel Drive del centro, **illeggibili per chiunque non abbia la chiave del centro**,
+  compresi Google e gli amministratori del dominio.
+- Non perdere mai dati: versioni precedenti di ogni bambino, fusione delle modifiche fatte in parallelo.
 
-## Architettura in una riga
-
-L'app non tocca mai Drive direttamente. Parla con un **custode** (Google Apps
-Script) che gira con l'account di un amministratore del centro ed è l'unico a
-leggere e scrivere il Drive condiviso. Gli utenti fanno "Accedi con Google" solo
-per dimostrare chi sono; è il custode a decidere cosa possono vedere.
+## Architettura
 
 ```
- telefono / tablet / PC                     Workspace centrotice.it
-┌──────────────────────┐   HTTPS + token   ┌──────────────────────────┐
-│ Quaderno TICE        │ ────────────────▶ │ Custode (Apps Script)    │
-│  · copia locale      │ ◀──────────────── │  · verifica identità     │
-│  · coda d'invio      │                   │  · controlla i permessi  │
-│  · grafici, criteri  │                   │  · unico che scrive      │
-└──────────────────────┘                   └────────────┬─────────────┘
-                                                        │
-                                            Drive condiviso "Quaderno TICE"
+ telefono / tablet / pc                 Google Apps Script                Drive condiviso
+┌────────────────────────┐   HTTPS   ┌─────────────────────────┐        ┌──────────────────────┐
+│ app (IndexedDB locale) │──────────▶│ custode                 │───────▶│ _config/             │
+│  cifra con la chiave   │  token    │  verifica chi sei,      │        │ Pazienti/<id>/       │
+│  del centro            │  Google   │  decide cosa puoi fare, │        │   paziente.json      │
+│  unisce i conflitti    │◀──────────│  conserva le versioni   │◀───────│   versioni/          │
+└────────────────────────┘  buste    └─────────────────────────┘        │ Materiali/           │
+                            cifrate                                     └──────────────────────┘
 ```
 
-Perché così e non con la condivisione di Drive:
+- L'app lavora sempre sul suo database locale, anche senza rete. Il modulo di
+  sincronizzazione (`js/tice-sync.js`) tiene allineato il Drive: ogni
+  salvataggio di un bambino condiviso va in coda e parte dopo pochi secondi.
+- Il **custode** (Apps Script, gira con l'account del centro) è l'unico che
+  scrive nel Drive. Verifica il token Google di ogni richiesta e i permessi, e
+  conserva le versioni. **Non vede i dati**: riceve buste già cifrate.
+- Gli utenti non hanno accesso al Drive: entrano dall'app con il loro account
+  Google, anche Gmail personale.
 
-- **Tirocinanti con Gmail personale.** Se ogni utente accedesse a Drive con i
-  propri permessi, Google imporrebbe di elencarli uno per uno nella console Cloud
-  (o una verifica di sicurezza lunga). Con il custode gli utenti chiedono solo
-  nome ed email, e per quello Google non richiede né liste né verifiche.
-- **Proprietà dei file.** Scrive sempre il custode, quindi tutti i file sono del
-  Drive condiviso del centro, anche quelli registrati da un tirocinante.
-- **Revoca reale.** I tirocinanti non ricevono la cartella: vedono i dati solo
-  tramite l'app, e quando l'accesso scade o viene tolto non resta nulla nel loro
-  Drive.
+## Cifratura
 
-Il prezzo: il controllo degli accessi è codice nostro (`custode/core.js`), non la
-condivisione di Google. È piccolo, testato e leggibile di proposito.
+- **Chiave del centro.** È una frase di 25 caratteri (125 bit), generata
+  dall'app per l'amministratore alla prima configurazione. L'amministratore la
+  conserva (gestore di password e carta) e la dà alle persone autorizzate, che
+  la inseriscono una volta per dispositivo. Il custode non la conosce.
+- **Derivazione.** Dalla frase si ricava la chiave con PBKDF2-SHA256
+  (600 000 iterazioni) e il sale del centro (`_config/cifratura.json`, non
+  segreto). Sul dispositivo si conserva solo la chiave derivata, in IndexedDB
+  come chiave non esportabile.
+- **Buste.** Ogni bambino è compresso (gzip) e cifrato con AES-256-GCM, con un
+  IV casuale per salvataggio. Il testo aggiuntivo autenticato `tice:paziente:<id>`
+  lega la busta al suo bambino: un file spostato o alterato non si apre.
+  Anche il nome nell'elenco è cifrato.
+- **Cosa resta in chiaro sul Drive.** Identificativi numerici, numero di
+  versione, email e ora di chi ha salvato, l'elenco degli accessi (email e
+  identificativi assegnati), i materiali (set e immagini, non dati clinici).
+- **Revoca.** A chi viene tolto l'accesso, il custode non risponde più e l'app
+  cancella dal suo dispositivo i dati del centro e la chiave. Conoscere la
+  chiave senza accesso al Drive non serve a niente: il Drive vero lo vede solo
+  l'account del centro.
+- **Aprire i file senza l'app.** Si usa `strumenti/apri-dati.html` (un file
+  solo, funziona offline: frase + file scaricati dal Drive → dati leggibili,
+  JSON o CSV per Excel) oppure `tools/decifra_tice.py`. Il file della chiave
+  che l'app fa scaricare alla creazione contiene anche sale e iterazioni.
+- **Rischio da conoscere.** Se si perdono tutte le copie della frase, i dati sul
+  Drive non si recuperano più. Restano leggibili le copie locali sui
+  dispositivi che l'hanno inserita.
 
-## Struttura del Drive condiviso
+## Versioni precedenti
 
-```
-Quaderno TICE/                      (Drive condiviso: membri = solo admin)
-├── _config/
-│   └── accessi.json                utenti, ruoli, assegnazioni, scadenze
-├── Pazienti/
-│   ├── _elenco.json                riepilogo per l'elenco (cache ricostruibile)
-│   └── pz_xxxxxxxx/
-│       ├── paziente.json           anagrafica pseudonima, programmi, STO
-│       ├── _sedute.json            tutte le sedute in un file (cache ricostruibile)
-│       └── sedute/
-│           ├── sd_xxxx.json        una seduta = un file
-│           └── import-AAAA-MM-GG.json   lo storico importato, in un file solo
-└── Materiali/
-    ├── indice.json                 elenco set con versione e hash delle immagini
-    ├── set/<id>.json               set con le immagini sostituite da riferimenti
-    └── immagini/<sha256>.<ext>     ogni immagine una volta sola, nominata dal contenuto
-```
+A ogni salvataggio il custode sposta la versione attuale in
+`Pazienti/<id>/versioni/vNNNNNNNN.json`. Tiene:
+- **le ultime 20 versioni**;
+- **l'ultima di ogni giorno per 60 giorni**.
 
-I file `_elenco.json` e `_sedute.json` servono solo alla velocità: leggere un file
-è molto più rapido che leggerne trecento. La fonte di verità sono i file in
-`sedute/`; un admin può ricostruire le cache in ogni momento (e se mancano si
-ricostruiscono da sole).
+Le altre vanno nel cestino di Drive, dove restano altri 30 giorni.
 
-Lo storico importato da Numbers sta in un solo file per paziente: scriverne
-trecento su Drive richiederebbe minuti. Se una seduta importata viene corretta,
-la correzione diventa un file a sé e prevale sull'originale.
+Dall'app si scorrono le versioni di un bambino, con data e autore, e se ne
+confronta una con la versione attuale (sedute, ultima seduta, attività). Una
+versione si può ripristinare: diventa la versione attuale, e quella di adesso
+resta tra le precedenti. Anche le versioni sono cifrate.
+
+## Modifiche in parallelo
+
+Il custode salva con un numero di versione: se nel frattempo un altro
+dispositivo ha salvato lo stesso bambino, risponde "conflitto" con la versione
+attuale. L'app, che può leggerla, la unisce alla propria (`js/tice-unisci.js`)
+partendo dall'ultima versione che entrambi conoscevano:
+- **Sedute.** Si uniscono per id: nessuna si perde. Una seduta cancellata da una
+  parte e non toccata dall'altra resta cancellata.
+- **Attività e target del programma.** Si uniscono per id.
+- **Oggetti** (note del giorno, soglie…). Ogni chiave prende il valore cambiato.
+  Se cambia da entrambe le parti, vince chi sta salvando.
 
 ## Ruoli
 
-| | admin | professionista | tirocinante |
+| | Admin | Professionista | Tirocinante |
 |---|---|---|---|
-| Vede i pazienti | tutti | assegnati (o tutti se `*`) | assegnati |
-| Registra sedute | ✓ | ✓ | ✓ |
-| Vede storico, grafici, dati | ✓ | ✓ | ✓ |
-| Corregge/elimina sedute | tutte | tutte dei suoi pazienti | solo le proprie |
-| Modifica programmi, STO, criteri | ✓ | ✓ | — |
-| Crea pazienti | ✓ | ✓ | — |
-| Pubblica materiali | ✓ | ✓ | — (li scarica) |
-| Gestisce utenti e assegnazioni | ✓ | — | — |
+| Vede i bambini | tutti | assegnati | assegnati |
+| Registra sedute, vede lo storico | ✓ | ✓ | ✓ |
+| Modifica i programmi, crea e importa bambini | ✓ | ✓ | — |
+| Pubblica materiali | ✓ | ✓ | — |
+| Archivia bambini, gestisce persone e chiave | ✓ | — | — |
 
-L'account su cui gira il custode è sempre admin, così il primo accesso funziona
-senza configurazioni a mano. Ogni utente può avere una **scadenza** (fine
-tirocinio): dopo quella data il custode lo rifiuta da solo.
+Il proprietario del custode è sempre admin. Gli accessi possono avere una data
+di scadenza (tirocini). Il custode controlla chi può leggere e salvare ogni
+bambino. Il contenuto è cifrato, quindi il limite "le tirocinanti non
+modificano i programmi" lo applica l'app, non il custode.
 
-La tabella è in `custode/core.js` (`PERMESSI`) ed è l'unico posto da cambiare.
+## Presa dati e programmi
 
-## Formato dei dati
+All'avvio l'app mostra i bambini. Toccandone uno compaiono le attività del suo
+**programma**, ciascuna con il target in corso, e si segna ✓ / P / ✗ con un
+tocco. La bozza resta sul dispositivo finché non si salva. Ogni attività diventa
+una seduta dello storico (setName "Attività · Target"), quindi cartella
+clinica, grafici, criterio ed export le trattano come le altre.
 
-### Paziente — `paziente.json`
+I target di un'attività possono essere:
+- **scritti a mano**;
+- **presi da una lista del Quaderno**;
+- **collegati a un set dell'archivio**, con il suo gioco (TACT, RAN…).
 
-```json
-{
-  "schema": 1,
-  "id": "pz_7Kq2mX9a",
-  "codice": "PZ-014",
-  "etichetta": "C. G.",
-  "aula": "Aula 1",
-  "programmi": [{
-    "id": "pr_...",
-    "area": "Speaker",
-    "nome": "TACT",
-    "descrizione": "TACT",
-    "criterio": { "soglia": 90, "sedute": 2 },
-    "strategia": "timedelay",
-    "prove": 10,
-    "scala": "conteggio",
-    "evento": null,
-    "stato": "attivo",
-    "sto": [{ "id": "st_...", "testo": "TACT oggetti mix — divano, porta, frigo",
-              "stato": "attivo", "inizio": "2026-03-09", "fine": null }]
-  }],
-  "learnUnitStoriche": [],
-  "version": 7, "aggiornato": "...", "aggiornatoDa": "..."
-}
-```
+Su tablet e computer, toccare un'attività collegata a un set apre direttamente
+il gioco, con bambino, set, tipo di seduta e secondi di T/D già impostati. Al
+salvataggio la seduta viene collegata al target e si torna alla presa dati. Una
+linguetta in alto riapre la presa dati in qualsiasi momento.
 
-- `codice` ed `etichetta` al posto del nome: consigliato usare iniziali.
-- `strategia`: `indipendente` o `timedelay`.
-- `prove`: prove per seduta, se fisso. Serve all'import (i fogli a una colonna non
-  scrivono il totale) e come promemoria in seduta.
-- `scala`: `conteggio` per i dati raccolti con l'app; `percentuale` solo per dati
-  importati da tabelle che registravano percentuali.
-- `evento`: registrazione di eventi (es. `["Pipì", "No pipì"]`) accanto a V/P/X.
-- `learnUnitStoriche`: le tabelle "Frequenze" e "Learn unit giornaliere"
-  importate così come sono, per non perdere lo storico prima dell'app.
-
-### Seduta — `sedute/<id>.json`
-
-```json
-{
-  "schema": 1,
-  "id": "sd_Xa91...",
-  "pazienteId": "pz_...",
-  "data": "2026-06-18",
-  "inizio": "2026-06-18T09:02:00Z", "fine": "2026-06-18T09:51:00Z",
-  "operatore": "elisa@...", "operatoreNome": "Eli",
-  "coOperatori": ["Ali"],
-  "voci": [{
-    "programmaId": "pr_...", "stoId": "st_...", "strategia": "timedelay",
-    "v": 9, "p": 1, "x": 0, "sequenza": "VVVVPVVVVV",
-    "eventi": null, "decisione": null, "nota": ""
-  }],
-  "nota": "",
-  "fonte": "app",
-  "eliminata": false
-}
-```
-
-Una seduta è **tutto quello che si fa con un bambino in quell'incontro**, con più
-programmi dentro: è l'unità del foglio "Learn unit giornaliere". Si invia con una
-sola richiesta a fine seduta.
-
-L'`id` è generato sul dispositivo. Se la rete cade dopo che il custode ha salvato
-ma prima della conferma, l'app riprova e il custode riconosce l'id: niente doppioni.
-
-### Decisioni prese sui dati reali
-
-Tre scelte sono venute dal confronto con il quaderno Numbers di esempio, non
-dalla teoria:
-
-- **Il criterio si segnala, non si applica da solo.** Sul file di esempio il
-  criterio calcolato coincide con il "CRITERIO" scritto a mano in 24 casi su 30;
-  nelle altre 6 il professionista ha scelto di aspettare una seduta in più (o
-  c'era un refuso). L'app mostra "criterio raggiunto" e propone di chiudere lo
-  STO, ma è il professionista a farlo.
-- **Mantenimento.** Dopo il criterio, sui fogli si continua spesso a registrare
-  sullo stesso STO finché non si scrive il successivo. In seduta l'app lo
-  permette e lo segnala come "mantenimento".
-- **La scala appartiene alla misura, non al programma.** Lo storico importato da
-  un foglio in percentuale resta in percentuale (`voce.scala`), le sedute
-  registrate con l'app sono conteggi, e lo stesso grafico li unisce.
-
-### Calcoli (identici a quelli dell'app personale)
-
-- **Percentuale** di una voce: `v / (v + p + x)`; se la voce ha `scala: percentuale` è `v`.
-- **Criterio** di uno STO: le ultime `criterio.sedute` sedute di quello STO, in
-  giorni diversi e consecutive, tutte ≥ `criterio.soglia`.
-- **Repertorio**: la prima seduta in assoluto di uno STO è già sopra soglia.
-- **Learn unit del giorno**: somma di `v` (corrette) e di `v+p+x` (totali) di tutte
-  le voci del giorno; **criteri del giorno**: STO che hanno raggiunto il criterio
-  in quella data.
-
-## API del custode
-
-Un solo indirizzo, richieste `POST` con corpo JSON:
-
-```json
-{ "v": 1, "token": "<ID token Google>", "azione": "seduta.salva", "dati": { } }
-```
-
-Risposta `{ "ok": true, "dati": ... }` oppure `{ "ok": false, "errore": "codice", "messaggio": "..." }`.
-
-| Azione | Chi | Cosa fa |
-|---|---|---|
-| `io` | tutti | identità, ruolo, permessi |
-| `pazienti.elenco` | tutti | pazienti visibili, con riepilogo |
-| `paziente.leggi` | assegnati | paziente + sedute (tutte o solo quelle dopo una data) |
-| `paziente.crea` | admin, prof. | nuovo paziente; chi lo crea viene assegnato |
-| `paziente.salva` | admin, prof. | programmi e STO, solo partendo dall'ultima versione |
-| `paziente.importa` | admin | paziente + storico da import Numbers |
-| `seduta.salva` | assegnati | crea o corregge (idempotente per id) |
-| `seduta.elimina` | vedi ruoli | segna come eliminata, non cancella |
-| `materiali.indice` | tutti | indice dei set |
-| `materiali.set` | tutti | un set |
-| `materiali.immagini` | tutti | immagini per hash, a gruppi |
-| `materiali.pubblica` | admin, prof. | pubblica un set, solo le immagini mancanti |
-| `materiali.elimina` | admin | toglie un set dall'indice |
-| `accessi.leggi` / `accessi.salva` | admin | utenti, ruoli, assegnazioni |
-| `manutenzione.ricostruisci` | admin | ricostruisce le cache dai file delle sedute |
-
-Scritture sotto lock: una alla volta per tutto il custode, ognuna in meno di un
-secondo. **Versioni**: paziente, indice dei materiali e accessi hanno un numero di
-versione; un salvataggio che non parte dall'ultima viene rifiutato con
-`conflitto`, e l'app propone di ricaricare invece di sovrascrivere il lavoro di
-un altro.
-
-## Sincronizzazione
-
-**Sedute.** Durante la seduta ogni tocco è salvato in locale (bozza). A fine
-seduta la seduta completa entra nella coda d'invio e parte subito; senza rete
-resta "in attesa di invio", visibile, e riparte da sola.
-
-**Pazienti.** Alla prima apertura si scarica lo storico; poi solo le sedute
-modificate dopo l'ultima sincronizzazione.
-
-**Materiali.** Si scarica l'indice (pochi KB); si confronta con quello locale; si
-scaricano solo i set cambiati e, dei set cambiati, solo le immagini che mancano.
-Il controllo avviene all'apertura e con "Aggiorna materiali".
-
-**Dispositivi condivisi.** I dati locali sono separati per utente: sul tablet
-dell'aula ognuno vede solo i propri pazienti. Quando un bambino viene tolto a un
-utente, la sua copia locale viene cancellata alla prima connessione.
-
-## Presa dati nell'app completa
-
-All'avvio l'app mostra i bambini; toccandone uno compaiono le attività del suo
-**programma**, ognuna con il target in corso, e si segna ✓ / P / ✗ con un tocco.
-Si possono aggiungere attività solo per quella seduta (anche prese dalle liste
-del Quaderno). "Salva seduta" scrive nello storico una seduta Quaderno per
-attività, con `setName` "Attività · Target": cartella clinica, grafici, criterio,
-giornate ed export le trattano come tutte le altre. La bozza resta sul
-dispositivo finché non si salva, anche chiudendo l'app.
-
-Il programma sta nel paziente:
+Quando un target raggiunge il criterio (N giorni di fila sopra soglia), l'app
+propone il target successivo, un altro o uno nuovo. Non lo decide da sola.
 
 ```
-patient.programma.attivita[] = { id, nome, area, descrizione, sessionType,
+patient.programma.attivita[] = { id, nome, area, descrizione, sessionType, mode,
   criterio: { soglia, sedute }, prove, stato: attivo|sospeso|terminato,
-  target[]: { id, testo, stato: attivo|pianificato|criterio|repertorio|chiuso, inizio, fine } }
+  target[]: { id, testo, setId?, mode?, stato: attivo|pianificato|criterio|repertorio|chiuso, inizio, fine } }
 ```
-
-Le sedute registrate da qui hanno anche `attivitaId`, `targetId`, `operatore` e
-`fonte: 'app'`. Quando un target raggiunge il criterio (N giorni di fila sopra
-soglia, come il resto dell'app) l'app propone di passare al successivo: non lo
-fa da sola.
-
-| File | Contenuto |
-|---|---|
-| `js/numbers-reader.js` | lettore dei file `.numbers` nel browser (Snappy + protobuf) |
-| `js/tice-import.js` | quaderno Numbers → programma + storico dell'app |
-| `js/tice-programma.js` | target corrente, criterio, passaggio al target successivo |
-| `js/tice-home.js`, `css/tice.css` | schermate di presa dati, programma, import |
 
 ## Import dai file Numbers
 
-Dall'app: **Presa dati → Importa quaderni**, anche più file insieme e anche
-scelti direttamente da Drive. Il file si legge sul dispositivo, si controlla
-l'anteprima (bambino nuovo o esistente, attività, sedute, prove da confermare,
-avvisi) e si importa. Reimportare lo stesso file sostituisce le sedute
-importate da quel file; le sedute registrate nell'app e i target chiusi o
-aggiunti nell'app restano. Le misure in percentuale sono marcate
-`scala: 'percentuale'` e non entrano nelle learn unit; per i giorni del
-quaderno le learn unit vengono dalla tabella "Learn unit giornaliere".
+Da **Presa dati → Importa quaderni** si scelgono uno o più file `.numbers`,
+anche direttamente da Drive. Il file si legge sul dispositivo
+(`js/numbers-reader.js`, verificato cella per cella contro numbers-parser) e si
+controlla l'anteprima: bambino nuovo o esistente, attività, sedute, prove da
+confermare, avvisi. L'import riconosce:
+- un foglio per area e una tabella per attività;
+- target su più righe e target paralleli;
+- tabelle in percentuale e in conteggi;
+- le decisioni scritte a mano;
+- le tabelle "Learn unit giornaliere" e "Frequenze";
+- il foglio dei programmi terminati.
 
-`tools/import_numbers.py` fa lo stesso da riga di comando per il Quaderno in
-`centro/`. Le due versioni danno risultati identici sul quaderno di esempio
-(`tools/test-tice-import.js`). Riconoscono:
+Quando un dato non è certo (le tabelle che scrivono solo le corrette non dicono
+quante prove c'erano), l'import propone un valore da confermare invece di
+inventarlo. Reimportare lo stesso file sostituisce le sedute importate da quel
+file; quanto registrato o cambiato nell'app resta.
 
-- un foglio per area, una tabella per programma, intestazione su tre righe;
-- STO scritti su più righe e STO paralleli nella stessa tabella;
-- tabelle in percentuale (V+P = 100) e in conteggi (con o senza la colonna dei
-  promptati);
-- decisioni scritte a mano (CRITERIO, REPERTORIO, "Passa a 1" T/D"…), conservate
-  come annotazioni;
-- tabelle "Frequenze" e "Learn unit giornaliere", importate come storico;
-- il foglio "Programmi terminati".
+## Materiali
 
-Quando non può saperlo con certezza, **lo dice**: le tabelle a una sola colonna
-non scrivono quante prove c'erano, e l'import propone un valore da confermare
-invece di inventarlo.
-
-## Sicurezza
-
-- Identità verificata dal custode su ogni richiesta (firma, destinatario,
-  scadenza, email verificata del token Google).
-- Permessi decisi solo dal custode; l'app mostra, non decide.
-- Ogni identificativo è validato prima di diventare un percorso su Drive.
-- Il Drive condiviso ha come membri solo gli admin.
-- Le copie locali sui dispositivi restano finché l'utente non esce o perde
-  l'accesso: per i dispositivi condivisi serve il blocco schermo.
-- Nome e cognome dei bambini non servono all'app: consigliato usare codici e
-  iniziali.
+I set si pubblicano sul Drive del centro e le colleghe li scaricano una volta.
+Immagini e audio viaggiano per impronta SHA-256, verificata dal custode: un set
+aggiornato scarica solo le novità. Niente SVG (possono contenere script).
 
 ## Dove sta cosa
 
 | Percorso | Contenuto |
 |---|---|
-| `centro/` | l'app (pubblicata su `/centro/` del sito) |
+| `js/tice-home.js`, `css/tice.css` | presa dati, programma, import |
+| `js/tice-centro.js` | accesso, chiave, persone, versioni, materiali |
+| `js/tice-sync.js` | sincronizzazione con il custode |
+| `js/tice-cifra.js`, `js/tice-unisci.js` | cifratura, fusione |
+| `js/tice-programma.js`, `js/tice-import.js`, `js/numbers-reader.js` | programma, import Numbers |
+| `tice-config.js` | indirizzo del custode e Client ID Google |
 | `custode/` | il custode: `core.js` (regole), `Code.gs` (Google), `appsscript.json` |
-| `tools/import_numbers.py` | import dai quaderni Numbers |
+| `strumenti/apri-dati.html`, `tools/decifra_tice.py` | aprire i dati senza l'app |
 | `tools/custode-mock.js` | custode locale per provare senza Google |
 | `tools/test-*.js` | test automatici, anche su GitHub a ogni push |
 | `docs/setup-custode.md` | installazione passo per passo |

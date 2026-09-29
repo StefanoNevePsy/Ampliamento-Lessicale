@@ -1,4 +1,4 @@
-# Quaderno TICE — installazione
+# Edizione Centro TICE — installazione
 
 Tempo: circa 30–40 minuti, una volta sola. Serve l'account **centrotice.it** su
 cui girerà il custode (nel vostro caso quello di Stefano) e, per un passaggio,
@@ -7,8 +7,9 @@ eventualmente chi amministra il dominio centrotice.it.
 Alla fine avrete:
 - un Drive condiviso del centro con dentro i dati;
 - il custode (Apps Script) che è l'unico a leggerlo e scriverlo;
-- l'app su `https://stefanonevepsy.github.io/Ampliamento-Lessicale/centro/`,
-  installabile su telefoni e tablet.
+- l'app su `https://stefanonevepsy.github.io/Ampliamento-Lessicale/`,
+  installabile su telefoni e tablet;
+- la **chiave del centro**, che cifra i dati dei bambini sul Drive.
 
 > Prima di toccare i dati veri potete provare tutto in locale con dati finti:
 > vedi [Provare in locale](#provare-in-locale) in fondo.
@@ -94,7 +95,7 @@ Così l'URL resta lo stesso e l'app non va toccata.
 
 ## 4. Collegare l'app al custode e pubblicarla
 
-1. In [`centro/config.js`](../centro/config.js) compila:
+1. In [`tice-config.js`](../tice-config.js) compila:
    ```js
    custodeUrl: 'https://script.google.com/macros/s/.../exec',
    googleClientId: '....apps.googleusercontent.com',
@@ -103,55 +104,80 @@ Così l'URL resta lo stesso e l'app non va toccata.
 2. Su GitHub: **Actions → Deploy su GitHub Pages → Run workflow** → nel campo
    *branch* scrivi `claude/quaderno-tice`.
 3. Dopo un paio di minuti l'app è su
-   `https://stefanonevepsy.github.io/Ampliamento-Lessicale/centro/`.
+   `https://stefanonevepsy.github.io/Ampliamento-Lessicale/`.
 
-Sul sito c'è un solo spazio: pubblicando questa branch ci finiscono sia l'app
-personale (invariata) sia `/centro/`. Se poi pubblichi un'altra branch,
-`/centro/` sparisce finché non ripubblichi questa. Quando il Quaderno sarà
-collaudato, la soluzione definitiva è unire la cartella `centro/` alla branch
-principale: non tocca nessun file dell'app personale.
+Sul sito c'è un solo spazio: pubblicando questa branch il sito diventa
+l'edizione del centro. È comunque l'app completa, che senza accesso funziona
+solo sul dispositivo come quella personale. Se ripubblichi un'altra branch,
+torna quella.
 
 **Installare sui dispositivi** (così si apre come un'app, anche senza rete):
 - Android, Chrome: menu ⋮ → *Installa app* (o *Aggiungi a schermata Home*).
 - iPhone/iPad, Safari: Condividi → *Aggiungi alla schermata Home*.
 
-## 5. Primo accesso e persone
+## 5. Primo accesso e chiave del centro
 
 1. Apri l'app e **Accedi con Google** con l'account del custode: sei admin.
-2. **Admin → Persone → Aggiungi una persona** per ogni collega e tirocinante:
-   ruolo, bambini assegnati, e per i tirocini la data di fine (dopo quella data
-   l'accesso si chiude da solo).
-3. Ognuno apre l'app sul proprio dispositivo e accede con la propria email
-   Google (del centro o personale, quella che hai inserito).
+2. Compare **Manca la chiave del centro → Crea la chiave del centro**. L'app
+   genera una frase di 25 caratteri:
+   - **scaricala** (il file contiene anche i dati tecnici per aprire i file
+     senza l'app) e **stampala**;
+   - mettila in un gestore di password e la copia su carta in un luogo chiuso;
+   - riscrivi l'ultimo gruppo per confermare.
 
-Togliere l'accesso ha effetto alla richiesta successiva. Al primo collegamento
-l'app cancella anche la copia locale dei bambini non più assegnati.
+   Da questo momento i dati dei bambini escono dai dispositivi solo cifrati:
+   sul Drive nessuno li può leggere senza la frase, nemmeno chi amministra
+   centrotice.it. **Se la frase si perde, i dati sul Drive non si recuperano.**
+3. Su ogni altro dispositivo, dopo l'accesso, si inserisce la frase una volta
+   (**Inserisci la chiave**). Dalla a voce o su carta, non per email o chat.
 
-## 6. Importare i quaderni Numbers
+## 6. Persone
 
-**Nell'app completa** (consigliato): *Presa dati → Importa quaderni*, scegli
-uno o più file `.numbers` (anche da Drive, dal telefono), controlla l'anteprima
-e premi **Importa**. Il file non esce dal dispositivo.
+Dal menu ⋮ → **Persone e accessi → Aggiungi una persona**, per ogni collega e
+tirocinante: email Google (del centro o personale), ruolo, bambini assegnati e,
+per i tirocini, la data di fine (dopo quella data l'accesso si chiude da solo).
 
-Per il Quaderno in `centro/`, su un computer, per ogni bambino:
+Togliere l'accesso ha effetto alla richiesta successiva: l'app di quella
+persona cancella dal dispositivo i dati del centro e la chiave. Anche un
+bambino tolto dagli assegnati sparisce dal suo dispositivo alla
+sincronizzazione successiva.
 
-```bash
-pip install numbers-parser
-python tools/import_numbers.py "Mario_R.numbers" --codice PZ-014 --etichetta "M. R." --aula "Aula 1"
-```
+## 7. Importare i quaderni Numbers
 
-Il programma stampa un riepilogo (programmi, STO, sedute, avvisi) e crea
-`import-PZ-014.json`. Poi nell'app: **Admin → Importa** → scegli il file →
-controlla le *prove per seduta* che l'import ha dovuto dedurre → **Importa**.
+*Presa dati → Importa quaderni*, scegli uno o più file `.numbers` (anche da
+Drive, dal telefono), controlla l'anteprima (bambino, attività, sedute, prove da
+confermare, avvisi) e premi **Importa**. Il file si legge sul dispositivo; il
+bambino importato va sul Drive del centro già cifrato.
 
-Consigliato: codice e iniziali, non nome e cognome.
+## 8. Materiali condivisi
 
-## 7. Materiali condivisi
+Menu ⋮ → **Materiali del centro → Pubblica un set del tuo archivio**. Le
+colleghe lo trovano lì e lo scaricano una volta: poi lo usano nei giochi e nei
+programmi anche senza rete. Ripubblicando un set scaricato se ne pubblica una
+versione aggiornata.
 
-Dall'app completa (tablet) esporta un set: è un file `.zip`. Nel Quaderno:
-**Materiali → Pubblica un set** → scegli lo zip. Le colleghe lo trovano in
-Materiali, lo scaricano una volta, e con **Esporta per l'app completa** ottengono
-uno zip che l'app completa apre con *Importa*.
+## Backup e versioni
+
+- Ogni bambino conserva le **versioni precedenti**: le ultime 20 e l'ultima di
+  ogni giorno per 60 giorni. Menu del bambino → **Versioni precedenti**: si
+  confronta una versione con quella attuale e la si ripristina (la versione di
+  adesso resta tra le precedenti).
+- Le versioni più vecchie finiscono nel cestino del Drive condiviso (30 giorni).
+- Per una copia fuori da Google: scarica periodicamente la cartella `Dati`
+  (tasto destro → Scarica). È cifrata, quindi si può conservare anche su un
+  disco esterno.
+
+## Aprire i dati senza l'app
+
+- **[`strumenti/apri-dati.html`](../strumenti/apri-dati.html)**: un file solo,
+  si apre con il browser anche senza rete. Scegli il file della chiave (o
+  scrivi la frase), poi i file scaricati dal Drive o la cartella intera: per
+  ogni bambino scarichi i dati leggibili (JSON) o le sedute (CSV per Excel).
+  Conservane una copia insieme alla chiave. È anche pubblicato su
+  `…/Ampliamento-Lessicale/strumenti/apri-dati.html`.
+- **[`tools/decifra_tice.py`](../tools/decifra_tice.py)** per chi usa Python:
+  `pip install cryptography`, poi
+  `python decifra_tice.py --frase XXXXX-… --config _config/cifratura.json --csv Pazienti/*/paziente.json`.
 
 ---
 
@@ -163,29 +189,32 @@ Con Node.js installato, dalla cartella del progetto:
 node tools/custode-mock.js --dev
 ```
 
-Apri `http://localhost:8787/`: c'è un accesso finto ("Entra" con qualunque
-email; `admin@centro.test` è l'admin). I dati finiscono in `.custode-dati/`,
+Apri `http://localhost:8787/`: c'è un accesso finto (email qualunque;
+`admin@centro.test` è l'admin). I dati, cifrati, finiscono in `.custode-dati/`,
 non su Google. Per provare anche il login vero:
 
 ```bash
 node tools/custode-mock.js --client-id <CLIENT_ID> --proprietario tu@centrotice.it
 ```
 
-Test automatici (logica del custode, adattatore Apps Script, calcoli clinici):
+Test automatici (custode, adattatore Apps Script, cifratura e fusione, import):
 
 ```bash
 node tools/test-custode.js
 node tools/test-appsscript.js
-node tools/test-modello.js
+node tools/test-tice-sync.js
+node tools/test-tice-import.js
 ```
 
 ## Se qualcosa non va
 
 | Sintomo | Causa probabile |
 |---|---|
-| "Manca il Client ID di Google in config.js" | punto 4.1 |
+| Nessun riquadro "Collega l'app al Drive del centro" | `tice-config.js` vuoto (punto 4.1) |
+| "Questa non è la chiave del centro" | frase sbagliata: controlla O/0 e I/1 (l'app li tollera) e che sia quella del centro |
+| "Prima un amministratore deve creare la chiave" | punto 5 non ancora fatto |
 | Il pulsante Google non compare o dà errore di origine | l'indirizzo del sito non è tra le *Origini JavaScript autorizzate* (punto 2.3) |
-| "L'account ... non è abilitato" | la persona non è in Admin → Persone, o l'email è diversa |
+| "L'account ... non è abilitato" | la persona non è in Persone e accessi, o l'email è diversa |
 | "Accesso scaduto" | normale dopo un'ora di inattività: si rientra con Google, le sedute restano salvate |
-| Sedute "da inviare" che non partono | nessuna rete, oppure il custode non risponde: prova l'URL `/exec` |
+| Bambini "da inviare" che non partono | nessuna rete, oppure il custode non risponde: prova l'URL `/exec` |
 | "Il custode è occupato" | molte scritture nello stesso istante: riprova dopo qualche secondo |

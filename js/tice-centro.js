@@ -1,0 +1,555 @@
+/**
+ * Centro TICE — schermate del collegamento con il Drive del centro:
+ * accesso con Google, chiave del centro, sincronizzazione, persone e accessi,
+ * versioni precedenti di un bambino, materiali condivisi.
+ *
+ * Si aggancia alla presa dati (tice-home.js) e usa il motore di tice-sync.js.
+ * Se tice-config.js non indica un custode, non mostra niente: l'app resta
+ * solo sul dispositivo.
+ */
+(function () {
+    'use strict';
+    const Y = window.TiceSync, C = window.TiceCifra;
+    if (!Y || !window.TiceHome) return;
+    const { h, grezzo, icona, foglio, conferma, avviso, barra, vai, paz, pazienti, formatoData, T } = TiceHome.strumenti;
+    const S = Y.S;
+    const io = () => S.io || {};
+    const admin = () => !!(S.io && S.io.permessi && S.io.permessi.gestisciAccessi);
+    const RUOLI = { admin: 'Amministratore', professionista: 'Professionista', tirocinante: 'Tirocinante' };
+    const dataOra = (iso) => iso ? new Date(iso).toLocaleString('it-IT', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+
+    // =====================================================================
+    // Agganci nella presa dati
+    // =====================================================================
+    function chip() {
+        if (!Y.attivo()) return '';
+        let stato = 'ok', testo = '';
+        if (S.fase === 'fuori') { stato = 'spento'; testo = 'Accedi'; }
+        else if (S.fase === 'chiave') { stato = 'attesa'; testo = 'Chiave'; }
+        else if (S.lavoro) { stato = 'lavoro'; }
+        else if (S.errore) { stato = 'errore'; }
+        else if (S.coda.size) { stato = 'attesa'; testo = String(S.coda.size); }
+        return h`<button class="ib tice-stato" data-a="vai-account" data-stato="${stato}" aria-label="Collegamento con il centro" title="Collegamento con il centro">
+            <i class="pallino"></i>${testo ? h`<span>${testo}</span>` : icona('cloud')}</button>`;
+    }
+
+    function banner() {
+        if (!Y.attivo()) return '';
+        if (S.fase === 'fuori') {
+            return h`<div class="scheda imbottita" style="margin-bottom:12px">
+                <b>${icona('cloud')} Collega l'app al Drive del centro</b>
+                <p class="sotto">Con il tuo account Google vedi i bambini che ti sono assegnati e le sedute registrate da tutti. Senza accesso l'app funziona solo su questo dispositivo.</p>
+                ${S.negato ? h`<div class="banda">${icona('triangle-exclamation')}<div>${S.negato}</div></div>` : ''}
+                ${window.TICE_CONFIG.dev ? h`<form data-a-form="accesso-dev" style="display:flex;gap:8px;flex-wrap:wrap">
+                    <input class="campo-in" name="email" type="email" placeholder="email (prova locale)" required style="flex:1;min-width:180px">
+                    <button class="bt primario">Entra</button></form>` : h`<div id="tice-gis" style="min-height:44px"></div>`}
+            </div>`;
+        }
+        if (S.fase === 'chiave') {
+            const serveCrearla = !io().cifratura;
+            return h`<div class="scheda imbottita" style="margin-bottom:12px">
+                <b>${icona('key')} ${serveCrearla ? 'Manca la chiave del centro' : 'Inserisci la chiave del centro'}</b>
+                <p class="sotto">${serveCrearla
+                    ? (admin() ? 'I dati dei bambini sul Drive sono cifrati con una chiave che conosce solo il centro. Creala adesso: la dovrai conservare e dare alle persone autorizzate.'
+                        : 'Un amministratore deve ancora creare la chiave del centro.')
+                    : 'I dati sul Drive sono cifrati. Inserisci la chiave del centro (25 caratteri) una volta su questo dispositivo: chiedila a un amministratore.'}</p>
+                ${serveCrearla ? (admin() ? h`<button class="bt primario" data-a="crea-chiave">${icona('key')} Crea la chiave del centro</button>` : '')
+                    : h`<button class="bt primario" data-a="inserisci-chiave">${icona('key')} Inserisci la chiave</button>`}
+            </div>`;
+        }
+        if (S.errore && !S.lavoro) {
+            return h`<div class="banda" style="justify-content:space-between">${icona('triangle-exclamation')}<div style="flex:1">${S.errore}</div>
+                <button class="bt piccolo" data-a="sincronizza">Riprova</button></div>`;
+        }
+        return '';
+    }
+
+    function pillola(p) {
+        if (!Y.attivo() || S.fase === 'fuori') return '';
+        if (!Y.condiviso(p.id)) return h`<span class="pill grigia">solo su questo dispositivo</span> `;
+        if (Y.inAttesa(p.id)) return h`<span class="pill arancio">da inviare</span> `;
+        return '';
+    }
+
+    function opzioniBambino(p) {
+        if (!Y.pronto()) return '';
+        const cond = Y.condiviso(p.id);
+        return h`${!cond && Y.puo('creaPazienti') ? h`<button class="opzione" data-foglio="est:condividi">${icona('cloud-arrow-up')}<span class="corpo">Condividi con il centro<small>Lo vedranno le persone a cui verrà assegnato</small></span></button>` : ''}
+            ${cond ? h`<button class="opzione" data-foglio="est:versioni">${icona('clock-rotate-left')}<span class="corpo">Versioni precedenti<small>Per recuperare dati cancellati o modificati per errore</small></span></button>` : ''}
+            ${cond && Y.puo('eliminaPazienti') ? h`<button class="opzione" data-foglio="est:archivia">${icona('box-archive')}<span class="corpo">Archivia per tutti<small>Sparisce dai dispositivi; resta sul Drive con le sue versioni</small></span></button>` : ''}`;
+    }
+    async function sceltaBambino(k, p) {
+        if (k === 'condividi') {
+            try { await Y.condividi(p.id); avviso(`${p.name} ora è sul Drive del centro`); }
+            catch (e) { avviso(e.message, 'errore'); }
+            TiceHome.ridisegna();
+        } else if (k === 'versioni') {
+            T.versioniDi = p.id;
+            vai('versioni');
+        } else if (k === 'archivia') {
+            if (!await conferma(`Archiviare ${p.name}?`, 'Sparisce dai dispositivi di tutti alla prossima sincronizzazione. Il file resta sul Drive con le versioni precedenti e un amministratore può recuperarlo.', { ok: 'Archivia', pericolo: true })) return;
+            try {
+                await Y.chiama('paziente.archivia', { id: p.id });
+                await Y.sincronizza();
+                vai('bambini');
+                avviso(`${p.name} archiviato`);
+            } catch (e) { avviso(e.message, 'errore'); }
+        }
+    }
+
+    function opzioniMenu() {
+        if (!Y.attivo()) return '';
+        return h`<button class="opzione" data-foglio="est:account">${icona('cloud')}<span class="corpo">Account e sincronizzazione</span></button>
+            ${Y.pronto() ? h`<button class="opzione" data-foglio="est:materiali">${icona('layer-group')}<span class="corpo">Materiali del centro<small>Set condivisi tra le professioniste</small></span></button>` : ''}
+            ${admin() ? h`<button class="opzione" data-foglio="est:persone">${icona('users')}<span class="corpo">Persone e accessi</span></button>` : ''}`;
+    }
+    function sceltaMenu(k) {
+        if (k === 'account') vai('account');
+        else if (k === 'materiali') vai('materiali');
+        else if (k === 'persone') vai('persone');
+    }
+
+    async function nuovoBambino(p) {
+        if (!Y.pronto() || !Y.puo('creaPazienti')) return;
+        try { await Y.condividi(p.id); } catch (e) { avviso('Salvato sul dispositivo; invio al centro non riuscito: ' + e.message, 'errore'); }
+    }
+    const puoProgrammi = (p) => !Y.attivo() || !Y.condiviso(p.id) || Y.puo('programmi');
+
+    function dopo(vista, r) {
+        const gis = r.querySelector('#tice-gis');
+        if (gis) Y.Auth.pulsante(gis).catch((e) => { gis.innerHTML = String(h`<p class="sotto">${e.message}</p>`); });
+        const f = r.querySelector('[data-a-form="accesso-dev"]');
+        if (f) f.addEventListener('submit', (e) => { e.preventDefault(); Y.Auth.accessoDev(f.email.value); });
+    }
+
+    // =====================================================================
+    // Chiave del centro
+    // =====================================================================
+    function scaricaTesto(nome, testo) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([testo], { type: 'text/plain;charset=utf-8' }));
+        a.download = nome;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    }
+    function testoChiave(frase, cfg) {
+        return `CHIAVE DEL CENTRO TICE — Quaderno digitale\n\n    ${frase}\n\n` +
+            `Dati tecnici (non segreti, servono ad aprire i file anche senza _config/cifratura.json):\n` +
+            `    identificativo ${cfg.kid} · PBKDF2-SHA256 ${cfg.kdf.iterazioni} iterazioni · sale ${cfg.kdf.sale}\n\n` +
+            `Serve ad aprire i dati dei bambini salvati sul Drive del centro.\n` +
+            `- Si inserisce una volta per dispositivo, nell'app.\n` +
+            `- Senza questa chiave i dati NON si possono recuperare: nessuno la conosce oltre al centro,\n  nemmeno Google o gli amministratori del Drive.\n` +
+            `- Per aprire un file senza l'app: strumenti/apri-dati.html (anche offline) oppure tools/decifra_tice.py.\n` +
+            `- Conservala in un gestore di password e su carta in un luogo chiuso. Non mandarla per email o chat.\n\n` +
+            `Creata il ${new Date().toLocaleDateString('it-IT')} da ${io().email || ''}.\n`;
+    }
+    async function creaChiave() {
+        const frase = C.generaFrase();
+        avviso('Preparazione della chiave…');
+        const preparata = await C.nuovaConfigurazione(frase);
+        const cfg = preparata.cfg;
+        const r = await foglio(h`<form><h2>${icona('key')} La chiave del centro</h2>
+            <p class="sotto">Questa è l'unica chiave che apre i dati dei bambini. Conservala adesso, prima di continuare: l'app non la mostrerà più.</p>
+            <div class="chiave-grande" aria-label="Chiave del centro">${frase}</div>
+            <div class="bottoni" style="margin-top:8px">
+                <button type="button" class="bt" data-copia>${icona('copy')} Copia</button>
+                <button type="button" class="bt" data-scarica>${icona('download')} Scarica</button>
+                <button type="button" class="bt" data-stampa>${icona('print')} Stampa</button>
+            </div>
+            <ul class="sotto piccolo" style="padding-left:18px">
+                <li>Mettila in un gestore di password e su carta in un luogo chiuso.</li>
+                <li>La dai a voce, o su carta, alle persone autorizzate: la inseriscono una volta sul loro dispositivo.</li>
+                <li>Se si perde, i dati sul Drive non si recuperano più.</li>
+            </ul>
+            <label class="campo"><span>Per conferma, riscrivi l'ultimo gruppo (${'•'.repeat(5)})</span><input name="conferma" required autocomplete="off" maxlength="5" style="text-transform:uppercase;font-family:monospace;letter-spacing:2px"></label>
+            <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Crea la chiave</button></div></form>`,
+        {
+            invia: (f) => {
+                const v = C.normalizzaFrase(frase.slice(0, -5) + f.conferma.value);
+                if (v !== frase) { f.conferma.setCustomValidity('Non corrisponde'); f.conferma.reportValidity(); f.conferma.setCustomValidity(''); return undefined; }
+                return true;
+            },
+            dopo: (f) => {
+                f.querySelector('[data-copia]').onclick = () => navigator.clipboard && navigator.clipboard.writeText(frase).then(() => avviso('Chiave copiata'));
+                f.querySelector('[data-scarica]').onclick = () => scaricaTesto('chiave-centro-tice.txt', testoChiave(frase, cfg));
+                f.querySelector('[data-stampa]').onclick = () => {
+                    const w = window.open('', '_blank');
+                    if (!w) return;
+                    w.document.write('<pre style="font:16px/1.5 monospace;padding:24px;white-space:pre-wrap">' + testoChiave(frase, cfg).replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</pre>');
+                    w.document.close(); w.print();
+                };
+            }
+        });
+        if (!r) return;
+        try {
+            await Y.creaChiave(frase, preparata);
+            avviso('Chiave del centro creata');
+        } catch (e) { avviso(e.message, 'errore'); }
+        TiceHome.ridisegna();
+    }
+    async function inserisciChiave() {
+        const r = await foglio(h`<form><h2>${icona('key')} Chiave del centro</h2>
+            <p class="sotto">25 caratteri, anche senza trattini. Si inserisce una volta su questo dispositivo.</p>
+            <label class="campo"><input name="frase" required autocomplete="off" autofocus placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX" style="font-family:monospace;letter-spacing:1px;text-transform:uppercase"></label>
+            <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Apri</button></div></form>`);
+        if (!r) return;
+        try {
+            avviso('Controllo della chiave…');
+            await Y.inserisciChiave(r.frase);
+            avviso('Chiave corretta: sincronizzazione in corso');
+        } catch (e) { avviso(e.message, 'errore'); }
+        TiceHome.ridisegna();
+    }
+
+    // =====================================================================
+    // Account
+    // =====================================================================
+    function vistaAccount() {
+        const u = Y.Auth.utente();
+        return h`${barra({ indietro: 'vai-bambini', titolo: 'Collegamento con il centro' })}
+            <main class="tice-main">
+                ${banner()}
+                ${u ? h`<div class="scheda imbottita">
+                    <b>${io().nome || u.nome}</b> <span class="sotto">${u.email}</span><br>
+                    <span class="pill">${RUOLI[io().ruolo] || 'accesso da verificare'}</span>
+                    ${io().scadenza ? h` <span class="pill arancio">fino al ${formatoData(io().scadenza, true)}</span>` : ''}
+                    ${io().proprietario ? h` <span class="pill verde">proprietario del custode</span>` : ''}
+                </div>` : ''}
+                ${Y.pronto() ? h`<div class="scheda imbottita" style="margin-top:10px">
+                    <table class="tabella"><tbody>
+                        <tr><td>Bambini del centro su questo dispositivo</td><td class="num"><b>${S.condivisi.size}</b></td></tr>
+                        <tr><td>Da inviare</td><td class="num"><b>${S.coda.size}</b></td></tr>
+                        <tr><td>Ultima sincronizzazione</td><td class="num">${S.ultimo ? dataOra(S.ultimo) : '—'}</td></tr>
+                    </tbody></table>
+                    ${S.errore ? h`<p class="sotto">${icona('triangle-exclamation')} ${S.errore}</p>` : ''}
+                    <button class="bt primario largo" style="margin-top:10px" data-a="sincronizza" ${S.lavoro ? grezzo('disabled') : ''}>${icona('rotate')} ${S.lavoro ? 'Sincronizzazione…' : 'Sincronizza ora'}</button>
+                </div>
+                <div class="scheda imbottita" style="margin-top:10px">
+                    <b>${icona('key')} Chiave del centro</b>
+                    <p class="sotto">Salvata su questo dispositivo in forma non leggibile. I dati sul Drive sono cifrati: senza la chiave nessuno, nemmeno chi amministra il Drive, può leggerli.</p>
+                    <button class="bt piccolo fantasma" data-a="dimentica-chiave">Togli la chiave da questo dispositivo</button>
+                </div>` : ''}
+                <div class="bottoni" style="margin-top:14px">
+                    ${admin() ? h`<button class="bt" data-a="vai-persone">${icona('users')} Persone e accessi</button>` : ''}
+                    ${Y.pronto() ? h`<button class="bt" data-a="vai-materiali">${icona('layer-group')} Materiali del centro</button>` : ''}
+                    ${u ? h`<button class="bt pericolo" data-a="esci">${icona('right-from-bracket')} Esci</button>` : ''}
+                </div>
+            </main>`;
+    }
+
+    // =====================================================================
+    // Persone e accessi (admin)
+    // =====================================================================
+    function nomeBambino(pid) {
+        const e = S.etichette[pid];
+        const l = paz(pid);
+        return (e && e.nome) || (l && l.name) || pid;
+    }
+    function vistaPersone() {
+        const a = T.accessi;
+        if (!a) {
+            Y.chiama('accessi.leggi').then((x) => { T.accessi = x; TiceHome.ridisegna(); }).catch((e) => avviso(e.message, 'errore'));
+            return h`${barra({ indietro: 'vai-account', titolo: 'Persone e accessi' })}<main class="tice-main"><p class="sotto">${icona('spinner fa-spin')} Caricamento…</p></main>`;
+        }
+        const oggi = new Date().toISOString().slice(0, 10);
+        const persone = Object.keys(a.utenti).sort((x, y) => (a.utenti[x].nome || x).localeCompare(a.utenti[y].nome || y, 'it'));
+        return h`${barra({ indietro: 'vai-account', titolo: 'Persone e accessi' })}
+            <main class="tice-main">
+                <p class="sotto">Chi è in elenco entra con il suo account Google (anche Gmail personale) e vede solo i bambini assegnati. Togliere l'accesso ha effetto alla richiesta successiva, e i dati del centro spariscono dal suo dispositivo alla prossima sincronizzazione.</p>
+                <button class="bt primario largo" data-a="persona" data-email="">${icona('user-plus')} Aggiungi una persona</button>
+                <div class="scheda" style="margin-top:12px">
+                    <div class="riga" style="cursor:default"><span class="corpo"><span class="t1">${a.proprietario}</span><span class="t2">Amministratore · proprietario del custode, sempre abilitato</span></span></div>
+                    ${persone.map((em) => {
+                        const u = a.utenti[em];
+                        const scaduto = u.scadenza && u.scadenza < oggi;
+                        const n = u.pazienti === '*' ? 'tutti i bambini' : `${(u.pazienti || []).length} bambini`;
+                        return h`<button class="riga" data-a="persona" data-email="${em}">
+                            <span class="corpo"><span class="t1">${u.nome || em}${!u.attivo ? h` <span class="pill grigia">disattivato</span>` : ''}${scaduto ? h` <span class="pill arancio">scaduto</span>` : ''}</span>
+                            <span class="t2">${em} · ${RUOLI[u.ruolo]} · ${n}${u.scadenza ? ' · fino al ' + formatoData(u.scadenza) : ''}</span></span>${icona('pen')}</button>`;
+                    })}
+                </div>
+            </main>`;
+    }
+    async function persona(email) {
+        const a = T.accessi;
+        const u = email ? a.utenti[email] : { nome: '', ruolo: 'tirocinante', pazienti: [], attivo: true, scadenza: null };
+        const bambini = Object.keys(S.etichette).sort((x, y) => nomeBambino(x).localeCompare(nomeBambino(y), 'it'));
+        const tutti = u.pazienti === '*';
+        const r = await foglio(h`<form><h2>${email ? u.nome || email : 'Nuova persona'}</h2>
+            <label class="campo"><span>Email Google</span><input name="email" type="email" required value="${email || ''}" ${email ? grezzo('readonly') : grezzo('autofocus')}></label>
+            <label class="campo"><span>Nome</span><input name="nome" maxlength="60" value="${u.nome || ''}"></label>
+            <div class="campo"><span>Ruolo</span><div class="scelta">
+                ${Object.keys(RUOLI).map((k) => h`<label><input type="radio" name="ruolo" value="${k}" ${u.ruolo === k ? grezzo('checked') : ''}><span>${RUOLI[k]}</span></label>`)}
+            </div><span class="sotto piccolo">Tirocinante: registra le sedute e vede lo storico. Professionista: anche programmi e nuovi bambini. Amministratore: tutto, persone comprese.</span></div>
+            <label class="campo"><span>Accesso fino al (facoltativo, per i tirocini)</span><input name="scadenza" type="date" value="${u.scadenza || ''}"></label>
+            <div class="campo"><span>Bambini assegnati</span>
+                <label style="display:flex;gap:8px;align-items:center;margin:4px 0"><input type="checkbox" name="tutti" ${tutti ? grezzo('checked') : ''}> Tutti</label>
+                <div class="opzioni" style="max-height:30vh;overflow-y:auto">
+                    ${bambini.length ? bambini.map((pid) => h`<label class="opzione"><input type="checkbox" name="p" value="${pid}" ${!tutti && (u.pazienti || []).includes(pid) ? grezzo('checked') : ''}><span class="corpo">${nomeBambino(pid)}</span></label>`)
+                        : h`<p class="sotto">Nessun bambino sul Drive del centro.</p>`}
+                </div></div>
+            ${email ? h`<label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" name="attivo" ${u.attivo !== false ? grezzo('checked') : ''}> Accesso attivo</label>` : ''}
+            ${email ? h`<button type="button" class="bt pericolo" data-foglio="togli" style="width:100%;margin-top:6px">Togli dall'elenco</button>` : ''}
+            <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`,
+        { invia: (f) => { const d = new FormData(f); return { email: d.get('email'), nome: d.get('nome'), ruolo: d.get('ruolo'), scadenza: d.get('scadenza'), tutti: !!d.get('tutti'), p: d.getAll('p'), attivo: email ? !!d.get('attivo') : true }; } });
+        if (!r) return;
+        const nuovi = JSON.parse(JSON.stringify(a));
+        const em = String(email || r.email).trim().toLowerCase();
+        if (r === 'togli') {
+            if (!await conferma(`Togliere ${em}?`, 'Non potrà più entrare; i dati del centro spariranno dal suo dispositivo.', { ok: 'Togli', pericolo: true })) return;
+            delete nuovi.utenti[em];
+        } else {
+            nuovi.utenti[em] = { nome: r.nome.trim(), ruolo: r.ruolo, pazienti: r.tutti ? '*' : r.p, scadenza: r.scadenza || null, attivo: r.attivo };
+        }
+        try {
+            T.accessi = await Y.chiama('accessi.salva', { accessi: { utenti: nuovi.utenti }, versioneBase: a.version || 0 });
+            T.accessi.proprietario = a.proprietario;
+            avviso('Accessi salvati');
+        } catch (e) {
+            avviso(e.message, 'errore');
+            if (e.codice === 'conflitto') T.accessi = null;
+        }
+        TiceHome.ridisegna();
+    }
+
+    // =====================================================================
+    // Versioni precedenti
+    // =====================================================================
+    function vistaVersioni() {
+        const pid = T.versioniDi;
+        const p = paz(pid);
+        if (!T.elencoVersioni || T.elencoVersioni.pid !== pid) {
+            Y.versioni(pid).then((v) => { T.elencoVersioni = { pid, v }; TiceHome.ridisegna(); }).catch((e) => avviso(e.message, 'errore'));
+            return h`${barra({ indietro: 'vai-seduta', titolo: 'Versioni precedenti', sotto: { testo: p ? p.name : '' } })}<main class="tice-main"><p class="sotto">${icona('spinner fa-spin')} Caricamento…</p></main>`;
+        }
+        const v = T.elencoVersioni.v;
+        return h`${barra({ indietro: 'vai-seduta', titolo: 'Versioni precedenti', sotto: { testo: p ? p.name : '' } })}
+            <main class="tice-main">
+                <p class="sotto">Ogni salvataggio conserva la versione di prima: le ultime 20, più l'ultima di ogni giorno per due mesi. Ripristinare una versione non cancella niente: diventa la versione attuale e quella di adesso resta tra le precedenti.</p>
+                <div class="scheda">
+                    ${v.length ? v.map((x) => h`<button class="riga" data-a="versione" data-v="${x.version}">
+                        <span class="corpo"><span class="t1">${dataOra(x.aggiornato)}</span><span class="t2">versione ${x.version} · ${x.aggiornatoDa || ''}</span></span>${icona('chevron-right')}</button>`)
+                        : h`<div class="vuoto">Ancora nessuna versione precedente.</div>`}
+                </div>
+            </main>`;
+    }
+    async function versione(b) {
+        const pid = T.versioniDi, n = +b.dataset.v;
+        let vecchia;
+        try { vecchia = await Y.anteprimaVersione(pid, n); } catch (e) { avviso(e.message, 'errore'); return; }
+        const ora = paz(pid) || {};
+        const conta = (p) => (p.history || []).length;
+        const ultima = (p) => (p.history || []).reduce((m, s) => (s.date > m ? s.date : m), '');
+        const r = await foglio(h`<h2>Versione ${n}</h2>
+            <table class="tabella"><thead><tr><th></th><th class="num">Questa versione</th><th class="num">Adesso</th></tr></thead><tbody>
+                <tr><td>Nome</td><td class="num">${vecchia.name}</td><td class="num">${ora.name || ''}</td></tr>
+                <tr><td>Sedute</td><td class="num">${conta(vecchia)}</td><td class="num">${conta(ora)}</td></tr>
+                <tr><td>Ultima seduta</td><td class="num">${formatoData((ultima(vecchia) || '').slice(0, 10))}</td><td class="num">${formatoData((ultima(ora) || '').slice(0, 10))}</td></tr>
+                <tr><td>Attività nel programma</td><td class="num">${((vecchia.programma || {}).attivita || []).length}</td><td class="num">${((ora.programma || {}).attivita || []).length}</td></tr>
+            </tbody></table>
+            <div class="bottoni"><button class="bt" data-foglio="chiudi">Chiudi</button><button class="bt primario" data-foglio="ripristina">Ripristina questa versione</button></div>`);
+        if (r !== 'ripristina') return;
+        if (!await conferma('Ripristinare la versione ' + n + '?', 'Diventa la versione attuale per tutti. Quella di adesso resta tra le precedenti.', { ok: 'Ripristina' })) return;
+        try {
+            await Y.ripristina(pid, n);
+            T.elencoVersioni = null;
+            avviso('Versione ripristinata');
+            vai('seduta', pid);
+        } catch (e) { avviso(e.message, 'errore'); }
+    }
+
+    // =====================================================================
+    // Materiali del centro: set condivisi. Immagini e audio viaggiano una volta
+    // sola, per impronta (sha256): un set aggiornato scarica solo le novità.
+    // =====================================================================
+    const setLocali = () => (typeof state !== 'undefined' && state.savedSets) || [];
+    async function sha256(b64) {
+        const buf = await crypto.subtle.digest('SHA-256', C.daB64(b64));
+        return [...new Uint8Array(buf)].map((x) => x.toString(16).padStart(2, '0')).join('');
+    }
+    // Sostituisce ogni "data:..." con "img:<hash>" e raccoglie i file
+    async function perRiferimento(set) {
+        const file = {};
+        const RE = /^data:((?:image\/(?:png|jpeg|webp|gif))|(?:audio\/(?:mpeg|mp4|webm|ogg|wav|x-m4a)));base64,(.+)$/;
+        async function visita(v) {
+            if (typeof v === 'string') {
+                if (v.indexOf('data:') !== 0) return v;
+                const m = RE.exec(v);
+                if (!m) throw new Error('Nel set c\'è un file di tipo non ammesso (solo immagini PNG, JPEG, WebP, GIF e audio).');
+                const hs = await sha256(m[2]);
+                file[hs] = v;
+                return 'img:' + hs;
+            }
+            if (Array.isArray(v)) { const o = []; for (const x of v) o.push(await visita(x)); return o; }
+            if (v && typeof v === 'object') { const o = {}; for (const k of Object.keys(v)) o[k] = await visita(v[k]); return o; }
+            return v;
+        }
+        return { set: await visita(set), file };
+    }
+    function hashDi(set) {
+        const tr = {};
+        (function visita(v) {
+            if (typeof v === 'string') { const m = /^img:([a-f0-9]{64})/.exec(v); if (m) tr[m[1]] = true; }
+            else if (Array.isArray(v)) v.forEach(visita);
+            else if (v && typeof v === 'object') Object.keys(v).forEach((k) => visita(v[k]));
+        })(set);
+        return Object.keys(tr);
+    }
+    function sostituisci(v, mappa) {
+        if (typeof v === 'string') { const m = /^img:([a-f0-9]{64})/.exec(v); return m && mappa[m[1]] ? mappa[m[1]] : v; }
+        if (Array.isArray(v)) return v.map((x) => sostituisci(x, mappa));
+        if (v && typeof v === 'object') { const o = {}; Object.keys(v).forEach((k) => { o[k] = sostituisci(v[k], mappa); }); return o; }
+        return v;
+    }
+    async function ricaricaSet() {
+        state.savedSets = await DB.getAllSets();
+        const b = document.getElementById('lib-count');
+        if (b) b.innerText = state.savedSets.length;
+        if (typeof filterSetsByMode === 'function') filterSetsByMode();
+    }
+
+    function vistaMateriali() {
+        if (!T.indiceMateriali) {
+            Y.chiama('materiali.indice').then((x) => { T.indiceMateriali = x; TiceHome.ridisegna(); }).catch((e) => avviso(e.message, 'errore'));
+            return h`${barra({ indietro: 'vai-bambini', titolo: 'Materiali del centro' })}<main class="tice-main"><p class="sotto">${icona('spinner fa-spin')} Caricamento…</p></main>`;
+        }
+        const ind = T.indiceMateriali.sets || {};
+        const locali = {};
+        setLocali().forEach((s) => { if (s.centro && s.centro.id) locali[s.centro.id] = s; });
+        const ids = Object.keys(ind).sort((a, b) => (ind[a].categoria + ind[a].nome).localeCompare(ind[b].categoria + ind[b].nome, 'it'));
+        return h`${barra({ indietro: 'vai-bambini', titolo: 'Materiali del centro' })}
+            <main class="tice-main">
+                <p class="sotto">I set pubblicati qui si scaricano una volta e poi si usano anche senza rete, nei giochi e nei programmi.</p>
+                ${Y.puo('pubblicaMateriali') ? h`<button class="bt primario largo" data-a="pubblica-set">${icona('cloud-arrow-up')} Pubblica un set del tuo archivio</button>` : ''}
+                ${T.lavoroMateriali ? h`<p class="sotto" style="margin-top:10px">${icona('spinner fa-spin')} ${T.lavoroMateriali}</p>` : ''}
+                <div class="scheda" style="margin-top:12px">
+                    ${ids.length ? ids.map((id) => {
+                        const v = ind[id], l = locali[id];
+                        const stato = !l ? 'scarica' : l.centro.versione < v.versione ? 'aggiorna' : 'ok';
+                        return h`<div class="riga" style="cursor:default">
+                            <span class="corpo"><span class="t1">${v.nome}</span><span class="t2">${v.categoria ? v.categoria + ' · ' : ''}${v.nItems} elementi · ${v.aggiornatoDa || ''} · ${formatoData((v.aggiornato || '').slice(0, 10))}</span></span>
+                            ${stato === 'ok' ? h`<span class="pill verde">${icona('check')} sul dispositivo</span>`
+                                : h`<button class="bt piccolo ${stato === 'aggiorna' ? 'arancio' : ''}" data-a="scarica-set" data-id="${id}">${stato === 'aggiorna' ? 'Aggiorna' : 'Scarica'}</button>`}
+                        </div>`;
+                    }) : h`<div class="vuoto">Ancora nessun set pubblicato.</div>`}
+                </div>
+            </main>`;
+    }
+    async function scaricaSet(b) {
+        const id = b.dataset.id;
+        try {
+            T.lavoroMateriali = 'Scaricamento del set…'; TiceHome.ridisegna();
+            const set = await Y.chiama('materiali.set', { id });
+            const hs = hashDi(set), mappa = {};
+            for (let i = 0; i < hs.length; i += 40) {
+                T.lavoroMateriali = `Immagini ${Math.min(i + 40, hs.length)} di ${hs.length}…`; TiceHome.ridisegna();
+                Object.assign(mappa, await Y.chiama('materiali.immagini', { hashes: hs.slice(i, i + 40) }));
+            }
+            const locale = sostituisci(set, mappa);
+            const esistente = setLocali().find((s) => s.centro && s.centro.id === id);
+            locale.id = esistente ? esistente.id : id;
+            locale.centro = { id, versione: set.versione, aggiornato: set.aggiornato };
+            delete locale.versione; delete locale.aggiornato; delete locale.aggiornatoDa;
+            await DB.saveSet(locale);
+            await ricaricaSet();
+            avviso(`«${locale.name}» scaricato`);
+        } catch (e) { avviso(e.message, 'errore'); }
+        T.lavoroMateriali = null;
+        TiceHome.ridisegna();
+    }
+    async function pubblicaSet() {
+        const sets = setLocali().filter((s) => !(s.modes || []).some((m) => m === 'quaderno' || m === 'quaderno_task'));
+        const r = await foglio(h`<form><h2>Pubblica un set</h2>
+            <p class="sotto">Le colleghe lo troveranno nei materiali del centro. Se lo hai scaricato dal centro, ne pubblichi una versione aggiornata.</p>
+            <input type="search" placeholder="Cerca" data-filtro-set style="margin-bottom:6px">
+            <div class="opzioni" style="max-height:44vh;overflow-y:auto" data-elenco-set>
+                ${sets.map((s) => h`<label class="opzione" data-nome="${String(s.name + ' ' + (s.category || '')).toLowerCase()}"><input type="radio" name="id" value="${s.id}" required>
+                    <span class="corpo">${s.name}<small>${s.category || ''} · ${(s.items || []).length} elementi${s.centro ? ' · dal centro' : ''}</small></span></label>`)}
+            </div>
+            <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Pubblica</button></div></form>`,
+        { dopo: (f) => { const q = f.querySelector('[data-filtro-set]'); q.addEventListener('input', () => { const v = q.value.trim().toLowerCase(); f.querySelectorAll('[data-elenco-set] > label').forEach((l) => { l.hidden = !!v && !l.dataset.nome.includes(v); }); }); } });
+        if (!r || !r.id) return;
+        const locale = setLocali().find((s) => s.id === r.id);
+        try {
+            T.lavoroMateriali = 'Preparazione del set…'; TiceHome.ridisegna();
+            const copia = JSON.parse(JSON.stringify(locale));
+            const idCentro = (copia.centro && copia.centro.id) || String(copia.id).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 80);
+            delete copia.centro;
+            copia.id = idCentro;
+            const { set, file } = await perRiferimento(copia);
+            const mancanti = await Y.chiama('materiali.mancanti', { hashes: Object.keys(file) });
+            let lotto = {}, peso = 0, fatti = 0;
+            const invia = async () => { if (!Object.keys(lotto).length) return; await Y.chiama('materiali.caricaImmagini', { immagini: lotto }); lotto = {}; peso = 0; };
+            for (const hs of mancanti) {
+                if (Object.keys(lotto).length >= 40 || peso + file[hs].length > 12e6) await invia();
+                lotto[hs] = file[hs]; peso += file[hs].length; fatti++;
+                T.lavoroMateriali = `Caricamento immagini ${fatti} di ${mancanti.length}…`; TiceHome.ridisegna();
+            }
+            await invia();
+            const indice = await Y.chiama('materiali.indice');
+            const prima = (indice.sets || {})[idCentro];
+            const voce = await Y.chiama('materiali.pubblica', { set, versioneBase: prima ? prima.versione : 0 });
+            locale.centro = { id: idCentro, versione: voce.versione, aggiornato: voce.aggiornato };
+            await DB.saveSet(locale);
+            await ricaricaSet();
+            T.indiceMateriali = null;
+            avviso(`«${locale.name}» pubblicato`);
+        } catch (e) { avviso(e.message, 'errore'); }
+        T.lavoroMateriali = null;
+        TiceHome.ridisegna();
+    }
+
+    // =====================================================================
+    // Registrazione
+    // =====================================================================
+    TiceHome.estendi({
+        viste: { account: vistaAccount, persone: vistaPersone, versioni: vistaVersioni, materiali: vistaMateriali },
+        azioni: {
+            'vai-account': () => vai('account'),
+            'vai-persone': () => { T.accessi = null; vai('persone'); },
+            'vai-materiali': () => { T.indiceMateriali = null; vai('materiali'); },
+            'crea-chiave': creaChiave,
+            'inserisci-chiave': inserisciChiave,
+            sincronizza: () => Y.sincronizza().then((ok) => avviso(ok ? 'Sincronizzato' : (S.errore || 'Sincronizzazione non riuscita'), ok ? undefined : 'errore')),
+            'dimentica-chiave': async () => {
+                if (!await conferma('Togliere la chiave da questo dispositivo?', 'Per sincronizzare di nuovo andrà reinserita.', { ok: 'Togli', pericolo: true })) return;
+                await C.dimenticaChiave();
+                S.chiave = null; S.fase = 'chiave';
+                TiceHome.ridisegna();
+            },
+            esci: async () => {
+                const r = await foglio(h`<h2>Esci</h2>
+                    <p class="sotto">Su un dispositivo personale puoi uscire lasciando i dati: ritrovi tutto al prossimo accesso. Su un dispositivo condiviso cancella i dati del centro.</p>
+                    ${S.coda.size ? h`<div class="banda">${icona('triangle-exclamation')}<div>${S.coda.size} bambini hanno modifiche non ancora inviate: se cancelli i dati andranno perse.</div></div>` : ''}
+                    <div class="opzioni">
+                        <button class="opzione" data-foglio="tieni">${icona('right-from-bracket')}<span class="corpo">Esci e basta</span></button>
+                        <button class="opzione" data-foglio="cancella">${icona('trash')}<span class="corpo">Esci e cancella i dati del centro da questo dispositivo<small>Anche la chiave del centro</small></span></button>
+                    </div><div class="bottoni"><button class="bt" data-foglio="chiudi">Annulla</button></div>`);
+                if (!r) return;
+                await Y.esci(r === 'cancella');
+                vai('bambini');
+            },
+            persona: (b) => persona(b.dataset.email),
+            versione,
+            'scarica-set': scaricaSet,
+            'pubblica-set': pubblicaSet
+        },
+        aggancio: { chip, banner, pillola, opzioniBambino, sceltaBambino, opzioniMenu, sceltaMenu, nuovoBambino, puoProgrammi, dopo }
+    });
+
+    Y.alCambio((cosa) => {
+        if (cosa === 'stato' || cosa === 'coda' || cosa === 'pazienti' || String(cosa).indexOf('paziente:') === 0) {
+            if (cosa === 'pazienti' && typeof populateGlobalPatientSelect === 'function') populateGlobalPatientSelect();
+            // non si ridisegna sotto le dita di chi sta segnando: solo il chip e gli elenchi
+            const v = TiceHome.attuale().vista;
+            if (v === 'seduta' && (cosa === 'stato' || cosa === 'coda')) {
+                const c = document.querySelector('#tice .tice-stato');
+                if (c) c.outerHTML = String(chip());
+                return;
+            }
+            TiceHome.ridisegna();
+        }
+    });
+    const parti = () => Y.avvia().catch((e) => console.error('avvio sincronizzazione', e));
+    if (document.readyState === 'complete') parti(); else window.addEventListener('load', parti);
+})();

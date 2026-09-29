@@ -175,6 +175,7 @@
             ${indietro ? h`<button class="ib" data-a="${indietro}" aria-label="Indietro">${icona('arrow-left')}</button>`
                 : h`<button class="marchio" data-a="vai-bambini" aria-label="Centro TICE"><img src="img/tice/logo-bianco.png" alt="TICE"></button>`}
             <div class="titolo">${titolo}${sotto ? h`<span class="sotto-titolo" ${sotto.azione ? grezzo(`data-a="${sotto.azione}" style="cursor:pointer"`) : ''}>${sotto.testo}</span>` : ''}</div>
+            ${EST.chip ? EST.chip() : ''}
             ${destra || ''}
         </header>`;
     }
@@ -197,7 +198,7 @@
             return h`<button class="riga" data-a="apri-bambino" data-pid="${p.id}">
                 <span class="avatar">${p.photo ? h`<img src="${p.photo}" alt="">` : iniziali(p.name)}</span>
                 <span class="corpo"><span class="t1">${p.name}</span>
-                    <span class="t2">${b && risposte ? h`<span class="pill arancio">seduta in corso · ${risposte} risposte</span> ` : ''}${attive ? `${attive} attività in corso` : 'nessun programma'}${u ? ' · ultima ' + formatoData(P.giorno(u)) : ''}${p.category ? ' · ' + p.category : ''}</span></span>
+                    <span class="t2">${EST.pillola ? EST.pillola(p) : ''}${b && risposte ? h`<span class="pill arancio">seduta in corso · ${risposte} risposte</span> ` : ''}${attive ? `${attive} attività in corso` : 'nessun programma'}${u ? ' · ultima ' + formatoData(P.giorno(u)) : ''}${p.category ? ' · ' + p.category : ''}</span></span>
                 ${icona('chevron-right')}
             </button>`;
         });
@@ -205,6 +206,7 @@
                 <button class="ib" data-a="giochi" aria-label="Giochi e attività dell'app" title="Giochi e attività">${icona('gamepad')}</button>
                 <button class="ib" data-a="menu" aria-label="Altro">${icona('ellipsis-vertical')}</button>` })}
             <main class="tice-main">
+                ${EST.banner ? EST.banner() : ''}
                 ${pazienti().length > 6 ? h`<input class="cerca" type="search" placeholder="Cerca un bambino" value="${T.cerca}" data-cambio="cerca" aria-label="Cerca">` : ''}
                 ${righe.length ? h`<div class="scheda">${righe}</div>`
                     : h`<div class="vuoto">${q ? 'Nessun bambino con questo nome.' : 'Ancora nessun bambino.'}</div>`}
@@ -336,6 +338,7 @@
     const ETICHETTE_STATO = { attivo: 'in corso', sospeso: 'sospesa', terminato: 'terminata' };
     function schedaProgramma(p, att) {
         const t = att.target || [];
+        const modifica = puoProgrammi(p);
         const ultimo = (tg) => {
             const s = P.sedute(p, att, tg);
             if (!s.length) return '';
@@ -348,21 +351,21 @@
         const riga = (tg) => h`<li class="${CHIUSI.includes(tg.stato) ? 'chiuso' : ''}">
                     <span class="punto ${tg.stato}"></span>
                     <span class="tt">${tg.testo}<small>${P.STATI_TARGET[tg.stato] || tg.stato}${tg.fine ? ' il ' + formatoData(tg.fine) : ''}${ultimo(tg)}</small></span>
-                    <button class="ib" data-a="menu-target" data-id="${att.id}" data-t="${tg.id}" aria-label="Opzioni del target">${icona('ellipsis')}</button>
+                    ${modifica || tg.setId ? h`<button class="ib" data-a="menu-target" data-id="${att.id}" data-t="${tg.id}" aria-label="Opzioni del target">${icona('ellipsis')}</button>` : ''}
                 </li>`;
         return h`<div class="scheda" data-prog="${att.id}">
-            <button class="att-testa" data-a="mod-att" data-id="${att.id}">
+            <button class="att-testa" ${modifica ? grezzo(`data-a="mod-att" data-id="${esc(att.id)}"`) : ''}>
                 <span class="corpo"><span class="nome">${att.nome}
                     ${att.sessionType === 'timedelay' ? h` <span class="pill">T/D</span>` : h` <span class="pill grigia">Indip.</span>`}
                     ${att.stato !== 'attivo' ? h` <span class="pill arancio">${ETICHETTE_STATO[att.stato] || att.stato}</span>` : ''}</span>
                     <span class="target">Criterio ${att.criterio.soglia}% per ${att.criterio.sedute} giorni${att.prove ? ' · ' + att.prove + ' prove' : ''}${att.descrizione ? ' · ' + att.descrizione : ''}</span></span>
-                ${icona('pen')}
+                ${modifica ? icona('pen') : ''}
             </button>
             <ul class="targets">
                 ${chiusi.length ? h`<li><details class="chiusi" ${T.chiusiAperti[att.id] ? grezzo('open') : ''} data-chiusi="${att.id}"><summary class="sotto piccolo">${chiusi.length} ${chiusi.length === 1 ? 'target chiuso' : 'target chiusi'}</summary>
                     <ul class="targets" style="padding:0">${chiusi.map(riga)}</ul></details></li>` : ''}
                 ${aperti.map(riga)}
-                <li><button class="bt piccolo fantasma" data-a="nuovo-target" data-id="${att.id}">${icona('plus')} Target</button></li>
+                ${modifica ? h`<li><button class="bt piccolo fantasma" data-a="nuovo-target" data-id="${att.id}">${icona('plus')} Target</button></li>` : ''}
             </ul>
         </div>`;
     }
@@ -370,6 +373,7 @@
         const p = paz(T.pid);
         if (!p) { T.vista = 'bambini'; return vistaBambini(); }
         const tutte = P.programma(p).attivita;
+        const modifica = puoProgrammi(p);
         const attive = tutte.filter((a) => a.stato === 'attivo');
         const altre = tutte.filter((a) => a.stato !== 'attivo');
         const gruppi = [];
@@ -382,7 +386,8 @@
         return h`${barra({ indietro: 'vai-seduta', titolo: 'Programma', sotto: { testo: p.name } })}
             <main class="tice-main">
                 <p class="sotto">Le attività in corso compaiono nella presa dati con il loro target. Quando un target raggiunge il criterio l'app propone di passare al successivo.</p>
-                <button class="bt primario largo" data-a="nuova-att">${icona('plus')} Nuova attività</button>
+                ${modifica ? h`<button class="bt primario largo" data-a="nuova-att">${icona('plus')} Nuova attività</button>`
+                    : h`<div class="banda">${icona('lock')}<div>Il programma lo modificano le professioniste: tu registri le sedute.</div></div>`}
                 ${gruppi.map((g) => h`<h3>${g.area}</h3>${g.att.map((a) => schedaProgramma(p, a))}`)}
                 ${!attive.length ? h`<div class="vuoto">Nessuna attività in corso.</div>` : ''}
                 ${altre.length ? h`<details style="margin-top:18px"><summary>Sospese e terminate (${altre.length})</summary>${altre.map((a) => schedaProgramma(p, a))}</details>` : ''}
@@ -449,13 +454,21 @@
             </main>`;
     }
 
+    // ---------- viste e punti di aggancio per le estensioni (tice-centro.js) ----------
+    const VISTE = { bambini: vistaBambini, seduta: vistaSeduta, programma: vistaProgramma, import: vistaImport };
+    const EST = {};
+    // Chi può cambiare il programma: sul dispositivo tutti; per i bambini del
+    // centro lo decide il ruolo (le tirocinanti registrano, non modificano).
+    const puoProgrammi = (p) => !EST.puoProgrammi || EST.puoProgrammi(p);
+
     // ---------- disegno ----------
     function disegna() {
         const r = radice();
         if (!r) return;
         const alto = r.scrollTop;
-        const viste = { bambini: vistaBambini, seduta: vistaSeduta, programma: vistaProgramma, import: vistaImport };
-        r.innerHTML = String((viste[T.vista] || vistaBambini)());
+        const f = VISTE[T.vista] || vistaBambini;
+        r.innerHTML = String(f());
+        if (EST.dopo) EST.dopo(T.vista, r);
         if (T.mantieniScroll) r.scrollTop = alto;
         T.mantieniScroll = false;
     }
@@ -483,7 +496,9 @@
                 <button class="opzione" data-foglio="import">${icona('file-import')}<span class="corpo">Importa quaderni Numbers</span></button>
                 <button class="opzione" data-foglio="archivio">${icona('folder-open')}<span class="corpo">Archivio set</span></button>
                 <button class="opzione" data-foglio="opzioni">${icona('gear')}<span class="corpo">Impostazioni e tema</span></button>
+                ${EST.opzioniMenu ? EST.opzioniMenu() : ''}
             </div><div class="bottoni"><button class="bt" data-foglio="chiudi">Chiudi</button></div>`);
+            if (r && r.indexOf('est:') === 0 && EST.sceltaMenu) return EST.sceltaMenu(r.slice(4));
             if (r === 'giochi') chiudi();
             else if (r === 'cartelle') apriDaQui(openPatients);
             else if (r === 'import') vai('import');
@@ -498,7 +513,9 @@
                 <button class="opzione" data-foglio="giochi">${icona('gamepad')}<span class="corpo">Giochi con ${p.name}<small>Le sedute dei giochi vanno nella sua cartella</small></span></button>
                 <button class="opzione" data-foglio="data">${icona('calendar-day')}<span class="corpo">Cambia la data della seduta<small>Per ricopiare un foglio di un altro giorno</small></span></button>
                 <button class="opzione" data-foglio="annulla">${icona('trash')}<span class="corpo">Annulla la seduta in corso</span></button>
+                ${EST.opzioniBambino ? EST.opzioniBambino(p) : ''}
             </div><div class="bottoni"><button class="bt" data-foglio="chiudi">Chiudi</button></div>`);
+            if (r && r.indexOf('est:') === 0 && EST.sceltaBambino) return EST.sceltaBambino(r.slice(4), p);
             if (r === 'programma') vai('programma');
             else if (r === 'cartella') apriCartella(p.id);
             else if (r === 'giochi') { if (typeof setGlobalPatient === 'function') setGlobalPatient(p.id); chiudi(); }
@@ -515,6 +532,7 @@
             const p = { id: Date.now().toString(), name: r.nome.trim(), history: [], programma: { attivita: [] } };
             if (r.cat.trim()) p.category = r.cat.trim();
             await salvaPaziente(p);
+            if (EST.nuovoBambino) await EST.nuovoBambino(p);
             vai('programma', p.id);
         },
         'apri-att': (b) => {
@@ -649,7 +667,7 @@
                 <div class="scelta" style="margin-bottom:10px">
                     <label><input type="radio" name="tipo" value="independent" checked><span>Indipendente</span></label>
                     <label><input type="radio" name="tipo" value="timedelay"><span>Time delay</span></label></div>
-                <label style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><input type="checkbox" name="programma"> Aggiungila anche al programma</label>
+                ${puoProgrammi(p) ? h`<label style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><input type="checkbox" name="programma"> Aggiungila anche al programma</label>` : ''}
                 <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Aggiungi</button></div>
                 ${sospese.length ? h`<h3>Sospese nel programma</h3><div class="opzioni">${sospese.map(opz)}</div>` : ''}
                 ${terminate.length ? h`<details style="margin-top:12px"><summary class="sotto">Riprendi un'attività terminata (${terminate.length})</summary><div class="opzioni" style="margin-top:6px">${terminate.map(opz)}</div></details>` : ''}
@@ -709,6 +727,7 @@
         // --- programma ---
         'nuova-att': async () => {
             const p = paz(T.pid);
+            if (!puoProgrammi(p)) return;
             const r = await moduloAttivita(p, null);
             if (!r) return;
             const righe = String(r.target || '').split('\n').map((x) => x.trim()).filter(Boolean);
@@ -725,6 +744,7 @@
         },
         'mod-att': async (b) => {
             const p = paz(T.pid);
+            if (!puoProgrammi(p)) return;
             const att = P.attivita(p, b.dataset.id);
             const r = await moduloAttivita(p, att);
             if (!r) return;
@@ -752,6 +772,7 @@
         },
         'nuovo-target': async (b) => {
             const p = paz(T.pid);
+            if (!puoProgrammi(p)) return;
             const att = P.attivita(p, b.dataset.id);
             const r = await moduloTarget(att);
             if (!r) return;
@@ -769,17 +790,19 @@
             const r = await foglio(h`<h2>${t.testo}</h2>
                 <p class="sotto">${P.STATI_TARGET[t.stato]}${n ? ` · ${n} sedute` : ''}${crit ? ` · criterio raggiunto il ${formatoData(crit)}` : ''}</p>
                 <div class="opzioni">
-                    ${t.stato !== 'attivo' ? h`<button class="opzione" data-foglio="corrente">${icona('play')}<span class="corpo">Lavora su questo target<small>Diventa quello della presa dati</small></span></button>` : ''}
+                    ${!puoProgrammi(p) && t.setId ? h`<button class="opzione" data-foglio="gioca">${icona('play')}<span class="corpo">Somministra con l'app<small>${etichettaModo(P.modoTarget(att, t))} · set ${t.testo}</small></span></button>` : ''}
+                    ${!puoProgrammi(p) ? '' : h`${t.stato !== 'attivo' ? h`<button class="opzione" data-foglio="corrente">${icona('play')}<span class="corpo">Lavora su questo target<small>Diventa quello della presa dati</small></span></button>` : ''}
                     ${t.stato === 'attivo' ? h`<button class="opzione" data-foglio="criterio">${icona('flag-checkered')}<span class="corpo">Chiudi a criterio<small>E passa al successivo</small></span></button>` : ''}
                     ${t.stato === 'attivo' || t.stato === 'pianificato' ? h`<button class="opzione" data-foglio="repertorio">${icona('star')}<span class="corpo">Già in repertorio</span></button>` : ''}
                     ${t.setId ? h`<button class="opzione" data-foglio="gioca">${icona('play')}<span class="corpo">Somministra con l'app<small>${etichettaModo(P.modoTarget(att, t))} · set ${t.testo}</small></span></button>`
                         : h`<button class="opzione" data-foglio="testo">${icona('pen')}<span class="corpo">Modifica il testo</span></button>`}
                     <button class="opzione" data-foglio="su">${icona('arrow-up')}<span class="corpo">Sposta prima</span></button>
                     <button class="opzione" data-foglio="giu">${icona('arrow-down')}<span class="corpo">Sposta dopo</span></button>
-                    ${!n ? h`<button class="opzione" data-foglio="elimina">${icona('trash')}<span class="corpo">Elimina</span></button>` : ''}
+                    ${!n ? h`<button class="opzione" data-foglio="elimina">${icona('trash')}<span class="corpo">Elimina</span></button>` : ''}`}
                 </div><div class="bottoni"><button class="bt" data-foglio="chiudi">Chiudi</button></div>`);
             if (!r) return;
             if (r === 'gioca') { lancia(p, att, t); return; }
+            if (!puoProgrammi(p)) return;
             if (r === 'corrente') P.rendiCorrente(att, t.id);
             else if (r === 'criterio') { await proponiProssimo(p, att, t, crit); T.mantieniScroll = true; disegna(); return; }
             else if (r === 'repertorio') P.chiudiTarget(att, t.id, 'repertorio');
@@ -960,6 +983,10 @@
     }
 
     async function proponiProssimo(p, att, t, data) {
+        if (!puoProgrammi(p)) {
+            avviso(`${att.nome}: criterio raggiunto su «${t.testo}». Il passaggio al prossimo target lo decide la referente.`);
+            return;
+        }
         const pianificati = att.target.filter((x) => x.stato === 'pianificato');
         const r = await foglio(h`<form><h2>${icona('flag-checkered')} ${att.nome}</h2>
             <p>${data ? h`Il target <b>${t.testo}</b> ha raggiunto il criterio (${att.criterio.soglia}% per ${att.criterio.sedute} giorni di fila) il ${formatoData(data)}.`
@@ -996,8 +1023,10 @@
         }
         try {
             const soglia = typeof DEFAULT_CRITERION !== 'undefined' ? DEFAULT_CRITERION : 90;
+            const nuovo = !paz(p.id);
             const r = TiceImport.applica(p, it.pk, it.conferme, { sogliaPredefinita: soglia });
             await salvaPaziente(p);
+            if (nuovo && EST.nuovoBambino) await EST.nuovoBambino(p);
             it.pazienteId = p.id;
             it.nome = p.name;
             it.fatto = `${r.sedute} sedute e ${it.pk.attivita.length} attività nella cartella di ${p.name}.`;
@@ -1194,7 +1223,17 @@
         await apri();
     }
 
-    window.TiceHome = { apri, chiudi, vai: (v, pid) => { apri().then(() => vai(v, pid)); } };
+    window.TiceHome = {
+        apri, chiudi, vai: (v, pid) => { apri().then(() => vai(v, pid)); },
+        estendi(e) {
+            Object.assign(VISTE, e.viste || {});
+            Object.assign(azioni, e.azioni || {});
+            Object.assign(EST, e.aggancio || {});
+        },
+        attuale: () => ({ vista: T.vista, pid: T.pid }),
+        ridisegna: () => { if (!radice().hidden) { T.mantieniScroll = true; disegna(); } },
+        strumenti: { h, grezzo, icona, foglio, conferma, avviso, barra, vai: (v, pid) => vai(v, pid), paz, pazienti, salvaPaziente, formatoData, T }
+    };
     if (document.readyState === 'complete') avvia();
     else window.addEventListener('load', avvia);
 })();

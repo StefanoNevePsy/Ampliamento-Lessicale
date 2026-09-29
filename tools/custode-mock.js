@@ -26,7 +26,7 @@ const QT = require('../custode/core.js');
 
 // ---------------------------------------------------------------------------
 function opzioni(argv) {
-  const o = { porta: 8787, dati: '.custode-dati', statico: path.join(__dirname, '..', 'centro'), dev: false, proprietario: 'admin@centro.test', clientId: '' };
+  const o = { porta: 8787, dati: '.custode-dati', statico: path.join(__dirname, '..'), dev: false, proprietario: 'admin@centro.test', clientId: '' };
   for (let i = 2; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--dev') o.dev = true;
@@ -150,7 +150,7 @@ function creaServer(o) {
   });
 
   const configJs = () =>
-    `window.QT_CONFIG = Object.assign(window.QT_CONFIG || {}, ${JSON.stringify({
+    `window.TICE_CONFIG = Object.assign(window.TICE_CONFIG || {}, ${JSON.stringify({
       custodeUrl: '/api', googleClientId: o.clientId || '', dev: !!o.dev, ambiente: 'locale',
     })});\n`;
 
@@ -183,13 +183,15 @@ function creaServer(o) {
       return;
     }
 
-    // File statici dell'app (con config.js generato per puntare a questo custode)
+    // File statici dell'app (con tice-config.js generato per puntare a questo custode)
     let rel = decodeURIComponent(url.pathname);
     if (rel.endsWith('/')) rel += 'index.html';
-    if (path.basename(rel) === 'config.js') {
+    if (path.basename(rel) === 'tice-config.js') {
       res.writeHead(200, { 'Content-Type': MIME['.js'], 'Cache-Control': 'no-store' });
       return res.end(configJs());
     }
+    // niente file nascosti (.git, .custode-dati...)
+    if (rel.split('/').some((x) => x.startsWith('.'))) { res.writeHead(403); return res.end(); }
     const base = path.resolve(o.statico);
     const file = path.resolve(base, '.' + rel);
     if (!file.startsWith(base)) { res.writeHead(403); return res.end(); }

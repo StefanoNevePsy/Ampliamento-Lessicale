@@ -5,8 +5,10 @@ Import dei quaderni Numbers del Centro TICE nel formato del Quaderno TICE.
     pip install numbers-parser
     python import_numbers.py "Mario_R.numbers" --codice PZ-014 --etichetta "M. R."
 
-Produce `import-PZ-014.json`, da caricare nell'app (Admin > Importa). L'app
-mostra un'anteprima e chiede conferma dei valori dedotti prima di salvare.
+Produce `import-PZ-014.json`. Nell'app l'import si fa direttamente dal file
+.numbers (Presa dati > Importa quaderni, js/tice-import.js): questo script resta
+come riferimento indipendente, e tools/test-tice-import.js verifica che i due
+leggano un quaderno allo stesso modo.
 
 Cosa riconosce (vedi docs/quaderno-tice.md):
   - un foglio per area, una tabella per programma, intestazione su tre righe
