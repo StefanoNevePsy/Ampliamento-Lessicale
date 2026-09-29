@@ -131,7 +131,7 @@ function verificatore(o) {
     if (intest.alg !== 'RS256' || !chiave) throw new Error('chiave sconosciuta');
     const firmaOk = crypto.verify('RSA-SHA256', Buffer.from(parti[0] + '.' + parti[1]), chiave, Buffer.from(parti[2], 'base64url'));
     if (!firmaOk) throw new Error('firma non valida');
-    if (dati.aud !== o.clientId) throw new Error('destinatario errato');
+    if (String(o.clientId).split(',').indexOf(dati.aud) < 0) throw new Error('destinatario errato');
     if (!['accounts.google.com', 'https://accounts.google.com'].includes(dati.iss)) throw new Error('emittente errato');
     if (!(dati.exp > Date.now() / 1000)) throw new Error('scaduto');
     if (dati.email_verified !== true && dati.email_verified !== 'true') throw new Error('email non verificata');
@@ -151,7 +151,7 @@ function creaServer(o) {
 
   const configJs = () =>
     `window.TICE_CONFIG = Object.assign(window.TICE_CONFIG || {}, ${JSON.stringify({
-      custodeUrl: '/api', googleClientId: o.clientId || '', dev: !!o.dev, ambiente: 'locale',
+      custodeUrl: '/api', googleClientId: String(o.clientId || '').split(',')[0], dev: !!o.dev, ambiente: 'locale',
     })});\n`;
 
   return http.createServer((req, res) => {

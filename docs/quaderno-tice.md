@@ -186,6 +186,27 @@ quante prove c'erano), l'import propone un valore da confermare invece di
 inventarlo. Reimportare lo stesso file sostituisce le sedute importate da quel
 file; quanto registrato o cambiato nell'app resta.
 
+## App installata
+
+- **Dal browser (PWA).** `manifest.webmanifest` e `sw.js`. Alla pubblicazione
+  `build.js` scrive nel service worker la versione e l'elenco dei file, che al primo
+  avvio si scaricano tutti: poi l'app si apre anche senza rete. Una pubblicazione
+  nuova si scarica in sottofondo e l'app propone **Aggiorna** (`js/tice-pwa.js`).
+  Le chiamate al custode e l'accesso Google non passano mai dalla cache.
+- **App desktop (Electron).** Google non consente l'accesso dentro le finestre
+  delle app, quindi `electron/accesso-google.js` usa il browser di sistema con il
+  flusso "loopback" + PKCE per app installate (RFC 8252):
+  - apre il browser sulla pagina di Google;
+  - riceve il codice su `127.0.0.1`;
+  - lo scambia per un ID token.
+
+  Il custode accetta i token del client web e di quello desktop
+  (`GOOGLE_CLIENT_ID_DESKTOP`). Il refresh token resta nel processo principale,
+  cifrato dal sistema operativo (`safeStorage`); la pagina riceve solo l'ID token.
+- **APK Android.** Per ora senza accesso al centro: la WebView ha lo stesso limite di
+  Electron e servirebbe il login nativo di Android. Su telefoni e tablet Android si
+  usa la PWA.
+
 ## Materiali
 
 I set si pubblicano sul Drive del centro e le colleghe li scaricano una volta.

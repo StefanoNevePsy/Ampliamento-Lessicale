@@ -1,0 +1,17 @@
+{
+  "name": "Centro TICE",
+  "short_name": "TICE",
+  "description": "Presa dati, programmi e attività del Centro TICE",
+  "lang": "it",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#eef2f3",
+  "theme_color": "#363a43",
+  "icons": [
+    { "src": "img/tice/icona-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "img/tice/icona-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "img/tice/icona-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -499,8 +499,10 @@
                 <button class="opzione" data-foglio="archivio">${icona('folder-open')}<span class="corpo">Archivio set</span></button>
                 <button class="opzione" data-foglio="opzioni">${icona('gear')}<span class="corpo">Impostazioni e tema</span></button>`}
                 ${EST.opzioniMenu ? EST.opzioniMenu() : ''}
+                ${window.TicePwa && TicePwa.puoInstallare() ? h`<button class="opzione" data-foglio="installa">${icona('download')}<span class="corpo">Installa l'app<small>Si apre come un'app e funziona anche senza rete</small></span></button>` : ''}
             </div><div class="bottoni"><button class="bt" data-foglio="chiudi">Chiudi</button></div>`);
             if (r && r.indexOf('est:') === 0 && EST.sceltaMenu) return EST.sceltaMenu(r.slice(4));
+            if (r === 'installa') { TicePwa.installa(); return; }
             if (r === 'giochi') chiudi();
             else if (r === 'cartelle') apriDaQui(openPatients);
             else if (r === 'import') vai('import');

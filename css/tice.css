@@ -355,3 +355,13 @@ body.tice-tirocinante [onclick^="deleteDailyNote"],
 body.tice-tirocinante [onclick^="openSessionNoteEditor"],
 body.tice-tirocinante [onclick^="toggleOutlierDay"],
 body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; }
+
+/* Avviso di versione nuova (tice-pwa.js) */
+.tice-aggiornamento {
+    position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); transform: translateX(-50%);
+    z-index: 9900; display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 24px);
+    padding: 10px 10px 10px 16px; border-radius: 14px; background: #363a43; color: #fff;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3); font-size: 0.92rem;
+}
+.tice-aggiornamento button { border: 0; border-radius: 10px; padding: 8px 14px; font: inherit; font-weight: 700; cursor: pointer; background: #39b2ad; color: #fff; }
+.tice-aggiornamento button.chiudi { background: transparent; padding: 8px 10px; font-size: 1.1rem; }

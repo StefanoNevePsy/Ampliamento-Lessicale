@@ -48,6 +48,7 @@ Tieni aperto un foglio: nei passi seguenti raccoglierai questi tre valori.
 | **ID della cartella** | Passo 1 | `1AbCdEfGhIjKlMnOpQrStUvWxYz` |
 | **Client ID Google** | Passo 2 | `123456789-abc….apps.googleusercontent.com` |
 | **URL del custode** | Passo 3 | `https://script.google.com/macros/s/AKfy…/exec` |
+| *Client ID e secret desktop* | Passo 2.6, solo per l'app installata su Mac e Windows | `…-desk….apps.googleusercontent.com`, `GOCSPX-…` |
 
 La **chiave del centro** (passo 5) invece **è segreta** e non va su questo foglio.
 
@@ -95,6 +96,13 @@ nell'app: l'app chiede a Google chi sei, niente di più (niente Drive, niente po
    - **URI di reindirizzamento**: lascia vuoto → **Crea**.
 5. Copia il **Client ID** (finisce con `.apps.googleusercontent.com`) e annotalo.
    Il *client secret* non serve: ignoralo.
+6. *(Facoltativo: solo se userete l'app installata su Mac o Windows, vedi passo 8.)*
+   **Client → Crea client** → tipo **App desktop**, nome `Centro TICE desktop` → **Crea**.
+   Annota **Client ID** e **Client secret**.
+   > [!NOTE]
+   > Per le app installate Google considera il secret non segreto: finisce nell'app,
+   > come il Client ID. L'app desktop apre l'accesso nel browser del computer (Google non
+   > lo consente dentro le finestre delle app) e poi torna da sola.
 
 ---
 
@@ -120,6 +128,7 @@ portinaio al Drive.*
    |---|---|
    | `CARTELLA_RADICE` | l'ID della cartella (passo 1) |
    | `GOOGLE_CLIENT_ID` | il Client ID (passo 2) |
+   | `GOOGLE_CLIENT_ID_DESKTOP` | *facoltativo*: il Client ID desktop (passo 2.6) |
 
    → **Salva proprietà script**.
 5. Torna all'Editor, nel menu a tendina in alto scegli la funzione **`configura`** e premi
@@ -159,6 +168,9 @@ portinaio al Drive.*
    ```js
    custodeUrl: 'https://script.google.com/macros/s/AKfy…/exec',
    googleClientId: '123456789-abc….apps.googleusercontent.com',
+   // solo per l'app desktop (passo 2.6)
+   googleDesktopClientId: '…-desk….apps.googleusercontent.com',
+   googleDesktopClientSecret: 'GOCSPX-…',
    ```
    Salva con un commit sulla branch `claude/quaderno-tice`.
 2. **Solo la prima volta**: su GitHub → **Settings → Pages → Build and deployment →
@@ -253,13 +265,47 @@ colleghe lo scaricano una volta e lo usano nei giochi e nei programmi, anche sen
 
 ## Passo 8 — Installare l'app sui dispositivi
 
-Così si apre come un'app, a schermo intero, anche senza rete:
+Ci sono due modi. Funzionano entrambi senza rete e usano gli stessi dati.
+
+### A. Dal browser (consigliato, tutti i dispositivi)
+
+Si apre in una finestra sua, con l'icona del centro, e si aggiorna da sola a ogni
+pubblicazione: quando c'è una versione nuova compare **Aggiorna**.
 
 | Dispositivo | Come |
 |---|---|
-| Android (Chrome) | menu ⋮ → **Installa app** (o *Aggiungi a schermata Home*) |
+| Android, telefono o tablet (Chrome) | menu ⋮ → **Installa app** |
 | iPhone / iPad (Safari) | Condividi ⎋ → **Aggiungi alla schermata Home** |
-| Computer (Chrome / Edge) | icona ⊕ nella barra dell'indirizzo → **Installa** |
+| Mac (Chrome o Edge) | icona ⊕ nella barra dell'indirizzo → **Installa** |
+| Mac (Safari, macOS 14+) | File → **Aggiungi al Dock** |
+| Windows (Chrome o Edge) | icona ⊕ nella barra dell'indirizzo → **Installa** |
+
+Dall'app si può installare anche dal menu ⋮ della presa dati → **Installa l'app**
+(Chrome ed Edge).
+
+### B. App desktop (Mac, Windows)
+
+Serve se volete l'app vera e propria, per esempio per lo scontorno delle immagini con
+il modello installato sul PC.
+1. Serve il client desktop: passo 2.6, passo 3.4 e passo 4.
+2. GitHub → **Actions → Build Desktop & Android → Run workflow**:
+   - in *Use workflow from* scegli `claude/quaderno-tice`;
+   - target `macos` o `windows`.
+3. A fine lavoro scarica l'installatore dagli **Artifacts** della corsa: `.dmg` per Mac,
+   `.exe` per Windows.
+
+L'app si chiama **Centro TICE** e si installa accanto all'app personale, senza
+sostituirla. Per l'accesso, **Accedi con Google** apre il browser del computer: si
+completa lì e si torna da soli all'app. Poi l'accesso si rinnova in silenzio; su Mac e
+Windows resta salvato, cifrato dal sistema operativo.
+
+> [!NOTE]
+> Gli installatori non sono firmati con un certificato a pagamento.
+> - **Mac**: al primo avvio tasto destro sull'app → **Apri** → **Apri**.
+> - **Windows**: se compare "Windows ha protetto il PC", → **Ulteriori informazioni →
+>   Esegui comunque**.
+>
+> L'app desktop non si aggiorna da sola: per una versione nuova si ripete il punto 2.
 
 > [!TIP]
 > Sui dispositivi condivisi del centro (tablet d'aula) usate il blocco schermo, e alla fine
@@ -321,6 +367,9 @@ L'URL resta lo stesso e l'app non va toccata. Controlla la versione aprendo l'UR
 | "Il custode è occupato" | tante scritture nello stesso istante | riprova dopo qualche secondo |
 | L'URL `/exec` dice `"configurato":false` | mancano le proprietà dello script | passo 3.4 |
 | All'URL `/exec` chiede di accedere a Google | deployment con accesso diverso da "Chiunque" | passo 3.6 |
+| App desktop: "Client ID desktop mancante" o il pulsante apre il login web | `googleDesktopClientId` vuoto in `tice-config.js`, o installatore creato prima di compilarlo | passo 4, poi rifai l'installatore |
+| App desktop: dopo l'accesso nel browser il custode dice "Accesso scaduto o non valido" | manca `GOOGLE_CLIENT_ID_DESKTOP` nelle proprietà del custode | passo 3.4 |
+| L'app installata non propone "Aggiorna" | l'aggiornamento arriva quando si riapre l'app con la rete | chiudi e riapri |
 
 ---
 
@@ -350,4 +399,5 @@ node tools/test-custode.js                 # regole del custode
 node tools/test-appsscript.js              # custode con servizi Google simulati
 node tools/test-tice-sync.js               # cifratura, consegna della chiave, fusione
 node tools/test-tice-import.js             # import dei quaderni Numbers
+node tools/test-accesso-desktop.js         # accesso dell'app desktop (Google finto)
 ```

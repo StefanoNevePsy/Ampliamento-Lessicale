@@ -18,36 +18,40 @@
     "cap:build:android:native": "npm run cap:sync:native && cd android && ./gradlew assembleRelease"
   },
   "build": {
-    "appId": "com.stimolatore.clinico",
-    "productName": "Terapia Attiva",
+    "appId": "it.centrotice.app",
+    "productName": "Centro TICE",
     "directories": {
       "output": "dist",
       "buildResources": "build"
     },
     "files": [
       "index.html",
+      "tice-config.js",
+      "manifest.webmanifest",
       "css/**/*",
       "js/**/*",
+      "img/**/*",
       "electron/**/*",
       "vendor/**/*",
+      "strumenti/**/*",
       "build/icon.svg",
       "tools/**/*"
     ],
     "mac": {
       "category": "public.app-category.medical",
-      "icon": "build/icon.icns",
+      "icon": "img/tice/icona-512.png",
       "target": [
         "dmg"
       ]
     },
     "win": {
-      "icon": "build/icon.ico",
+      "icon": "img/tice/icona-512.png",
       "target": [
         "nsis"
       ]
     },
     "linux": {
-      "icon": "build/icon.png",
+      "icon": "img/tice/icona-512.png",
       "target": [
         "AppImage"
       ]

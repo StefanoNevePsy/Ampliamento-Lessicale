@@ -5,9 +5,9 @@ name: Test Quaderno TICE
 on:
   push:
     branches: [claude/quaderno-tice]
-    paths: ['custode/**', 'js/tice-*.js', 'js/numbers-reader.js', 'strumenti/**', 'tools/test-*.js', 'tools/custode-mock.js']
+    paths: ['custode/**', 'electron/**', 'js/tice-*.js', 'js/numbers-reader.js', 'strumenti/**', 'sw.js', 'build.js', 'tools/test-*.js', 'tools/custode-mock.js']
   pull_request:
-    paths: ['custode/**', 'js/tice-*.js', 'js/numbers-reader.js', 'strumenti/**', 'tools/test-*.js', 'tools/custode-mock.js']
+    paths: ['custode/**', 'electron/**', 'js/tice-*.js', 'js/numbers-reader.js', 'strumenti/**', 'sw.js', 'build.js', 'tools/test-*.js', 'tools/custode-mock.js']
   workflow_dispatch:
 
 jobs:
@@ -26,7 +26,11 @@ jobs:
         run: node tools/test-appsscript.js
       - name: Cifratura e fusione tra dispositivi
         run: node tools/test-tice-sync.js
+      - name: Accesso Google dell'app desktop (Google finto)
+        run: node tools/test-accesso-desktop.js
+      - name: Pubblicazione con service worker
+        run: node build.js && grep -q '"./index.html"' www/sw.js
       - name: Import dei quaderni Numbers e programma (quaderno sintetico)
         run: node tools/test-tice-import.js
       - name: Sintassi della presa dati
-        run: for f in js/numbers-reader.js js/tice-*.js js/state.js js/patients.js js/dataviz.js js/gemini.js tice-config.js; do node --check "$f"; done
+        run: for f in js/numbers-reader.js js/tice-*.js js/state.js js/patients.js js/dataviz.js js/gemini.js tice-config.js sw.js electron/*.js; do node --check "$f"; done

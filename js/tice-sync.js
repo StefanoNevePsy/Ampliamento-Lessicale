@@ -45,6 +45,15 @@
             return true;
         }
         const avvisa = () => ascoltatori.forEach((f) => { try { f(utente); } catch (e) { console.error(e); } });
+        // App desktop: l'accesso passa dal browser di sistema (electron/accesso-google.js),
+        // perché Google non lo consente dentro la finestra dell'app.
+        const nativo = () => !!(window.ticeNativo && cfgApp().googleDesktopClientId);
+        const cfgNativo = () => ({ clientId: cfgApp().googleDesktopClientId, clientSecret: cfgApp().googleDesktopClientSecret || '' });
+        async function accediNativo() {
+            const r = await window.ticeNativo.accedi(cfgNativo());
+            if (!r || !imposta(r.idToken)) throw new ErroreAccesso('Accesso non riuscito.');
+            return token;
+        }
         const valido = () => !!token && Date.now() < scadenza - 60000;
         function caricaGIS() {
             if (gis) return gis;
@@ -72,11 +81,20 @@
                 if (!utente) { const u = JSON.parse(localStorage.getItem(K_UTENTE) || 'null'); if (u && u.email) utente = u; }
                 if (cfgApp().dev) token = sessionStorage.getItem(K_TOKEN + ':dev') || token;
             } catch (e) { /* ok */ }
-            if (!cfgApp().dev && cfgApp().googleClientId) caricaGIS().catch(() => { /* offline */ });
+            if (!cfgApp().dev && cfgApp().googleClientId && !nativo()) caricaGIS().catch(() => { /* offline */ });
             return utente;
         }
         function pulsante(el) {
             if (cfgApp().dev) return Promise.resolve();
+            if (nativo()) {
+                el.innerHTML = '<button type="button" class="bt primario"><i class="fa-brands fa-google"></i> Accedi con Google</button>' +
+                    '<p class="sotto piccolo" style="margin:8px 0 0">Si apre il browser: dopo l\'accesso torna da solo qui.</p>';
+                el.querySelector('button').onclick = () => {
+                    el.querySelector('p').textContent = 'Completa l\'accesso nel browser…';
+                    accediNativo().catch((e) => { el.querySelector('p').textContent = e.message; });
+                };
+                return Promise.resolve();
+            }
             return caricaGIS().then(() => google.accounts.id.renderButton(el, {
                 type: 'standard', theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with', locale: 'it',
                 width: Math.min(320, el.clientWidth || 320)
@@ -96,6 +114,12 @@
         function prendi() {
             if (cfgApp().dev) return token ? Promise.resolve(token) : Promise.reject(new ErroreAccesso('Serve l\'accesso.'));
             if (valido()) return Promise.resolve(token);
+            if (nativo()) {
+                return window.ticeNativo.token(cfgNativo()).then((r) => {
+                    if (r && imposta(r.idToken)) return token;
+                    throw new ErroreAccesso('Accesso scaduto: rientra con Google.');
+                }, (e) => { if (e && e.accesso) throw e; throw new Error('Non riesco a rinnovare l\'accesso: controlla la connessione.'); });
+            }
             return caricaGIS().then(() => new Promise((ok, ko) => {
                 attesa = { ok };
                 const timer = setTimeout(() => { if (attesa) { attesa = null; ko(new ErroreAccesso('Accesso scaduto: rientra con Google.')); } }, 8000);
@@ -113,6 +137,7 @@
             invalida(); utente = null;
             try { localStorage.removeItem(K_UTENTE); } catch (e) { /* ok */ }
             if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
+            if (nativo()) window.ticeNativo.esci().catch(() => {});
             avvisa();
         }
         return { inizia, pulsante, accessoDev, token: prendi, utente: () => utente, haToken: () => cfgApp().dev ? !!token : valido(), invalida, esci, alCambio: (f) => ascoltatori.push(f), ErroreAccesso };

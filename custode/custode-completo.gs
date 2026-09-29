@@ -12,7 +12,8 @@
  * l'identita'. Tutte le regole su chi puo' fare cosa stanno in core.gs.
  *
  * Installazione: docs/configurazione.md. In breve:
- *   1. Proprieta' dello script: CARTELLA_RADICE, GOOGLE_CLIENT_ID.
+ *   1. Proprieta' dello script: CARTELLA_RADICE, GOOGLE_CLIENT_ID
+ *      (e GOOGLE_CLIENT_ID_DESKTOP per l'app installata su Mac e Windows).
  *   2. Esegui una volta `configura` dall'editor.
  *   3. Distribuisci come app web: "Esegui come: Me", "Chi ha accesso: Chiunque".
  */
@@ -66,8 +67,9 @@ function custode_() {
 // ---------------------------------------------------------------------------
 function verificaToken_(token) {
   if (typeof token !== 'string' || token.length < 20 || token.length > 4096) throw new Error('token mancante');
-  var clientId = PROP.getProperty('GOOGLE_CLIENT_ID');
-  if (!clientId) throw new Error('GOOGLE_CLIENT_ID non configurato');
+  // Client dell'app web e, se c'è, dell'app desktop (accesso dal browser di sistema)
+  var clientIds = [PROP.getProperty('GOOGLE_CLIENT_ID'), PROP.getProperty('GOOGLE_CLIENT_ID_DESKTOP')].filter(Boolean);
+  if (!clientIds.length) throw new Error('GOOGLE_CLIENT_ID non configurato');
 
   // Un token si verifica una volta e poi si ricorda fino alla sua scadenza:
   // evita una chiamata a Google per ogni richiesta dell'app.
@@ -82,7 +84,7 @@ function verificaToken_(token) {
 
   // Il token deve essere stato emesso da Google, per QUESTA app, non scaduto,
   // e riferito a un'email verificata.
-  if (t.aud !== clientId) throw new Error('token emesso per un\'altra app');
+  if (clientIds.indexOf(t.aud) < 0) throw new Error('token emesso per un\'altra app');
   if (t.iss !== 'accounts.google.com' && t.iss !== 'https://accounts.google.com') throw new Error('emittente non valido');
   if (String(t.email_verified) !== 'true') throw new Error('email non verificata');
   var adesso = Math.floor(Date.now() / 1000);
@@ -246,6 +248,7 @@ function configura() {
   Logger.log('Cartella radice: ' + radice.getName());
   Logger.log('Proprietario (sempre admin): ' + proprietario);
   Logger.log('Client ID: ' + clientId);
+  Logger.log('Client ID desktop: ' + (PROP.getProperty('GOOGLE_CLIENT_ID_DESKTOP') || '(nessuno: accesso solo dal browser)'));
   Logger.log('Pronto. Ora: Distribuisci > Nuova distribuzione > App web.');
 }
 

@@ -7,6 +7,10 @@ window.TICE_CONFIG = Object.assign({
   custodeUrl: '',
   // Client ID OAuth di tipo "Applicazione web" (Google Cloud): termina con .apps.googleusercontent.com
   googleClientId: '',
+  // App desktop (Mac, Windows): client OAuth di tipo "App desktop". Per le app
+  // installate Google considera anche il "client secret" non segreto.
+  googleDesktopClientId: '',
+  googleDesktopClientSecret: '',
   // Solo per sviluppo con tools/custode-mock.js --dev: accesso senza Google
   dev: false,
 }, window.TICE_CONFIG || {});

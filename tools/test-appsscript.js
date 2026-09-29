@@ -75,6 +75,7 @@ function nuovaCartella(nome) {
 
 const radice = nuovaCartella('Quaderno TICE');
 const CLIENT_ID = '123-test.apps.googleusercontent.com';
+const CLIENT_ID_DESKTOP = '98765-desktop.apps.googleusercontent.com';
 const PROPRIETARIO = 'stefano@centrotice.it';
 
 // token finti: "tok-<email>" = valido; varianti per i casi di errore
@@ -82,6 +83,7 @@ function tokeninfo(token) {
   const adesso = Math.floor(Date.now() / 1000);
   const base = { iss: 'https://accounts.google.com', aud: CLIENT_ID, email_verified: 'true', exp: String(adesso + 3600) };
   if (token.startsWith('tok-altraapp-')) return { ...base, aud: 'altra-app', email: token.slice(13) };
+  if (token.startsWith('tok-desktop-')) return { ...base, aud: CLIENT_ID_DESKTOP, email: token.slice(12) };
   if (token.startsWith('tok-scaduto-')) return { ...base, exp: String(adesso - 10), email: token.slice(12) };
   if (token.startsWith('tok-nonverif-')) return { ...base, email_verified: 'false', email: token.slice(13) };
   if (token.startsWith('tok-')) return { ...base, email: token.slice(4), name: token.slice(4).split('@')[0] };
@@ -96,7 +98,7 @@ const contesto = {
     getFolderById: (id) => { const n = tutti[id]; if (!n || n._tipo !== 'cartella') throw new Error('non trovato'); return n; },
     getFileById: (id) => { const n = tutti[id]; if (!n || n._tipo !== 'file') throw new Error('non trovato'); return n; },
   },
-  PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => ({ CARTELLA_RADICE: radice._id, GOOGLE_CLIENT_ID: CLIENT_ID })[k] || null }) },
+  PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => ({ CARTELLA_RADICE: radice._id, GOOGLE_CLIENT_ID: CLIENT_ID, GOOGLE_CLIENT_ID_DESKTOP: CLIENT_ID_DESKTOP })[k] || null }) },
   CacheService: { getScriptCache: () => ({
     get: (k) => (k in cacheDati ? cacheDati[k] : null),
     put: (k, v) => { cacheDati[k] = v; },
@@ -126,8 +128,8 @@ const contesto = {
 contesto.globalThis = contesto;
 vm.createContext(contesto);
 const dir = path.join(__dirname, '..', 'custode');
-vm.runInContext(fs.readFileSync(path.join(dir, 'core.js'), 'utf8'), contesto, { filename: 'core.gs' });
-vm.runInContext(fs.readFileSync(path.join(dir, 'Code.gs'), 'utf8'), contesto, { filename: 'Code.gs' });
+// Si prova il file unico che si incolla davvero in Apps Script
+vm.runInContext(fs.readFileSync(path.join(dir, 'custode-completo.gs'), 'utf8'), contesto, { filename: 'custode-completo.gs' });
 
 // Ogni richiesta HTTP e' un'esecuzione nuova di Apps Script: si azzera lo stato
 // globale del custode, ma la cache dello script sopravvive (come in produzione).
@@ -158,6 +160,9 @@ prova('token per un\'altra app, scaduto o con email non verificata: rifiutati', 
   for (const t of ['tok-altraapp-' + PROPRIETARIO, 'tok-scaduto-' + PROPRIETARIO, 'tok-nonverif-' + PROPRIETARIO, 'spazzatura-lunga-abbastanza']) {
     assert.strictEqual(post(t, 'io').errore, 'non-autenticato', t);
   }
+});
+prova('accesso dall\'app desktop (client "App desktop") accettato', () => {
+  assert.strictEqual(ok(post('tok-desktop-' + PROPRIETARIO, 'io')).ruolo, 'admin');
 });
 prova('il token valido viene verificato una volta sola e poi ricordato', () => {
   const prima = chiamateTokeninfo;
