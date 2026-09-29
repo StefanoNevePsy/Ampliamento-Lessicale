@@ -1,5 +1,5 @@
 // Configurazione dell'edizione Centro TICE.
-// Si compila una volta dopo aver pubblicato il custode (docs/setup-custode.md).
+// Si compila una volta dopo aver pubblicato il custode (docs/configurazione.md).
 // Nessuno dei due valori è segreto. Lasciati vuoti, l'app funziona solo sul
 // dispositivo, come l'app personale.
 window.TICE_CONFIG = Object.assign({

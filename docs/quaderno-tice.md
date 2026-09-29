@@ -202,8 +202,8 @@ aggiornato scarica solo le novità. Niente SVG (possono contenere script).
 | `js/tice-cifra.js`, `js/tice-unisci.js` | cifratura, fusione |
 | `js/tice-programma.js`, `js/tice-import.js`, `js/numbers-reader.js` | programma, import Numbers |
 | `tice-config.js` | indirizzo del custode e Client ID Google |
-| `custode/` | il custode: `core.js` (regole), `Code.gs` (Google), `appsscript.json` |
+| `custode/` | il custode: `core.js` (regole), `Code.gs` (Google), `custode-completo.gs` (i due insieme, da incollare), `appsscript.json` |
 | `strumenti/apri-dati.html`, `tools/decifra_tice.py` | aprire i dati senza l'app |
 | `tools/custode-mock.js` | custode locale per provare senza Google |
 | `tools/test-*.js` | test automatici, anche su GitHub a ogni push |
-| `docs/setup-custode.md` | installazione passo per passo |
+| `docs/configurazione.md` | configurazione passo per passo |

@@ -5,13 +5,13 @@
  * Google: Drive per i file, LockService per le scritture, UrlFetch per verificare
  * l'identita'. Tutte le regole su chi puo' fare cosa stanno in core.gs.
  *
- * Installazione: docs/setup-custode.md. In breve:
+ * Installazione: docs/configurazione.md. In breve:
  *   1. Proprieta' dello script: CARTELLA_RADICE, GOOGLE_CLIENT_ID.
  *   2. Esegui una volta `configura` dall'editor.
  *   3. Distribuisci come app web: "Esegui come: Me", "Chi ha accesso: Chiunque".
  */
 
-var VERSIONE_CUSTODE = '1.0.0';
+var VERSIONE_CUSTODE = '2.0.0';
 var PROP = PropertiesService.getScriptProperties();
 
 // ---------------------------------------------------------------------------

@@ -18,6 +18,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+      - name: File unico del custode aggiornato
+        run: node tools/componi-custode.js --verifica
       - name: Logica del custode (permessi, idempotenza, conflitti, materiali)
         run: node tools/test-custode.js
       - name: Custode su Apps Script (servizi Google simulati)
