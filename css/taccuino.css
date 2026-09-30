@@ -1,0 +1,163 @@
+/* === Tema "Taccuino": lo stesso design system di PsyDiary ===============
+   Carta calda e inchiostro blu-nero, un solo inchiostro "spot" vermiglio,
+   titoli in Gloock, testo in Archivo, grana da stampa, angoli morbidi.
+   Due varianti: "taccuino" (carta, chiaro) e "taccuino-scuro" (inchiostro).
+   Usa le stesse variabili degli altri temi, quindi vale in tutta l'app. */
+
+[data-theme="taccuino"] {
+    --bg-gradient: #f6f0e6;
+    --glass-bg: rgba(241, 233, 219, 0.97);
+    --glass-border: rgba(26, 33, 49, 0.16);
+    --text-primary: #1a2131;
+    --text-secondary: #4f5563;
+    --text-muted: #6d727d;
+    --accent-color: #b23a23;
+    --accent-rgb: 178, 58, 35;
+    --success-color: #3f7a4d;
+    --danger-color: #9f1d2c;
+    --warning-color: #9a6a16;
+    --input-bg: rgba(26, 33, 49, 0.05);
+    --dropdown-bg: #f6f0e6;
+    --dropdown-deeper: #efe7d8;
+    --modal-bg: #f6f0e6;
+    --cat-1: #30747f; --cat-2: #b07a20; --cat-3: #488055; --cat-4: #c74a31; --cat-5: #834d7e; --cat-6: #375587;
+    --ink-rgb: 26, 33, 49;
+    --shade-rgb: 205, 192, 172;
+    --shadow-rgb: 40, 44, 60;
+    --shadow: 0 1px 0 rgba(26, 33, 49, 0.12), 0 22px 44px -30px rgba(26, 33, 49, 0.55);
+    --tice-antracite: #1a2131;
+    --tice-arancio: #c74a31;
+    --taccuino-carta: #f6f0e6;
+    --taccuino-spot: #c74a31;
+    --taccuino-retino: rgba(199, 74, 49, 0.5);
+    --taccuino-grana: 0.42;
+    --taccuino-fondo: multiply;
+    color-scheme: light;
+}
+
+[data-theme="taccuino-scuro"] {
+    --bg-gradient: #10141b;
+    --glass-bg: rgba(24, 28, 36, 0.97);
+    --glass-border: rgba(237, 231, 220, 0.16);
+    --text-primary: #ede7dc;
+    --text-secondary: #b7b0a5;
+    --text-muted: #938c82;
+    --accent-color: #f48a64;
+    --accent-rgb: 244, 138, 100;
+    --success-color: #75b683;
+    --danger-color: #ec6b7a;
+    --warning-color: #e1ad57;
+    --input-bg: #20252f;
+    --dropdown-bg: #181c24;
+    --dropdown-deeper: #10141b;
+    --modal-bg: #10141b;
+    --cat-1: #6eb1bd; --cat-2: #e1ad57; --cat-3: #75b683; --cat-4: #ef7c59; --cat-5: #c287bc; --cat-6: #87a6d7;
+    --ink-rgb: 237, 231, 220;
+    --shade-rgb: 0, 0, 0;
+    --shadow-rgb: 0, 0, 0;
+    --shadow: 0 1px 0 rgba(237, 231, 220, 0.1), 0 24px 48px -28px rgba(0, 0, 0, 0.7);
+    --tice-antracite: #181c24;
+    --tice-arancio: #ef7c59;
+    --taccuino-carta: #10141b;
+    --taccuino-spot: #ef7c59;
+    --taccuino-retino: rgba(239, 124, 89, 0.45);
+    --taccuino-grana: 0.22;
+    --taccuino-fondo: screen;
+    color-scheme: dark;
+}
+
+[data-theme^="taccuino"] {
+    --radius: 16px;
+    --radius-sm: 10px;
+    --radius-md: 12px;
+    --radius-lg: 18px;
+    --f-display: 'Gloock', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+    --f-testo: 'Archivo Variable', 'Helvetica Neue', Arial, system-ui, sans-serif;
+    --f-mano: 'La Belle Aurore', 'Bradley Hand', cursive;
+}
+
+/* --- carta, grana, testo --------------------------------------------------- */
+[data-theme^="taccuino"] body {
+    font-family: var(--f-testo);
+    font-stretch: 97%;
+    background: var(--taccuino-carta);
+    -webkit-font-smoothing: antialiased;
+}
+[data-theme^="taccuino"] body::after {
+    content: '';
+    position: fixed; inset: 0; z-index: 2147483000; pointer-events: none;
+    opacity: var(--taccuino-grana); mix-blend-mode: var(--taccuino-fondo);
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.78' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .24  0 0 0 0 .2  0 0 0 0 .14  0 0 0 .5 0'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='.5'/></svg>");
+}
+[data-theme^="taccuino"] button,
+[data-theme^="taccuino"] input,
+[data-theme^="taccuino"] select,
+[data-theme^="taccuino"] textarea { font-family: inherit; }
+[data-theme^="taccuino"] ::selection { background: rgba(var(--accent-rgb), 0.18); }
+[data-theme^="taccuino"] .app-shell::before { backdrop-filter: none; -webkit-backdrop-filter: none; }
+
+/* titoli in Gloock: un solo peso, il carattere fa il lavoro */
+[data-theme^="taccuino"] header h1,
+[data-theme^="taccuino"] .modal-header h2,
+[data-theme^="taccuino"] .modal-header h3,
+[data-theme^="taccuino"] .tice h2,
+[data-theme^="taccuino"] .tice-barra .titolo {
+    font-family: var(--f-display); font-weight: 400; letter-spacing: -0.01em;
+}
+[data-theme^="taccuino"] header h1 { font-size: 1.35rem; }
+[data-theme^="taccuino"] .tice h2 { font-size: 1.45rem; }
+[data-theme^="taccuino"] .tice-barra .titolo { font-size: 1.2rem; }
+[data-theme^="taccuino"] .tice h3 { letter-spacing: 0.12em; font-weight: 600; }
+
+/* --- controlli: pillole e cerchi, bordi a matita -------------------------- */
+[data-theme^="taccuino"] .tice .bt,
+[data-theme^="taccuino"] .btn-primary,
+[data-theme^="taccuino"] .btn-secondary { border-radius: 999px; }
+[data-theme^="taccuino"] .tice .bt.piccolo { border-radius: 999px; }
+[data-theme^="taccuino"] .tice .bt.primario,
+[data-theme^="taccuino"] .btn-primary { background: var(--text-primary); border-color: var(--text-primary); color: var(--taccuino-carta); }
+[data-theme^="taccuino"] .tice .bt.arancio { background: var(--taccuino-spot); border-color: var(--taccuino-spot); color: #fff; }
+[data-theme^="taccuino"] .tice .ib,
+[data-theme^="taccuino"] .btn-icon { border-radius: 999px; }
+[data-theme^="taccuino"] .tice .pill,
+[data-theme^="taccuino"] .tag-chip { border-radius: 999px; }
+[data-theme^="taccuino"] .tice .scheda { border-radius: 16px; }
+[data-theme^="taccuino"] .theme-card { border-radius: 16px; }
+[data-theme^="taccuino"] :focus-visible { outline: 2px solid var(--taccuino-spot); outline-offset: 2px; }
+
+/* barra della presa dati: una striscia d'inchiostro, con la matita rossa sotto */
+[data-theme^="taccuino"] .tice-barra { border-bottom: 2px solid var(--taccuino-spot); }
+
+/* la scheda attiva nelle impostazioni: sottolineatura a matita */
+[data-theme^="taccuino"] .settings-tab.active {
+    background: transparent !important; color: var(--text-primary) !important;
+    box-shadow: inset 0 -3px 0 var(--taccuino-spot);
+}
+[data-theme^="taccuino"] .theme-card.active { border-color: var(--taccuino-spot); box-shadow: 4px 4px 0 var(--taccuino-retino); }
+
+/* testi scuri nei menu del tema chiaro (come per gli altri temi chiari) */
+[data-theme="taccuino"] .custom-dropdown-trigger,
+[data-theme="taccuino"] .mode-dd-label,
+[data-theme="taccuino"] .set-item-name,
+[data-theme="taccuino"] .patient-dd-name { color: #1a2131; }
+[data-theme="taccuino"] .custom-ac-item { color: #4f5563; }
+[data-theme="taccuino"] .btn-float { background: rgba(246, 240, 230, 0.97); color: #1a2131; border-color: rgba(26, 33, 49, 0.16); }
+[data-theme="taccuino"] .tice-torna .logo-chiaro { display: block; }
+[data-theme="taccuino"] .tice-torna .logo-scuro { display: none; }
+
+/* indicatore della sincronizzazione nei colori del tema */
+[data-theme^="taccuino"] .tice-pallino[data-stato="attesa"] .pallino,
+[data-theme^="taccuino"] .tice .tice-stato[data-stato="attesa"] .pallino { background: #d6a23e; }
+[data-theme^="taccuino"] .tice-pallino[data-stato="errore"] .pallino,
+[data-theme^="taccuino"] .tice .tice-stato[data-stato="errore"] .pallino { background: var(--taccuino-spot); }
+
+/* nel tema scuro i tasti di risposta sono chiari: testo d'inchiostro, contrasto AA */
+[data-theme="taccuino-scuro"] .tice .tasto.v,
+[data-theme="taccuino-scuro"] .tice .tasto.p,
+[data-theme="taccuino-scuro"] .tice .tasto.x,
+[data-theme="taccuino-scuro"] .tice .bt.arancio,
+[data-theme="taccuino-scuro"] .btn-score.success,
+[data-theme="taccuino-scuro"] .btn-score.fail,
+[data-theme="taccuino-scuro"] .btn-score.prompt { color: #10141b; }
+
+@media print { [data-theme^="taccuino"] body::after { display: none; } }

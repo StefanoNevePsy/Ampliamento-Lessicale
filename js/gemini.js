@@ -156,6 +156,9 @@ function saveGeminiApiKey(key) {
 const APP_THEMES = [
     { id: 'tice', name: 'TICE', icon: 'fa-leaf', colors: ['#eef2f3', '#363a43', '#39b2ad', '#fb8e28'] },
     { id: 'tice-scuro', name: 'TICE scuro', icon: 'fa-moon', colors: ['#1b1e23', '#363a43', '#39b2ad', '#fb8e28'] },
+    { id: 'taccuino', name: 'Taccuino', icon: 'fa-feather', colors: ['#f6f0e6', '#1a2131', '#c74a31', '#488055'] },
+    { id: 'taccuino-scuro', name: 'Taccuino scuro', icon: 'fa-moon', colors: ['#10141b', '#ede7dc', '#ef7c59', '#75b683'] },
+    { id: 'taccuino-auto', name: 'Taccuino automatico', icon: 'fa-circle-half-stroke', colors: ['#f6f0e6', '#c74a31', '#ef7c59', '#10141b'] },
     { id: 'default', name: 'Indigo', icon: 'fa-gem', colors: ['#1e1e2f', '#2d2b55', '#6366f1', '#10b981'] },
     { id: 'ocean', name: 'Oceano', icon: 'fa-water', colors: ['#0f172a', '#1e3a5f', '#38bdf8', '#34d399'] },
     { id: 'forest', name: 'Foresta', icon: 'fa-tree', colors: ['#1a2e1a', '#2d4a2d', '#4ade80', '#34d399'] },
@@ -176,16 +179,27 @@ function getCurrentTheme() {
     return localStorage.getItem('app_theme') || 'tice';
 }
 
+// "Taccuino automatico": carta di giorno, inchiostro quando il dispositivo è in modalità scura
+const _scuroDispositivo = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+function _temaEffettivo(themeId) {
+    if (themeId !== 'taccuino-auto') return themeId;
+    return _scuroDispositivo && _scuroDispositivo.matches ? 'taccuino-scuro' : 'taccuino';
+}
+if (_scuroDispositivo && _scuroDispositivo.addEventListener) {
+    _scuroDispositivo.addEventListener('change', () => { if (getCurrentTheme() === 'taccuino-auto') applyTheme('taccuino-auto'); });
+}
+
 function applyTheme(themeId) {
-    if (themeId === 'default') {
+    const effettivo = _temaEffettivo(themeId);
+    if (effettivo === 'default') {
         document.documentElement.removeAttribute('data-theme');
     } else {
-        document.documentElement.setAttribute('data-theme', themeId);
+        document.documentElement.setAttribute('data-theme', effettivo);
     }
     localStorage.setItem('app_theme', themeId);
     // Update theme-color meta
     const metaTheme = document.querySelector('meta[name="theme-color"]');
-    const theme = APP_THEMES.find(t => t.id === themeId);
+    const theme = APP_THEMES.find(t => t.id === effettivo);
     if (metaTheme && theme) metaTheme.setAttribute('content', theme.colors[0]);
 }
 

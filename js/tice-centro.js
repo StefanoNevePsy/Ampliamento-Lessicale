@@ -24,7 +24,8 @@
     function chip() {
         if (!Y.attivo()) return '';
         let stato = 'ok', testo = '';
-        if (S.fase === 'fuori') { stato = 'spento'; testo = 'Accedi'; }
+        if (!navigator.onLine) { stato = 'spento'; testo = 'Offline'; }
+        else if (S.fase === 'fuori') { stato = 'spento'; testo = 'Accedi'; }
         else if (S.fase === 'chiave') { stato = 'attesa'; testo = 'Chiave'; }
         else if (S.fase === 'attesa') { stato = 'attesa'; testo = 'In attesa'; }
         else if (S.lavoro) { stato = 'lavoro'; }
