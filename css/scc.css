@@ -1,0 +1,42 @@
+/* === Standard Celeration Chart (js/scc-grafico.js) === */
+.scc { display: grid; gap: 12px; }
+.scc-controlli { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.scc-gruppo { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.scc-tasto {
+    display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 11px;
+    border-radius: 999px; border: 1px solid rgba(var(--ink-rgb), 0.18); background: transparent;
+    color: var(--text-secondary); font: inherit; font-size: 0.8rem; font-weight: 650; cursor: pointer;
+}
+.scc-tasto.on { background: var(--text-primary); border-color: var(--text-primary); color: var(--modal-bg); }
+.scc-tasto i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.scc-controlli select { width: auto; min-height: 32px; padding: 4px 8px; font-size: 0.8rem; border-radius: 999px; }
+.scc-carta {
+    overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch;
+    background: rgba(var(--ink-rgb), 0.025); border: 1px solid rgba(var(--ink-rgb), 0.12); border-radius: 14px; padding: 6px 4px;
+}
+.scc-legenda, .scc-nota, .scc-sotto { font-size: 0.78rem; color: var(--text-secondary); margin: 0; line-height: 1.4; }
+.scc-nota { font-style: italic; }
+.scc-analisi { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
+.scc-scheda { padding: 10px 12px; border-radius: 12px; background: rgba(var(--ink-rgb), 0.04); border: 1px solid rgba(var(--ink-rgb), 0.08); display: grid; gap: 3px; align-content: start; }
+.scc-scheda b { font-size: 0.82rem; }
+.scc-cel { margin: 0; font-size: 1.5rem; font-weight: 800; line-height: 1.1; }
+.scc-cel small { font-size: 0.72rem; font-weight: 600; color: var(--text-secondary); }
+.scc-fasi { display: grid; gap: 6px; justify-items: start; font-size: 0.85rem; }
+.scc-fasi ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; width: 100%; }
+.scc-fasi li { display: flex; align-items: center; gap: 8px; }
+.scc-fasi li span { font-weight: 700; min-width: 52px; }
+.scc-fasi li small { color: var(--text-muted); }
+.scc-x { border: 0; background: none; color: var(--danger-color); cursor: pointer; font-size: 0.9rem; }
+.scc-nuova { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.scc-nuova input { width: auto; flex: 1 1 150px; min-height: 34px; padding: 4px 8px; }
+.scc-nuova input[type=date] { flex: 0 0 auto; }
+.scc-vuoto { color: var(--text-secondary); text-align: center; padding: 20px; }
+.scc-scelta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+.scc-scelta select { width: auto; max-width: 100%; }
+.scc-distintivo { border: 0; cursor: pointer; font-family: inherit; font-weight: 800; font-size: 0.75rem; padding: 1px 7px; border-radius: 999px; background: rgba(var(--ink-rgb), 0.06); white-space: nowrap; }
+.scc-distintivo.su { color: var(--success-color); }
+.scc-distintivo.giu { color: var(--danger-color); }
+.scc-distintivo.piatto { color: var(--text-secondary); }
+.tice-foglio:has(.scc) { max-width: 1000px; }
+.scc-riga { display: flex; width: max-content; }
+.scc-asse { position: sticky; left: 0; z-index: 1; flex: none; margin-right: -46px; background: linear-gradient(to right, var(--taccuino-carta, var(--modal-bg)) 80%, transparent); }

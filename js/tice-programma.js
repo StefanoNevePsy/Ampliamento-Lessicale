@@ -6,6 +6,7 @@
  * patient.programma = { attivita: [{
  *   id, nome, area, descrizione,
  *   suggerimenti: '',        // come si somministra: note per chi fa la seduta
+ *   cronometro: false,       // fluency: si misura il tempo, per le risposte al minuto
  *   sessionType: 'independent' | 'timedelay',
  *   criterio: { soglia: 90, sedute: 2 },
  *   prove: 10 | null,          // prove per seduta, se fisse
@@ -143,6 +144,11 @@
     if (voce.nota) nota.push(voce.nota);
     if (nota.length) s.note = nota.join(' — ');
     if (voce.mantenimento) s.mantenimento = true;
+    // attività cronometrata: il tempo di lavoro, per le risposte al minuto (SCC)
+    if (voce.tempo) {
+      var ms = (voce.tempo.ms || 0) + (voce.tempo.da ? Date.now() - voce.tempo.da : 0);
+      if (ms >= 5000) s.durationSeconds = Math.round(ms / 1000);
+    }
     return s;
   }
 
@@ -154,6 +160,7 @@
       area: String(dati.area || '').trim(),
       descrizione: String(dati.descrizione || '').trim(),
       suggerimenti: String(dati.suggerimenti || '').trim(),
+      cronometro: !!dati.cronometro,
       sessionType: dati.sessionType === 'timedelay' ? 'timedelay' : 'independent',
       criterio: { soglia: +dati.soglia || 90, sedute: +dati.sedute || 2 },
       prove: +dati.prove || null,

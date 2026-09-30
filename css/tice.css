@@ -385,3 +385,10 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 .tice .sugg-testo { margin-top: 8px; padding: 10px 12px; border-radius: 12px; background: rgba(var(--accent-rgb), 0.07); border-left: 3px solid var(--accent-color); font-size: 0.9rem; line-height: 1.45; user-select: text; }
 .tice .sugg-testo p { margin: 0; white-space: pre-wrap; }
 .tice .sugg-testo p + p { margin-top: 8px; }
+
+/* --- cronometro delle attività di fluency --- */
+.tice .cronometro { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 10px; padding: 8px 10px; border-radius: 12px; background: rgba(var(--ink-rgb), 0.04); }
+.tice .cronometro .t { font-variant-numeric: tabular-nums; font-size: 1.35rem; font-weight: 800; min-width: 64px; }
+.tice .spunta-riga { display: flex; gap: 10px; align-items: flex-start; margin: 4px 0 10px; cursor: pointer; }
+.tice .spunta-riga input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--accent-color); flex: none; }
+.tice .targets li.azioni-att { gap: 6px; flex-wrap: wrap; }

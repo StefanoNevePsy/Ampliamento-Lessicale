@@ -273,6 +273,7 @@
             ${aperta ? h`<div class="att-corpo">
                 ${giocabile ? h`<button class="bt primario largo" style="margin-bottom:10px" data-a="gioca" data-id="${att.id}">${icona('play')} Somministra con l'app · ${etichettaModo(P.modoTarget(att, t))}</button>` : ''}
                 ${t && t.setId && !giocabile ? h`<p class="sotto piccolo">Il set «${t.testo}» non è su questo dispositivo: scaricalo dai materiali o segna qui sotto.</p>` : ''}
+                ${att.cronometro ? cronometro(att, v) : ''}
                 <div class="tasti">
                     <button class="tasto v" data-a="segna" data-id="${att.id}" data-r="V">✓<small>Corretta</small></button>
                     <button class="tasto p" data-a="segna" data-id="${att.id}" data-r="P">P<small>${att.nomeP || (tipo === 'timedelay' ? 'Promptata' : 'Con aiuto')}</small></button>
@@ -289,6 +290,34 @@
             </div>` : ''}
         </div>`;
     }
+    // ---------- cronometro per le attività di fluency ----------
+    const tempoDi = (v) => (v && v.tempo ? (v.tempo.ms || 0) + (v.tempo.da ? Date.now() - v.tempo.da : 0) : 0);
+    const mmss = (ms) => { const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+    function alMinuto(v) {
+        const min = tempoDi(v) / 60000;
+        return min >= 0.25 && v ? (v.v / min).toFixed(1).replace('.', ',') : '—';
+    }
+    function cronometro(att, v) {
+        const va = !!(v && v.tempo && v.tempo.da);
+        return h`<div class="cronometro" data-crono="${att.id}">
+            <span class="t">${mmss(tempoDi(v))}</span>
+            <button class="bt piccolo ${va ? '' : 'primario'}" data-a="crono" data-id="${att.id}">${icona(va ? 'pause' : 'play')} ${va ? 'Pausa' : (tempoDi(v) ? 'Riprendi' : 'Avvia')}</button>
+            <span class="sotto piccolo"><b data-al-minuto>${alMinuto(v)}</b> corrette al minuto</span>
+        </div>`;
+    }
+    setInterval(() => {
+        const r = document.querySelectorAll('#tice [data-crono]');
+        if (!r.length) return;
+        const p = paz(T.pid);
+        if (!p) return;
+        r.forEach((el) => {
+            const v = bozza(p.id).voci[el.dataset.crono];
+            if (!v || !v.tempo || !v.tempo.da) return;
+            el.querySelector('.t').textContent = mmss(tempoDi(v));
+            el.querySelector('[data-al-minuto]').textContent = alMinuto(v);
+        });
+    }, 1000);
+
     function riassunto(p) {
         const b = bozza(p.id);
         let corrette = 0, prove = 0, n = 0;
@@ -359,7 +388,7 @@
         const aperti = t.filter((tg) => !CHIUSI.includes(tg.stato));
         const riga = (tg) => h`<li class="${CHIUSI.includes(tg.stato) ? 'chiuso' : ''}">
                     <span class="punto ${tg.stato}"></span>
-                    <span class="tt">${tg.testo}${tg.suggerimento ? h` <span class="sotto" title="Ha dei suggerimenti">${icona('lightbulb')}</span>` : ''}<small>${P.STATI_TARGET[tg.stato] || tg.stato}${tg.fine ? ' il ' + formatoData(tg.fine) : ''}${ultimo(tg)}</small></span>
+                    <span class="tt">${tg.testo}${tg.suggerimento ? h` <span class="sotto" title="Ha dei suggerimenti">${icona('lightbulb')}</span>` : ''}${celerazioneTarget(p, att, tg)}<small>${P.STATI_TARGET[tg.stato] || tg.stato}${tg.fine ? ' il ' + formatoData(tg.fine) : ''}${ultimo(tg)}</small></span>
                     ${modifica || tg.setId ? h`<button class="ib" data-a="menu-target" data-id="${att.id}" data-t="${tg.id}" aria-label="Opzioni del target">${icona('ellipsis')}</button>` : ''}
                 </li>`;
         return h`<div class="scheda" data-prog="${att.id}">
@@ -375,7 +404,8 @@
                 ${chiusi.length ? h`<li><details class="chiusi" ${T.chiusiAperti[att.id] ? grezzo('open') : ''} data-chiusi="${att.id}"><summary class="sotto piccolo">${chiusi.length} ${chiusi.length === 1 ? 'target chiuso' : 'target chiusi'}</summary>
                     <ul class="targets" style="padding:0">${chiusi.map(riga)}</ul></details></li>` : ''}
                 ${aperti.map(riga)}
-                ${modifica ? h`<li><button class="bt piccolo fantasma" data-a="nuovo-target" data-id="${att.id}">${icona('plus')} Target</button></li>` : ''}
+                <li class="azioni-att">${modifica ? h`<button class="bt piccolo fantasma" data-a="nuovo-target" data-id="${att.id}">${icona('plus')} Target</button>` : ''}
+                    ${P.sedute(p, att).length ? h`<button class="bt piccolo fantasma" data-a="scc-att" data-id="${att.id}">${icona('chart-line')} Andamento</button>` : ''}</li>
             </ul>
         </div>`;
     }
@@ -550,6 +580,8 @@
             if (EST.nuovoBambino) await EST.nuovoBambino(p);
             vai('programma', p.id);
         },
+        'scc-att': async (b) => { const p = paz(T.pid); await graficoSCC(p, P.attivita(p, b.dataset.id), null); },
+        'scc-target': async (b) => { const p = paz(T.pid); const att = P.attivita(p, b.dataset.id); await graficoSCC(p, att, att.target.find((x) => x.id === b.dataset.t)); },
         suggerimenti: (b) => {
             T.suggerimenti[b.dataset.id] = !T.suggerimenti[b.dataset.id];
             T.mantieniScroll = true;
@@ -576,7 +608,19 @@
             const r = b.dataset.r;
             v[r.toLowerCase()] += 1;
             v.sequenza += r;
+            // fluency: il cronometro parte da solo alla prima risposta
+            if (att.cronometro && !v.tempo) v.tempo = { ms: 0, da: Date.now() };
             if (navigator.vibrate) navigator.vibrate(r === 'V' ? 8 : 18);
+            salvaBozza();
+            aggiornaScheda(p, att.id);
+        },
+        crono: (b) => {
+            const p = paz(T.pid);
+            const att = attivitaDi(p, b.dataset.id);
+            if (!att) return;
+            const v = voce(p, att);
+            const t = v.tempo || (v.tempo = { ms: 0, da: null });
+            if (t.da) { t.ms += Date.now() - t.da; t.da = null; } else t.da = Date.now();
             salvaBozza();
             aggiornaScheda(p, att.id);
         },
@@ -781,6 +825,7 @@
                 att.area = r.area.trim();
                 att.descrizione = r.descrizione.trim();
                 att.suggerimenti = String(r.suggerimenti || '').trim();
+                att.cronometro = !!r.cronometro;
                 att.sessionType = r.sessionType;
                 att.criterio = { soglia: +r.soglia || 90, sedute: +r.sedute || 2 };
                 att.prove = +r.prove || null;
@@ -811,6 +856,7 @@
             const r = await foglio(h`<h2>${t.testo}</h2>
                 <p class="sotto">${P.STATI_TARGET[t.stato]}${n ? ` · ${n} sedute` : ''}${crit ? ` · criterio raggiunto il ${formatoData(crit)}` : ''}</p>
                 <div class="opzioni">
+                    ${n ? h`<button class="opzione" data-foglio="grafico">${icona('chart-line')}<span class="corpo">Grafico e celerazione<small>Standard Celeration Chart: andamento, fasi, previsione</small></span></button>` : ''}
                     ${!puoProgrammi(p) && t.setId ? h`<button class="opzione" data-foglio="gioca">${icona('play')}<span class="corpo">Somministra con l'app<small>${etichettaModo(P.modoTarget(att, t))} · set ${t.testo}</small></span></button>` : ''}
                     ${!puoProgrammi(p) ? '' : h`${t.stato !== 'attivo' ? h`<button class="opzione" data-foglio="corrente">${icona('play')}<span class="corpo">Lavora su questo target<small>Diventa quello della presa dati</small></span></button>` : ''}
                     ${t.stato === 'attivo' ? h`<button class="opzione" data-foglio="criterio">${icona('flag-checkered')}<span class="corpo">Chiudi a criterio<small>E passa al successivo</small></span></button>` : ''}
@@ -824,6 +870,7 @@
                 </div><div class="bottoni"><button class="bt" data-foglio="chiudi">Chiudi</button></div>`);
             if (!r) return;
             if (r === 'gioca') { lancia(p, att, t); return; }
+            if (r === 'grafico') { await graficoSCC(p, att, t); return; }
             if (!puoProgrammi(p)) return;
             if (r === 'corrente') P.rendiCorrente(att, t.id);
             else if (r === 'criterio') { await proponiProssimo(p, att, t, crit); T.mantieniScroll = true; disegna(); return; }
@@ -941,6 +988,34 @@
         });
     }
 
+    // ---------- Standard Celeration Chart di un target o di un'attività ----------
+    function celerazioneTarget(p, att, t) {
+        if (!window.TiceSCCGrafico || !window.TiceSCCDati) return '';
+        const sedute = P.sedute(p, att, t);
+        if (sedute.length < TiceSCC.MIN_PUNTI) return '';
+        const d = TiceSCCGrafico.distintivo(sedute, TiceSCCDati.fasiPer(p, { chiave: 't:' + t.id, att }), TiceSCCDati.nomiTarget(p));
+        return d ? h` <button class="scc-distintivo ${d.verso}" data-a="scc-target" data-id="${att.id}" data-t="${t.id}" title="${d.titolo}">${d.testo}</button>` : '';
+    }
+    async function graficoSCC(p, att, t) {
+        if (!window.TiceSCCGrafico) return;
+        const chiave = t ? 't:' + t.id : 'a:' + att.id;
+        const sedute = P.sedute(p, att, t || undefined);
+        const g = { chiave, att, target: t };
+        await foglio(h`<h2>${t ? t.testo : att.nome}</h2>
+            <p class="sotto piccolo">${t ? att.nome + ' · ' : 'Tutta l\'attività · '}${sedute.length} ${sedute.length === 1 ? 'seduta' : 'sedute'}</p>
+            <div class="scc" data-scc></div>
+            <div class="bottoni" style="margin-top:12px"><button class="bt" data-foglio="chiudi">Chiudi</button></div>`, {
+            dopo: (f) => TiceSCCGrafico.pannello(f.querySelector('[data-scc]'), {
+                titolo: t ? t.testo : att.nome, sedute, fasi: TiceSCCDati.fasiPer(p, g), nomi: TiceSCCDati.nomiTarget(p),
+                obiettivo: TiceSCCDati.obiettivo(att, sedute), puoModificare: puoProgrammi(p),
+                nomeFile: p.name + ' - ' + (t ? t.testo : att.nome),
+                alAggiungiFase: (fs) => TiceSCCDati.aggiungiFase(p, chiave, fs), alTogliFase: (id) => TiceSCCDati.togliFase(p, id)
+            })
+        });
+        T.mantieniScroll = true;
+        disegna();
+    }
+
     function moduloAttivita(p, att) {
         const aree = [...new Set(P.programma(p).attivita.map((a) => a.area).filter(Boolean))];
         const a = att || { nome: '', area: '', descrizione: '', sessionType: 'independent', criterio: { soglia: 90, sedute: 2 }, prove: null };
@@ -954,6 +1029,7 @@
             <div class="campo"><span>Tipo di seduta</span><div class="scelta">
                 <label><input type="radio" name="sessionType" value="independent" ${a.sessionType !== 'timedelay' ? grezzo('checked') : ''}><span>Indipendente</span></label>
                 <label><input type="radio" name="sessionType" value="timedelay" ${a.sessionType === 'timedelay' ? grezzo('checked') : ''}><span>Time delay</span></label></div></div>
+            <label class="spunta-riga"><input type="checkbox" name="cronometro" ${a.cronometro ? grezzo('checked') : ''}> <span><b>Cronometra (fluency)</b><br><span class="sotto piccolo">In seduta compare un cronometro che parte alla prima risposta: il grafico SCC mostra le risposte al minuto.</span></span></label>
             <div class="riga-campi">
                 <label class="campo"><span>Criterio %</span><input name="soglia" type="number" min="10" max="100" inputmode="numeric" value="${a.criterio.soglia}"></label>
                 <label class="campo"><span>Giorni di fila</span><input name="sedute" type="number" min="1" max="10" inputmode="numeric" value="${a.criterio.sedute}"></label>
