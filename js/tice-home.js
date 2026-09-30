@@ -247,7 +247,9 @@
         const giaOggi = !att.temporanea && t ? P.sedute(p, att, t).filter((x) => P.giorno(x.date) === b.data) : [];
         const oggiV = giaOggi.reduce((n, x) => n + (x.correct || 0), 0), oggiT = giaOggi.reduce((n, x) => n + (x.total || 0), 0);
         const prev = previsione(p, att, v);
-        return h`<div class="att ${haDati(v) ? 'con-dati' : ''}" data-att="${att.id}">
+        const hint = suggerimentiDi(att, t).length;
+        return h`<div class="att ${haDati(v) ? 'con-dati' : ''} ${hint ? 'con-hint' : ''}" data-att="${att.id}">
+            ${hint ? h`<button class="ib hint-tasto ${T.suggerimenti[att.id] ? 'on' : ''}" data-a="suggerimenti" data-id="${att.id}" aria-expanded="${T.suggerimenti[att.id] ? 'true' : 'false'}" aria-label="Suggerimenti" title="Suggerimenti per chi somministra">${icona('lightbulb')}</button>` : ''}
             <button class="att-testa" data-a="apri-att" data-id="${att.id}" aria-expanded="${aperta ? 'true' : 'false'}">
                 <span class="corpo">
                     <span class="nome">${att.nome}
@@ -263,12 +265,11 @@
                 <span class="conto">${tot ? h`<b class="${classePct(pct, soglia)}">${pct}%</b><br><span class="piccolo sotto">${v.v}/${tot}${att.prove ? ' di ' + att.prove : ''}</span>`
                     : h`<span class="piccolo sotto">${att.prove ? att.prove + ' prove' : 'tocca'}</span>`}</span>
             </button>
-            ${suggerimentiDi(att, t).length ? h`<div class="att-suggerimenti ${T.suggerimenti[att.id] ? 'aperti' : ''}">
-                <button class="sugg-tasto" data-a="suggerimenti" data-id="${att.id}" aria-expanded="${T.suggerimenti[att.id] ? 'true' : 'false'}">${icona('lightbulb')} Suggerimenti ${icona(T.suggerimenti[att.id] ? 'chevron-up' : 'chevron-down')}</button>
-                ${T.suggerimenti[att.id] ? h`<div class="sugg-testo">
+            ${hint && T.suggerimenti[att.id] ? h`<div class="att-suggerimenti aperti">
+                ${h`<div class="sugg-testo">
                     ${att.suggerimenti ? h`<p>${att.suggerimenti}</p>` : ''}
                     ${t && t.suggerimento ? h`<p>${att.suggerimenti ? h`<b>${t.testo}:</b> ` : ''}${t.suggerimento}</p>` : ''}
-                </div>` : ''}
+                </div>`}
             </div>` : ''}
             ${aperta ? h`<div class="att-corpo">
                 ${giocabile ? h`<button class="bt primario largo" style="margin-bottom:10px" data-a="gioca" data-id="${att.id}">${icona('play')} Somministra con l'app · ${etichettaModo(P.modoTarget(att, t))}</button>` : ''}
@@ -1216,6 +1217,26 @@
         const L = T.lancio;
         l.innerHTML = String(h`${icona('chevron-down')} <b>Presa dati</b>${L ? h` <span>· ${L.nome} · ${L.testo}</span>` : ''}`);
         l.hidden = !radice().hidden;
+        // i suggerimenti dell'attività in gioco, senza uscire dal gioco
+        let lb = document.getElementById('tice-hint-gioco');
+        const pL = L && paz(L.pid), aL = pL && P.attivita(pL, L.attId), tL = aL && (aL.target || []).find((x) => x.id === L.targetId);
+        const testi = aL ? suggerimentiDi(aL, tL) : [];
+        if (!lb) {
+            lb = document.createElement('div');
+            lb.id = 'tice-hint-gioco';
+            lb.className = 'tice-hint-gioco';
+            lb.innerHTML = '<button type="button" class="tasto-hint" aria-expanded="false" title="Suggerimenti per chi somministra"></button><div class="fumetto" hidden></div>';
+            lb.firstChild.addEventListener('click', () => {
+                const f = lb.querySelector('.fumetto');
+                f.hidden = !f.hidden;
+                lb.firstChild.setAttribute('aria-expanded', String(!f.hidden));
+            });
+            document.body.appendChild(lb);
+        }
+        lb.firstChild.innerHTML = String(icona('lightbulb'));
+        lb.querySelector('.fumetto').innerHTML = String(h`<b>${L ? L.nome : ''}</b>${testi.map((x) => h`<p>${x}</p>`)}`);
+        lb.hidden = !testi.length || !radice().hidden;
+        if (lb.hidden) lb.querySelector('.fumetto').hidden = true;
     }
     // Le sedute salvate dal gioco lanciato da qui vengono collegate all'attività
     // e al target del programma; poi si torna alla presa dati.

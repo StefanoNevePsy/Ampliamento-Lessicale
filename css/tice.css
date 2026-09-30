@@ -392,3 +392,22 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 .tice .spunta-riga { display: flex; gap: 10px; align-items: flex-start; margin: 4px 0 10px; cursor: pointer; }
 .tice .spunta-riga input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--accent-color); flex: none; }
 .tice .targets li.azioni-att { gap: 6px; flex-wrap: wrap; }
+
+/* --- lampadina dei suggerimenti sulla riga dell'attività (si apre senza entrare) --- */
+.tice .att.con-hint { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+.tice .att.con-hint > * { grid-column: 1 / -1; }
+.tice .att.con-hint > .att-testa { grid-column: 1; grid-row: 1; }
+.tice .att.con-hint > .hint-tasto { grid-column: 2; grid-row: 1; align-self: center; margin-right: 10px; }
+.tice .hint-tasto { width: 38px; height: 38px; border-radius: 999px; color: var(--accent-color); border-style: dashed; border-color: rgba(var(--accent-rgb), 0.5); background: rgba(var(--accent-rgb), 0.06); }
+.tice .hint-tasto.on { background: var(--accent-color); border-style: solid; border-color: var(--accent-color); color: #fff; }
+.tice .att-suggerimenti { padding-top: 0; }
+.tice .att-suggerimenti .sugg-testo { margin-top: 0; }
+
+/* --- suggerimenti durante il gioco lanciato dalla presa dati --- */
+.tice-hint-gioco { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 72px); left: 14px; z-index: 9100; display: grid; gap: 8px; justify-items: start; max-width: min(360px, 86vw); }
+.tice-hint-gioco[hidden] { display: none; }
+.tice-hint-gioco .tasto-hint { width: 44px; height: 44px; border-radius: 999px; border: 1px dashed rgba(var(--accent-rgb), 0.6); background: var(--glass-bg); color: var(--accent-color); font-size: 1.05rem; cursor: pointer; box-shadow: var(--shadow); }
+.tice-hint-gioco .tasto-hint[aria-expanded="true"] { background: var(--accent-color); color: #fff; border-style: solid; }
+.tice-hint-gioco .fumetto { padding: 12px 14px; border-radius: 14px; background: var(--modal-bg); color: var(--text-primary); border-left: 3px solid var(--accent-color); box-shadow: var(--shadow); font-size: 0.92rem; line-height: 1.45; user-select: text; }
+.tice-hint-gioco .fumetto[hidden] { display: none; }
+.tice-hint-gioco .fumetto p { margin: 6px 0 0; white-space: pre-wrap; }
