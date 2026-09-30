@@ -5,11 +5,12 @@
  *
  * patient.programma = { attivita: [{
  *   id, nome, area, descrizione,
+ *   suggerimenti: '',        // come si somministra: note per chi fa la seduta
  *   sessionType: 'independent' | 'timedelay',
  *   criterio: { soglia: 90, sedute: 2 },
  *   prove: 10 | null,          // prove per seduta, se fisse
  *   stato: 'attivo' | 'sospeso' | 'terminato',
- *   target: [{ id, testo, stato, inizio, fine, tdSeconds? }],
+ *   target: [{ id, testo, stato, inizio, fine, tdSeconds?, suggerimento? }],
  *   // stato del target: 'attivo' | 'pianificato' | 'criterio' | 'repertorio' | 'chiuso'
  * }] }
  *
@@ -152,6 +153,7 @@
       nome: String(dati.nome || '').trim() || 'Attività',
       area: String(dati.area || '').trim(),
       descrizione: String(dati.descrizione || '').trim(),
+      suggerimenti: String(dati.suggerimenti || '').trim(),
       sessionType: dati.sessionType === 'timedelay' ? 'timedelay' : 'independent',
       criterio: { soglia: +dati.soglia || 90, sedute: +dati.sedute || 2 },
       prove: +dati.prove || null,

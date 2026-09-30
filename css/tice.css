@@ -377,3 +377,11 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 @media (max-width: 600px) {
     .tice-pallino { width: 26px; min-width: 26px; border-color: transparent; background: none; }
 }
+
+/* --- suggerimenti per chi somministra (attività e target) --- */
+.tice .att-suggerimenti { padding: 0 12px 8px; }
+.tice .sugg-tasto { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 12px; border-radius: 999px; border: 1px dashed rgba(var(--accent-rgb), 0.5); background: rgba(var(--accent-rgb), 0.06); color: var(--accent-color); font: inherit; font-size: 0.82rem; font-weight: 700; cursor: pointer; }
+.tice .att-suggerimenti.aperti .sugg-tasto { border-style: solid; }
+.tice .sugg-testo { margin-top: 8px; padding: 10px 12px; border-radius: 12px; background: rgba(var(--accent-rgb), 0.07); border-left: 3px solid var(--accent-color); font-size: 0.9rem; line-height: 1.45; user-select: text; }
+.tice .sugg-testo p { margin: 0; white-space: pre-wrap; }
+.tice .sugg-testo p + p { margin-top: 8px; }

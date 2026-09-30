@@ -36,7 +36,9 @@
     const icona = (n) => grezzo(`<i class="fa-solid fa-${n}"></i>`);
 
     // ---------- stato ----------
-    const T = { vista: 'bambini', pid: null, aperte: {}, chiusiAperti: {}, cerca: '', importazioni: [] };
+    const T = { vista: 'bambini', pid: null, aperte: {}, chiusiAperti: {}, suggerimenti: {}, cerca: '', importazioni: [] };
+    // Suggerimenti per chi somministra: dell'attività e del target in corso
+    const suggerimentiDi = (att, t) => [att && att.suggerimenti, t && t.suggerimento].map((x) => String(x || '').trim()).filter(Boolean);
     const radice = () => document.getElementById('tice');
 
     function pazienti() { return (typeof state !== 'undefined' && state.patients) || []; }
@@ -261,6 +263,13 @@
                 <span class="conto">${tot ? h`<b class="${classePct(pct, soglia)}">${pct}%</b><br><span class="piccolo sotto">${v.v}/${tot}${att.prove ? ' di ' + att.prove : ''}</span>`
                     : h`<span class="piccolo sotto">${att.prove ? att.prove + ' prove' : 'tocca'}</span>`}</span>
             </button>
+            ${suggerimentiDi(att, t).length ? h`<div class="att-suggerimenti ${T.suggerimenti[att.id] ? 'aperti' : ''}">
+                <button class="sugg-tasto" data-a="suggerimenti" data-id="${att.id}" aria-expanded="${T.suggerimenti[att.id] ? 'true' : 'false'}">${icona('lightbulb')} Suggerimenti ${icona(T.suggerimenti[att.id] ? 'chevron-up' : 'chevron-down')}</button>
+                ${T.suggerimenti[att.id] ? h`<div class="sugg-testo">
+                    ${att.suggerimenti ? h`<p>${att.suggerimenti}</p>` : ''}
+                    ${t && t.suggerimento ? h`<p>${att.suggerimenti ? h`<b>${t.testo}:</b> ` : ''}${t.suggerimento}</p>` : ''}
+                </div>` : ''}
+            </div>` : ''}
             ${aperta ? h`<div class="att-corpo">
                 ${giocabile ? h`<button class="bt primario largo" style="margin-bottom:10px" data-a="gioca" data-id="${att.id}">${icona('play')} Somministra con l'app · ${etichettaModo(P.modoTarget(att, t))}</button>` : ''}
                 ${t && t.setId && !giocabile ? h`<p class="sotto piccolo">Il set «${t.testo}» non è su questo dispositivo: scaricalo dai materiali o segna qui sotto.</p>` : ''}
@@ -350,14 +359,15 @@
         const aperti = t.filter((tg) => !CHIUSI.includes(tg.stato));
         const riga = (tg) => h`<li class="${CHIUSI.includes(tg.stato) ? 'chiuso' : ''}">
                     <span class="punto ${tg.stato}"></span>
-                    <span class="tt">${tg.testo}<small>${P.STATI_TARGET[tg.stato] || tg.stato}${tg.fine ? ' il ' + formatoData(tg.fine) : ''}${ultimo(tg)}</small></span>
+                    <span class="tt">${tg.testo}${tg.suggerimento ? h` <span class="sotto" title="Ha dei suggerimenti">${icona('lightbulb')}</span>` : ''}<small>${P.STATI_TARGET[tg.stato] || tg.stato}${tg.fine ? ' il ' + formatoData(tg.fine) : ''}${ultimo(tg)}</small></span>
                     ${modifica || tg.setId ? h`<button class="ib" data-a="menu-target" data-id="${att.id}" data-t="${tg.id}" aria-label="Opzioni del target">${icona('ellipsis')}</button>` : ''}
                 </li>`;
         return h`<div class="scheda" data-prog="${att.id}">
             <button class="att-testa" ${modifica ? grezzo(`data-a="mod-att" data-id="${esc(att.id)}"`) : ''}>
                 <span class="corpo"><span class="nome">${att.nome}
                     ${att.sessionType === 'timedelay' ? h` <span class="pill">T/D</span>` : h` <span class="pill grigia">Indip.</span>`}
-                    ${att.stato !== 'attivo' ? h` <span class="pill arancio">${ETICHETTE_STATO[att.stato] || att.stato}</span>` : ''}</span>
+                    ${att.stato !== 'attivo' ? h` <span class="pill arancio">${ETICHETTE_STATO[att.stato] || att.stato}</span>` : ''}
+                    ${att.suggerimenti ? h` <span class="pill grigia" title="${att.suggerimenti}">${icona('lightbulb')} suggerimenti</span>` : ''}</span>
                     <span class="target">Criterio ${att.criterio.soglia}% per ${att.criterio.sedute} giorni${att.prove ? ' · ' + att.prove + ' prove' : ''}${att.descrizione ? ' · ' + att.descrizione : ''}</span></span>
                 ${modifica ? icona('pen') : ''}
             </button>
@@ -539,6 +549,11 @@
             await salvaPaziente(p);
             if (EST.nuovoBambino) await EST.nuovoBambino(p);
             vai('programma', p.id);
+        },
+        suggerimenti: (b) => {
+            T.suggerimenti[b.dataset.id] = !T.suggerimenti[b.dataset.id];
+            T.mantieniScroll = true;
+            disegna();
         },
         'apri-att': (b) => {
             const id = b.dataset.id;
@@ -765,6 +780,7 @@
                 att.nome = r.nome.trim() || att.nome;
                 att.area = r.area.trim();
                 att.descrizione = r.descrizione.trim();
+                att.suggerimenti = String(r.suggerimenti || '').trim();
                 att.sessionType = r.sessionType;
                 att.criterio = { soglia: +r.soglia || 90, sedute: +r.sedute || 2 };
                 att.prove = +r.prove || null;
@@ -801,6 +817,7 @@
                     ${t.stato === 'attivo' || t.stato === 'pianificato' ? h`<button class="opzione" data-foglio="repertorio">${icona('star')}<span class="corpo">Già in repertorio</span></button>` : ''}
                     ${t.setId ? h`<button class="opzione" data-foglio="gioca">${icona('play')}<span class="corpo">Somministra con l'app<small>${etichettaModo(P.modoTarget(att, t))} · set ${t.testo}</small></span></button>`
                         : h`<button class="opzione" data-foglio="testo">${icona('pen')}<span class="corpo">Modifica il testo</span></button>`}
+                    <button class="opzione" data-foglio="suggerimento">${icona('lightbulb')}<span class="corpo">Suggerimenti per questo target<small>${t.suggerimento ? 'Modifica' : 'Note su come somministrarlo, visibili in seduta'}</small></span></button>
                     <button class="opzione" data-foglio="su">${icona('arrow-up')}<span class="corpo">Sposta prima</span></button>
                     <button class="opzione" data-foglio="giu">${icona('arrow-down')}<span class="corpo">Sposta dopo</span></button>
                     ${!n ? h`<button class="opzione" data-foglio="elimina">${icona('trash')}<span class="corpo">Elimina</span></button>` : ''}`}
@@ -813,6 +830,15 @@
             else if (r === 'repertorio') P.chiudiTarget(att, t.id, 'repertorio');
             else if (r === 'su' || r === 'giu') P.spostaTarget(att, t.id, r === 'su' ? -1 : 1);
             else if (r === 'elimina') { att.target = att.target.filter((x) => x.id !== t.id); att.modificato = new Date().toISOString(); }
+            else if (r === 'suggerimento') {
+                const ns = await foglio(h`<form><h2>Suggerimenti · ${t.testo}</h2>
+                    <label class="campo"><span>Come somministrare questo target</span><textarea name="s" maxlength="3000" rows="5" autofocus placeholder="es. Presentare la carta a sinistra; aiuto gestuale prima del verbale">${t.suggerimento || ''}</textarea></label>
+                    <p class="sotto piccolo">In seduta si aprono dal tasto «Suggerimenti», insieme a quelli dell'attività.</p>
+                    <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`);
+                if (!ns) return;
+                t.suggerimento = String(ns.s || '').trim();
+                t.modificato = att.modificato = new Date().toISOString();
+            }
             else if (r === 'testo') {
                 const nt = await foglio(h`<form><h2>Testo del target</h2>
                     <label class="campo"><textarea name="t" required autofocus>${t.testo}</textarea></label>
@@ -923,6 +949,8 @@
             <label class="campo"><span>Area</span><input name="area" maxlength="60" value="${a.area}" list="tice-aree" placeholder="es. Linguaggio"></label>
             <datalist id="tice-aree">${aree.map((x) => h`<option value="${x}">`)}</datalist>
             <label class="campo"><span>Descrizione (facoltativa)</span><input name="descrizione" maxlength="300" value="${a.descrizione || ''}"></label>
+            <label class="campo"><span>Suggerimenti per chi somministra (facoltativi)</span><textarea name="suggerimenti" maxlength="3000" rows="3" placeholder="Come presentare lo stimolo, che aiuto dare, quando rinforzare, errori da evitare…">${a.suggerimenti || ''}</textarea>
+                <span class="sotto piccolo">In seduta compaiono sotto l'attività con il tasto «Suggerimenti». Per un solo target: dal target, «Suggerimenti per questo target».</span></label>
             <div class="campo"><span>Tipo di seduta</span><div class="scelta">
                 <label><input type="radio" name="sessionType" value="independent" ${a.sessionType !== 'timedelay' ? grezzo('checked') : ''}><span>Indipendente</span></label>
                 <label><input type="radio" name="sessionType" value="timedelay" ${a.sessionType === 'timedelay' ? grezzo('checked') : ''}><span>Time delay</span></label></div></div>
