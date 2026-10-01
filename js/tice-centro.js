@@ -40,6 +40,7 @@
         if (S.fase === 'fuori') {
             return h`<div class="scheda imbottita" style="margin-bottom:12px">
                 <b>${icona('cloud')} Collega l'app al Drive del centro</b>
+                <p class="sotto"><a href="privacy.html" target="_blank" rel="noopener">Informativa privacy</a></p>
                 <p class="sotto">Con il tuo account Google vedi i bambini che ti sono assegnati e le sedute registrate da tutti. Senza accesso l'app funziona solo su questo dispositivo.</p>
                 ${S.negato ? h`<div class="banda">${icona('triangle-exclamation')}<div>${S.negato}</div></div>` : ''}
                 ${window.TICE_CONFIG.dev ? h`<form data-a-form="accesso-dev" style="display:flex;gap:8px;flex-wrap:wrap">

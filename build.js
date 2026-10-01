@@ -7,7 +7,7 @@ const dest = path.join(__dirname, 'www');
 fs.rmSync(dest, { recursive: true, force: true });
 fs.mkdirSync(dest);
 
-const itemsToCopy = ['index.html', 'tice-config.js', 'manifest.webmanifest', 'sw.js', 'css', 'js', 'build', 'img', 'models', 'vendor', 'strumenti'];
+const itemsToCopy = ['index.html', 'privacy.html', 'tice-config.js', 'manifest.webmanifest', 'sw.js', 'css', 'js', 'build', 'img', 'models', 'vendor', 'strumenti'];
 
 function copyRecursiveSync(src, destPath) {
     const exists = fs.existsSync(src);
