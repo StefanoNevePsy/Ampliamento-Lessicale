@@ -20,6 +20,7 @@ const PROPRIETARIO = 'stefano@centrotice.it';
 let adesso = new Date('2026-10-01T09:00:00Z');
 const tick = (ms = 1000) => { adesso = new Date(adesso.getTime() + ms); };
 
+const ricordi = new Map();
 function nuovoCustode() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'custode-test-'));
   const custode = QT.creaCustode({
@@ -32,6 +33,7 @@ function nuovoCustode() {
     proprietario: () => PROPRIETARIO,
     ora: () => adesso.toISOString(),
     sha256Hex,
+    ricordo: { leggi: (k) => ricordi.get(k) || null, scrivi: (k, v) => ricordi.set(k, v) },
   });
   return { dir, custode };
 }
@@ -367,6 +369,41 @@ prova('caricamento, pubblicazione e scaricamento', () => {
 prova('due modifiche concorrenti allo stesso set: la seconda va in conflitto', () => {
   ok(chiama(PROPRIETARIO, 'materiali.pubblica', { set: SET, versioneBase: 1 }));
   ko(chiama(ADM2, 'materiali.pubblica', { set: SET, versioneBase: 1 }), 'conflitto');
+});
+
+console.log('\nReinvii (risposta persa per strada)');
+prova('la stessa pubblicazione rimandata con lo stesso identificativo non va in conflitto', () => {
+  const rid = 'r' + crypto.randomBytes(8).toString('hex');
+  const base = ok(chiama(PROPRIETARIO, 'materiali.indice')).sets.animali.versione;
+  const prima = custode.gestisci({ v: 1, token: 'dev:' + PROPRIETARIO, azione: 'materiali.pubblica', rid, dati: { set: SET, versioneBase: base } });
+  const ancora = custode.gestisci({ v: 1, token: 'dev:' + PROPRIETARIO, azione: 'materiali.pubblica', rid, dati: { set: SET, versioneBase: base } });
+  assert.ok(prima.ok && ancora.ok);
+  assert.deepStrictEqual(ancora, prima);
+  assert.strictEqual(ok(chiama(PROPRIETARIO, 'materiali.indice')).sets.animali.versione, base + 1, 'pubblicato una volta sola');
+});
+prova('...con un identificativo diverso invece si', () => {
+  const base = ok(chiama(PROPRIETARIO, 'materiali.indice')).sets.animali.versione - 1;
+  ko(custode.gestisci({ v: 1, token: 'dev:' + PROPRIETARIO, azione: 'materiali.pubblica', rid: 'altro-id-123', dati: { set: SET, versioneBase: base } }), 'conflitto');
+});
+prova('...e la risposta ricordata vale solo per chi l\'ha chiesta', () => {
+  const rid = 'r' + crypto.randomBytes(8).toString('hex');
+  const base = ok(chiama(PROPRIETARIO, 'materiali.indice')).sets.animali.versione;
+  ok(custode.gestisci({ v: 1, token: 'dev:' + PROPRIETARIO, azione: 'materiali.pubblica', rid, dati: { set: SET, versioneBase: base } }));
+  ko(custode.gestisci({ v: 1, token: 'dev:' + ADM2, azione: 'materiali.pubblica', rid, dati: { set: SET, versioneBase: base } }), 'conflitto');
+});
+prova('molte immagini da controllare: un solo elenco della cartella, stesso risultato', () => {
+  const finti = [1, 2, 3, 4].map((i) => crypto.createHash('sha256').update('finto' + i).digest('hex'));
+  assert.deepStrictEqual(ok(chiama(PROPRIETARIO, 'materiali.mancanti', { hashes: [H].concat(finti) })), finti);
+  const img = ok(chiama(TIR, 'materiali.immagini', { hashes: finti.concat([H]) }));
+  assert.deepStrictEqual(Object.keys(img), [H]);
+});
+prova('custode occupato: errore riconoscibile, l\'app riprova', () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'custode-occ-'));
+  const a = archivioSuDisco(d);
+  a.conLock = () => { const e = new Error('occupato'); e.occupato = true; throw e; };
+  const c = QT.creaCustode({ archivio: a, verificaToken: (t) => ({ email: t.slice(4), nome: 'x' }), proprietario: () => PROPRIETARIO, ora: () => adesso.toISOString(), sha256Hex });
+  ko(c.gestisci({ v: 1, token: 'dev:' + PROPRIETARIO, azione: 'materiali.pubblica', dati: { set: SET, versioneBase: 0 } }), 'occupato');
+  fs.rmSync(d, { recursive: true, force: true });
 });
 
 console.log(`\n${passati} test passati, ${fallimenti.length} falliti`);

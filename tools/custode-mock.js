@@ -13,6 +13,7 @@
  *   node tools/custode-mock.js --client-id <ID>.apps.googleusercontent.com --proprietario tu@centrotice.it
  *       login Google vero, verificato in locale con le chiavi pubbliche di Google
  *
+ * Prove di robustezza: --guasti 0.3 perde a caso il 30% delle risposte (come il 404 di Apps Script).
  * Opzioni: --porta 8787  --dati <cartella>  --statico <cartella app>  --proprietario <email>
  */
 'use strict';
@@ -35,6 +36,7 @@ function opzioni(argv) {
     else if (a === '--statico') o.statico = argv[++i];
     else if (a === '--proprietario') o.proprietario = argv[++i];
     else if (a === '--client-id') o.clientId = argv[++i];
+    else if (a === '--guasti') o.guasti = Number(argv[++i]);
   }
   return o;
 }
@@ -147,6 +149,7 @@ function creaServer(o) {
     proprietario: () => o.proprietario,
     ora: () => (o.ora ? o.ora() : new Date().toISOString()),
     sha256Hex,
+    ricordo: (() => { const m = new Map(); return { leggi: (k) => m.get(k) || null, scrivi: (k, v) => m.set(k, v) }; })(),
   });
 
   const configJs = () =>
@@ -174,6 +177,8 @@ function creaServer(o) {
         let risposta;
         try { risposta = custode.gestisci(JSON.parse(corpo)); }
         catch (e) { risposta = { ok: false, errore: 'richiesta-non-valida', messaggio: 'JSON non valido' }; }
+        // --guasti 0.3: come Apps Script, a volte l'azione e' fatta ma la risposta si perde (404)
+        if (o.guasti && Math.random() < o.guasti) { res.writeHead(404, { 'Content-Type': 'text/html' }); return res.end('<html>Sorry, unable to open the file at this time.</html>'); }
         if (o.ritardo) {
           return setTimeout(() => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(risposta)); }, o.ritardo);
         }

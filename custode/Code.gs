@@ -25,10 +25,15 @@ function doPost(e) {
     if (corpo.length > 40 * 1024 * 1024) {
       risposta = { ok: false, errore: 'richiesta-non-valida', messaggio: 'Richiesta troppo grande.' };
     } else {
-      risposta = custode_().gestisci(JSON.parse(corpo));
+      var richiesta;
+      try { richiesta = JSON.parse(corpo); } catch (e) { richiesta = undefined; }
+      risposta = richiesta === undefined
+        ? { ok: false, errore: 'richiesta-non-valida', messaggio: 'Richiesta non leggibile.' }
+        : custode_().gestisci(richiesta);
     }
   } catch (err) {
-    risposta = { ok: false, errore: 'richiesta-non-valida', messaggio: 'Richiesta non leggibile.' };
+    // Configurazione o servizi Google (Drive, cache) non disponibili: l'app riprova
+    risposta = { ok: false, errore: 'interno', messaggio: 'Errore interno del custode: ' + String(err && err.message || err).slice(0, 300) };
   }
   return ContentService.createTextOutput(JSON.stringify(risposta)).setMimeType(ContentService.MimeType.JSON);
 }
@@ -52,6 +57,11 @@ function custode_() {
     },
     ora: function () { return new Date().toISOString(); },
     sha256Hex: function (b64) { return hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, Utilities.base64Decode(b64))); },
+    // Risposte alle scritture gia' fatte, per i reinvii dell'app (10 minuti)
+    ricordo: {
+      leggi: function (k) { return CacheService.getScriptCache().get(chiaveCache_(k)); },
+      scrivi: function (k, v) { CacheService.getScriptCache().put(chiaveCache_(k), v, 600); },
+    },
   });
   return _custode;
 }
@@ -89,6 +99,11 @@ function verificaToken_(token) {
   var durata = Math.max(1, Math.min(21600, scade - adesso - 60));
   cache.put(chiave, JSON.stringify(identita), durata);
   return identita;
+}
+
+// Le chiavi della cache di Apps Script hanno un limite di lunghezza
+function chiaveCache_(k) {
+  return 'r:' + hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, k));
 }
 
 function hex_(bytes) {
@@ -204,6 +219,16 @@ function archivioDrive_() {
       memoria['f:' + percorso] = nuovo;
     },
     esiste: function (percorso) { return !!file(percorso); },
+    // Solo i nomi, con una ricerca sola (senza chiedere a Drive file per file se e' nel cestino)
+    nomiFile: function (percorso) {
+      var dir = cartella(percorso, false);
+      var out = [];
+      if (!dir) return out;
+      var cerca = !!dir.searchFiles;
+      var it = cerca ? dir.searchFiles('trashed = false') : dir.getFiles();
+      while (it.hasNext()) { var f = it.next(); if (cerca || !f.isTrashed()) out.push(f.getName()); }
+      return out;
+    },
     // Nel cestino di Drive, non cancellato per sempre: resta recuperabile per 30 giorni
     elimina: function (percorso) {
       var f = file(percorso);
@@ -214,7 +239,11 @@ function archivioDrive_() {
     },
     conLock: function (fn) {
       var lock = LockService.getScriptLock();
-      if (!lock.tryLock(25000)) throw new Error('Il custode e\' occupato: riprova tra qualche secondo.');
+      if (!lock.tryLock(25000)) {
+        var e = new Error('Il custode e\' occupato: riprova tra qualche secondo.');
+        e.occupato = true;
+        throw e;
+      }
       try { return fn(); } finally { lock.releaseLock(); }
     },
   };

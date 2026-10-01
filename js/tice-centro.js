@@ -519,7 +519,18 @@
 
     function vistaMateriali() {
         if (!T.indiceMateriali) {
-            Y.chiama('materiali.indice').then((x) => { T.indiceMateriali = x; TiceHome.ridisegna(); }).catch((e) => avviso(e.message, 'errore'));
+            if (T.erroreMateriali) {
+                return h`${barra({ indietro: 'vai-bambini', titolo: 'Materiali del centro' })}<main class="tice-main">
+                    <div class="banda">${icona('triangle-exclamation')}<div>Non riesco a leggere i materiali del centro: ${T.erroreMateriali}</div></div>
+                    <button class="bt primario largo" style="margin-top:10px" data-a="vai-materiali">${icona('rotate')} Riprova</button></main>`;
+            }
+            if (!T.caricoMateriali) {
+                T.caricoMateriali = true;
+                Y.chiama('materiali.indice')
+                    .then((x) => { T.indiceMateriali = x; })
+                    .catch((e) => { T.erroreMateriali = e.message; })
+                    .finally(() => { T.caricoMateriali = false; TiceHome.ridisegna(); });
+            }
             return h`${barra({ indietro: 'vai-bambini', titolo: 'Materiali del centro' })}<main class="tice-main"><p class="sotto">${icona('spinner fa-spin')} Caricamento…</p></main>`;
         }
         const ind = T.indiceMateriali.sets || {};
@@ -553,6 +564,14 @@
         Object.keys(ind).forEach((id) => { const l = locali[id]; out[id] = !l ? 'scarica' : l.centro.versione < ind[id].versione ? 'aggiorna' : 'ok'; });
         return out;
     }
+    // Le chiamate dei materiali: se il custode non risponde si riprova da soli
+    // e intanto lo si dice, invece di restare fermi su "Caricamento…"
+    function chiamaM(azione, dati) {
+        const prima = T.lavoroMateriali;
+        return Y.chiama(azione, dati, {
+            suTentativo: (n, max) => lavoro(`${prima ? prima.replace(/…$/, '') + ' · ' : ''}il custode non ha risposto, riprovo (${n} di ${max})…`)
+        }).finally(() => { if (prima && T.lavoroMateriali !== prima && T.lavoroMateriali) lavoro(prima); });
+    }
     function lavoro(testo) {
         T.lavoroMateriali = testo;
         // durante i lotti si aggiorna solo la riga di avanzamento, non tutta la vista
@@ -579,11 +598,20 @@
             const id = ids[n], pre = ids.length > 1 ? `Set ${n + 1} di ${ids.length} · ` : '';
             try {
                 lavoro(pre + 'scaricamento…');
-                const set = await Y.chiama('materiali.set', { id });
-                const hs = hashDi(set), nuovi = hs.filter((x) => !presi[x]);
-                for (let i = 0; i < nuovi.length; i += 40) {
-                    lavoro(`${pre}immagini ${Math.min(i + 40, nuovi.length)} di ${nuovi.length}…`);
-                    Object.assign(presi, await Y.chiama('materiali.immagini', { hashes: nuovi.slice(i, i + 40) }));
+                const set = await chiamaM('materiali.set', { id });
+                const hs = hashDi(set);
+                // Il custode manda al massimo ~8 MB per risposta: quelle che non
+                // arrivano si richiedono; se un giro non porta niente, mancano davvero.
+                let coda = hs.filter((x) => !presi[x]);
+                const totale = coda.length, assenti = [];
+                while (coda.length) {
+                    const lotto = coda.slice(0, 40);
+                    lavoro(`${pre}immagini ${totale - coda.length + 1}–${Math.min(totale - coda.length + lotto.length, totale)} di ${totale}…`);
+                    const arrivate = await chiamaM('materiali.immagini', { hashes: lotto });
+                    Object.assign(presi, arrivate);
+                    const restano = lotto.filter((x) => !arrivate[x]);
+                    if (restano.length === lotto.length) { assenti.push(...restano); coda = coda.slice(lotto.length); }
+                    else coda = restano.concat(coda.slice(lotto.length));
                 }
                 const locale = sostituisci(set, presi);
                 const esistente = setLocali().find((s) => s.centro && s.centro.id === id);
@@ -592,7 +620,8 @@
                 delete locale.versione; delete locale.aggiornato; delete locale.aggiornatoDa;
                 await DB.saveSet(locale);
                 await ricaricaSet();
-                fatti.push(locale.name);
+                if (assenti.length) falliti.push({ nome: locale.name, errore: `Scaricato, ma ${assenti.length === 1 ? 'un\'immagine non c\'è' : assenti.length + ' immagini non ci sono'} nel Drive del centro: chi l'ha pubblicato può ripubblicarlo.` });
+                else fatti.push(locale.name);
             } catch (e) { falliti.push({ nome: (ind[id] && ind[id].nome) || id, errore: e.message }); }
         }
         lavoro(null);
@@ -677,30 +706,62 @@
                     pronti.push({ locale, idCentro, set: p.set });
                 } catch (e) { falliti.push({ nome: locale.name, errore: e.message }); }
             }
-            // 2. le immagini che il centro non ha ancora, a lotti
+            // 2. le immagini che il centro non ha ancora, a lotti piccoli: se un
+            //    lotto non passa si divide in due, e un'immagine che proprio non
+            //    passa ferma solo i set che la usano
             const tutti = Object.keys(file), mancanti = [];
-            for (let i = 0; i < tutti.length; i += 5000) mancanti.push(...await Y.chiama('materiali.mancanti', { hashes: tutti.slice(i, i + 5000) }));
-            let lotto = {}, peso = 0, inviati = 0;
-            const invia = async () => {
-                if (!Object.keys(lotto).length) return;
-                await Y.chiama('materiali.caricaImmagini', { immagini: lotto });
-                inviati += Object.keys(lotto).length; lotto = {}; peso = 0;
-                lavoro(`Caricamento immagini ${inviati} di ${mancanti.length}…`);
+            for (let i = 0; i < tutti.length; i += 1000) {
+                lavoro(`Controllo delle immagini già nel centro${tutti.length > 1000 ? ` (${Math.min(i + 1000, tutti.length)} di ${tutti.length})` : ''}…`);
+                mancanti.push(...await chiamaM('materiali.mancanti', { hashes: tutti.slice(i, i + 1000) }));
+            }
+            const nonCaricate = {};
+            let inviati = 0;
+            const invia = async (hs) => {
+                try {
+                    const lotto = {};
+                    hs.forEach((x) => { lotto[x] = file[x]; });
+                    await chiamaM('materiali.caricaImmagini', { immagini: lotto });
+                    inviati += hs.length;
+                    lavoro(`Caricamento immagini ${inviati} di ${mancanti.length}…`);
+                } catch (e) {
+                    if (e && (e.accesso || e.codice === 'vietato')) throw e;
+                    if (hs.length === 1) { nonCaricate[hs[0]] = e.message; inviati++; return; }
+                    const meta = Math.ceil(hs.length / 2);
+                    await invia(hs.slice(0, meta));
+                    await invia(hs.slice(meta));
+                }
             };
             if (mancanti.length) lavoro(`Caricamento immagini 0 di ${mancanti.length}…`);
+            let lotto = [], peso = 0;
             for (const hs of mancanti) {
-                if (Object.keys(lotto).length >= 40 || peso + file[hs].length > 12e6) await invia();
-                lotto[hs] = file[hs]; peso += file[hs].length;
+                if (lotto.length && (lotto.length >= 20 || peso + file[hs].length > 6e6)) { await invia(lotto); lotto = []; peso = 0; }
+                lotto.push(hs); peso += file[hs].length;
             }
-            await invia();
+            if (lotto.length) await invia(lotto);
             // 3. i set, uno alla volta: se uno non passa, gli altri vanno avanti
-            const indice = await Y.chiama('materiali.indice');
+            const indice = await chiamaM('materiali.indice');
             for (let n = 0; n < pronti.length; n++) {
                 const { locale, idCentro, set } = pronti[n];
+                const rotte = hashDi(set).filter((x) => nonCaricate[x]);
+                if (rotte.length) {
+                    falliti.push({ nome: locale.name, errore: `${rotte.length === 1 ? 'Un\'immagine non si è caricata' : rotte.length + ' immagini non si sono caricate'}: ${nonCaricate[rotte[0]]}` });
+                    continue;
+                }
                 lavoro(pronti.length > 1 ? `Pubblicazione ${n + 1} di ${pronti.length}…` : 'Pubblicazione…');
+                const base = ((indice.sets || {})[idCentro] || {}).versione || 0;
                 try {
-                    const prima = (indice.sets || {})[idCentro];
-                    const voce = await Y.chiama('materiali.pubblica', { set, versioneBase: prima ? prima.versione : 0 });
+                    let voce;
+                    try { voce = await chiamaM('materiali.pubblica', { set, versioneBase: base }); }
+                    catch (e) {
+                        // La risposta era andata persa ma la pubblicazione era fatta (custode
+                        // senza memoria dei reinvii): lo si riconosce dall'indice
+                        if (!e || e.codice !== 'conflitto') throw e;
+                        const ora = ((await chiamaM('materiali.indice')).sets || {})[idCentro];
+                        const mie = ora && ora.versione === base + 1 && ora.aggiornatoDa === io().email &&
+                            JSON.stringify((ora.immagini || []).slice().sort()) === JSON.stringify(hashDi(set).sort());
+                        if (!mie) throw e;
+                        voce = ora;
+                    }
                     locale.centro = { id: idCentro, versione: voce.versione, aggiornato: voce.aggiornato };
                     await DB.saveSet(locale);
                     fatti.push(locale.name);
@@ -724,7 +785,7 @@
         azioni: {
             'vai-account': () => vai('account'),
             'vai-persone': () => { T.accessi = null; vai('persone'); },
-            'vai-materiali': () => { T.indiceMateriali = null; vai('materiali'); },
+            'vai-materiali': () => { T.indiceMateriali = null; T.erroreMateriali = null; vai('materiali'); },
             'crea-chiave': creaChiave,
             'inserisci-chiave': inserisciChiave,
             sincronizza: () => Y.sincronizza().then((ok) => avviso(ok ? 'Sincronizzato' : (S.errore || 'Sincronizzazione non riuscita'), ok ? undefined : 'errore')),

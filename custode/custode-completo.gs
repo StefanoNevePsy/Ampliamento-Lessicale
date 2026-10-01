@@ -31,10 +31,15 @@ function doPost(e) {
     if (corpo.length > 40 * 1024 * 1024) {
       risposta = { ok: false, errore: 'richiesta-non-valida', messaggio: 'Richiesta troppo grande.' };
     } else {
-      risposta = custode_().gestisci(JSON.parse(corpo));
+      var richiesta;
+      try { richiesta = JSON.parse(corpo); } catch (e) { richiesta = undefined; }
+      risposta = richiesta === undefined
+        ? { ok: false, errore: 'richiesta-non-valida', messaggio: 'Richiesta non leggibile.' }
+        : custode_().gestisci(richiesta);
     }
   } catch (err) {
-    risposta = { ok: false, errore: 'richiesta-non-valida', messaggio: 'Richiesta non leggibile.' };
+    // Configurazione o servizi Google (Drive, cache) non disponibili: l'app riprova
+    risposta = { ok: false, errore: 'interno', messaggio: 'Errore interno del custode: ' + String(err && err.message || err).slice(0, 300) };
   }
   return ContentService.createTextOutput(JSON.stringify(risposta)).setMimeType(ContentService.MimeType.JSON);
 }
@@ -58,6 +63,11 @@ function custode_() {
     },
     ora: function () { return new Date().toISOString(); },
     sha256Hex: function (b64) { return hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, Utilities.base64Decode(b64))); },
+    // Risposte alle scritture gia' fatte, per i reinvii dell'app (10 minuti)
+    ricordo: {
+      leggi: function (k) { return CacheService.getScriptCache().get(chiaveCache_(k)); },
+      scrivi: function (k, v) { CacheService.getScriptCache().put(chiaveCache_(k), v, 600); },
+    },
   });
   return _custode;
 }
@@ -95,6 +105,11 @@ function verificaToken_(token) {
   var durata = Math.max(1, Math.min(21600, scade - adesso - 60));
   cache.put(chiave, JSON.stringify(identita), durata);
   return identita;
+}
+
+// Le chiavi della cache di Apps Script hanno un limite di lunghezza
+function chiaveCache_(k) {
+  return 'r:' + hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, k));
 }
 
 function hex_(bytes) {
@@ -210,6 +225,16 @@ function archivioDrive_() {
       memoria['f:' + percorso] = nuovo;
     },
     esiste: function (percorso) { return !!file(percorso); },
+    // Solo i nomi, con una ricerca sola (senza chiedere a Drive file per file se e' nel cestino)
+    nomiFile: function (percorso) {
+      var dir = cartella(percorso, false);
+      var out = [];
+      if (!dir) return out;
+      var cerca = !!dir.searchFiles;
+      var it = cerca ? dir.searchFiles('trashed = false') : dir.getFiles();
+      while (it.hasNext()) { var f = it.next(); if (cerca || !f.isTrashed()) out.push(f.getName()); }
+      return out;
+    },
     // Nel cestino di Drive, non cancellato per sempre: resta recuperabile per 30 giorni
     elimina: function (percorso) {
       var f = file(percorso);
@@ -220,7 +245,11 @@ function archivioDrive_() {
     },
     conLock: function (fn) {
       var lock = LockService.getScriptLock();
-      if (!lock.tryLock(25000)) throw new Error('Il custode e\' occupato: riprova tra qualche secondo.');
+      if (!lock.tryLock(25000)) {
+        var e = new Error('Il custode e\' occupato: riprova tra qualche secondo.');
+        e.occupato = true;
+        throw e;
+      }
       try { return fn(); } finally { lock.releaseLock(); }
     },
   };
@@ -322,6 +351,7 @@ var QT = (function () {
     versioni: function (pid) { return 'Pazienti/' + pid + '/versioni'; },
     versione: function (pid, v) { return 'Pazienti/' + pid + '/versioni/v' + ('00000000' + v).slice(-8) + '.json'; },
     indiceMateriali: 'Materiali/indice.json',
+    cartellaImmagini: 'Materiali/immagini',
     set: function (id) { return 'Materiali/set/' + id + '.json'; },
     immagine: function (hash, ext) { return 'Materiali/immagini/' + hash + '.' + ext; },
   };
@@ -417,6 +447,18 @@ var QT = (function () {
   }
   var MAX_PAZIENTE = 30 * 1024 * 1024;   // caratteri base64 (~22 MB): anni di sedute
   var MAX_ETICHETTA = 4096;
+  var MAX_RISPOSTA = 8 * 1024 * 1024;     // caratteri: oltre, le immagini arrivano in piu' risposte
+
+  // Scritture che l'app puo' ripetere quando la risposta si perde per strada
+  // (con Apps Script capita: l'azione e' fatta ma l'app vede un errore).
+  // Con lo stesso identificativo di richiesta il custode restituisce la
+  // risposta di allora invece di rifare l'azione.
+  var RIPETIBILI = {
+    'cifratura.imposta': true, 'dispositivo.registra': true, 'dispositivi.abilita': true, 'dispositivo.togli': true,
+    'paziente.crea': true, 'paziente.salva': true, 'paziente.archivia': true,
+    'materiali.caricaImmagini': true, 'materiali.pubblica': true, 'materiali.elimina': true, 'accessi.salva': true,
+  };
+  var RE_RICHIESTA = /^[A-Za-z0-9_-]{8,64}$/;
 
   function validaCifratura(c) {
     oggettoV(c, 'cifratura');
@@ -510,7 +552,9 @@ var QT = (function () {
    *   proprietario() -> email dell'account su cui gira il custode
    *   ora() -> ISO string
    *   sha256Hex(base64) -> hex dei byte decodificati
+   *   ricordo?: { leggi(chiave) -> testo|null, scrivi(chiave, testo) }   (facoltativo)
    * }
+   * archivio.nomiFile?(percorso) -> [nomi]  (facoltativo: elenco veloce dei soli file)
    */
   function creaCustode(amb) {
     var A = amb.archivio;
@@ -918,13 +962,24 @@ var QT = (function () {
 
     azioni['materiali.mancanti'] = function (u, d) {
       puo(u, 'pubblicaMateriali');
-      return listaV(d.hashes, 5000, 'hashes').filter(function (h) {
-        idV(h, RE.hash, 'hash');
-        return !immagineEsiste(h);
-      });
+      var hashes = listaV(d.hashes, 5000, 'hashes');
+      hashes.forEach(function (h) { idV(h, RE.hash, 'hash'); });
+      preparaImmagini(hashes.length);
+      return hashes.filter(function (h) { return !immagineEsiste(h); });
     };
 
+    // Quali immagini ci sono: con molti hash un solo elenco della cartella
+    // costa molto meno di una ricerca per ogni hash e per ogni estensione.
+    // Vale per la sola richiesta in corso (si azzera in gestisci).
+    var registroImmagini = null;
+    function preparaImmagini(quante) {
+      if (registroImmagini || quante < 4) return;
+      var nomi = A.nomiFile ? A.nomiFile(P.cartellaImmagini) : A.elenca(P.cartellaImmagini).file;
+      registroImmagini = {};
+      nomi.forEach(function (n) { var m = /^([a-f0-9]{64})\.(\w+)$/.exec(n); if (m) registroImmagini[m[1]] = m[2]; });
+    }
     function immagineEsiste(hash) {
+      if (registroImmagini) return registroImmagini[hash] || null;
       for (var mime in EST) if (A.esiste(P.immagine(hash, EST[mime]))) return EST[mime];
       return null;
     }
@@ -934,6 +989,7 @@ var QT = (function () {
       var imm = oggettoV(d.immagini, 'immagini');
       var chiavi = Object.keys(imm);
       if (chiavi.length > 40) throw err('richiesta-non-valida', 'Al massimo 40 immagini per richiesta.');
+      preparaImmagini(chiavi.length);
       var caricate = [];
       chiavi.forEach(function (h) {
         idV(h, RE.hash, 'hash');
@@ -943,7 +999,10 @@ var QT = (function () {
         // L'hash lo ricalcola il custode: un client non puo' salvare un file
         // sotto il nome di un altro e contaminare le cache degli altri.
         if (amb.sha256Hex(m[2]) !== h) throw err('richiesta-non-valida', 'L\'hash del file ' + h.slice(0, 8) + ' non corrisponde al contenuto.');
-        if (!immagineEsiste(h)) A.scriviBinario(P.immagine(h, EST[m[1]]), m[2], m[1]);
+        if (!immagineEsiste(h)) {
+          A.scriviBinario(P.immagine(h, EST[m[1]]), m[2], m[1]);
+          if (registroImmagini) registroImmagini[h] = EST[m[1]];
+        }
         caricate.push(h);
       });
       return caricate;
@@ -951,14 +1010,17 @@ var QT = (function () {
 
     azioni['materiali.immagini'] = function (u, d) {
       var hashes = listaV(d.hashes, 40, 'hashes');
-      var out = {};
-      hashes.forEach(function (h) {
-        idV(h, RE.hash, 'hash');
-        var ext = immagineEsiste(h);
-        if (!ext) return;
-        var b = A.leggiBinario(P.immagine(h, ext));
-        if (b) out[h] = 'data:' + b.mime + ';base64,' + b.base64;
-      });
+      hashes.forEach(function (h) { idV(h, RE.hash, 'hash'); });
+      preparaImmagini(hashes.length);
+      // Risposte troppo grosse si perdono per strada: oltre ~8 MB ci si ferma e
+      // l'app richiede le restanti (le trova assenti da questa risposta).
+      var out = {}, peso = 0;
+      for (var i = 0; i < hashes.length && peso < MAX_RISPOSTA; i++) {
+        var ext = immagineEsiste(hashes[i]);
+        if (!ext) continue;
+        var b = A.leggiBinario(P.immagine(hashes[i], ext));
+        if (b) { out[hashes[i]] = 'data:' + b.mime + ';base64,' + b.base64; peso += b.base64.length; }
+      }
       return out;
     };
 
@@ -967,6 +1029,7 @@ var QT = (function () {
       var set = validaSet(d.set);
       var base = interoV(d.versioneBase, 0, 1e9, 'versioneBase');
       var hashes = hashRiferiti(set);
+      preparaImmagini(hashes.length);
       return conLock(function () {
         var mancanti = hashes.filter(function (h) { return !immagineEsiste(h); });
         if (mancanti.length) throw err('immagini-mancanti', 'Mancano ' + mancanti.length + ' immagini: caricale prima di pubblicare.', { mancanti: mancanti });
@@ -1066,9 +1129,24 @@ var QT = (function () {
         catch (e) { throw err('non-autenticato', 'Accesso scaduto o non valido: rientra con Google.'); }
         var u = utenteDa(identita);
         var dati = richiesta.dati && typeof richiesta.dati === 'object' ? richiesta.dati : {};
-        return { ok: true, dati: fn(u, dati) };
+        registroImmagini = null;
+        var chiave = amb.ricordo && RIPETIBILI[richiesta.azione] && typeof richiesta.rid === 'string' && RE_RICHIESTA.test(richiesta.rid)
+          ? 'rid:' + u.email + ':' + richiesta.azione + ':' + richiesta.rid : null;
+        if (chiave) {
+          var gia = null;
+          try { gia = amb.ricordo.leggi(chiave); } catch (e0) { gia = null; }
+          if (gia) return JSON.parse(gia);
+        }
+        var risposta = { ok: true, dati: fn(u, dati) };
+        if (chiave) {
+          var testo = JSON.stringify(risposta);
+          // la cache di Apps Script tiene valori fino a 100 KB
+          if (testo.length < 90000) { try { amb.ricordo.scrivi(chiave, testo); } catch (e1) { /* solo una comodita' */ } }
+        }
+        return risposta;
       } catch (e) {
         if (e instanceof Errore) return { ok: false, errore: e.codice, messaggio: e.message, extra: e.extra };
+        if (e && e.occupato) return { ok: false, errore: 'occupato', messaggio: 'Il custode è occupato con un\'altra richiesta: riprova tra qualche secondo.' };
         return { ok: false, errore: 'interno', messaggio: 'Errore interno del custode: ' + String(e && e.message || e).slice(0, 300) };
       }
     }

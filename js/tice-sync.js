@@ -148,19 +148,53 @@
     // =====================================================================
     function ErroreRete(m) { this.message = m; this.rete = true; }
     function ErroreCustode(codice, m, extra) { this.codice = codice; this.message = m || codice; this.extra = extra || null; this.custode = true; }
-    async function chiama(azione, dati) {
+    const attendi = (ms) => new Promise((ok) => setTimeout(ok, ms));
+    const nuovoRid = () => {
+        const b = new Uint8Array(12);
+        crypto.getRandomValues(b);
+        return [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+    };
+    // Apps Script ogni tanto perde la risposta (404 "unable to open the file"),
+    // risponde con una pagina d'errore o e' occupato: si riprova da soli.
+    // Ogni chiamata ha un identificativo che resta uguale nei tentativi, cosi'
+    // se l'azione era gia' stata fatta il custode restituisce la risposta di
+    // allora invece di rifarla.
+    const RIPETIBILE = (e) => (e && e.rete) || (e && e.custode && (e.codice === 'occupato' || e.codice === 'interno'));
+    const ATTESE = [1500, 4000, 9000, 15000];
+    async function chiama(azione, dati, opzioni) {
+        const o = opzioni || {};
+        const tentativi = o.tentativi || 4, rid = nuovoRid();
+        for (let n = 1; ; n++) {
+            try { return await chiamaUnaVolta(azione, dati, rid, o.attesaMax); }
+            catch (e) {
+                const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+                if (!RIPETIBILE(e) || offline || n >= tentativi) throw e;
+                if (o.suTentativo) { try { o.suTentativo(n + 1, tentativi, e); } catch (x) { /* solo avviso */ } }
+                const base = ATTESE[Math.min(n - 1, ATTESE.length - 1)];
+                await attendi(base + Math.random() * base * 0.3);
+            }
+        }
+    }
+    async function chiamaUnaVolta(azione, dati, rid, attesaMax) {
         const url = cfgApp().custodeUrl;
         if (!url) throw new ErroreCustode('non-configurato', 'Il custode non è configurato (tice-config.js).');
         const token = await Auth.token();
-        let r;
+        // Apps Script chiude ogni esecuzione dopo 6 minuti: oltre non arriva piu' niente
+        const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        const timer = ctrl ? setTimeout(() => ctrl.abort(), attesaMax || 330000) : null;
+        let r, testo;
         try {
             // text/plain evita la richiesta preliminare CORS, che Apps Script non gestisce
             r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({ v: 1, token, azione, dati: dati || {} }), redirect: 'follow', cache: 'no-store' });
-        } catch (e) { throw new ErroreRete('Nessuna connessione con il custode.'); }
+                body: JSON.stringify({ v: 1, token, azione, rid, dati: dati || {} }), redirect: 'follow', cache: 'no-store', signal: ctrl ? ctrl.signal : undefined });
+            testo = r.ok ? await r.text() : '';
+        } catch (e) {
+            throw new ErroreRete(e && e.name === 'AbortError' ? 'Il custode non ha risposto in tempo.' : 'Nessuna connessione con il custode.');
+        } finally { if (timer) clearTimeout(timer); }
         if (!r.ok) throw new ErroreRete('Il custode non risponde (HTTP ' + r.status + ').');
         let j;
-        try { j = await r.json(); } catch (e) { throw new ErroreRete('Risposta del custode non leggibile.'); }
+        try { j = JSON.parse(testo); } catch (e) { throw new ErroreRete('Risposta del custode non leggibile.'); }
+        if (!j || typeof j !== 'object') throw new ErroreRete('Risposta del custode non leggibile.');
         if (!j.ok) {
             if (j.errore === 'non-autenticato') { Auth.invalida(); throw new Auth.ErroreAccesso(j.messaggio); }
             throw new ErroreCustode(j.errore, j.messaggio, j.extra);

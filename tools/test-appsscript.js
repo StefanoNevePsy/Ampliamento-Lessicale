@@ -217,6 +217,28 @@ prova('immagini: salvate come file binari veri e rilette identiche', () => {
   const r = ok(post('tok-' + PROPRIETARIO, 'materiali.immagini', { hashes: [h] }));
   assert.strictEqual(r[h], 'data:image/png;base64,' + png);
 });
+prova('molte immagini: un elenco solo della cartella, senza quelle nel cestino', () => {
+  const imm = radice._cartelle.find((c) => c._nome === 'Materiali')._cartelle.find((c) => c._nome === 'immagini');
+  const hs = imm._file.map((f) => f._nome.split('.')[0]);
+  imm._file[0].setTrashed(true);
+  const finti = [1, 2, 3].map((i) => crypto.createHash('sha256').update('x' + i).digest('hex'));
+  const prima = statistiche.ricerche;
+  const r = ok(post('tok-' + PROPRIETARIO, 'materiali.mancanti', { hashes: hs.concat(finti) }));
+  assert.deepStrictEqual(r, [hs[0]].concat(finti));
+  assert.ok(statistiche.ricerche - prima < 5, 'ricerche su Drive: ' + (statistiche.ricerche - prima));
+  imm._file[0].setTrashed(false);
+});
+prova('una scrittura rimandata con lo stesso identificativo restituisce la risposta di allora', () => {
+  const rid = 'rid-' + crypto.randomBytes(6).toString('hex');
+  const invia = () => { vm.runInContext('_custode = null;', contesto); return JSON.parse(contesto.doPost({ postData: { contents: JSON.stringify({ v: 1, token: 'tok-' + PROPRIETARIO, azione: 'materiali.elimina', rid, dati: { id: 'inesistente' } }) } }).getContent()); };
+  const a = invia();
+  assert.strictEqual(a.errore, 'non-trovato');   // gli errori non si ricordano: si rifanno
+  const set = { id: 'prova-rid', name: 'Prova', items: [] };
+  const pubblica = () => { vm.runInContext('_custode = null;', contesto); return JSON.parse(contesto.doPost({ postData: { contents: JSON.stringify({ v: 1, token: 'tok-' + PROPRIETARIO, azione: 'materiali.pubblica', rid, dati: { set, versioneBase: 0 } }) } }).getContent()); };
+  const p1 = pubblica(), p2 = pubblica();
+  assert.ok(p1.ok && p2.ok, JSON.stringify(p2));
+  assert.strictEqual(p2.dati.versione, 1);
+});
 prova('ricostruisciCache dall\'editor funziona', () => {
   contesto.ricostruisciCache();
 });
