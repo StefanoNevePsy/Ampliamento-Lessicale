@@ -187,6 +187,14 @@
             // text/plain evita la richiesta preliminare CORS, che Apps Script non gestisce
             r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify({ v: 1, token, azione, rid, dati: dati || {} }), redirect: 'follow', cache: 'no-store', signal: ctrl ? ctrl.signal : undefined });
+            // Apps Script consegna il risultato del POST da un indirizzo temporaneo:
+            // se si perde solo quella consegna, la si richiede (GET) senza rifare il POST
+            let consegna = null;
+            try { const u = new URL(r.url); if (r.redirected && u.protocol === 'https:' && u.hostname === 'script.googleusercontent.com') consegna = u.href; } catch (e) { /* niente consegna */ }
+            for (let t = 0; consegna && [404, 429, 500, 502, 503, 504].includes(r.status) && t < 3; t++) {
+                await attendi(600 * (t + 1));
+                r = await fetch(consegna, { method: 'GET', redirect: 'follow', cache: 'no-store', credentials: 'omit', signal: ctrl ? ctrl.signal : undefined });
+            }
             testo = r.ok ? await r.text() : '';
         } catch (e) {
             throw new ErroreRete(e && e.name === 'AbortError' ? 'Il custode non ha risposto in tempo.' : 'Nessuna connessione con il custode.');
