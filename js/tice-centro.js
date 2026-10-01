@@ -523,89 +523,197 @@
             return h`${barra({ indietro: 'vai-bambini', titolo: 'Materiali del centro' })}<main class="tice-main"><p class="sotto">${icona('spinner fa-spin')} Caricamento…</p></main>`;
         }
         const ind = T.indiceMateriali.sets || {};
-        const locali = {};
-        setLocali().forEach((s) => { if (s.centro && s.centro.id) locali[s.centro.id] = s; });
         const ids = Object.keys(ind).sort((a, b) => (ind[a].categoria + ind[a].nome).localeCompare(ind[b].categoria + ind[b].nome, 'it'));
+        const stati = statiMateriali();
+        const daPrendere = ids.filter((id) => stati[id] !== 'ok');
         return h`${barra({ indietro: 'vai-bambini', titolo: 'Materiali del centro' })}
             <main class="tice-main">
                 <p class="sotto">I set pubblicati qui si scaricano una volta e poi si usano anche senza rete, nei giochi e nei programmi.</p>
-                ${Y.puo('pubblicaMateriali') ? h`<button class="bt primario largo" data-a="pubblica-set">${icona('cloud-arrow-up')} Pubblica un set del tuo archivio</button>` : ''}
-                ${T.lavoroMateriali ? h`<p class="sotto" style="margin-top:10px">${icona('spinner fa-spin')} ${T.lavoroMateriali}</p>` : ''}
+                ${Y.puo('pubblicaMateriali') ? h`<button class="bt primario largo" data-a="pubblica-set" ${T.lavoroMateriali ? grezzo('disabled') : ''}>${icona('cloud-arrow-up')} Pubblica set del tuo archivio</button>` : ''}
+                ${daPrendere.length > 1 ? h`<button class="bt largo" style="margin-top:8px" data-a="scarica-tutti" ${T.lavoroMateriali ? grezzo('disabled') : ''}>${icona('cloud-arrow-down')} Scarica tutti i nuovi e gli aggiornati (${daPrendere.length})</button>` : ''}
+                ${T.lavoroMateriali ? h`<p class="sotto" style="margin-top:10px" data-lavoro-materiali>${icona('spinner fa-spin')} ${T.lavoroMateriali}</p>` : ''}
                 <div class="scheda" style="margin-top:12px">
                     ${ids.length ? ids.map((id) => {
-                        const v = ind[id], l = locali[id];
-                        const stato = !l ? 'scarica' : l.centro.versione < v.versione ? 'aggiorna' : 'ok';
+                        const v = ind[id], stato = stati[id];
                         return h`<div class="riga" style="cursor:default">
                             <span class="corpo"><span class="t1">${v.nome}</span><span class="t2">${v.categoria ? v.categoria + ' · ' : ''}${v.nItems} elementi · ${v.aggiornatoDa || ''} · ${formatoData((v.aggiornato || '').slice(0, 10))}</span></span>
                             ${stato === 'ok' ? h`<span class="pill verde">${icona('check')} sul dispositivo</span>`
-                                : h`<button class="bt piccolo ${stato === 'aggiorna' ? 'arancio' : ''}" data-a="scarica-set" data-id="${id}">${stato === 'aggiorna' ? 'Aggiorna' : 'Scarica'}</button>`}
+                                : h`<button class="bt piccolo ${stato === 'aggiorna' ? 'arancio' : ''}" data-a="scarica-set" data-id="${id}" ${T.lavoroMateriali ? grezzo('disabled') : ''}>${stato === 'aggiorna' ? 'Aggiorna' : 'Scarica'}</button>`}
                         </div>`;
                     }) : h`<div class="vuoto">Ancora nessun set pubblicato.</div>`}
                 </div>
             </main>`;
     }
-    async function scaricaSet(b) {
-        const id = b.dataset.id;
-        try {
-            T.lavoroMateriali = 'Scaricamento del set…'; TiceHome.ridisegna();
-            const set = await Y.chiama('materiali.set', { id });
-            const hs = hashDi(set), mappa = {};
-            for (let i = 0; i < hs.length; i += 40) {
-                T.lavoroMateriali = `Immagini ${Math.min(i + 40, hs.length)} di ${hs.length}…`; TiceHome.ridisegna();
-                Object.assign(mappa, await Y.chiama('materiali.immagini', { hashes: hs.slice(i, i + 40) }));
-            }
-            const locale = sostituisci(set, mappa);
-            const esistente = setLocali().find((s) => s.centro && s.centro.id === id);
-            locale.id = esistente ? esistente.id : id;
-            locale.centro = { id, versione: set.versione, aggiornato: set.aggiornato };
-            delete locale.versione; delete locale.aggiornato; delete locale.aggiornatoDa;
-            await DB.saveSet(locale);
-            await ricaricaSet();
-            avviso(`«${locale.name}» scaricato`);
-        } catch (e) { avviso(e.message, 'errore'); }
-        T.lavoroMateriali = null;
-        TiceHome.ridisegna();
+    // id del centro → 'scarica' | 'aggiorna' | 'ok'
+    function statiMateriali() {
+        const ind = (T.indiceMateriali && T.indiceMateriali.sets) || {};
+        const locali = {};
+        setLocali().forEach((s) => { if (s.centro && s.centro.id) locali[s.centro.id] = s; });
+        const out = {};
+        Object.keys(ind).forEach((id) => { const l = locali[id]; out[id] = !l ? 'scarica' : l.centro.versione < ind[id].versione ? 'aggiorna' : 'ok'; });
+        return out;
     }
-    async function pubblicaSet() {
-        const sets = setLocali().filter((s) => !(s.modes || []).some((m) => m === 'quaderno' || m === 'quaderno_task'));
-        const r = await foglio(h`<form><h2>Pubblica un set</h2>
-            <p class="sotto">Le colleghe lo troveranno nei materiali del centro. Se lo hai scaricato dal centro, ne pubblichi una versione aggiornata.</p>
-            <input type="search" placeholder="Cerca" data-filtro-set style="margin-bottom:6px">
-            <div class="opzioni" style="max-height:44vh;overflow-y:auto" data-elenco-set>
-                ${sets.map((s) => h`<label class="opzione" data-nome="${String(s.name + ' ' + (s.category || '')).toLowerCase()}"><input type="radio" name="id" value="${s.id}" required>
-                    <span class="corpo">${s.name}<small>${s.category || ''} · ${(s.items || []).length} elementi${s.centro ? ' · dal centro' : ''}</small></span></label>`)}
+    function lavoro(testo) {
+        T.lavoroMateriali = testo;
+        // durante i lotti si aggiorna solo la riga di avanzamento, non tutta la vista
+        const p = testo && document.querySelector('#tice [data-lavoro-materiali]');
+        if (p) p.innerHTML = String(h`${icona('spinner fa-spin')} ${testo}`);
+        else TiceHome.ridisegna();
+    }
+    // Esito di un lavoro su più set: un avviso se è andato tutto bene, altrimenti il dettaglio
+    async function esito(verbo, fatti, falliti) {
+        if (!falliti.length) { avviso(fatti.length === 1 ? `«${fatti[0]}» ${verbo}` : `${fatti.length} set ${verbo.replace(/o$/, 'i')}`); return; }
+        await foglio(h`<h2>${fatti.length} set ${verbo.replace(/o$/, 'i')}, ${falliti.length} no</h2>
+            <div class="opzioni" style="max-height:50vh;overflow-y:auto">
+                ${falliti.map((x) => h`<div class="opzione">${icona('triangle-exclamation')}<span class="corpo">${x.nome}<small>${x.errore}</small></span></div>`)}
             </div>
-            <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Pubblica</button></div></form>`,
-        { dopo: (f) => { const q = f.querySelector('[data-filtro-set]'); q.addEventListener('input', () => { const v = q.value.trim().toLowerCase(); f.querySelectorAll('[data-elenco-set] > label').forEach((l) => { l.hidden = !!v && !l.dataset.nome.includes(v); }); }); } });
-        if (!r || !r.id) return;
-        const locale = setLocali().find((s) => s.id === r.id);
+            <p class="sotto">Gli altri sono a posto: puoi riprovare solo questi.</p>
+            <div class="bottoni"><button class="bt primario" data-foglio="chiudi">Ho capito</button></div>`);
+    }
+
+    // Scarica uno o più set; le immagini già prese per un set non si richiedono per gli altri
+    async function scarica(ids) {
+        const ind = (T.indiceMateriali && T.indiceMateriali.sets) || {};
+        const presi = {}, fatti = [], falliti = [];
+        for (let n = 0; n < ids.length; n++) {
+            const id = ids[n], pre = ids.length > 1 ? `Set ${n + 1} di ${ids.length} · ` : '';
+            try {
+                lavoro(pre + 'scaricamento…');
+                const set = await Y.chiama('materiali.set', { id });
+                const hs = hashDi(set), nuovi = hs.filter((x) => !presi[x]);
+                for (let i = 0; i < nuovi.length; i += 40) {
+                    lavoro(`${pre}immagini ${Math.min(i + 40, nuovi.length)} di ${nuovi.length}…`);
+                    Object.assign(presi, await Y.chiama('materiali.immagini', { hashes: nuovi.slice(i, i + 40) }));
+                }
+                const locale = sostituisci(set, presi);
+                const esistente = setLocali().find((s) => s.centro && s.centro.id === id);
+                locale.id = esistente ? esistente.id : id;
+                locale.centro = { id, versione: set.versione, aggiornato: set.aggiornato };
+                delete locale.versione; delete locale.aggiornato; delete locale.aggiornatoDa;
+                await DB.saveSet(locale);
+                await ricaricaSet();
+                fatti.push(locale.name);
+            } catch (e) { falliti.push({ nome: (ind[id] && ind[id].nome) || id, errore: e.message }); }
+        }
+        lavoro(null);
+        await esito('scaricato', fatti, falliti);
+    }
+    const scaricaSet = (b) => scarica([b.dataset.id]);
+    function scaricaTutti() {
+        const stati = statiMateriali();
+        return scarica(Object.keys(stati).filter((id) => stati[id] !== 'ok'));
+    }
+
+    async function pubblicaSet() {
+        const sets = setLocali().filter((s) => !(s.modes || []).some((m) => m === 'quaderno' || m === 'quaderno_task'))
+            .slice().sort((a, b) => ((a.category || '') + a.name).localeCompare((b.category || '') + b.name, 'it'));
+        if (!sets.length) { avviso('Nel tuo archivio non ci sono set da pubblicare.'); return; }
+        const ind = (T.indiceMateriali && T.indiceMateriali.sets) || {};
+        const categorie = [...new Set(sets.map((s) => s.category || ''))].filter(Boolean);
+        const nota = (s) => {
+            const c = s.centro && ind[s.centro.id];
+            return c ? ' · già nel centro (v' + c.versione + ')' : s.centro ? ' · dal centro' : '';
+        };
+        const r = await foglio(h`<form><h2>Pubblica set</h2>
+            <p class="sotto">Le colleghe li troveranno nei materiali del centro. Un set già pubblicato o scaricato dal centro viene aggiornato. Le immagini in comune tra più set viaggiano una volta sola.</p>
+            <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+                <input type="search" placeholder="Cerca" data-filtro-set autocomplete="off" style="flex:1;min-width:140px">
+                ${categorie.length > 1 ? h`<select data-filtro-cat style="flex:none;max-width:45%"><option value="">Tutte le categorie</option>${categorie.map((c) => h`<option value="${c}">${c}</option>`)}</select>` : ''}
+            </div>
+            <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;flex-wrap:wrap">
+                <button type="button" class="bt piccolo" data-sel="tutti">Tutti quelli visibili</button>
+                <button type="button" class="bt piccolo" data-sel="nuovi">Solo i nuovi</button>
+                <button type="button" class="bt piccolo" data-sel="nessuno">Nessuno</button>
+            </div>
+            <div class="opzioni" style="max-height:44vh;overflow-y:auto" data-elenco-set>
+                ${sets.map((s) => h`<label class="opzione" data-nome="${String(s.name + ' ' + (s.category || '')).toLowerCase()}" data-cat="${s.category || ''}" data-nuovo="${s.centro ? '' : '1'}"><input type="checkbox" name="id" value="${s.id}">
+                    <span class="corpo">${s.name}<small>${[s.category, (s.items || []).length + ' elementi'].filter(Boolean).join(' · ')}${nota(s)}</small></span></label>`)}
+            </div>
+            <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario" data-conta disabled>Pubblica</button></div></form>`,
+        {
+            invia: (f) => ({ ids: new FormData(f).getAll('id') }),
+            dopo: (f) => {
+                const q = f.querySelector('[data-filtro-set]'), cat = f.querySelector('[data-filtro-cat]'), ok = f.querySelector('[data-conta]');
+                const righe = [...f.querySelectorAll('[data-elenco-set] > label')];
+                const conta = () => { const n = righe.filter((l) => l.querySelector('input').checked).length; ok.disabled = !n; ok.textContent = n > 1 ? `Pubblica ${n} set` : 'Pubblica'; };
+                const filtra = () => {
+                    const v = q.value.trim().toLowerCase(), c = cat ? cat.value : '';
+                    righe.forEach((l) => { l.hidden = !l.querySelector('input').checked && ((!!v && !l.dataset.nome.includes(v)) || (!!c && l.dataset.cat !== c)); });
+                };
+                q.addEventListener('input', filtra);
+                if (cat) cat.addEventListener('change', filtra);
+                f.addEventListener('change', (e) => { if (e.target.name === 'id') conta(); });
+                f.querySelectorAll('[data-sel]').forEach((b) => b.addEventListener('click', () => {
+                    const modo = b.dataset.sel;
+                    if (modo !== 'nessuno') filtra();
+                    righe.forEach((l) => {
+                        const i = l.querySelector('input');
+                        if (modo === 'nessuno') i.checked = false;
+                        else if (!l.hidden) i.checked = modo === 'tutti' || !!l.dataset.nuovo;
+                    });
+                    filtra(); conta();
+                }));
+            }
+        });
+        if (!r || !r.ids || !r.ids.length) return;
+        await pubblica(r.ids);
+    }
+    async function pubblica(ids) {
+        const fatti = [], falliti = [];
+        const scelti = ids.map((id) => setLocali().find((s) => s.id === id)).filter(Boolean);
         try {
-            T.lavoroMateriali = 'Preparazione del set…'; TiceHome.ridisegna();
-            const copia = JSON.parse(JSON.stringify(locale));
-            const idCentro = (copia.centro && copia.centro.id) || String(copia.id).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 80);
-            delete copia.centro;
-            copia.id = idCentro;
-            const { set, file } = await perRiferimento(copia);
-            const mancanti = await Y.chiama('materiali.mancanti', { hashes: Object.keys(file) });
-            let lotto = {}, peso = 0, fatti = 0;
-            const invia = async () => { if (!Object.keys(lotto).length) return; await Y.chiama('materiali.caricaImmagini', { immagini: lotto }); lotto = {}; peso = 0; };
+            // 1. ogni set con i file al posto delle immagini; i file di tutti in un solo elenco
+            const pronti = [], file = {};
+            for (let n = 0; n < scelti.length; n++) {
+                const locale = scelti[n];
+                lavoro(`Preparazione ${n + 1} di ${scelti.length}…`);
+                try {
+                    const copia = JSON.parse(JSON.stringify(locale));
+                    const idCentro = (copia.centro && copia.centro.id) || String(copia.id).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 80);
+                    delete copia.centro;
+                    copia.id = idCentro;
+                    const p = await perRiferimento(copia);
+                    Object.assign(file, p.file);
+                    pronti.push({ locale, idCentro, set: p.set });
+                } catch (e) { falliti.push({ nome: locale.name, errore: e.message }); }
+            }
+            // 2. le immagini che il centro non ha ancora, a lotti
+            const tutti = Object.keys(file), mancanti = [];
+            for (let i = 0; i < tutti.length; i += 5000) mancanti.push(...await Y.chiama('materiali.mancanti', { hashes: tutti.slice(i, i + 5000) }));
+            let lotto = {}, peso = 0, inviati = 0;
+            const invia = async () => {
+                if (!Object.keys(lotto).length) return;
+                await Y.chiama('materiali.caricaImmagini', { immagini: lotto });
+                inviati += Object.keys(lotto).length; lotto = {}; peso = 0;
+                lavoro(`Caricamento immagini ${inviati} di ${mancanti.length}…`);
+            };
+            if (mancanti.length) lavoro(`Caricamento immagini 0 di ${mancanti.length}…`);
             for (const hs of mancanti) {
                 if (Object.keys(lotto).length >= 40 || peso + file[hs].length > 12e6) await invia();
-                lotto[hs] = file[hs]; peso += file[hs].length; fatti++;
-                T.lavoroMateriali = `Caricamento immagini ${fatti} di ${mancanti.length}…`; TiceHome.ridisegna();
+                lotto[hs] = file[hs]; peso += file[hs].length;
             }
             await invia();
+            // 3. i set, uno alla volta: se uno non passa, gli altri vanno avanti
             const indice = await Y.chiama('materiali.indice');
-            const prima = (indice.sets || {})[idCentro];
-            const voce = await Y.chiama('materiali.pubblica', { set, versioneBase: prima ? prima.versione : 0 });
-            locale.centro = { id: idCentro, versione: voce.versione, aggiornato: voce.aggiornato };
-            await DB.saveSet(locale);
+            for (let n = 0; n < pronti.length; n++) {
+                const { locale, idCentro, set } = pronti[n];
+                lavoro(pronti.length > 1 ? `Pubblicazione ${n + 1} di ${pronti.length}…` : 'Pubblicazione…');
+                try {
+                    const prima = (indice.sets || {})[idCentro];
+                    const voce = await Y.chiama('materiali.pubblica', { set, versioneBase: prima ? prima.versione : 0 });
+                    locale.centro = { id: idCentro, versione: voce.versione, aggiornato: voce.aggiornato };
+                    await DB.saveSet(locale);
+                    fatti.push(locale.name);
+                } catch (e) { falliti.push({ nome: locale.name, errore: e.message }); }
+            }
             await ricaricaSet();
-            T.indiceMateriali = null;
-            avviso(`«${locale.name}» pubblicato`);
-        } catch (e) { avviso(e.message, 'errore'); }
-        T.lavoroMateriali = null;
-        TiceHome.ridisegna();
+        } catch (e) {
+            // un errore prima della pubblicazione (rete, immagini) ferma tutto
+            scelti.filter((s) => !fatti.includes(s.name) && !falliti.some((x) => x.nome === s.name)).forEach((s) => falliti.push({ nome: s.name, errore: e.message }));
+        }
+        T.indiceMateriali = null;
+        lavoro(null);
+        await esito('pubblicato', fatti, falliti);
     }
 
     // =====================================================================
@@ -644,6 +752,7 @@
             persona: (b) => persona(b.dataset.email),
             versione,
             'scarica-set': scaricaSet,
+            'scarica-tutti': scaricaTutti,
             'pubblica-set': pubblicaSet
         },
         aggancio: { chip, banner, pillola, opzioniBambino, sceltaBambino, opzioniMenu, sceltaMenu, nuovoBambino, puoProgrammi, dopo, limitato: tirocinante }

@@ -273,6 +273,7 @@ body.tice-aperto #notebook-tab-handle { display: none !important; }
     border-radius: 12px; border: 1px solid rgba(var(--ink-rgb),0.12); background: rgba(var(--ink-rgb),0.03);
     color: inherit; font: inherit; text-align: left; cursor: pointer;
 }
+.tice-foglio .opzione[hidden] { display: none; }
 .tice-foglio .opzione small { display: block; color: var(--text-secondary); font-size: 0.8rem; }
 .tice-foglio .opzione .corpo { flex: 1; min-width: 0; }
 .tice-foglio .sotto { color: var(--text-secondary); font-size: 0.86rem; }
