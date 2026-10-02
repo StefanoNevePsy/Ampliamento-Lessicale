@@ -55,6 +55,8 @@ jobs:
 
       - name: Build del sito in www/
         run: node build.js
+        env:
+          TICE_CSP: '1'
 
       - uses: actions/configure-pages@v5
 
