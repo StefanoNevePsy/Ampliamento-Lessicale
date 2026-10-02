@@ -412,3 +412,84 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 .tice-hint-gioco .fumetto { padding: 12px 14px; border-radius: 14px; background: var(--modal-bg); color: var(--text-primary); border-left: 3px solid var(--accent-color); box-shadow: var(--shadow); font-size: 0.92rem; line-height: 1.45; user-select: text; }
 .tice-hint-gioco .fumetto[hidden] { display: none; }
 .tice-hint-gioco .fumetto p { margin: 6px 0 0; white-space: pre-wrap; }
+
+/* ---------- Annulla l'ultima risposta: sempre a portata in seduta ---------- */
+.tice .tice-annulla {
+    position: fixed; right: 12px; bottom: calc(env(safe-area-inset-bottom, 0px) + 80px); z-index: 9;
+    display: flex; align-items: center; gap: 8px; max-width: min(78vw, 360px); min-height: 48px;
+    padding: 8px 14px 8px 12px; border-radius: 999px; border: 1px solid var(--t-bordo);
+    background: var(--t-sup); color: var(--text-primary); font: inherit; font-size: 0.85rem; font-weight: 650;
+    box-shadow: 0 6px 22px rgba(var(--shadow-rgb), 0.22); cursor: pointer;
+}
+.tice .tice-annulla[hidden] { display: none; }
+.tice .tice-annulla > i { font-size: 1.05rem; color: var(--accent-color); }
+.tice .tice-annulla .cosa { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; color: var(--text-secondary); font-weight: 600; }
+.tice .tice-annulla .cosa b { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; color: #fff; font-size: 0.72rem; margin-right: 2px; }
+.tice .tice-annulla .cosa b.V { background: var(--t-v); }
+.tice .tice-annulla .cosa b.P { background: var(--t-p); }
+.tice .tice-annulla .cosa b.X { background: var(--t-x); }
+.tice .tice-annulla:active { transform: scale(0.97); }
+.tice:has(.ta-linguetta) .tice-annulla { bottom: calc(env(safe-area-inset-bottom, 0px) + 146px); }
+.tice:has(.ta-strato) .tice-annulla { bottom: calc(env(safe-area-inset-bottom, 0px) + 236px); }
+.tice:has(.tice-annulla:not([hidden])) .tice-main { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 150px); }
+.tice:has(.ta-linguetta) .tice-main { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 220px); }
+
+/* ---------- Task analysis ---------- */
+.tice .ta-riga b { color: var(--text-primary); }
+.tice .ta-ora { display: grid; gap: 2px; padding: 10px 12px; margin-bottom: 10px; border-radius: 12px; background: var(--t-sup-2); }
+.tice .ta-ora small { color: var(--text-secondary); font-size: 0.76rem; font-weight: 650; }
+.tice .ta-ora b { font-size: 1.12rem; line-height: 1.25; }
+.tice .ta-punti { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.tice .ta-punti i { width: 10px; height: 10px; border-radius: 50%; background: var(--t-bordo); }
+.tice .ta-punti i.V { background: var(--t-v); }
+.tice .ta-punti i.P { background: var(--t-p); }
+.tice .ta-punti i.X { background: var(--t-x); }
+.tice .ta-punti i.qui { outline: 2px solid var(--accent-color); outline-offset: 1px; }
+
+.tice .ta-strato {
+    position: fixed; inset: 0; z-index: 8; display: flex; flex-direction: column;
+    background: var(--bg-color); background: var(--bg-gradient, var(--bg-color)); color: var(--text-primary);
+}
+.tice .ta-strato.anima { animation: ta-su 0.18s ease-out; }
+@keyframes ta-su { from { transform: translateY(24px); opacity: 0.4; } }
+.tice .ta-testa {
+    display: flex; align-items: center; gap: 10px;
+    padding: calc(env(safe-area-inset-top, 0px) + 10px) 12px 10px;
+    background: var(--t-sup); border-bottom: 1px solid var(--t-bordo);
+}
+.tice .ta-titolo { flex: 1; min-width: 0; display: grid; }
+.tice .ta-titolo b { font-size: 1.02rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tice .ta-titolo small { color: var(--text-secondary); font-size: 0.78rem; }
+.tice .ta-passi { list-style: none; margin: 0; padding: 8px 10px; overflow-y: auto; flex: 1; max-width: 760px; width: 100%; align-self: center; box-sizing: border-box; }
+.tice .ta-passi li { margin: 0 0 6px; }
+.tice .ta-passo {
+    width: 100%; display: flex; align-items: center; gap: 10px; text-align: left; font: inherit; color: inherit;
+    padding: 10px 12px; min-height: 48px; border-radius: 12px; border: 1px solid var(--t-bordo); background: var(--t-sup); cursor: pointer;
+}
+.tice .ta-passo .n { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--t-sup-2); font-size: 0.8rem; font-weight: 700; }
+.tice .ta-passo .tt { flex: 1; min-width: 0; }
+.tice .ta-passo .esiti { display: flex; gap: 3px; flex-wrap: wrap; justify-content: flex-end; max-width: 40%; }
+.tice .ta-passo .esiti i { width: 10px; height: 10px; border-radius: 50%; }
+.tice .ta-passo .esiti i.V { background: var(--t-v); }
+.tice .ta-passo .esiti i.P { background: var(--t-p); }
+.tice .ta-passo .esiti i.X { background: var(--t-x); }
+.tice .ta-passi li.corrente .ta-passo { border-color: var(--accent-color); box-shadow: 0 0 0 2px var(--accent-color) inset; }
+.tice .ta-passi li.corrente .n { background: var(--accent-color); color: #fff; }
+.tice .ta-piede {
+    display: grid; gap: 8px; padding: 10px 12px calc(env(safe-area-inset-bottom, 0px) + 10px);
+    background: var(--t-sup); border-top: 1px solid var(--t-bordo); box-shadow: 0 -6px 20px rgba(var(--shadow-rgb), 0.12);
+}
+.tice .ta-piede > * { max-width: 760px; width: 100%; margin: 0 auto; box-sizing: border-box; }
+.tice .ta-piede .ta-ora { margin: 0; }
+.tice .ta-piede .bt { justify-self: center; width: auto; }
+
+.tice .ta-linguetta {
+    position: fixed; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom, 0px) + 78px); z-index: 7;
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px; text-align: left; font: inherit; color: #fff;
+    border: 0; border-radius: 14px; background: var(--accent-color); box-shadow: 0 8px 24px rgba(var(--shadow-rgb), 0.28); cursor: pointer;
+    max-width: 736px; margin: 0 auto;
+}
+.tice .ta-linguetta span { flex: 1; min-width: 0; }
+.tice .ta-linguetta small { opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.tice-foglio .ta-nuova { margin: 10px 0; padding: 8px 10px; border: 1px dashed var(--t-bordo, rgba(0,0,0,.2)); border-radius: 12px; }
+.tice-foglio .ta-nuova summary { cursor: pointer; padding: 4px 0; }

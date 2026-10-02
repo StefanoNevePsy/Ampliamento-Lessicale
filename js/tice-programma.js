@@ -11,9 +11,16 @@
  *   criterio: { soglia: 90, sedute: 2 },
  *   prove: 10 | null,          // prove per seduta, se fisse
  *   stato: 'attivo' | 'sospeso' | 'terminato',
- *   target: [{ id, testo, stato, inizio, fine, tdSeconds?, suggerimento? }],
+ *   target: [{ id, testo, stato, inizio, fine, tdSeconds?, suggerimento?,
+ *              passi?: [{ id, testo }] }],   // con i passi è una task analysis
  *   // stato del target: 'attivo' | 'pianificato' | 'criterio' | 'repertorio' | 'chiuso'
  * }] }
+ *
+ * Task analysis: in seduta si segna un passo alla volta (ogni passo è una
+ * learn unit) e si va avanti da soli; finito l'ultimo si ricomincia (un altro
+ * giro). La seduta va nello storico come quelle della modalità Task Analysis
+ * dell'app (mode 'quaderno_task' con taskSteps), quindi con il dettaglio dei
+ * passi nei grafici.
  *
  * Le sedute restano nello storico dell'app (patient.history) come sedute
  * Quaderno con setName "Attività · Target", più attivitaId e targetId.
@@ -115,6 +122,23 @@
     return null;
   }
 
+  /** I passi di una task analysis ([] per un target normale). */
+  function passiDi(target) {
+    return (target && Array.isArray(target.passi)) ? target.passi.filter(function (x) { return x && x.testo; }) : [];
+  }
+  /** Testi (o oggetti) → passi con id, conservando gli id dei passi uguali. */
+  function nuoviPassi(elenco, vecchi) {
+    var usati = {};
+    return (elenco || []).map(function (x) {
+      var testo = String(typeof x === 'object' && x ? (x.testo || x.name || '') : x).trim();
+      if (!testo) return null;
+      var v = (vecchi || []).filter(function (y) { return y.testo === testo && !usati[y.id]; })[0];
+      var id = v ? v.id : nuovoId('ps');
+      usati[id] = true;
+      return { id: id, testo: testo };
+    }).filter(Boolean);
+  }
+
   /** Crea le sedute Quaderno di un'attività per lo storico dell'app. */
   function seduta(att, target, voce, quando) {
     var v = voce.v || 0, pp = voce.p || 0, x = voce.x || 0, tot = v + pp + x;
@@ -138,6 +162,19 @@
     };
     if (s.sessionType === 'timedelay') s.timeDelaySeconds = voce.tdSeconds || (target && target.tdSeconds) || att.tdSeconds || 5;
     if (voce.sequenza) s.sequenza = voce.sequenza;
+    // task analysis: il dettaglio per passo, come la modalità Task Analysis
+    var passi = passiDi(target);
+    if (passi.length && voce.esiti) {
+      var CODICI = { V: true, P: 'prompt', X: false };
+      s.mode = 'quaderno_task';
+      s.taskSteps = passi.map(function (ps) {
+        var e = String(voce.esiti[ps.id] || '');
+        var n = function (c) { return e.split(c).length - 1; };
+        return { name: ps.testo, results: e.split('').map(function (c) { return CODICI[c]; }),
+          v: n('V'), p: n('P'), x: n('X'), na: 0, scored: e.length, sessionType: s.sessionType };
+      });
+      if (voce.giri) s.giri = voce.giri;
+    }
     if (voce.operatore) s.operatore = voce.operatore;
     var nota = [];
     if (voce.decisione) nota.push('**' + voce.decisione + '**');
@@ -186,6 +223,7 @@
       inizio: null, fine: null, origine: 'app', modificato: new Date().toISOString()
     };
     if (d.setId) { t.setId = String(d.setId); if (d.mode) t.mode = String(d.mode); }
+    if (d.passi && d.passi.length) t.passi = nuoviPassi(d.passi);
     (att.target || (att.target = [])).push(t);
     att.modificato = t.modificato;
     return t;
@@ -233,6 +271,7 @@
     nuovoId: nuovoId, giorno: giorno, oggi: oggi,
     programma: programma, attivita: attivita, nomeSet: nomeSet, modoTarget: modoTarget,
     targetCorrente: targetCorrente, prossimoTarget: prossimoTarget,
+    passiDi: passiDi, nuoviPassi: nuoviPassi,
     sedute: sedute, criterioRaggiunto: criterioRaggiunto, seduta: seduta,
     nuovaAttivita: nuovaAttivita, aggiungiTarget: aggiungiTarget,
     chiudiTarget: chiudiTarget, rendiCorrente: rendiCorrente, spostaTarget: spostaTarget,

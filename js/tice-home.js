@@ -91,6 +91,7 @@
     }
     function eliminaBozza(pid) {
         localStorage.removeItem(chiaveBozza(pid));
+        if (T.ta && T.ta.pid === pid) T.ta = null;
         if (T.bozza && T.bozza.pid === pid) T.bozza = null;
     }
     const haDati = (v) => v && (v.v + v.p + v.x) > 0;
@@ -121,6 +122,102 @@
                 mantenimento: !!(c && c.mantenimento), sessionType: att.sessionType || 'independent' };
         }
         return b.voci[att.id];
+    }
+
+    // ---------- task analysis: un passo alla volta ----------
+    // Nella voce della seduta: esiti = { passoId: 'VPX…' }, passo = indice del
+    // passo da segnare, giri = giri completati, ordine = passo di ogni risposta
+    // (parallelo a sequenza), per poter annullare l'ultima.
+    function targetVoce(att, v) {
+        if (v && v.targetId) return (att.target || []).find((x) => x.id === v.targetId) || null;
+        const c = att.temporanea ? null : P.targetCorrente(att);
+        return c ? c.target : null;
+    }
+    const passiVoce = (att, v) => P.passiDi(targetVoce(att, v));
+    function statoTA(v, passi) {
+        const i = Math.min((v && v.passo) || 0, Math.max(0, passi.length - 1));
+        return { i, passo: passi[i], giri: (v && v.giri) || 0 };
+    }
+    // Ultime risposte della seduta, in ordine, per l'annulla sempre a portata
+    function ultimeDi(b) { return b.ultime || (b.ultime = []); }
+    function descriviUltima(p) {
+        const b = bozza(p.id), u = ultimeDi(b);
+        for (let k = u.length - 1; k >= 0; k--) {
+            const att = attivitaDi(p, u[k]), v = b.voci[u[k]];
+            if (!att || !v || !v.sequenza) continue;
+            const r = v.sequenza.slice(-1);
+            const passi = passiVoce(att, v);
+            const ps = passi.length && v.ordine ? passi.find((x) => x.id === v.ordine[v.ordine.length - 1]) : null;
+            return { att, r, testo: att.nome + (ps ? ' · ' + ps.testo : '') };
+        }
+        return null;
+    }
+    function tastoAnnulla(p) {
+        const d = descriviUltima(p);
+        const SEGNO = { V: '✓', P: 'P', X: '✗' };
+        return h`<button id="tice-annulla" class="tice-annulla ${d ? '' : 'nascosto'}" data-a="annulla-ultima" ${d ? '' : grezzo('hidden')}
+            aria-label="${d ? 'Annulla l\'ultima: ' + SEGNO[d.r] + ' ' + d.testo : 'Annulla'}" title="${d ? 'Annulla: ' + d.testo : ''}">
+            ${icona('rotate-left')}<span class="cosa"><b class="${d ? d.r : ''}">${d ? SEGNO[d.r] : ''}</b> ${d ? d.testo : ''}</span></button>`;
+    }
+
+    // La lista dei passi a tutto schermo; "Quaderno" la mette da parte e
+    // lascia una linguetta per tornarci.
+    function pannelloTA(p) {
+        if (!T.ta || T.ta.pid !== p.id) return h`<div id="tice-ta"></div>`;
+        const att = attivitaDi(p, T.ta.attId);
+        const v = att && bozza(p.id).voci[att.id];
+        const passi = att ? passiVoce(att, v) : [];
+        if (!att || !passi.length) { T.ta = null; return h`<div id="tice-ta"></div>`; }
+        const t = targetVoce(att, v), st = statoTA(v, passi);
+        const tipo = (v && v.sessionType) || att.sessionType;
+        if (T.ta.nascosta) {
+            return h`<div id="tice-ta"><button class="ta-linguetta" data-a="mostra-ta">${icona('list-ol')}
+                <span><b>${t.testo}</b><br><small>passo ${st.i + 1} di ${passi.length} · ${st.passo.testo}</small></span>${icona('chevron-up')}</button></div>`;
+        }
+        const tot = v ? v.v + v.p + v.x : 0;
+        const anima = T.ta.anima;
+        T.ta.anima = false;   // solo all'apertura, non a ogni punteggio
+        return h`<div id="tice-ta" class="ta-strato ${anima ? 'anima' : ''}" role="dialog" aria-label="Task analysis ${t.testo}">
+            <div class="ta-testa">
+                <button class="ib" data-a="chiudi-ta" aria-label="Chiudi la lista">${icona('xmark')}</button>
+                <div class="ta-titolo"><b>${t.testo}</b><small>${att.nome} · giro ${st.giri + 1}${tot ? ` · ${v.v}/${tot} (${Math.round(100 * v.v / tot)}%)` : ''}</small></div>
+                <button class="bt piccolo" data-a="nascondi-ta" title="Torna al quaderno della seduta, la lista resta a portata">${icona('book-open')} Quaderno</button>
+            </div>
+            <ol class="ta-passi">
+                ${passi.map((ps, k) => {
+                    const e = (v && v.esiti && v.esiti[ps.id]) || '';
+                    return h`<li class="${k === st.i ? 'corrente' : ''}" ${k === st.i ? grezzo('data-corrente') : ''}>
+                        <button class="ta-passo" data-a="vai-passo" data-id="${att.id}" data-k="${k}">
+                            <span class="n">${k + 1}</span><span class="tt">${ps.testo}</span>
+                            <span class="esiti">${e.split('').map((r) => h`<i class="${r}"></i>`)}</span>
+                        </button></li>`;
+                })}
+            </ol>
+            <div class="ta-piede">
+                <div class="ta-ora"><small>Passo ${st.i + 1} di ${passi.length}</small><b>${st.passo.testo}</b></div>
+                <div class="tasti">
+                    <button class="tasto v" data-a="segna" data-id="${att.id}" data-r="V">✓<small>Corretta</small></button>
+                    <button class="tasto p" data-a="segna" data-id="${att.id}" data-r="P">P<small>${att.nomeP || (tipo === 'timedelay' ? 'Promptata' : 'Con aiuto')}</small></button>
+                    <button class="tasto x" data-a="segna" data-id="${att.id}" data-r="X">✗<small>Errata</small></button>
+                </div>
+                <button class="bt piccolo fantasma" data-a="salta-passo" data-id="${att.id}">Salta il passo ${icona('forward')}</button>
+            </div>
+        </div>`;
+    }
+    function aggiornaSovra(p) {
+        const ta = document.getElementById('tice-ta');
+        if (ta) {
+            const scroll = (ta.querySelector('.ta-passi') || {}).scrollTop;
+            ta.outerHTML = String(pannelloTA(p));
+            const nuovo = document.querySelector('#tice-ta .ta-passi');
+            if (nuovo) {
+                if (scroll != null) nuovo.scrollTop = scroll;
+                const c = nuovo.querySelector('[data-corrente]');
+                if (c) c.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+        }
+        const a = document.getElementById('tice-annulla');
+        if (a) a.outerHTML = String(tastoAnnulla(p));
     }
 
     // ---------- fogli, conferme, avvisi ----------
@@ -248,6 +345,8 @@
         const oggiV = giaOggi.reduce((n, x) => n + (x.correct || 0), 0), oggiT = giaOggi.reduce((n, x) => n + (x.total || 0), 0);
         const prev = previsione(p, att, v);
         const hint = suggerimentiDi(att, t).length;
+        const passi = P.passiDi(t);
+        const st = passi.length ? statoTA(v, passi) : null;
         return h`<div class="att ${haDati(v) ? 'con-dati' : ''} ${hint ? 'con-hint' : ''}" data-att="${att.id}">
             ${hint ? h`<button class="ib hint-tasto ${T.suggerimenti[att.id] ? 'on' : ''}" data-a="suggerimenti" data-id="${att.id}" aria-expanded="${T.suggerimenti[att.id] ? 'true' : 'false'}" aria-label="Suggerimenti" title="Suggerimenti per chi somministra">${icona('lightbulb')}</button>` : ''}
             <button class="att-testa" data-a="apri-att" data-id="${att.id}" aria-expanded="${aperta ? 'true' : 'false'}">
@@ -260,6 +359,7 @@
                         ${aCriterio ? h` <span class="pill verde">${icona('flag-checkered')} criterio</span>` : ''}
                     </span>
                     ${t ? h`<span class="target">${t.setId ? h`${icona(giocabile ? 'layer-group' : 'triangle-exclamation')} ` : ''}${t.testo}${t.setId ? h` · ${etichettaModo(P.modoTarget(att, t))}` : ''}</span>` : (!att.temporanea ? h`<span class="target"><i>Nessun target in corso: aggiungilo dal programma.</i></span>` : '')}
+                    ${st ? h`<span class="target ta-riga">${icona('list-ol')} passo <b>${st.i + 1}/${passi.length}</b> · ${st.passo.testo}${st.giri ? h` <span class="pill grigia">giro ${st.giri + 1}</span>` : ''}</span>` : ''}
                     ${oggiT ? h`<span class="target">${icona('circle-check')} già oggi: ${oggiV}/${oggiT} (${Math.round(100 * oggiV / oggiT)}%)</span>` : ''}
                 </span>
                 <span class="conto">${tot ? h`<b class="${classePct(pct, soglia)}">${pct}%</b><br><span class="piccolo sotto">${v.v}/${tot}${att.prove ? ' di ' + att.prove : ''}</span>`
@@ -275,6 +375,10 @@
                 ${giocabile ? h`<button class="bt primario largo" style="margin-bottom:10px" data-a="gioca" data-id="${att.id}">${icona('play')} Somministra con l'app · ${etichettaModo(P.modoTarget(att, t))}</button>` : ''}
                 ${t && t.setId && !giocabile ? h`<p class="sotto piccolo">Il set «${t.testo}» non è su questo dispositivo: scaricalo dai materiali o segna qui sotto.</p>` : ''}
                 ${att.cronometro ? cronometro(att, v) : ''}
+                ${st ? h`<div class="ta-ora in-scheda">
+                    <small>Passo ${st.i + 1} di ${passi.length}${st.giri ? ` · giro ${st.giri + 1}` : ''}</small><b>${st.passo.testo}</b>
+                    <span class="ta-punti">${passi.map((ps, k) => h`<i class="${k === st.i ? 'qui' : ''} ${((v && v.esiti && v.esiti[ps.id]) || '').slice(-1)}"></i>`)}</span>
+                </div>` : ''}
                 <div class="tasti">
                     <button class="tasto v" data-a="segna" data-id="${att.id}" data-r="V">✓<small>Corretta</small></button>
                     <button class="tasto p" data-a="segna" data-id="${att.id}" data-r="P">P<small>${att.nomeP || (tipo === 'timedelay' ? 'Promptata' : 'Con aiuto')}</small></button>
@@ -282,6 +386,8 @@
                 </div>
                 <div class="sotto-tasti">
                     <div class="sequenza" aria-label="Sequenza delle risposte">${(v ? v.sequenza : '').split('').map((r) => h`<i class="${r}"></i>`)}</div>
+                    ${st ? h`<button class="ib" data-a="salta-passo" data-id="${att.id}" aria-label="Salta il passo" title="Salta il passo">${icona('forward')}</button>
+                    <button class="ib" data-a="apri-ta" data-id="${att.id}" aria-label="Lista dei passi" title="Lista dei passi">${icona('list-ol')}</button>` : ''}
                     <button class="ib" data-a="annulla" data-id="${att.id}" aria-label="Annulla l'ultima" title="Annulla l'ultima">${icona('rotate-left')}</button>
                     <button class="ib" data-a="nota-voce" data-id="${att.id}" aria-label="Nota e opzioni" title="Nota e opzioni">${icona('pen')}</button>
                 </div>
@@ -360,10 +466,33 @@
                 ${perArea.map((g) => h`${perArea.length > 1 ? h`<h3>${g.area}</h3>` : ''}${g.att.map((a) => schedaAttivita(p, a))}`)}
                 <button class="bt largo fantasma" style="margin-top:12px" data-a="aggiungi-oggi">${icona('plus')} Aggiungi un'attività per questa seduta</button>
             </main>
+            ${tastoAnnulla(p)}
+            ${pannelloTA(p)}
             <div class="piede"><div class="piede-dentro">
                 <div class="riassunto" id="tice-riassunto">${grezzo(testoPiede(p))}</div>
                 <button class="bt primario" data-a="termina">${icona('check')} Salva seduta</button>
             </div></div>`;
+    }
+    function annullaUltima(p, id) {
+        const b = bozza(p.id), v = b.voci[id];
+        if (!v || !v.sequenza) return;
+        const u = v.sequenza.slice(-1);
+        v.sequenza = v.sequenza.slice(0, -1);
+        v[u.toLowerCase()] = Math.max(0, v[u.toLowerCase()] - 1);
+        // task analysis: si torna sul passo annullato, da risegnare
+        if (v.ordine && v.ordine.length) {
+            const ps = v.ordine.pop(), giri = (v.giriPrima || []).pop();
+            if (v.esiti && v.esiti[ps]) v.esiti[ps] = v.esiti[ps].slice(0, -1);
+            const att = attivitaDi(p, id), passi = att ? passiVoce(att, v) : [];
+            const k = passi.findIndex((x) => x.id === ps);
+            if (k >= 0) v.passo = k;
+            if (giri != null) v.giri = giri;
+        }
+        const ul = ultimeDi(b), k = ul.lastIndexOf(id);
+        if (k >= 0) ul.splice(k, 1);
+        if (navigator.vibrate) navigator.vibrate([6, 40, 6]);
+        salvaBozza();
+        aggiornaScheda(p, id);
     }
     function aggiornaScheda(p, id) {
         const el = radice().querySelector(`[data-att="${CSS.escape(id)}"]`);
@@ -371,6 +500,7 @@
         if (el && att) el.outerHTML = String(schedaAttivita(p, att));
         const r = document.getElementById('tice-riassunto');
         if (r) r.innerHTML = testoPiede(p);
+        aggiornaSovra(p);
     }
 
     // ---------- programma ----------
@@ -389,7 +519,7 @@
         const aperti = t.filter((tg) => !CHIUSI.includes(tg.stato));
         const riga = (tg) => h`<li class="${CHIUSI.includes(tg.stato) ? 'chiuso' : ''}">
                     <span class="punto ${tg.stato}"></span>
-                    <span class="tt">${tg.testo}${tg.suggerimento ? h` <span class="sotto" title="Ha dei suggerimenti">${icona('lightbulb')}</span>` : ''}${celerazioneTarget(p, att, tg)}<small>${P.STATI_TARGET[tg.stato] || tg.stato}${tg.fine ? ' il ' + formatoData(tg.fine) : ''}${ultimo(tg)}</small></span>
+                    <span class="tt">${P.passiDi(tg).length ? h`${icona('list-ol')} ` : ''}${tg.testo}${P.passiDi(tg).length ? h` <span class="sotto piccolo">· ${P.passiDi(tg).length} passi</span>` : ''}${tg.suggerimento ? h` <span class="sotto" title="Ha dei suggerimenti">${icona('lightbulb')}</span>` : ''}${celerazioneTarget(p, att, tg)}<small>${P.STATI_TARGET[tg.stato] || tg.stato}${tg.fine ? ' il ' + formatoData(tg.fine) : ''}${ultimo(tg)}</small></span>
                     ${modifica || tg.setId ? h`<button class="ib" data-a="menu-target" data-id="${att.id}" data-t="${tg.id}" aria-label="Opzioni del target">${icona('ellipsis')}</button>` : ''}
                 </li>`;
         return h`<div class="scheda" data-prog="${att.id}">
@@ -609,6 +739,17 @@
             const r = b.dataset.r;
             v[r.toLowerCase()] += 1;
             v.sequenza += r;
+            ultimeDi(bozza(p.id)).push(att.id);
+            // task analysis: si segna il passo corrente e si passa al successivo
+            const passi = passiVoce(att, v);
+            if (passi.length) {
+                const st = statoTA(v, passi);
+                v.esiti = v.esiti || {};
+                v.esiti[st.passo.id] = (v.esiti[st.passo.id] || '') + r;
+                (v.ordine || (v.ordine = [])).push(st.passo.id);
+                (v.giriPrima || (v.giriPrima = [])).push(st.giri);
+                if (st.i + 1 >= passi.length) { v.passo = 0; v.giri = st.giri + 1; } else v.passo = st.i + 1;
+            }
             // fluency: il cronometro parte da solo alla prima risposta
             if (att.cronometro && !v.tempo) v.tempo = { ms: 0, da: Date.now() };
             if (navigator.vibrate) navigator.vibrate(r === 'V' ? 8 : 18);
@@ -632,16 +773,39 @@
             const t = v && v.targetId ? att.target.find((x) => x.id === v.targetId) : (P.targetCorrente(att) || {}).target;
             if (t) lancia(p, att, t);
         },
-        annulla: (b) => {
+        annulla: (b) => annullaUltima(paz(T.pid), b.dataset.id),
+        'annulla-ultima': () => {
             const p = paz(T.pid);
-            const v = bozza(p.id).voci[b.dataset.id];
-            if (!v || !v.sequenza) return;
-            const u = v.sequenza.slice(-1);
-            v.sequenza = v.sequenza.slice(0, -1);
-            v[u.toLowerCase()] = Math.max(0, v[u.toLowerCase()] - 1);
-            salvaBozza();
-            aggiornaScheda(p, b.dataset.id);
+            const u = ultimeDi(bozza(p.id));
+            // la più recente ancora annullabile (un'attività tolta non conta)
+            while (u.length) {
+                const id = u[u.length - 1], v = bozza(p.id).voci[id];
+                if (v && v.sequenza) { annullaUltima(p, id); return; }
+                u.pop();
+            }
         },
+        'salta-passo': (b) => {
+            const p = paz(T.pid);
+            const att = attivitaDi(p, b.dataset.id);
+            const v = voce(p, att), passi = passiVoce(att, v);
+            if (!passi.length) return;
+            const st = statoTA(v, passi);
+            if (st.i + 1 >= passi.length) { v.passo = 0; v.giri = st.giri + 1; } else v.passo = st.i + 1;
+            salvaBozza();
+            aggiornaScheda(p, att.id);
+        },
+        'vai-passo': (b) => {
+            const p = paz(T.pid);
+            const att = attivitaDi(p, b.dataset.id);
+            const v = voce(p, att);
+            v.passo = +b.dataset.k || 0;
+            salvaBozza();
+            aggiornaScheda(p, att.id);
+        },
+        'apri-ta': (b) => { T.ta = { pid: T.pid, attId: b.dataset.id, nascosta: false, anima: true }; aggiornaSovra(paz(T.pid)); },
+        'chiudi-ta': () => { T.ta = null; aggiornaSovra(paz(T.pid)); },
+        'nascondi-ta': () => { if (T.ta) T.ta.nascosta = true; aggiornaSovra(paz(T.pid)); },
+        'mostra-ta': () => { if (T.ta) { T.ta.nascosta = false; T.ta.anima = true; } aggiornaSovra(paz(T.pid)); },
         'nota-voce': async (b) => {
             const p = paz(T.pid);
             const att = attivitaDi(p, b.dataset.id);
@@ -864,6 +1028,7 @@
                     ${t.stato === 'attivo' || t.stato === 'pianificato' ? h`<button class="opzione" data-foglio="repertorio">${icona('star')}<span class="corpo">Già in repertorio</span></button>` : ''}
                     ${t.setId ? h`<button class="opzione" data-foglio="gioca">${icona('play')}<span class="corpo">Somministra con l'app<small>${etichettaModo(P.modoTarget(att, t))} · set ${t.testo}</small></span></button>`
                         : h`<button class="opzione" data-foglio="testo">${icona('pen')}<span class="corpo">Modifica il testo</span></button>`}
+                    <button class="opzione" data-foglio="passi">${icona('list-ol')}<span class="corpo">${P.passiDi(t).length ? 'Passi della task analysis' : 'Trasforma in task analysis'}<small>${P.passiDi(t).length ? P.passiDi(t).length + ' passi: modifica, aggiungi, riordina' : 'Un passo alla volta in seduta'}</small></span></button>
                     <button class="opzione" data-foglio="suggerimento">${icona('lightbulb')}<span class="corpo">Suggerimenti per questo target<small>${t.suggerimento ? 'Modifica' : 'Note su come somministrarlo, visibili in seduta'}</small></span></button>
                     <button class="opzione" data-foglio="su">${icona('arrow-up')}<span class="corpo">Sposta prima</span></button>
                     <button class="opzione" data-foglio="giu">${icona('arrow-down')}<span class="corpo">Sposta dopo</span></button>
@@ -885,6 +1050,17 @@
                     <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`);
                 if (!ns) return;
                 t.suggerimento = String(ns.s || '').trim();
+                t.modificato = att.modificato = new Date().toISOString();
+            }
+            else if (r === 'passi') {
+                const ora = P.passiDi(t);
+                const np = await foglio(h`<form><h2>Passi · ${t.testo}</h2>
+                    <label class="campo"><span>Uno per riga, nell'ordine in cui si fanno</span><textarea name="p" rows="9" autofocus placeholder="Apre il rubinetto&#10;Mette le mani sotto l'acqua">${ora.map((x) => x.testo).join('\n')}</textarea></label>
+                    <p class="sotto piccolo">I passi con lo stesso testo tengono il loro storico. Svuota per tornare a un target normale.</p>
+                    <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`);
+                if (!np) return;
+                const nuovi = P.nuoviPassi(String(np.p || '').split('\n'), ora);
+                if (nuovi.length) t.passi = nuovi; else delete t.passi;
                 t.modificato = att.modificato = new Date().toISOString();
             }
             else if (r === 'testo') {
@@ -923,9 +1099,11 @@
         return ((typeof state !== 'undefined' && state.savedSets) || []).filter((s) => (s.modes || []).includes('quaderno') && !(s.modes || []).includes('quaderno_task'));
     }
     const etichettaModo = (m) => (typeof getModeLabel === 'function' ? getModeLabel(m) : m);
+    const listeTA = () => ((typeof state !== 'undefined' && state.savedSets) || []).filter((s) => (s.modes || []).includes('quaderno_task'));
     function moduloTarget(att) {
         const sets = setArchivio();
         const liste = listeQuaderno();
+        const ta = listeTA();
         const modi = [...new Set(sets.flatMap((x) => x.modes || []))].filter((m) => !MODI_ESCLUSI.includes(m));
         const modoPred = att.mode || (modi.includes('tact') ? 'tact' : modi[0]);
         return foglio(h`<form><h2>Nuovi target · ${att.nome}</h2>
@@ -939,13 +1117,20 @@
                 </div>
                 <label class="campo" style="margin-top:8px"><span>Con il gioco</span><select name="modo">
                     ${modi.map((m) => h`<option value="${m}" ${m === modoPred ? grezzo('selected') : ''}>${etichettaModo(m)}</option>`)}</select></label>` : ''}
+            <details class="ta-nuova" ${ta.length ? '' : grezzo('open')}><summary><b>${icona('list-ol')} Task analysis</b> <span class="sotto piccolo">un target fatto di passi, segnati uno alla volta</span></summary>
+                <label class="campo"><span>Nome</span><input name="ta_nome" placeholder="es. Lavarsi le mani" autocomplete="off"></label>
+                <label class="campo"><span>Passi, uno per riga, nell'ordine</span><textarea name="ta_passi" rows="5" placeholder="Apre il rubinetto&#10;Mette le mani sotto l'acqua&#10;Prende il sapone"></textarea></label>
+                ${ta.length ? h`<label class="campo"><span>Oppure da una task analysis dell'archivio</span><select name="ta_lista"><option value="">—</option>
+                    ${ta.map((x) => h`<option value="${x.id}">${x.name} (${(x.items || []).length} passi)</option>`)}</select></label>` : ''}
+            </details>
             ${liste.length ? h`<label class="campo"><span>Da una lista del Quaderno</span><select name="lista"><option value="">—</option>
                 ${liste.map((x) => h`<option value="${x.id}">${x.name} (${(x.items || []).length})</option>`)}</select></label>` : ''}
             <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Aggiungi</button></div></form>`,
         {
             invia: (f) => {
                 const fd = new FormData(f);
-                return { t: fd.get('t') || '', set: fd.getAll('s'), modo: fd.get('modo') || '', lista: fd.get('lista') || '' };
+                return { t: fd.get('t') || '', set: fd.getAll('s'), modo: fd.get('modo') || '', lista: fd.get('lista') || '',
+                    taNome: fd.get('ta_nome') || '', taPassi: fd.get('ta_passi') || '', taLista: fd.get('ta_lista') || '' };
             },
             dopo: (f) => {
                 const filtro = f.querySelector('[data-filtro-set]');
@@ -967,6 +1152,13 @@
             P.aggiungiTarget(att, { testo: x.name, setId: x.id, mode: modo }, true);
             if (!att.mode && modo) att.mode = modo;
         });
+        const passiScritti = String(r.taPassi || '').split('\n').map((x) => x.trim()).filter(Boolean);
+        if (passiScritti.length) P.aggiungiTarget(att, { testo: String(r.taNome || '').trim() || 'Task analysis', passi: passiScritti }, true);
+        if (r.taLista) {
+            const l = listeTA().find((y) => String(y.id) === String(r.taLista));
+            const passi = ((l && l.items) || []).map((it) => String(it.name || it.label || '').trim()).filter(Boolean);
+            if (passi.length) P.aggiungiTarget(att, { testo: (passiScritti.length ? '' : String(r.taNome || '').trim()) || l.name, passi }, true);
+        }
         if (r.lista) {
             const l = listeQuaderno().find((y) => y.id === r.lista);
             ((l && l.items) || []).forEach((it) => {
