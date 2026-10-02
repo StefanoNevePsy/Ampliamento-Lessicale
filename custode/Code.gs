@@ -46,15 +46,25 @@ function doGet() {
   })).setMimeType(ContentService.MimeType.JSON);
 }
 
+// Chi ospita il custode, sempre admin. Lo si legge da Google una volta e lo si
+// ricorda nelle proprieta' dello script: se Google per un attimo non lo dice,
+// il proprietario non viene scambiato per uno sconosciuto.
+function proprietario_() {
+  var p = PROP.getProperty('PROPRIETARIO');
+  if (p) return String(p).trim().toLowerCase();
+  var e = '';
+  try { e = String(Session.getEffectiveUser().getEmail() || '').trim().toLowerCase(); } catch (x) { e = ''; }
+  if (e) { try { PROP.setProperty('PROPRIETARIO', e); } catch (x) { /* si riprova la prossima volta */ } }
+  return e;
+}
+
 var _custode = null;
 function custode_() {
   if (_custode) return _custode;
   _custode = QT.creaCustode({
     archivio: archivioDrive_(),
     verificaToken: verificaToken_,
-    proprietario: function () {
-      return PROP.getProperty('PROPRIETARIO') || Session.getEffectiveUser().getEmail();
-    },
+    proprietario: proprietario_,
     ora: function () { return new Date().toISOString(); },
     sha256Hex: function (b64) { return hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, Utilities.base64Decode(b64))); },
     // Risposte alle scritture gia' fatte, per i reinvii dell'app (10 minuti)
@@ -267,7 +277,7 @@ function configura() {
       dir = it.hasNext() ? it.next() : dir.createFolder(nome);
     });
   });
-  var proprietario = PROP.getProperty('PROPRIETARIO') || Session.getEffectiveUser().getEmail();
+  var proprietario = proprietario_();
   Logger.log('Cartella radice: ' + radice.getName());
   Logger.log('Proprietario (sempre admin): ' + proprietario);
   Logger.log('Client ID: ' + clientId);

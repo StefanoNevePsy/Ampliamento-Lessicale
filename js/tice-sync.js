@@ -448,12 +448,32 @@
     function gestisciErrore(e) {
         console.warn('sincronizzazione', e);
         if (e && e.accesso) { S.errore = e.message; S.fase = 'fuori'; }
-        else if (e && e.custode && ['non-autorizzato', 'disattivato', 'scaduto'].includes(e.codice)) {
-            // Accesso tolto o scaduto: i dati del centro non restano su questo dispositivo
+        else if (e && e.custode && NEGATI.includes(e.codice)) {
             S.errore = null; S.fase = 'fuori'; S.negato = e.message;
-            cancellaDatiCentro().then(() => cambiato('pazienti')).catch((x) => console.error(x));
+            confermaNegato(e.codice);
         }
         else S.errore = (e && e.message) || String(e);
+    }
+    // Accesso tolto o scaduto: i dati del centro non restano su questo
+    // dispositivo. Ma una sola risposta non basta: si richiede al custode chi
+    // sei e si cancella solo se lo conferma; altrimenti (era un intoppo) si
+    // riparte da soli. Un nuovo accesso aspetta che la cancellazione finisca.
+    const NEGATI = ['non-autorizzato', 'disattivato', 'scaduto'];
+    let verifica = null, pulizia = null;
+    function confermaNegato(codice) {
+        if (verifica) return verifica;
+        verifica = (async () => {
+            await attendi(2500);
+            let ancora = false;
+            try { await chiama('io'); } catch (e) { ancora = !!(e && e.custode && NEGATI.includes(e.codice)); if (!ancora) throw e; }
+            if (ancora) {
+                pulizia = cancellaDatiCentro().finally(() => { pulizia = null; });
+                await pulizia;
+                S.fase = 'fuori';
+                cambiato('pazienti'); cambiato('stato');
+            } else await preparaCentro();
+        })().catch((e) => console.warn('verifica dell\'accesso', codice, e)).finally(() => { verifica = null; });
+        return verifica;
     }
     async function cancellaDatiCentro() {
         for (const r of await tuttiRec()) { await togliLocale(r.id); await togliRec(r.id); }
@@ -489,6 +509,8 @@
     }
     function aggiornaFase() {
         S.chiave = S.cfg ? S.chiavi[S.cfg.kid] || null : null;
+        // senza sapere chi sei non si entra
+        if (!S.io) { S.fase = 'fuori'; return; }
         S.fase = S.chiave ? 'pronto' : (eAdmin() ? 'chiave' : 'attesa');
     }
     /** Gli admin consegnano la chiave ai dispositivi delle persone abilitate che la aspettano. */
@@ -512,6 +534,7 @@
 
     // ---------- avvio, accesso, chiave ----------
     async function preparaCentro(senzaSincronizzare) {
+        if (pulizia) await pulizia.catch(() => {});
         S.io = await chiama('io');
         await scriviMeta('io', S.io);
         S.cfg = S.io.cifratura ? await chiama('cifratura.leggi') : null;

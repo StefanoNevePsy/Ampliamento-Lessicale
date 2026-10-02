@@ -92,13 +92,15 @@ function tokeninfo(token) {
 let chiamateTokeninfo = 0;
 
 const cacheDati = {};
+let emailSessione = PROPRIETARIO;
+const proprieta = { CARTELLA_RADICE: radice._id, GOOGLE_CLIENT_ID: CLIENT_ID, GOOGLE_CLIENT_ID_DESKTOP: CLIENT_ID_DESKTOP };
 const contesto = {
   console,
   DriveApp: {
     getFolderById: (id) => { const n = tutti[id]; if (!n || n._tipo !== 'cartella') throw new Error('non trovato'); return n; },
     getFileById: (id) => { const n = tutti[id]; if (!n || n._tipo !== 'file') throw new Error('non trovato'); return n; },
   },
-  PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => ({ CARTELLA_RADICE: radice._id, GOOGLE_CLIENT_ID: CLIENT_ID, GOOGLE_CLIENT_ID_DESKTOP: CLIENT_ID_DESKTOP })[k] || null }) },
+  PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => proprieta[k] || null, setProperty: (k, v) => { proprieta[k] = v; } }) },
   CacheService: { getScriptCache: () => ({
     get: (k) => (k in cacheDati ? cacheDati[k] : null),
     put: (k, v) => { cacheDati[k] = v; },
@@ -122,7 +124,7 @@ const contesto = {
     MimeType: { JSON: 'application/json' },
     createTextOutput: (t) => ({ _t: t, setMimeType() { return this; }, getContent() { return this._t; } }),
   },
-  Session: { getEffectiveUser: () => ({ getEmail: () => PROPRIETARIO }) },
+  Session: { getEffectiveUser: () => ({ getEmail: () => emailSessione }) },
   Logger: { log: () => {} },
 };
 contesto.globalThis = contesto;
@@ -238,6 +240,11 @@ prova('una scrittura rimandata con lo stesso identificativo restituisce la rispo
   const p1 = pubblica(), p2 = pubblica();
   assert.ok(p1.ok && p2.ok, JSON.stringify(p2));
   assert.strictEqual(p2.dati.versione, 1);
+});
+prova('se Google per un attimo non dice chi e\' il proprietario, resta admin', () => {
+  assert.strictEqual(proprieta.PROPRIETARIO, PROPRIETARIO, 'ricordato nelle proprieta\' dello script');
+  emailSessione = '';
+  try { assert.strictEqual(ok(post('tok-' + PROPRIETARIO, 'io')).ruolo, 'admin'); } finally { emailSessione = PROPRIETARIO; }
 });
 prova('ricostruisciCache dall\'editor funziona', () => {
   contesto.ricostruisciCache();
