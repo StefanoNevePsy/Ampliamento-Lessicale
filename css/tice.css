@@ -508,6 +508,9 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 .tice-foglio .scelte-stampa { display: grid; gap: 2px; }
 .tice-foglio .scelte-stampa > label { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; }
 .tice-foglio .scelte-stampa > label input { flex: none; }
+.tice-foglio .riga-stampa { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 2px 0; }
+.tice-foglio .riga-stampa .spunta-riga { display: flex; gap: 8px; align-items: baseline; flex: 1; min-width: 0; }
+.tice-foglio .riga-stampa .lu-per { width: 74px; flex: none; text-align: center; }
 @media print {
     @page { size: A4 portrait; margin: 9mm 9mm 10mm; }
     html.tice-stampa-in-corso body > *:not(#tice-stampa) { display: none !important; }
@@ -556,6 +559,7 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 #tice-stampa .st-legenda .st-c.demo { display: inline-block; width: 4.5mm; height: 3.4mm; --c: #2471a3; --t: rgba(36,113,163,.16); }
 #tice-stampa .st-tot { width: 16mm; text-align: center; font-size: 8pt; }
 #tice-stampa .st-tot b { display: inline-block; width: 5mm; border-bottom: .5pt solid #333; }
+#tice-stampa .st-min { font-size: 6pt; color: #666; margin-top: .4mm; }
 #tice-stampa .st-crono { font-size: 6.5pt; color: #444; margin-top: .5mm; }
 #tice-stampa .st-mant td { height: 6.5mm; }
 #tice-stampa .st-note { margin-top: 3mm; border: .5pt solid #9a9a9a; border-radius: 1.5mm; min-height: 24mm; padding: 1.2mm 2mm; break-inside: avoid; }

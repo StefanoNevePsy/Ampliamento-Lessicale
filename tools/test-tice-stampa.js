@@ -48,6 +48,23 @@ prova('time delay e criterio scritti', () => {
   const t = S.html(pz, { ids: [tact.id] }, dip);
   assert.ok(t.includes('T/D 1″') && t.includes('90% × 2 gg · 10 prove'));
 });
+prova('spazio: solo le previste, righe in più, LU chieste per attività', () => {
+  const sole = S.html(pz, { ids: [tact.id], spazio: 'previste', mantenimento: false }, dip);
+  assert.strictEqual(conta(sole, /<td class="st-c/g), 10);
+  const piu = S.html(pz, { ids: [tact.id], spazio: 'piu2', mantenimento: false }, dip);
+  assert.strictEqual(conta(piu, /<td class="st-c/g), 30);
+  assert.ok(piu.includes('previste 10'), 'il target resta scritto');
+  const cinquanta = S.html(pz, { ids: [perc.id], luPer: { [perc.id]: 50 } }, dip);
+  assert.strictEqual(conta(cinquanta, /<td class="st-c/g), 50);
+});
+prova('riempi il foglio: più righe, prima ai dati in percentuale, senza superare una pagina', () => {
+  const v = S.voci(pz, dip).filter((x) => !x.ta && x.attiva);
+  S.pianificaRighe(v, { colonne: 10, spazio: 'riempi', mantenimento: true, prossimi: true });
+  const per = (n) => v.find((x) => x.att.nome === n).righe;
+  assert.ok(per('TACT') >= 2 && per('POINT') >= 3, 'righe oltre le previste');
+  assert.ok(per('Correlazioni') >= per('TACT'), 'la percentuale ne ha almeno quante le altre');
+  assert.ok(per('Correlazioni') <= 13, 'senza esagerare');
+});
 
 console.log(`\n${passati} test passati, ${falliti.length} falliti`);
 process.exit(falliti.length ? 1 : 0);

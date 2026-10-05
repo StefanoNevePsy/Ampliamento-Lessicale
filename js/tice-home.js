@@ -1102,9 +1102,16 @@
             const r = await foglio(h`<form><h2>Griglie da stampare</h2>
                 <p class="sotto">Fogli A4 per prendere i dati su carta quando serve, con le attività del programma, i target in corso e le prove già marcate. Si ricopiano poi nella presa dati.</p>
                 <div class="campo scelte-stampa"><span>Attività</span>
-                    ${elenco.map((v) => h`<label class="spunta-riga"><input type="checkbox" name="att" value="${v.att.id}" ${v.attiva ? grezzo('checked') : ''}>
-                        <span><b>${v.att.nome}</b> <span class="sotto piccolo">${v.categoria.nome}${v.ta ? ' · task analysis' : v.att.prove ? ' · ' + v.att.prove + ' prove' : ''}${v.attiva ? '' : ' · sospesa'}</span></span></label>`)}
+                    ${elenco.map((v) => h`<div class="riga-stampa"><label class="spunta-riga"><input type="checkbox" name="att" value="${v.att.id}" ${v.attiva ? grezzo('checked') : ''}>
+                        <span><b>${v.att.nome}</b> <span class="sotto piccolo">${v.categoria.nome}${v.ta ? ' · task analysis' : v.att.scala === 'percentuale' ? ' · dato in %' : v.att.prove ? ' · ' + v.att.prove + ' prove' : ''}${v.attiva ? '' : ' · sospesa'}</span></span></label>
+                        ${v.ta ? '' : h`<input class="campo-in lu-per" type="number" name="${'lu_' + v.att.id}" min="1" max="200" inputmode="numeric" placeholder="auto" aria-label="${'LU da prevedere per ' + v.att.nome}" title="LU da prevedere sul foglio (vuoto: in automatico)">`}</div>`)}
+                    ${nLU ? h`<span class="sotto piccolo">Il numero accanto all'attività: quante LU prevedere sul foglio. Vuoto: in automatico, secondo la scelta qui sotto.</span>` : ''}
                 </div>
+                ${nLU ? h`<label class="campo"><span>Spazio per ogni attività</span><select name="spazio" class="campo-in">
+                    <option value="riempi" selected>Riempi il foglio (righe in più, soprattutto ai dati in %)</option>
+                    <option value="piu1">Le prove previste e una riga in più</option>
+                    <option value="piu2">Le prove previste e due righe in più</option>
+                    <option value="previste">Solo le prove previste</option></select></label>` : ''}
                 <div class="campo scelte-stampa"><span>Fogli</span>
                     ${nLU ? h`<label class="spunta-riga"><input type="checkbox" name="lu" checked> <span>Presa dati delle learn unit <span class="sotto piccolo">(${nLU} attività su un foglio)</span></span></label>` : ''}
                     ${nTA ? h`<label class="spunta-riga"><input type="checkbox" name="ta" checked> <span>Task analysis <span class="sotto piccolo">(${nTA}, due o tre per foglio)</span></span></label>` : ''}
@@ -1123,7 +1130,9 @@
                     const ids = fd.getAll('att');
                     if (!ids.length) { avviso('Scegli almeno un\'attività.'); return undefined; }
                     const d = fd.get('data');
-                    return { ids, lu: fd.has('lu'), ta: fd.has('ta'), colonne: +fd.get('colonne') || 10, colonneTA: +fd.get('colonneTA') || 15,
+                    const luPer = {};
+                    ids.forEach((id) => { const n = parseInt(fd.get('lu_' + id), 10); if (n > 0) luPer[id] = Math.min(n, 200); });
+                    return { ids, luPer, spazio: fd.get('spazio') || 'riempi', lu: fd.has('lu'), ta: fd.has('ta'), colonne: +fd.get('colonne') || 10, colonneTA: +fd.get('colonneTA') || 15,
                         prossimi: fd.has('prossimi'), mantenimento: fd.has('mantenimento'), data: d ? d.split('-').reverse().join('/') : '' };
                 }
             });

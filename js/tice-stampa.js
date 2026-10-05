@@ -98,11 +98,12 @@
     var a = v.att, col = opz.colonne;
     var perc = a.scala === 'percentuale';
     var marcate = perc ? 0 : (+a.prove || 0);
-    var righe = Math.max(1, Math.ceil(marcate / col));
+    var base = Math.max(1, Math.ceil(marcate / col));
+    var righe = Math.max(base, v.righe || 0);
     var stile = ' style="--c:' + colore + ';--t:' + tinta(colore, 0.16) + '"';
     var totale = function (r) {
       if (r < righe - 1) return '<td class="st-tot"></td>';
-      var testo = perc ? '<b></b> %' : '<b></b> / ' + (marcate || '<b></b>');
+      var testo = perc ? '<b></b> %' : righe > base || !marcate ? '<b></b> / <b></b>' + (marcate ? '<div class="st-min">previste ' + marcate + '</div>' : '') : '<b></b> / ' + marcate;
       return '<td class="st-tot">' + testo + (a.cronometro ? '<div class="st-crono"><i class="fa-solid fa-stopwatch"></i> ____ s</div>' : '') + '</td>';
     };
     var etTarget = function (t, extra) {
@@ -118,7 +119,7 @@
     var html = '<table class="st-att"' + stile + '><tbody>';
     for (var r = 0; r < righe; r++) {
       html += '<tr>' + (r === 0 ? info : '') +
-        (r === 0 ? etTarget(v.corrente, v.mantenimento ? 'mant.' : '') : '<td class="st-target segue">↳ segue</td>') +
+        (r === 0 ? etTarget(v.corrente, v.mantenimento ? 'mant.' : '') : '<td class="st-target segue">' + (r === 1 ? '↳ segue' : '') + '</td>') +
         rigaCaselle(col, marcate, r * col) + totale(r) + '</tr>';
     }
     if (opz.mantenimento && v.ultimoChiuso) {
@@ -173,9 +174,70 @@
       elenco.map(function (v) { return bloccoTA(v, colori[v.att.id], opz, P); }).join('') + '</section>';
   }
 
+  // ---------- quante righe per attività ----------
+  // Misure in mm come nel CSS: servono a riempire il foglio senza sforare.
+  var MM = { pagina: 278, testata: 31, note: 28, cat: 9, riga: 8.5, mant: 6.5, spazio: 1.4, margine: 4 };
+  function righeBase(v, col) {
+    var a = v.att, marcate = a.scala === 'percentuale' ? 0 : (+a.prove || 0);
+    return Math.max(1, Math.ceil(marcate / col));
+  }
+  function altezzaInfo(v, opz) {
+    var a = v.att, h = 2.4 + 4.2 * Math.max(1, Math.ceil(String(a.nome).length / 26)) + 3.8;
+    if (v.modalita && v.modalita.toLowerCase() !== String(a.nome).toLowerCase()) h += 3;
+    if (opz.prossimi && v.prossimo) h += 3.2;
+    return h;
+  }
+  function altezzaBlocco(v, righe, opz) {
+    var mant = opz.mantenimento && v.ultimoChiuso ? MM.mant : 0;
+    return Math.max(righe * MM.riga + mant, altezzaInfo(v, opz)) + MM.spazio;
+  }
+  /**
+   * Righe per ogni attività (v.righe):
+   *   spazio 'previste' → solo le prove previste; 'piu1' / 'piu2' → righe in più;
+   *   'riempi' → le righe libere del foglio (o dell'ultimo foglio) distribuite,
+   *   prima alle attività in percentuale, che a volte arrivano a 40-50 LU.
+   * opz.lu_<id>: LU da prevedere per quell'attività (vince sul resto).
+   */
+  function pianificaRighe(elenco, opz) {
+    var col = opz.colonne, spazio = opz.spazio || 'riempi';
+    var fisse = {};
+    elenco.forEach(function (v) {
+      var base = righeBase(v, col), chieste = +(opz.luPer && opz.luPer[v.att.id]) || 0;
+      if (chieste) { v.righe = Math.max(base, Math.ceil(chieste / col)); fisse[v.att.id] = true; }
+      else v.righe = base + (spazio === 'piu1' ? 1 : spazio === 'piu2' ? 2 : 0);
+    });
+    if (spazio !== 'riempi') return;
+    var categorie = {};
+    elenco.forEach(function (v) { categorie[v.categoria.id] = true; });
+    var usato = function () {
+      return MM.testata + MM.note + Object.keys(categorie).length * MM.cat +
+        elenco.reduce(function (t, v) { return t + altezzaBlocco(v, v.righe, opz); }, 0);
+    };
+    var pagine = Math.max(1, Math.ceil(usato() / (MM.pagina - MM.margine)));
+    var limite = pagine * MM.pagina - pagine * MM.margine;
+    var libere = elenco.filter(function (v) { return !fisse[v.att.id]; })
+      .sort(function (x, y) { return (y.att.scala === 'percentuale') - (x.att.scala === 'percentuale'); });
+    if (!libere.length) return;
+    // al massimo 6 righe (60-90 LU) per attività: oltre si sceglie a mano
+    for (var giro = 0; giro < 6; giro++) {
+      var aggiunte = 0;
+      for (var i = 0; i < libere.length; i++) {
+        var v = libere[i];
+        // le attività in percentuale prendono due righe a giro
+        var passo = v.att.scala === 'percentuale' ? 2 : 1;
+        var prima = v.righe;
+        v.righe += passo;
+        if (usato() > limite) { v.righe = prima; continue; }
+        aggiunte++;
+      }
+      if (!aggiunte) break;
+    }
+  }
+
   /**
    * L'HTML da stampare.
    * opz: { ids: [idAttività], lu: bool, ta: bool, colonne: 10|15, colonneTA: 10|15|20,
+   *        spazio: 'riempi'|'previste'|'piu1'|'piu2', luPer: { idAttività: LU },
    *        mantenimento: bool, prossimi: bool, data: 'gg/mm/aaaa' }
    */
   function html(p, opz, dip) {
@@ -186,11 +248,11 @@
     scelte.forEach(function (v, i) { colori[v.att.id] = PALETTE[i % PALETTE.length]; });
     var out = '';
     var lu = scelte.filter(function (v) { return !v.ta; });
-    if (opz.lu && lu.length) out += foglioLU(p, lu, colori, opz);
+    if (opz.lu && lu.length) { pianificaRighe(lu, opz); out += foglioLU(p, lu, colori, opz); }
     var ta = scelte.filter(function (v) { return v.ta; });
     if (opz.ta && ta.length) out += foglioTA(p, ta, colori, opz, dip.P);
     return out;
   }
 
-  return { PALETTE: PALETTE, ICONE: ICONE, voci: voci, html: html };
+  return { PALETTE: PALETTE, ICONE: ICONE, voci: voci, html: html, pianificaRighe: pianificaRighe };
 });
