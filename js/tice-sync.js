@@ -428,6 +428,7 @@
                 for (const pid of [...S.coda]) await spingi(pid);   // quanto unito in ricezione
                 await scriviMeta('coda', [...S.coda]);
                 if (!(opz && opz.soloCoda)) await consegnaChiavi();
+                if (!(opz && opz.soloCoda)) await leggiModalita();
                 S.errore = null;
                 S.ultimo = new Date().toISOString();
                 return true;
@@ -537,6 +538,7 @@
         if (pulizia) await pulizia.catch(() => {});
         S.io = await chiama('io');
         await scriviMeta('io', S.io);
+        leggiModalita().catch(() => {});
         S.cfg = S.io.cifratura ? await chiama('cifratura.leggi') : null;
         await scriviMeta('cfg', S.cfg);
         S.chiavi = await C.portachiavi();
@@ -557,6 +559,7 @@
         // Senza rete si lavora con quanto già noto: profilo e chiave ricordati
         S.io = await meta('io');
         S.cfg = await meta('cfg');
+        S.modalita = (await meta('modalita')) || null;
         S.chiavi = await C.portachiavi();
         if (S.io && S.io.email === u.email) aggiornaFase(); else S.fase = 'fuori';
         cambiato('stato');
@@ -642,6 +645,26 @@
         return { bambini: elenco.length, saltati };
     }
     const mostraFrase = () => (eAdmin() ? C.frase() : Promise.resolve(null));
+    // Dizionario delle modalità del centro (nomi dei programmi nei quaderni →
+    // modalità e categorie). Un custode non ancora aggiornato non lo conosce:
+    // allora resta quello di serie e lo si dice a chi prova a modificarlo.
+    async function leggiModalita() {
+        try {
+            const d = await chiama('modalita.leggi', {}, { tentativi: 1 });
+            S.modalitaAssenti = false;
+            if (!S.modalita || d.version !== S.modalita.version) { S.modalita = d; await scriviMeta('modalita', d); cambiato('modalita'); }
+        } catch (e) {
+            if (e && e.custode && e.codice === 'richiesta-non-valida') S.modalitaAssenti = true;
+        }
+        return S.modalita;
+    }
+    async function aggiornaModalita(aggiunte) {
+        if (S.modalitaAssenti) throw new ErroreCustode('da-aggiornare', 'Il custode del centro va aggiornato per condividere le modalità.');
+        const d = await chiama('modalita.aggiorna', aggiunte);
+        S.modalita = d; await scriviMeta('modalita', d); cambiato('modalita');
+        return d;
+    }
+
     async function dispositivi() { S.dispositivi = await chiama('dispositivi.elenco'); return S.dispositivi; }
     async function togliDispositivo(id) { await chiama('dispositivo.togli', { id }); return dispositivi(); }
     /** Porta sul Drive del centro un bambino che finora era solo su questo dispositivo. */
@@ -674,7 +697,7 @@
     window.TiceSync = {
         S, Auth, chiama, ErroreRete, ErroreCustode,
         avvia, sincronizza, condividi, esci, creaChiave, inserisciChiave, cambiaChiave, mostraFrase, dispositivi, togliDispositivo,
-        ripristina, versioni, anteprimaVersione, preparaCentro, eAdmin, ruolo: () => (S.io && S.io.ruolo) || null,
+        ripristina, versioni, anteprimaVersione, preparaCentro, eAdmin, leggiModalita, aggiornaModalita, ruolo: () => (S.io && S.io.ruolo) || null,
         attivo: () => !!cfgApp().custodeUrl,
         pronto, condiviso: (pid) => S.condivisi.has(pid), inAttesa: (pid) => S.coda.has(pid),
         puo: (cosa) => !S.io || !S.io.permessi || !!S.io.permessi[cosa],

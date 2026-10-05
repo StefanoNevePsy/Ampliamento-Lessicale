@@ -209,6 +209,7 @@
     };
     if (dati.tdSeconds) att.tdSeconds = +dati.tdSeconds;
     if (dati.mode) att.mode = String(dati.mode);
+    if (dati.modalita) { att.modalita = String(dati.modalita); if (dati.variante) att.variante = String(dati.variante).trim(); }
     programma(p).attivita.push(att);
     if (dati.target) aggiungiTarget(att, dati.target, true);
     return att;

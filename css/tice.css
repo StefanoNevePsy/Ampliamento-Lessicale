@@ -252,6 +252,12 @@ body.tice-aperto #notebook-tab-handle { display: none !important; }
 }
 .tice-foglio textarea { min-height: 88px; resize: vertical; }
 .tice-foglio .riga-campi { display: flex; gap: 10px; }
+/* scelta della modalità (anteprima di import, riordino) */
+.tice .riga-mod { padding: 10px 0; border-top: 1px dashed var(--border-color, rgba(0,0,0,.15)); }
+.tice .riga-mod .riga-campi { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+.tice .riga-mod .riga-campi > .campo { flex: 1 1 160px; min-width: 0; margin: 0; }
+.tice .riga-mod .campo > span { display: block; font-size: .75rem; opacity: .75; }
+.tice .riga-mod select.campo-in, .tice .riga-mod input.campo-in { width: 100%; }
 .tice-foglio .riga-campi > * { flex: 1; min-width: 0; }
 .tice-foglio .scelta { display: flex; gap: 6px; }
 .tice-foglio .scelta label { flex: 1; }

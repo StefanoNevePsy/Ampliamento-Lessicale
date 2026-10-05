@@ -406,6 +406,33 @@ prova('custode occupato: errore riconoscibile, l\'app riprova', () => {
   fs.rmSync(d, { recursive: true, force: true });
 });
 
+// --- dizionario delle modalità ------------------------------------------------
+prova('modalità: all\'inizio il dizionario è vuoto e lo leggono tutti', () => {
+  const d = ok(chiama(TIR, 'modalita.leggi'));
+  assert.strictEqual(d.version, 0);
+  assert.deepStrictEqual(d.sinonimi, {});
+});
+prova('modalità: chi importa aggiunge sinonimi e modalità nuove', () => {
+  const d = ok(chiama(PROPRIETARIO, 'modalita.aggiorna', { sinonimi: { 'emulazione con lego': { modalita: 'imitazione', variante: 'Lego' } }, modalita: [{ id: 'c-sequenze-motorie', nome: 'Sequenze motorie', categoria: 'motricita' }] }));
+  assert.strictEqual(d.version, 1);
+  assert.strictEqual(d.sinonimi['emulazione con lego'].variante, 'Lego');
+  assert.strictEqual(d.modalita[0].nome, 'Sequenze motorie');
+});
+prova('modalità: le aggiunte si sommano, non si cancellano a vicenda', () => {
+  const d = ok(chiama(PROPRIETARIO, 'modalita.aggiorna', { sinonimi: { 'tact intensivo': { modalita: 'tact' } } }));
+  assert.ok(d.sinonimi['emulazione con lego'] && d.sinonimi['tact intensivo']);
+  const t = ok(chiama(PROPRIETARIO, 'modalita.aggiorna', { sinonimi: { 'tact intensivo': null } }));
+  assert.ok(!t.sinonimi['tact intensivo'] && t.sinonimi['emulazione con lego']);
+});
+prova('modalità: le tirocinanti non modificano il dizionario', () => {
+  ko(chiama(TIR, 'modalita.aggiorna', { sinonimi: { x: { modalita: 'tact' } } }), 'vietato');
+});
+prova('modalità: chiavi e identificativi strani sono rifiutati', () => {
+  ko(chiama(PROPRIETARIO, 'modalita.aggiorna', { sinonimi: JSON.parse('{"__proto__":{"modalita":"tact"}}') }), 'richiesta-non-valida');
+  ko(chiama(PROPRIETARIO, 'modalita.aggiorna', { modalita: [{ id: '../x', nome: 'x', categoria: 'altro' }] }), 'richiesta-non-valida');
+  ko(chiama(PROPRIETARIO, 'modalita.aggiorna', { sinonimi: { tact: { modalita: 'Tact!' } } }), 'richiesta-non-valida');
+});
+
 console.log(`\n${passati} test passati, ${fallimenti.length} falliti`);
 fs.rmSync(dir, { recursive: true, force: true });
 process.exit(fallimenti.length ? 1 : 0);

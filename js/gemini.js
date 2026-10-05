@@ -175,8 +175,12 @@ const APP_THEMES = [
 ];
 
 function getCurrentTheme() {
-    // Edizione Centro TICE: senza una scelta salvata si parte dal tema del centro
-    return localStorage.getItem('app_theme') || 'tice';
+    // Edizione Centro TICE: senza una scelta fatta a mano si usa il Taccuino,
+    // chiaro o scuro come il dispositivo. "tice" salvato senza scelta è il
+    // vecchio predefinito (lo scriveva l'avvio), non una preferenza.
+    const t = localStorage.getItem('app_theme');
+    if (!localStorage.getItem('app_theme_scelto') && (!t || t === 'tice')) return 'taccuino-auto';
+    return t || 'taccuino-auto';
 }
 
 // "Taccuino automatico": carta di giorno, inchiostro quando il dispositivo è in modalità scura
@@ -220,6 +224,7 @@ function renderThemePicker() {
 }
 
 window.selectTheme = (themeId) => {
+    localStorage.setItem('app_theme_scelto', '1');
     applyTheme(themeId);
     renderThemePicker();
     // Re-render mode dropdown with new theme colors

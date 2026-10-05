@@ -816,11 +816,15 @@
             'scarica-tutti': scaricaTutti,
             'pubblica-set': pubblicaSet
         },
-        aggancio: { chip, banner, pillola, opzioniBambino, sceltaBambino, opzioniMenu, sceltaMenu, nuovoBambino, puoProgrammi, dopo, limitato: tirocinante }
+        aggancio: { chip, banner, pillola, opzioniBambino, sceltaBambino, opzioniMenu, sceltaMenu, nuovoBambino, puoProgrammi, dopo, limitato: tirocinante,
+            // modalità e sinonimi: quelli del centro, uguali per tutti
+            dizionario: () => (Y.attivo() && S.io ? S.modalita || {} : null),
+            salvaDizionario: (aggiunte) => Y.aggiornaModalita(aggiunte) }
     });
 
     Y.alCambio((cosa) => {
         if (cosa === 'stato') aggiornaRuolo();
+        if (cosa === 'modalita' && ['programma', 'import'].includes(TiceHome.attuale().vista)) TiceHome.ridisegna();
         if (cosa === 'stato' || cosa === 'coda' || cosa === 'pazienti' || String(cosa).indexOf('paziente:') === 0) {
             if (cosa === 'pazienti' && typeof populateGlobalPatientSelect === 'function') populateGlobalPatientSelect();
             // non si ridisegna sotto le dita di chi sta segnando: solo il chip e gli elenchi

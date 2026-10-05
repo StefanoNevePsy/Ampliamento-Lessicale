@@ -444,13 +444,7 @@
         const unica = lista.length === 1 && lista[0];
         const unicaGioco = unica && !unica.temporanea && schermoGrande() && ((P.targetCorrente(unica) || {}).target || {}).setId;
         if (unica && !unicaGioco && T.aperte[unica.id] === undefined) T.aperte[unica.id] = true;
-        const perArea = [];
-        lista.forEach((a) => {
-            const area = a.temporanea ? 'Aggiunte per oggi' : (a.area || 'Altre attività');
-            let g = perArea.find((x) => x.area === area);
-            if (!g) perArea.push(g = { area, att: [] });
-            g.att.push(a);
-        });
+        const perArea = perCategoria(lista);
         const nonOggi = b.data !== oggi();
         return h`${barra({ indietro: 'vai-bambini', titolo: p.name,
                 sotto: { testo: (nonOggi ? 'Seduta del ' : 'Oggi, ') + formatoData(b.data, true), azione: 'data' },
@@ -503,6 +497,100 @@
         aggiornaSovra(p);
     }
 
+    // ---------- modalità e categorie (js/tice-modalita.js) ----------
+    // Nel centro il dizionario è condiviso dal custode; sul dispositivo da solo resta qui.
+    const M = window.TiceModalita;
+    function dizionario() {
+        const d = EST.dizionario && EST.dizionario();
+        if (d) return d;
+        try { return JSON.parse(localStorage.getItem('tice_modalita') || 'null') || {}; } catch (e) { return {}; }
+    }
+    async function salvaDizionario(aggiunte) {
+        if (!aggiunte || (!Object.keys(aggiunte.sinonimi || {}).length && !(aggiunte.modalita || []).length)) return;
+        if (EST.dizionario && EST.dizionario()) return EST.salvaDizionario(aggiunte);
+        localStorage.setItem('tice_modalita', JSON.stringify(M.unisci(dizionario(), aggiunte)));
+    }
+    // Le attività raggruppate per categoria, nell'ordine delle categorie
+    function perCategoria(lista) {
+        const diz = dizionario();
+        const ordine = M.elenco(diz).categorie.map((c) => c.id);
+        const gruppi = [];
+        lista.forEach((a) => {
+            const c = a.temporanea ? { id: '~oggi', nome: 'Aggiunte per oggi' }
+                : M.categoriaDi(a, diz) || (a.area ? { id: '~' + a.area, nome: a.area } : { id: '~altre', nome: 'Altre attività' });
+            let g = gruppi.find((x) => x.id === c.id);
+            if (!g) gruppi.push(g = { id: c.id, area: c.nome, att: [] });
+            g.att.push(a);
+        });
+        const pos = (g) => { const i = ordine.indexOf(g.id); return i >= 0 ? i : g.id === '~oggi' ? 999 : 500; };
+        return gruppi.sort((a, b) => pos(a) - pos(b));
+    }
+    // Stato di una scelta di modalità (anteprima di import o riordino)
+    function statoModalita(att) {
+        const r = M.riconosci(att, dizionario());
+        return Object.assign(r, {
+            nome: att.nome, area: att.area || (att.stato && att.stato !== 'attivo' ? 'terminata' : ''),
+            nuova: r.nuova ? Object.assign({ id: M.nuovoId(r.nuova.nome) }, r.nuova) : null,
+            iniziale: r.certo,
+        });
+    }
+    function sceltaModalita(k) {
+        if (k === 'c') return T.classifica && T.classifica.righe;
+        const it = T.importazioni[+String(k).slice(1)];
+        return it && it.modalita;
+    }
+    function opzioniModalita(scelta) {
+        const E = M.elenco(dizionario());
+        return E.categorie.map((c) => {
+            const ms = E.modalita.filter((m) => m.categoria === c.id);
+            return ms.length ? h`<optgroup label="${c.nome}">${ms.map((m) => h`<option value="${m.id}" ${scelta === m.id ? grezzo('selected') : ''}>${m.nome}</option>`)}</optgroup>` : '';
+        });
+    }
+    function rigaModalita(k, id, st) {
+        const E = M.elenco(dizionario());
+        const da = (c) => grezzo(`data-cambio="${c}" data-k="${esc(k)}" data-att="${esc(id)}"`);
+        const stato = st.ambiguo ? h`<span class="pill arancio">da scegliere</span>`
+            : !st.modalita ? h`<span class="pill arancio">nuova</span>`
+            : !st.certo ? h`<span class="pill arancio">da controllare</span>` : '';
+        return h`<div class="riga-mod">
+            <div><b>${st.nome}</b>${st.area ? h` <span class="sotto piccolo">· ${st.area}</span>` : ''} ${stato}</div>
+            ${st.motivo && !st.certo ? h`<div class="sotto piccolo">${st.motivo}</div>` : ''}
+            <div class="riga-campi">
+                <label class="campo"><span>Modalità</span><select class="campo-in" ${da('mod-scelta')}>
+                    <option value="+" ${!st.modalita ? grezzo('selected') : ''}>Nuova modalità…</option>${opzioniModalita(st.modalita)}</select></label>
+                ${st.modalita ? h`<label class="campo"><span>Variante</span><input class="campo-in" maxlength="80" value="${st.variante || ''}" placeholder="—" ${da('mod-variante')}></label>`
+                    : h`<label class="campo"><span>Nome</span><input class="campo-in" maxlength="60" value="${st.nuova.nome}" ${da('mod-nuova-nome')}></label>
+                    <label class="campo"><span>Categoria</span><select class="campo-in" ${da('mod-nuova-cat')}>${E.categorie.map((c) => h`<option value="${c.id}" ${st.nuova.categoria === c.id ? grezzo('selected') : ''}>${c.nome}</option>`)}</select></label>`}
+            </div>
+        </div>`;
+    }
+    // Le scelte fatte → attività classificate e aggiunte al dizionario.
+    // Due tabelle con lo stesso nome nuovo diventano la stessa modalità.
+    function applicaScelte(coppie) {
+        const diz = dizionario();
+        const nuoveNome = {};
+        M.elenco(diz).modalita.forEach((m) => { nuoveNome[M.normalizza(m.nome)] = m.id; });
+        const scelte = coppie.map(([att, st]) => {
+            let id = st.modalita, nuova = null;
+            if (!id) {
+                const nn = M.normalizza(st.nuova.nome);
+                if (nuoveNome[nn]) id = nuoveNome[nn];
+                else { nuova = { id: st.nuova.id, nome: st.nuova.nome.trim() || 'Nuova modalità', categoria: st.nuova.categoria || 'altro' }; id = nuova.id; nuoveNome[nn] = id; }
+            }
+            att.modalita = id;
+            att.variante = st.modalita ? String(st.variante || '').trim() : '';
+            return { chiave: st.chiave, modalita: id, variante: att.variante, nuova };
+        });
+        const aggiunte = M.aggiunte(scelte, diz);
+        const dopo = M.unisci(diz, aggiunte);
+        coppie.forEach(([att]) => { const c = M.categoriaDi(att, dopo); if (c) att.setCat = c.nome; });
+        return aggiunte;
+    }
+    async function condividiScelte(aggiunte) {
+        try { await salvaDizionario(aggiunte); }
+        catch (e) { avviso('Modalità non condivise con il centro: ' + (e.message || e), 'errore'); }
+    }
+
     // ---------- programma ----------
     const ETICHETTE_STATO = { attivo: 'in corso', sospeso: 'sospesa', terminato: 'terminata' };
     function schedaProgramma(p, att) {
@@ -525,6 +613,7 @@
         return h`<div class="scheda" data-prog="${att.id}">
             <button class="att-testa" ${modifica ? grezzo(`data-a="mod-att" data-id="${esc(att.id)}"`) : ''}>
                 <span class="corpo"><span class="nome">${att.nome}
+                    ${(() => { const e = M.etichetta(att, dizionario()); return e && M.normalizza(e) !== M.normalizza(att.nome) ? h` <span class="pill grigia">${e}</span>` : ''; })()}
                     ${att.sessionType === 'timedelay' ? h` <span class="pill">T/D</span>` : h` <span class="pill grigia">Indip.</span>`}
                     ${att.stato !== 'attivo' ? h` <span class="pill arancio">${ETICHETTE_STATO[att.stato] || att.stato}</span>` : ''}
                     ${att.suggerimenti ? h` <span class="pill grigia" title="${att.suggerimenti}">${icona('lightbulb')} suggerimenti</span>` : ''}</span>
@@ -547,21 +636,34 @@
         const modifica = puoProgrammi(p);
         const attive = tutte.filter((a) => a.stato === 'attivo');
         const altre = tutte.filter((a) => a.stato !== 'attivo');
-        const gruppi = [];
-        attive.forEach((a) => {
-            const area = a.area || 'Altre attività';
-            let g = gruppi.find((x) => x.area === area);
-            if (!g) gruppi.push(g = { area, att: [] });
-            g.att.push(a);
-        });
+        const gruppi = perCategoria(attive);
+        const senza = tutte.filter((a) => !a.modalita || !M.trovaModalita(a.modalita, dizionario()));
         return h`${barra({ indietro: 'vai-seduta', titolo: 'Programma', sotto: { testo: p.name } })}
             <main class="tice-main">
                 <p class="sotto">Le attività in corso compaiono nella presa dati con il loro target. Quando un target raggiunge il criterio l'app propone di passare al successivo.</p>
                 ${modifica ? h`<button class="bt primario largo" data-a="nuova-att">${icona('plus')} Nuova attività</button>`
                     : h`<div class="banda">${icona('lock')}<div>Il programma lo modificano le professioniste: tu registri le sedute.</div></div>`}
+                ${modifica && senza.length ? h`<div class="banda">${icona('layer-group')}<div>${senza.length} ${senza.length === 1 ? 'attività non ha' : 'attività non hanno'} ancora una modalità del centro.
+                    <button class="bt piccolo" style="margin-top:6px" data-a="classifica">Riordina le modalità</button></div></div>` : ''}
                 ${gruppi.map((g) => h`<h3>${g.area}</h3>${g.att.map((a) => schedaProgramma(p, a))}`)}
                 ${!attive.length ? h`<div class="vuoto">Nessuna attività in corso.</div>` : ''}
                 ${altre.length ? h`<details style="margin-top:18px"><summary>Sospese e terminate (${altre.length})</summary>${altre.map((a) => schedaProgramma(p, a))}</details>` : ''}
+            </main>`;
+    }
+
+    // ---------- riordino delle modalità per le attività già nel programma ----------
+    function vistaClassifica() {
+        const p = paz(T.pid);
+        if (!p || !T.classifica || T.classifica.pid !== p.id) { T.vista = 'programma'; return vistaProgramma(); }
+        const tutte = P.programma(p).attivita.filter((a) => T.classifica.righe[a.id]);
+        const vedere = tutte.filter((a) => !T.classifica.righe[a.id].iniziale), ok = tutte.filter((a) => T.classifica.righe[a.id].iniziale);
+        return h`${barra({ indietro: 'vai-programma', titolo: 'Modalità', sotto: { testo: p.name } })}
+            <main class="tice-main">
+                <p class="sotto">Ogni attività va in una modalità del centro, dentro la sua categoria. Le sedute non cambiano: cambiano solo il nome della categoria e il raggruppamento. Le scelte valgono anche per i prossimi quaderni.</p>
+                ${vedere.map((a) => rigaModalita('c', a.id, T.classifica.righe[a.id]))}
+                ${ok.length ? h`<details data-chiusi="mod-c" ${T.chiusiAperti['mod-c'] ? grezzo('open') : ''}><summary class="sotto">${ok.length} riconosciute: ${ok.map((a) => a.nome + ' → ' + M.etichetta({ modalita: T.classifica.righe[a.id].modalita, variante: T.classifica.righe[a.id].variante }, dizionario())).join(' · ')}</summary>
+                    ${ok.map((a) => rigaModalita('c', a.id, T.classifica.righe[a.id]))}</details>` : ''}
+                <button class="bt primario largo" style="margin-top:14px" data-a="salva-classifica">${icona('check')} Salva</button>
             </main>`;
     }
 
@@ -608,6 +710,14 @@
                 <p class="sotto piccolo">Questi fogli non scrivono quante prove c'erano: la differenza con le corrette diventa errori.</p>
                 ${daConf.map(campoProve)}
                 ${daConfTerm.length ? h`<details><summary class="sotto">Attività terminate (${daConfTerm.length})</summary>${daConfTerm.map(campoProve)}</details>` : ''}` : ''}
+            ${(() => {
+                const righe = pk.attivita.map((a) => [a, it.modalita[a.id]]);
+                const vedere = righe.filter(([, st]) => !st.iniziale), ok = righe.filter(([, st]) => st.iniziale);
+                return h`<h3 style="margin-left:0">Modalità</h3>
+                    <p class="sotto piccolo">Ogni tabella del quaderno va in una modalità del centro, dentro la sua categoria: quaderni diversi e giochi dell'app finiscono insieme. Le scelte valgono anche per i prossimi quaderni.</p>
+                    ${vedere.map(([a, st]) => rigaModalita('i' + i, a.id, st))}
+                    ${ok.length ? h`<details data-chiusi="${'mod-i' + i}" ${T.chiusiAperti['mod-i' + i] ? grezzo('open') : ''}><summary class="sotto">${ok.length} riconosciute: ${ok.map(([a, st]) => a.nome + ' → ' + M.etichetta({ modalita: st.modalita, variante: st.variante }, dizionario())).join(' · ')}</summary>${ok.map(([a, st]) => rigaModalita('i' + i, a.id, st))}</details>` : ''}`;
+            })()}
             ${pk.avvisi.length ? h`<details><summary>${pk.avvisi.length} avvisi</summary><ul>${pk.avvisi.map((a) => h`<li>${a}</li>`)}</ul></details>` : ''}
             <button class="bt primario largo" style="margin-top:12px" data-a="importa" data-i="${i}">${icona('file-import')} Importa</button>
         </div>`;
@@ -626,7 +736,7 @@
     }
 
     // ---------- viste e punti di aggancio per le estensioni (tice-centro.js) ----------
-    const VISTE = { bambini: vistaBambini, seduta: vistaSeduta, programma: vistaProgramma, import: vistaImport };
+    const VISTE = { bambini: vistaBambini, seduta: vistaSeduta, programma: vistaProgramma, import: vistaImport, classifica: vistaClassifica };
     const EST = {};
     // Chi può cambiare il programma: sul dispositivo tutti; per i bambini del
     // centro lo decide il ruolo (le tirocinanti registrano, non modificano).
@@ -954,6 +1064,31 @@
         },
 
         // --- programma ---
+        classifica: () => {
+            const p = paz(T.pid);
+            if (!puoProgrammi(p)) return;
+            const righe = {};
+            P.programma(p).attivita.filter((a) => !a.modalita || !M.trovaModalita(a.modalita, dizionario())).forEach((a) => { righe[a.id] = statoModalita(a); });
+            T.classifica = { pid: p.id, righe };
+            vai('classifica', p.id);
+        },
+        'salva-classifica': async () => {
+            const p = paz(T.pid);
+            if (!p || !T.classifica || !puoProgrammi(p)) return;
+            const coppie = P.programma(p).attivita.filter((a) => T.classifica.righe[a.id]).map((a) => [a, T.classifica.righe[a.id]]);
+            const aggiunte = applicaScelte(coppie);
+            const ora = new Date().toISOString();
+            coppie.forEach(([a]) => {
+                a.modificato = ora;
+                (p.history || []).forEach((x) => { if (x.attivitaId === a.id && a.setCat) x.setCat = a.setCat; });
+                delete a.setCat;
+            });
+            await salvaPaziente(p);
+            await condividiScelte(aggiunte);
+            T.classifica = null;
+            avviso('Modalità salvate');
+            vai('programma', p.id);
+        },
         'nuova-att': async () => {
             const p = paz(T.pid);
             if (!puoProgrammi(p)) return;
@@ -961,6 +1096,7 @@
             if (!r) return;
             const righe = String(r.target || '').split('\n').map((x) => x.trim()).filter(Boolean);
             const att = P.nuovaAttivita(p, Object.assign({}, r, { target: null }));
+            modalitaDaModulo(att, r);
             righe.forEach((x, i) => P.aggiungiTarget(att, x, i === 0));
             await salvaPaziente(p);
             if (!righe.length) {
@@ -985,16 +1121,15 @@
             } else if (typeof r === 'string') {
                 att.stato = r;
             } else {
-                const vecchioNome = att.nome;
                 att.nome = r.nome.trim() || att.nome;
-                att.area = r.area.trim();
+                modalitaDaModulo(att, r);
                 att.descrizione = r.descrizione.trim();
                 att.suggerimenti = String(r.suggerimenti || '').trim();
                 att.cronometro = !!r.cronometro;
                 att.sessionType = r.sessionType;
                 att.criterio = { soglia: +r.soglia || 90, sedute: +r.sedute || 2 };
                 att.prove = +r.prove || null;
-                if (vecchioNome !== att.nome) rinominaSedute(p, att);
+                rinominaSedute(p, att);   // nome e categoria delle sedute
             }
             att.modificato = new Date().toISOString();
             await salvaPaziente(p);
@@ -1177,7 +1312,7 @@
             const t = s.targetId ? perTarget[s.targetId] : null;
             if (t && t.setId) return; // le sedute di un set portano il nome del set
             s.setName = P.nomeSet(att, t);
-            s.setCat = att.area || s.setCat;
+            s.setCat = (M.categoriaDi(att, dizionario()) || {}).nome || att.area || s.setCat;
         });
     }
 
@@ -1209,13 +1344,21 @@
         disegna();
     }
 
+    // Modalità scelta nel modulo, o riconosciuta dal nome quando è sicura
+    function modalitaDaModulo(att, r) {
+        if (r.modalita) { att.modalita = r.modalita; att.variante = String(r.variante || '').trim(); return; }
+        const x = M.riconosci(att, dizionario());
+        if (x.modalita && x.certo) { att.modalita = x.modalita; att.variante = String(r.variante || '').trim() || x.variante; }
+        else { delete att.modalita; att.variante = String(r.variante || '').trim(); }
+    }
     function moduloAttivita(p, att) {
-        const aree = [...new Set(P.programma(p).attivita.map((a) => a.area).filter(Boolean))];
         const a = att || { nome: '', area: '', descrizione: '', sessionType: 'independent', criterio: { soglia: 90, sedute: 2 }, prove: null };
         return foglio(h`<form><h2>${att ? 'Modifica attività' : 'Nuova attività'}</h2>
             <label class="campo"><span>Nome</span><input name="nome" required maxlength="120" value="${a.nome}" ${att ? '' : grezzo('autofocus')} placeholder="es. TACT, Imitazione motoria"></label>
-            <label class="campo"><span>Area</span><input name="area" maxlength="60" value="${a.area}" list="tice-aree" placeholder="es. Linguaggio"></label>
-            <datalist id="tice-aree">${aree.map((x) => h`<option value="${x}">`)}</datalist>
+            <div class="riga-campi">
+                <label class="campo"><span>Modalità</span><select name="modalita" class="campo-in"><option value="">Dal nome, in automatico</option>${opzioniModalita(a.modalita)}</select></label>
+                <label class="campo"><span>Variante</span><input name="variante" maxlength="80" value="${a.variante || ''}" placeholder="es. intensivo"></label>
+            </div>
             <label class="campo"><span>Descrizione (facoltativa)</span><input name="descrizione" maxlength="300" value="${a.descrizione || ''}"></label>
             <label class="campo"><span>Suggerimenti per chi somministra (facoltativi)</span><textarea name="suggerimenti" maxlength="3000" rows="3" placeholder="Come presentare lo stimolo, che aiuto dare, quando rinforzare, errori da evitare…">${a.suggerimenti || ''}</textarea>
                 <span class="sotto piccolo">In seduta compaiono sotto l'attività con il tasto «Suggerimenti». Per un solo target: dal target, «Suggerimenti per questo target».</span></label>
@@ -1326,8 +1469,10 @@
         try {
             const soglia = typeof DEFAULT_CRITERION !== 'undefined' ? DEFAULT_CRITERION : 90;
             const nuovo = !paz(p.id);
+            const aggiunte = applicaScelte(it.pk.attivita.map((a) => [a, it.modalita[a.id]]));
             const r = TiceImport.applica(p, it.pk, it.conferme, { sogliaPredefinita: soglia });
             await salvaPaziente(p);
+            await condividiScelte(aggiunte);
             if (nuovo && EST.nuovoBambino) await EST.nuovoBambino(p);
             it.pazienteId = p.id;
             it.nome = p.name;
@@ -1353,7 +1498,9 @@
                 const esistente = pazienti().find((x) => normNome(x.name) === n);
                 const conferme = {};
                 pk.daConfermare.forEach((d) => { conferme[d.attivitaId] = d.proposta; });
-                T.importazioni.push({ file: f.name, pk, nome: pk.nome, pazienteId: esistente ? esistente.id : '', conferme });
+                const modalita = {};
+                pk.attivita.forEach((a) => { modalita[a.id] = statoModalita(a); });
+                T.importazioni.push({ file: f.name, pk, nome: pk.nome, pazienteId: esistente ? esistente.id : '', conferme, modalita });
             } catch (e) {
                 console.error(e);
                 T.importazioni.push({ file: f.name, errore: e.message || String(e) });
@@ -1507,6 +1654,18 @@
             T.mantieniScroll = true; disegna();
         } else if (c === 'imp-nome') {
             T.importazioni[+el.dataset.i].nome = el.value;
+        } else if (c.indexOf('mod-') === 0) {
+            const righe = sceltaModalita(el.dataset.k);
+            const st = righe && righe[el.dataset.att];
+            if (!st) return;
+            if (c === 'mod-scelta' && e.type === 'change') {
+                if (el.value === '+') { st.modalita = null; st.nuova = st.nuova || { id: M.nuovoId(st.nome), nome: st.nome, categoria: st.categoria || 'altro' }; }
+                else { st.modalita = el.value; st.categoria = (M.trovaModalita(el.value, dizionario()) || {}).categoria; }
+                st.certo = true; st.ambiguo = false;
+                T.mantieniScroll = true; disegna();
+            } else if (c === 'mod-variante') st.variante = el.value;
+            else if (c === 'mod-nuova-nome') st.nuova.nome = el.value;
+            else if (c === 'mod-nuova-cat') st.nuova.categoria = el.value;
         } else if (c === 'imp-prove' && e.type === 'change') {
             const it = T.importazioni[+el.dataset.i];
             const n = parseInt(el.value, 10);

@@ -410,7 +410,7 @@
         date: x.data + 'T12:00:00',
         setId: 'tice_' + t.id,
         setName: nomeSet(a, t),
-        setCat: a.area || 'Terminati',
+        setCat: a.setCat || a.area || 'Terminati',
         mode: 'quaderno',
         correct: v,
         prompts: p,

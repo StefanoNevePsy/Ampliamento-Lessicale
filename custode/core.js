@@ -58,6 +58,7 @@ var QT = (function () {
     versioni: function (pid) { return 'Pazienti/' + pid + '/versioni'; },
     versione: function (pid, v) { return 'Pazienti/' + pid + '/versioni/v' + ('00000000' + v).slice(-8) + '.json'; },
     indiceMateriali: 'Materiali/indice.json',
+    modalita: '_config/modalita.json',
     cartellaImmagini: 'Materiali/immagini',
     set: function (id) { return 'Materiali/set/' + id + '.json'; },
     immagine: function (hash, ext) { return 'Materiali/immagini/' + hash + '.' + ext; },
@@ -164,6 +165,7 @@ var QT = (function () {
     'cifratura.imposta': true, 'dispositivo.registra': true, 'dispositivi.abilita': true, 'dispositivo.togli': true,
     'paziente.crea': true, 'paziente.salva': true, 'paziente.archivia': true,
     'materiali.caricaImmagini': true, 'materiali.pubblica': true, 'materiali.elimina': true, 'accessi.salva': true,
+    'modalita.aggiorna': true,
   };
   var RE_RICHIESTA = /^[A-Za-z0-9_-]{8,64}$/;
 
@@ -776,6 +778,68 @@ var QT = (function () {
         indice.aggiornato = amb.ora();
         A.scriviJSON(P.indiceMateriali, indice);
         return true;
+      });
+    };
+
+    // --- Modalità e sinonimi del centro ------------------------------------------
+    // Un solo dizionario per tutti: come si chiamano nei quaderni le modalità
+    // (TACT, Intensive tact, Mandi sì/no...) e in quale categoria stanno. Non
+    // contiene dati dei bambini: nomi di programmi, quindi in chiaro.
+    var RE_MOD = /^[a-z0-9][a-z0-9-]{0,47}$/;
+    function leggiModalita() {
+      return A.leggiJSON(P.modalita) || { schema: SCHEMA, version: 0, categorie: [], modalita: [], sinonimi: {}, modi: {} };
+    }
+    azioni['modalita.leggi'] = function () { return leggiModalita(); };
+
+    // Aggiunte, non sostituzioni: due persone che importano insieme non si
+    // cancellano a vicenda. Un sinonimo o un modo a null si toglie.
+    azioni['modalita.aggiorna'] = function (u, d) {
+      if (!permessi(u).importa && !permessi(u).programmi) throw err('vietato', 'Non puoi modificare le modalità del centro.');
+      var cat = listaV(d.categorie || [], 50, 'categorie').map(function (c) {
+        oggettoV(c, 'categoria');
+        return { id: idV(c.id, RE_MOD, 'categoria.id'), nome: testoV(c.nome, 60, true, 'categoria.nome') };
+      });
+      var mod = listaV(d.modalita || [], 200, 'modalita').map(function (m) {
+        oggettoV(m, 'modalita');
+        return { id: idV(m.id, RE_MOD, 'modalita.id'), nome: testoV(m.nome, 60, true, 'modalita.nome'), categoria: idV(m.categoria, RE_MOD, 'modalita.categoria') };
+      });
+      var sin = {}, modi = {};
+      var sinIn = d.sinonimi ? oggettoV(d.sinonimi, 'sinonimi') : {};
+      var chiaviSin = Object.keys(sinIn);
+      if (chiaviSin.length > 500) throw err('richiesta-non-valida', 'Troppi sinonimi in una volta.');
+      chiaviSin.forEach(function (k) {
+        var kk = idV(k, /^[a-z0-9][a-z0-9 ]{0,79}$/, 'sinonimo');
+        var v = sinIn[k];
+        if (v === null) { sin[kk] = null; return; }
+        oggettoV(v, 'sinonimo');
+        sin[kk] = { modalita: idV(v.modalita, RE_MOD, 'sinonimo.modalita') };
+        if (v.variante) sin[kk].variante = testoV(v.variante, 80, false, 'sinonimo.variante');
+      });
+      var modiIn = d.modi ? oggettoV(d.modi, 'modi') : {};
+      Object.keys(modiIn).forEach(function (k) {
+        idV(k, /^[a-z0-9_]{1,40}$/, 'modo');
+        modi[k] = modiIn[k] === null ? null : idV(modiIn[k], RE_MOD, 'modi.modalita');
+      });
+      return conLock(function () {
+        var x = leggiModalita();
+        x.categorie = x.categorie || []; x.modalita = x.modalita || []; x.sinonimi = x.sinonimi || {}; x.modi = x.modi || {};
+        cat.forEach(function (c) {
+          var i = -1; x.categorie.forEach(function (y, k) { if (y.id === c.id) i = k; });
+          if (i >= 0) x.categorie[i] = c; else x.categorie.push(c);
+        });
+        mod.forEach(function (m) {
+          var i = -1; x.modalita.forEach(function (y, k) { if (y.id === m.id) i = k; });
+          if (i >= 0) x.modalita[i] = m; else x.modalita.push(m);
+        });
+        Object.keys(sin).forEach(function (k) { if (sin[k] === null) delete x.sinonimi[k]; else x.sinonimi[k] = sin[k]; });
+        Object.keys(modi).forEach(function (k) { if (modi[k] === null) delete x.modi[k]; else x.modi[k] = modi[k]; });
+        if (Object.keys(x.sinonimi).length > 3000 || x.modalita.length > 500) throw err('richiesta-non-valida', 'Il dizionario delle modalità è troppo grande.');
+        x.schema = SCHEMA;
+        x.version = (x.version || 0) + 1;
+        x.aggiornato = amb.ora();
+        x.aggiornatoDa = u.email;
+        A.scriviJSON(P.modalita, x);
+        return x;
       });
     };
 
