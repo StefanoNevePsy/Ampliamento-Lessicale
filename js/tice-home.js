@@ -641,6 +641,7 @@
         return h`${barra({ indietro: 'vai-seduta', titolo: 'Programma', sotto: { testo: p.name } })}
             <main class="tice-main">
                 <p class="sotto">Le attività in corso compaiono nella presa dati con il loro target. Quando un target raggiunge il criterio l'app propone di passare al successivo.</p>
+                <button class="bt largo fantasma" data-a="stampa-griglie" style="margin-bottom:8px">${icona('print')} Stampa le griglie per la presa dati su carta</button>
                 ${modifica ? h`<button class="bt primario largo" data-a="nuova-att">${icona('plus')} Nuova attività</button>`
                     : h`<div class="banda">${icona('lock')}<div>Il programma lo modificano le professioniste: tu registri le sedute.</div></div>`}
                 ${modifica && senza.length ? h`<div class="banda">${icona('layer-group')}<div>${senza.length} ${senza.length === 1 ? 'attività non ha' : 'attività non hanno'} ancora una modalità del centro.
@@ -796,6 +797,7 @@
                 <button class="opzione" data-foglio="programma">${icona('list-check')}<span class="corpo">Programma<small>Attività e target</small></span></button>
                 <button class="opzione" data-foglio="cartella">${icona('chart-line')}<span class="corpo">Cartella clinica<small>Grafici, giornate, diario</small></span></button>
                 <button class="opzione" data-foglio="giochi">${icona('gamepad')}<span class="corpo">Giochi con ${p.name}<small>Le sedute dei giochi vanno nella sua cartella</small></span></button>
+                <button class="opzione" data-foglio="stampa">${icona('print')}<span class="corpo">Stampa le griglie<small>Per prendere i dati su carta e ricopiarli dopo</small></span></button>
                 <button class="opzione" data-foglio="data">${icona('calendar-day')}<span class="corpo">Cambia la data della seduta<small>Per ricopiare un foglio di un altro giorno</small></span></button>
                 <button class="opzione" data-foglio="annulla">${icona('trash')}<span class="corpo">Annulla la seduta in corso</span></button>
                 ${EST.opzioniBambino ? EST.opzioniBambino(p) : ''}
@@ -805,6 +807,7 @@
             else if (r === 'cartella') apriCartella(p.id);
             else if (r === 'giochi') { if (typeof setGlobalPatient === 'function') setGlobalPatient(p.id); chiudi(); }
             else if (r === 'data') azioni.data();
+            else if (r === 'stampa') azioni['stampa-griglie']();
             else if (r === 'annulla') azioni['annulla-seduta']();
         },
         'nuovo-bambino': async () => {
@@ -1088,6 +1091,43 @@
             T.classifica = null;
             avviso('Modalità salvate');
             vai('programma', p.id);
+        },
+        'stampa-griglie': async () => {
+            const p = paz(T.pid);
+            if (!p) return;
+            const elenco = TiceStampa.voci(p, { P, M, diz: dizionario() });
+            if (!elenco.length) { avviso('Il programma non ha ancora attività da stampare.'); return; }
+            const nTA = elenco.filter((v) => v.ta).length, nLU = elenco.length - nTA;
+            const maxProve = Math.max(0, ...elenco.filter((v) => !v.ta).map((v) => +v.att.prove || 0));
+            const r = await foglio(h`<form><h2>Griglie da stampare</h2>
+                <p class="sotto">Fogli A4 per prendere i dati su carta quando serve, con le attività del programma, i target in corso e le prove già marcate. Si ricopiano poi nella presa dati.</p>
+                <div class="campo scelte-stampa"><span>Attività</span>
+                    ${elenco.map((v) => h`<label class="spunta-riga"><input type="checkbox" name="att" value="${v.att.id}" ${v.attiva ? grezzo('checked') : ''}>
+                        <span><b>${v.att.nome}</b> <span class="sotto piccolo">${v.categoria.nome}${v.ta ? ' · task analysis' : v.att.prove ? ' · ' + v.att.prove + ' prove' : ''}${v.attiva ? '' : ' · sospesa'}</span></span></label>`)}
+                </div>
+                <div class="campo scelte-stampa"><span>Fogli</span>
+                    ${nLU ? h`<label class="spunta-riga"><input type="checkbox" name="lu" checked> <span>Presa dati delle learn unit <span class="sotto piccolo">(${nLU} attività su un foglio)</span></span></label>` : ''}
+                    ${nTA ? h`<label class="spunta-riga"><input type="checkbox" name="ta" checked> <span>Task analysis <span class="sotto piccolo">(${nTA}, due o tre per foglio)</span></span></label>` : ''}
+                </div>
+                <div class="riga-campi">
+                    ${nLU ? h`<label class="campo"><span>Caselle per riga</span><select name="colonne" class="campo-in">${[10, 15].map((n) => h`<option value="${n}" ${n === (maxProve > 10 && maxProve % 15 === 0 ? 15 : 10) ? grezzo('selected') : ''}>${n}</option>`)}</select></label>` : ''}
+                    ${nTA ? h`<label class="campo"><span>Colonne task analysis</span><select name="colonneTA" class="campo-in">${[10, 15, 20].map((n) => h`<option value="${n}" ${n === 15 ? grezzo('selected') : ''}>${n}</option>`)}</select></label>` : ''}
+                    <label class="campo"><span>Data (facoltativa)</span><input type="date" name="data" class="campo-in"></label>
+                </div>
+                <div class="campo scelte-stampa"><span>Righe</span>
+                <label class="spunta-riga"><input type="checkbox" name="prossimi" checked> <span>Scrivi il target successivo</span></label>
+                <label class="spunta-riga"><input type="checkbox" name="mantenimento" checked> <span>Una riga per il mantenimento dell'ultimo target a criterio</span></label></div>
+                <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">${icona('print')} Stampa</button></div></form>`, {
+                invia: (form) => {
+                    const fd = new FormData(form);
+                    const ids = fd.getAll('att');
+                    if (!ids.length) { avviso('Scegli almeno un\'attività.'); return undefined; }
+                    const d = fd.get('data');
+                    return { ids, lu: fd.has('lu'), ta: fd.has('ta'), colonne: +fd.get('colonne') || 10, colonneTA: +fd.get('colonneTA') || 15,
+                        prossimi: fd.has('prossimi'), mantenimento: fd.has('mantenimento'), data: d ? d.split('-').reverse().join('/') : '' };
+                }
+            });
+            if (r) await stampa(TiceStampa.html(p, r, { P, M, diz: dizionario() }));
         },
         'nuova-att': async () => {
             const p = paz(T.pid);
@@ -1380,6 +1420,21 @@
                 <button type="button" class="opzione" data-foglio="elimina">${icona('trash')}<span class="corpo">Elimina dal programma</span></button>
             </div>` : ''}
             <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`);
+    }
+
+    // Stampa: il foglio va in un contenitore che in stampa è l'unica cosa visibile
+    async function stampa(contenuto) {
+        if (!contenuto) { avviso('Niente da stampare con queste scelte.'); return; }
+        let box = document.getElementById('tice-stampa');
+        if (!box) { box = document.createElement('div'); box.id = 'tice-stampa'; document.body.appendChild(box); }
+        box.innerHTML = contenuto;
+        document.documentElement.classList.add('tice-stampa-in-corso');
+        const fine = () => { document.documentElement.classList.remove('tice-stampa-in-corso'); box.innerHTML = ''; window.removeEventListener('afterprint', fine); };
+        window.addEventListener('afterprint', fine);
+        try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (e) { /* si stampa lo stesso */ }
+        await Promise.all([...box.querySelectorAll('img')].map((i) => i.complete ? null : new Promise((ok) => { i.onload = i.onerror = ok; })));
+        if (typeof window.print !== 'function') { fine(); avviso('Su questo dispositivo la stampa non è disponibile: apri l\'app dal browser.', 'errore'); return; }
+        window.print();
     }
 
     async function salvaSeduta(p, b, dati) {

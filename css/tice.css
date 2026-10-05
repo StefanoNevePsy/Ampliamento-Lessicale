@@ -499,3 +499,79 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 .tice .ta-linguetta small { opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 .tice-foglio .ta-nuova { margin: 10px 0; padding: 8px 10px; border: 1px dashed var(--t-bordo, rgba(0,0,0,.2)); border-radius: 12px; }
 .tice-foglio .ta-nuova summary { cursor: pointer; padding: 4px 0; }
+
+/* ==========================================================================
+   Griglie da stampare (js/tice-stampa.js): A4, inchiostro su bianco, ogni
+   attività col suo colore. A schermo il contenitore resta nascosto.
+   ========================================================================== */
+#tice-stampa { display: none; }
+.tice-foglio .scelte-stampa { display: grid; gap: 2px; }
+.tice-foglio .scelte-stampa > label { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; }
+.tice-foglio .scelte-stampa > label input { flex: none; }
+@media print {
+    @page { size: A4 portrait; margin: 9mm 9mm 10mm; }
+    html.tice-stampa-in-corso body > *:not(#tice-stampa) { display: none !important; }
+    html.tice-stampa-in-corso, html.tice-stampa-in-corso body { background: #fff !important; height: auto !important; overflow: visible !important; }
+    html.tice-stampa-in-corso body::after, html.tice-stampa-in-corso body::before { display: none !important; }
+    html.tice-stampa-in-corso #tice-stampa { display: block; }
+}
+#tice-stampa {
+    color: #111; background: #fff; font-family: 'Archivo Variable', 'Archivo', 'Helvetica Neue', Arial, sans-serif; font-size: 9pt;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+#tice-stampa .st-foglio { break-after: page; }
+#tice-stampa .st-foglio:last-child { break-after: auto; }
+#tice-stampa .st-testa { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1.5pt solid #111; padding-bottom: 2mm; margin-bottom: 1.5mm; }
+#tice-stampa .st-tit { display: flex; gap: 3mm; align-items: center; }
+#tice-stampa .st-logo { height: 12mm; width: auto; }
+#tice-stampa .st-eti { font-size: 7pt; letter-spacing: .12em; text-transform: uppercase; color: #555; font-weight: 600; }
+#tice-stampa .st-bambino { font-family: 'Gloock', Georgia, serif; font-size: 19pt; line-height: 1.05; }
+#tice-stampa .st-campi { border-collapse: collapse; font-size: 8pt; }
+#tice-stampa .st-campi th { text-align: right; font-weight: 600; padding: 1.2mm 2mm 0; color: #444; }
+#tice-stampa .st-campi td { width: 44mm; border-bottom: .6pt solid #888; }
+#tice-stampa .st-legenda { font-size: 7.5pt; color: #333; display: flex; flex-wrap: wrap; gap: 1mm 2.2mm; align-items: center; margin: 1.5mm 0 2mm; }
+#tice-stampa .st-legenda b { font-size: 9.5pt; }
+#tice-stampa .st-sep { width: .5pt; height: 3mm; background: #bbb; }
+#tice-stampa .st-cat { margin: 3mm 0 1.2mm; font-size: 8pt; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; border-bottom: .8pt solid #111; padding-bottom: .6mm; break-after: avoid; }
+#tice-stampa .st-cat i { margin-right: 1.5mm; }
+#tice-stampa table { border-collapse: collapse; }
+#tice-stampa .st-att { width: 100%; table-layout: fixed; margin-bottom: 1.4mm; break-inside: avoid; }
+#tice-stampa .st-att td { border: .5pt solid #9a9a9a; height: 8.5mm; vertical-align: middle; }
+#tice-stampa .st-info { width: 47mm; padding: 1mm 1.6mm; border-left: 2.4mm solid var(--c) !important; background: var(--t); }
+#tice-stampa .st-att-nome { font-weight: 700; font-size: 9pt; line-height: 1.15; }
+#tice-stampa .st-att .st-pallino { display: none; }
+#tice-stampa .st-pallino { display: inline-block; width: 2.8mm; height: 2.8mm; border-radius: 50%; background: var(--c); margin-right: 1.5mm; vertical-align: -.2mm; }
+#tice-stampa .st-mod { font-size: 7pt; color: #444; }
+#tice-stampa .st-meta { margin-top: .6mm; font-size: 7pt; color: #333; font-weight: 400; }
+#tice-stampa .st-badge { display: inline-block; border-radius: 2mm; padding: 0 1.3mm; background: #111; color: #fff; font-weight: 700; font-size: 6.5pt; line-height: 1.5; }
+#tice-stampa .st-badge.chiaro { background: transparent; color: #111; border: .5pt solid #111; }
+#tice-stampa .st-poi { font-size: 6.5pt; color: #555; margin-top: .4mm; }
+#tice-stampa .st-target { width: 36mm; padding: .6mm 1.6mm; font-size: 8pt; line-height: 1.15; }
+#tice-stampa .st-target.segue, #tice-stampa .st-target.vuoto { color: #999; font-size: 7pt; }
+#tice-stampa .st-mini { font-size: 6pt; text-transform: uppercase; letter-spacing: .08em; color: var(--c); font-weight: 700; }
+#tice-stampa .st-c { position: relative; }
+#tice-stampa .st-c span { position: absolute; top: .3mm; left: .7mm; font-size: 5pt; color: #b5b5b5; line-height: 1; }
+#tice-stampa .st-c.on { background: var(--t); border: 1pt solid var(--c) !important; }
+#tice-stampa .st-c.on span { color: var(--c); }
+#tice-stampa .st-legenda .st-c.demo { display: inline-block; width: 4.5mm; height: 3.4mm; --c: #2471a3; --t: rgba(36,113,163,.16); }
+#tice-stampa .st-tot { width: 16mm; text-align: center; font-size: 8pt; }
+#tice-stampa .st-tot b { display: inline-block; width: 5mm; border-bottom: .5pt solid #333; }
+#tice-stampa .st-crono { font-size: 6.5pt; color: #444; margin-top: .5mm; }
+#tice-stampa .st-mant td { height: 6.5mm; }
+#tice-stampa .st-note { margin-top: 3mm; border: .5pt solid #9a9a9a; border-radius: 1.5mm; min-height: 24mm; padding: 1.2mm 2mm; break-inside: avoid; }
+#tice-stampa .st-note.piccola { min-height: 0; font-size: 8pt; }
+#tice-stampa .st-tabta { width: 100%; table-layout: fixed; }
+#tice-stampa .st-tabta th, #tice-stampa .st-tabta td { border: .5pt solid #9a9a9a; }
+#tice-stampa .st-banda { text-align: left; padding: 1.6mm 2mm; font-size: 10.5pt; background: var(--t); border-left: 2.4mm solid var(--c) !important; }
+#tice-stampa .st-banda .st-meta { display: inline; margin-left: 2mm; }
+#tice-stampa .st-blocco-ta { break-inside: avoid; margin-bottom: 5mm; }
+#tice-stampa col.st-num { width: 7mm; }
+#tice-stampa col.st-passo-t { width: 62mm; }
+#tice-stampa th.st-num { font-size: 7.5pt; color: #444; text-align: center; }
+#tice-stampa th.st-passo-t { text-align: left; padding-left: 1.6mm; font-size: 7.5pt; }
+#tice-stampa .st-n { font-size: 6.5pt; color: #666; font-weight: 600; height: 4.5mm; }
+#tice-stampa .st-passo { padding: 1mm 1.6mm; font-size: 8.5pt; line-height: 1.15; height: 8.5mm; }
+#tice-stampa .st-tabta tbody tr:nth-child(even) td.st-c, #tice-stampa .st-tabta tbody tr:nth-child(even) .st-passo { background: rgba(0,0,0,.028); }
+#tice-stampa .st-piede th { text-align: right; padding: 0 1.6mm; font-size: 7.5pt; background: var(--t); }
+#tice-stampa .st-piede td { height: 7mm; background: #fff !important; }
+#tice-stampa .st-piede.primo td, #tice-stampa .st-piede.primo th { border-top: 1.2pt solid #111; }

@@ -34,6 +34,8 @@ jobs:
         run: node tools/test-tice-import.js
       - name: Modalità dei quaderni
         run: node tools/test-tice-modalita.js
+      - name: Griglie da stampare
+        run: node tools/test-tice-stampa.js
       - name: Task analysis nel programma
         run: node tools/test-tice-ta.js
       - name: Sintassi della presa dati
