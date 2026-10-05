@@ -160,4 +160,164 @@
 [data-theme="taccuino-scuro"] .btn-score.fail,
 [data-theme="taccuino-scuro"] .btn-score.prompt { color: #10141b; }
 
+/* ==========================================================================
+   Seconda passata: tutta l'interfaccia come PsyDiary, non solo i colori.
+   Barre su carta con una riga a matita, tasti a pillola d'inchiostro o
+   contornati, campi sottolineati, schede piatte con un'ombra appena, titoli
+   in Gloock e nessun colore "da app" (verdi e arancioni) fuori dai punteggi.
+   ========================================================================== */
+[data-theme^="taccuino"] {
+    --tq-matita: rgba(var(--ink-rgb), 0.14);
+    --tq-matita-forte: rgba(var(--ink-rgb), 0.3);
+    --tq-carta-2: var(--glass-bg);
+    --tq-ombra: 0 1px 0 rgba(var(--ink-rgb), 0.07), 0 16px 32px -28px rgba(var(--shadow-rgb), 0.55);
+    --tq-hover: rgba(var(--ink-rgb), 0.06);
+    --shadow: 0 1px 0 rgba(var(--ink-rgb), 0.07), 0 14px 28px -26px rgba(var(--shadow-rgb), 0.5);
+}
+/* iniziali come in PsyDiary: un cerchio di carta con la lettera in Gloock */
+[data-theme^="taccuino"] .tice .avatar {
+    background: rgba(var(--ink-rgb), 0.08); color: var(--text-primary);
+    font-family: var(--f-display); font-weight: 400; font-size: 1.15rem; letter-spacing: 0;
+}
+[data-theme^="taccuino"] .patient-avatar-mini { background: rgba(var(--ink-rgb), 0.08) !important; color: var(--text-primary) !important; }
+/* nomi di bambini e attività, titoli dei passi: in Gloock come i nomi in PsyDiary */
+[data-theme^="taccuino"] .tice .att-testa .nome,
+[data-theme^="taccuino"] .tice .riga .t1,
+[data-theme^="taccuino"] .tice .ta-titolo b,
+[data-theme^="taccuino"] .tice .ta-ora b {
+    font-family: var(--f-display); font-weight: 400; letter-spacing: -0.005em;
+}
+[data-theme^="taccuino"] .tice .att-testa .nome,
+[data-theme^="taccuino"] .tice .riga .t1 { font-size: 1.15rem; }
+[data-theme^="taccuino"] .tice .ta-ora b { font-size: 1.3rem; }
+[data-theme^="taccuino"] .tice .ta-titolo b { font-size: 1.2rem; }
+/* link e tasti colorati "a mano" nell'HTML: l'unico colore è il vermiglio */
+[data-theme^="taccuino"] a[style*="color"],
+[data-theme^="taccuino"] .btn-ghost[style*="color"] { color: var(--taccuino-spot) !important; }
+
+/* --- barre: carta, inchiostro, una riga a matita sotto --------------------- */
+[data-theme^="taccuino"] .tice-barra {
+    background: var(--bg-gradient); color: var(--text-primary);
+    border-bottom: 1px solid var(--tq-matita-forte); box-shadow: none;
+}
+[data-theme^="taccuino"] .tice-barra .marchio { color: var(--text-primary); }
+[data-theme="taccuino"] .tice-barra .marchio img { content: url("../img/tice/logo-scuro.svg"); }
+[data-theme^="taccuino"] .tice-barra .titolo { font-size: 1.35rem; line-height: 1.1; }
+[data-theme^="taccuino"] .tice-barra .sotto-titolo { font-family: var(--f-testo); font-size: 0.78rem; letter-spacing: 0.02em; opacity: 0.7; }
+[data-theme^="taccuino"] .tice-barra button.ib { color: var(--text-primary); background: transparent; border-color: transparent; }
+[data-theme^="taccuino"] .tice-barra button.ib:hover { background: var(--tq-hover); }
+[data-theme^="taccuino"] header { border-bottom: 1px solid var(--tq-matita-forte); }
+[data-theme^="taccuino"] .tice-linguetta { background: var(--text-primary); color: var(--taccuino-carta); border-radius: 0 0 14px 14px; }
+
+/* --- schede: piatte, bordo a matita, ombra leggera ------------------------- */
+[data-theme^="taccuino"] .tice .scheda,
+[data-theme^="taccuino"] .tice .att,
+[data-theme^="taccuino"] .tice .lista,
+[data-theme^="taccuino"] .modal,
+[data-theme^="taccuino"] .modal-content {
+    box-shadow: var(--tq-ombra);
+}
+[data-theme^="taccuino"] .tice .scheda,
+[data-theme^="taccuino"] .tice .att { border-color: var(--tq-matita); }
+[data-theme^="taccuino"] .app-shell { box-shadow: none; border-color: var(--tq-matita); }
+[data-theme^="taccuino"] .tice h3,
+[data-theme^="taccuino"] .tice .eti,
+[data-theme^="taccuino"] .modal-label,
+[data-theme^="taccuino"] .select-wrapper > label { letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; color: var(--text-secondary); }
+
+/* --- tasti: pillole d'inchiostro, o contornate a matita -------------------- */
+[data-theme^="taccuino"] .tice .bt:not(.primario):not(.arancio):not(.tasto),
+[data-theme^="taccuino"] .btn-ghost,
+[data-theme^="taccuino"] .btn-secondary {
+    background: transparent; border: 1px solid var(--tq-matita-forte); color: var(--text-primary); box-shadow: none;
+}
+[data-theme^="taccuino"] .tice .bt:not(.primario):not(.arancio):not(.tasto):hover,
+[data-theme^="taccuino"] .btn-ghost:hover,
+[data-theme^="taccuino"] .btn-secondary:hover { background: var(--tq-hover); border-color: var(--text-secondary); }
+[data-theme^="taccuino"] .btn { border-radius: 999px; box-shadow: none; }
+[data-theme^="taccuino"] .btn-primary,
+[data-theme^="taccuino"] .btn-success,
+[data-theme^="taccuino"] .tice .bt.primario { background: var(--text-primary) !important; border-color: var(--text-primary) !important; color: var(--taccuino-carta) !important; }
+[data-theme^="taccuino"] .tice-foglio .chiave-grande {
+    background: transparent; border: 1px dashed var(--tq-matita-forte); border-radius: 10px; color: var(--text-primary); font-weight: 600; letter-spacing: 0.06em;
+}
+[data-theme^="taccuino"] .btn-danger { background: transparent !important; color: var(--danger-color) !important; border: 1px solid var(--danger-color) !important; }
+[data-theme^="taccuino"] .tice .ib { background: transparent; border-color: var(--tq-matita); color: var(--text-primary); }
+[data-theme^="taccuino"] .tice .ib:hover { background: var(--tq-hover); }
+
+/* barra principale dell'app: icone d'inchiostro, niente pastiglie colorate */
+[data-theme^="taccuino"] .btn-icon,
+[data-theme^="taccuino"] .btn-icon-labeled {
+    background: transparent !important; border: 1px solid var(--tq-matita) !important; color: var(--text-primary) !important; box-shadow: none !important;
+}
+[data-theme^="taccuino"] .btn-icon:hover,
+[data-theme^="taccuino"] .btn-icon-labeled:hover { background: var(--tq-hover) !important; border-color: var(--tq-matita-forte) !important; }
+[data-theme^="taccuino"] .btn-icon i,
+[data-theme^="taccuino"] .btn-icon-labeled i,
+[data-theme^="taccuino"] .btn-icon-hint { color: inherit !important; }
+[data-theme^="taccuino"] .btn-icon-hint { letter-spacing: 0.08em; font-weight: 600; opacity: 0.75; }
+
+/* tasti flottanti e cassetta degli attrezzi: carta con bordo, inchiostro pieno per i principali */
+[data-theme^="taccuino"] .btn-float {
+    background: var(--modal-bg) !important; color: var(--text-primary) !important;
+    border: 1px solid var(--tq-matita-forte) !important; box-shadow: var(--tq-ombra) !important;
+}
+[data-theme^="taccuino"] #fab-toggle-btn,
+[data-theme^="taccuino"] #btn-save-session { background: var(--text-primary) !important; color: var(--taccuino-carta) !important; border-color: var(--text-primary) !important; }
+[data-theme^="taccuino"] #btn-visual-prompts { background: var(--modal-bg) !important; }
+
+/* tipo di seduta: un'etichetta contornata, il colore resta solo nell'icona */
+[data-theme^="taccuino"] #session-type-toggle {
+    background: transparent !important; border: 0 !important; border-bottom: 1.5px solid var(--tq-matita-forte) !important;
+    border-radius: 0 !important; color: var(--text-primary) !important;
+}
+[data-theme^="taccuino"] #session-type-toggle i { color: var(--success-color); }
+
+/* --- campi sottolineati, come in PsyDiary ---------------------------------- */
+[data-theme^="taccuino"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="hidden"]),
+[data-theme^="taccuino"] select,
+[data-theme^="taccuino"] textarea,
+[data-theme^="taccuino"] .custom-dropdown-trigger {
+    background-color: transparent !important; border: 0 !important; border-bottom: 1.5px solid var(--tq-matita-forte) !important;
+    border-radius: 0 !important; box-shadow: none !important; color: var(--text-primary);
+}
+[data-theme^="taccuino"] textarea { border: 1px solid var(--tq-matita) !important; border-radius: 10px !important; background: rgba(var(--ink-rgb), 0.025) !important; }
+[data-theme^="taccuino"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):hover,
+[data-theme^="taccuino"] select:hover,
+[data-theme^="taccuino"] .custom-dropdown-trigger:hover { border-bottom-color: var(--text-secondary) !important; }
+[data-theme^="taccuino"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
+[data-theme^="taccuino"] select:focus,
+[data-theme^="taccuino"] textarea:focus { outline: none !important; border-bottom-color: var(--taccuino-spot) !important; }
+[data-theme^="taccuino"] input::placeholder,
+[data-theme^="taccuino"] textarea::placeholder { color: var(--text-muted); opacity: 1; }
+[data-theme^="taccuino"] input[type="checkbox"],
+[data-theme^="taccuino"] input[type="radio"],
+[data-theme^="taccuino"] input[type="range"] { accent-color: var(--taccuino-spot); }
+/* menu a tendina aperti: un foglio con il bordo a matita */
+[data-theme^="taccuino"] .custom-dropdown-panel,
+[data-theme^="taccuino"] .patient-dd-panel { background: var(--modal-bg) !important; border: 1px solid var(--tq-matita-forte) !important; border-radius: 14px !important; box-shadow: var(--tq-ombra) !important; }
+[data-theme^="taccuino"] .controls-row { background: transparent; border-bottom: 1px dashed var(--tq-matita-forte); border-radius: 0; }
+
+/* --- finestre (impostazioni e simili): titoli d'inchiostro in Gloock ------- */
+[data-theme^="taccuino"] .modal-body h3,
+[data-theme^="taccuino"] .modal-body h4,
+[data-theme^="taccuino"] .settings-tab-content h3,
+[data-theme^="taccuino"] .settings-tab-content h4 {
+    font-family: var(--f-display); font-weight: 400; font-size: 1.15rem; color: var(--text-primary) !important; letter-spacing: 0;
+}
+[data-theme^="taccuino"] .modal-body h4 i,
+[data-theme^="taccuino"] .modal-body h3 i { color: var(--taccuino-spot); font-size: 0.85em; }
+[data-theme^="taccuino"] .modal-body a,
+[data-theme^="taccuino"] .tice a { color: var(--taccuino-spot); text-underline-offset: 3px; }
+[data-theme^="taccuino"] .modal-body a[style*="color"] { color: var(--taccuino-spot) !important; }
+[data-theme^="taccuino"] .modal-header { border-bottom: 1px solid var(--tq-matita-forte); }
+[data-theme^="taccuino"] .modal-backdrop { background: rgba(var(--shadow-rgb), 0.45); backdrop-filter: none; }
+[data-theme^="taccuino"] .setting-option,
+[data-theme^="taccuino"] .theme-card { background: transparent; border: 1px solid var(--tq-matita); box-shadow: none; }
+[data-theme^="taccuino"] .modal-hint { color: var(--text-muted); }
+
+/* stato vuoto del gioco: il disegno nei toni della carta */
+[data-theme^="taccuino"] .empty-state-step-num { background: transparent; border: 1px solid var(--tq-matita-forte); color: var(--text-secondary); }
+[data-theme^="taccuino"] #game-stage { border-color: var(--tq-matita-forte); }
+
 @media print { [data-theme^="taccuino"] body::after { display: none; } }
