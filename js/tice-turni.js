@@ -102,7 +102,8 @@
   }
 
   // ---------- la giornata ----------
-  var GIORNATA = { da: '08:00', a: '19:00', fascia: 60 };
+  // Di solito si lavora il pomeriggio; d'estate si cambia dagli orari della giornata
+  var GIORNATA = { da: '14:10', a: '18:10', fascia: 60 };
   function vuota() { return { giorni: {}, voci: [] }; }
   /** Impostazioni e bambini della giornata (anche quelli con turni ma non in elenco). */
   function giornata(sett, g) {
@@ -118,7 +119,21 @@
     fasce.sort();
     var celle = {};
     voci.forEach(function (v) { celle[v.pid + '|' + v.ora] = v; });
-    return { giorno: g, da: c.da, a: c.a, fascia: +c.fascia || 60, bambini: bambini, fasce: fasce, celle: celle, voci: voci };
+    // le fasce davvero riempite: dalla prima all'ultima con almeno un turno
+    var piene = fasce.filter(function (f) { return voci.some(function (v) { return v.ora === f && (v.persone || []).length; }); });
+    var usate = piene.length ? fasce.slice(fasce.indexOf(piene[0]), fasce.indexOf(piene[piene.length - 1]) + 1) : [];
+    return { giorno: g, da: c.da, a: c.a, fascia: +c.fascia || 60, bambini: bambini, fasce: fasce, usate: usate, celle: celle, voci: voci };
+  }
+  /** Dove finisce una fascia (l'ultima si ferma all'orario di chiusura). */
+  function fineFascia(gi, ora) {
+    var f = minuti(ora) + gi.fascia, a = minuti(gi.a);
+    return hhmm(minuti(ora) < a && f > a ? a : f);
+  }
+  /** "14.10", "1410", "9" → "HH:MM" (null se non è un'ora) */
+  function leggiOra(t) {
+    var x = /^\s*(\d{1,2})(?:[:.,h]?(\d{2}))?\s*$/.exec(String(t || ''));
+    if (!x || +x[1] > 23 || +(x[2] || 0) > 59) return null;
+    return due(+x[1]) + ':' + due(+(x[2] || 0));
   }
   /** Chi è in una cella: imposta (o toglie, con persone vuote) il turno. Restituisce la settimana cambiata. */
   function impostaCella(sett, g, pid, ora, persone, opz) {
@@ -235,6 +250,8 @@
   function stampaGiornata(sett, g, dip) {
     var gi = giornata(sett, g);
     var oraT = dip.oraTesto || function (x) { return x; };
+    // il foglio si adatta alle ore riempite; vuoto (da compilare) tutte le fasce
+    var righeF = dip.vuota || !gi.usate.length ? gi.fasce : gi.usate;
     var perId = {};
     (dip.persone || []).forEach(function (p) { perId[p.id] = p; });
     var nomeP = function (id) { return perId[id] ? perId[id].nome : '?'; };
@@ -246,8 +263,12 @@
       '<div class="st-legenda st-legenda-turni">' + gi.bambini.length + ' bambini · fasce di ' + gi.fascia + ' minuti</div></header>' +
       '<table class="st-tturni st-giornata"><colgroup><col class="st-colora">' + gi.bambini.map(function () { return '<col>'; }).join('') + '</colgroup>' +
       '<thead><tr><th></th>' + gi.bambini.map(function (pid) { var c = colore(pid); return '<th class="st-bcol" style="--c:' + c + ';--t:' + tinta(c, 0.16) + '">' + esc(dip.nomeBambino(pid)) + '</th>'; }).join('') + '</tr></thead><tbody>';
-    gi.fasce.forEach(function (ora) {
-      html += '<tr><th class="st-ora">' + esc(oraT(ora)) + '<span class="st-ora-fine">' + esc(oraT(hhmm(minuti(ora) + gi.fascia))) + '</span></th>';
+    // righe alte quanto serve a riempire la pagina (A4 orizzontale: ~150 mm per la griglia)
+    var nPers = dip.perPersona && !dip.vuota ? (dip.persone || []).filter(function (p) { return gi.voci.some(function (v) { return (v.persone || []).indexOf(p.id) >= 0; }); }).length : 0;
+    var spazio = 150 - (nPers ? 12 + nPers * 8 : 0);
+    var alta = Math.max(11, Math.min(30, Math.floor(spazio / Math.max(1, righeF.length))));
+    righeF.forEach(function (ora) {
+      html += '<tr style="height:' + alta + 'mm"><th class="st-ora">' + esc(oraT(ora)) + '<span class="st-ora-fine">' + esc(oraT(fineFascia(gi, ora))) + '</span></th>';
       gi.bambini.forEach(function (pid) {
         var v = dip.vuota ? null : gi.celle[pid + '|' + ora];
         var c = colore(pid);
@@ -270,7 +291,7 @@
   }
 
   return {
-    vuota: vuota, giornata: giornata, impostaCella: impostaCella, alternaPersona: alternaPersona, impostaGiornata: impostaGiornata,
+    vuota: vuota, giornata: giornata, fineFascia: fineFascia, leggiOra: leggiOra, impostaCella: impostaCella, alternaPersona: alternaPersona, impostaGiornata: impostaGiornata,
     occupati: occupati, copiaGiornata: copiaGiornata, stampaGiornata: stampaGiornata, GIORNATA: GIORNATA,
     GIORNI: GIORNI, GIORNI_BREVI: GIORNI_BREVI, RUOLI: RUOLI,
     daIso: daIso, iso: iso, piu: piu, lunedi: lunedi, giorni: giorni, minuti: minuti, hhmm: hhmm, fine: fine,

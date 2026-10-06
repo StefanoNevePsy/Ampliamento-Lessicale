@@ -613,6 +613,9 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 .tice .tt-griglia thead th { position: sticky; top: 0; z-index: 2; }
 .tice .tt-angolo, .tice .tt-ora { position: sticky; left: 0; z-index: 1; background: var(--bg-primary, var(--taccuino-carta, #fff)); }
 .tice .tt-angolo { z-index: 3; }
+.tice .tt-ora small { display: block; font-weight: 400; font-size: .7rem; opacity: .6; }
+.tice .tt-tutte { margin-top: 8px; }
+.tice-foglio .opzioni-rapide { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 10px; }
 .tice .tt-ora { font-size: .8rem; font-weight: 700; padding: 6px 8px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; vertical-align: top; }
 .tice .tt-bambino { min-width: 118px; padding: 8px 8px 7px; font-weight: 700; font-size: .92rem; text-align: left; background: var(--bg-primary, #fff); background-image: linear-gradient(var(--t), var(--t)); border-top: 4px solid var(--c) !important; }
 .tice .tt-cella { padding: 0; background-image: linear-gradient(var(--t), var(--t)); vertical-align: top; }
@@ -640,7 +643,7 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 #tice-stampa .st-ora { font-size: 8.5pt; text-align: right; padding: 1mm 1.5mm; vertical-align: top; white-space: nowrap; }
 #tice-stampa .st-ora-fine { display: block; font-size: 6.5pt; font-weight: 400; color: #777; }
 #tice-stampa .st-bcol { font-size: 9.5pt; padding: 1.6mm 1.4mm; text-align: left; border-top: 2.4mm solid var(--c) !important; background: var(--t); }
-#tice-stampa .st-cella { height: 11mm; padding: .8mm 1.2mm; vertical-align: top; background: var(--t); }
+#tice-stampa .st-cella { padding: .8mm 1.2mm; vertical-align: top; background: var(--t); }
 #tice-stampa .st-pers { font-size: 8.5pt; font-weight: 600; line-height: 1.2; }
 #tice-stampa .st-nota-t { font-size: 6.5pt; font-style: italic; color: #555; }
 #tice-stampa .st-cella.st-conf { outline: 1.2pt solid #c0392b; outline-offset: -1.2pt; }

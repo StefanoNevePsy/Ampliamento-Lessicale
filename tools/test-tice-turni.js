@@ -10,13 +10,26 @@ prova('settimana dal lunedì e titolo', () => {
   assert.strictEqual(T.lunedi(G), '2026-10-05');
   assert.strictEqual(T.titoloSettimana('2026-09-28', true), '28 settembre – 4 ottobre 2026');
 });
-prova('giornata: fasce dalle 8 alle 19, bambini in colonna, anche chi ha turni fuori elenco', () => {
+prova('giornata: di serie il pomeriggio (14:10–18:10), bambini in colonna, anche chi ha turni fuori elenco', () => {
   let s = T.impostaGiornata(T.vuota(), G, { bambini: ['a', 'b'] });
   s = T.impostaCella(s, G, 'c', '07:30', ['p1']);
   const g = T.giornata(s, G);
   assert.deepStrictEqual(g.bambini, ['a', 'b', 'c']);
   assert.strictEqual(g.fasce[0], '07:30');
-  assert.strictEqual(g.fasce.length, 12);
+  assert.deepStrictEqual(g.fasce.slice(1), ['14:10', '15:10', '16:10', '17:10']);
+});
+prova('il foglio si adatta alle fasce riempite; l\'ultima si ferma alla chiusura', () => {
+  let s = T.impostaGiornata(T.vuota(), G, { bambini: ['a', 'b'], da: '14:10', a: '18:00' });
+  s = T.impostaCella(s, G, 'a', '15:10', ['p1']);
+  s = T.impostaCella(s, G, 'b', '16:10', ['p2']);
+  const g = T.giornata(s, G);
+  assert.deepStrictEqual(g.usate, ['15:10', '16:10']);
+  assert.strictEqual(T.fineFascia(g, '17:10'), '18:00');
+  const html = T.stampaGiornata(s, G, { nomeBambino: () => 'x', persone: [] });
+  assert.strictEqual((html.match(/class="st-ora"/g) || []).length, 2, 'stampate solo le fasce riempite');
+  assert.ok(/height:30mm/.test(html), 'righe più alte per riempire il foglio');
+  assert.strictEqual(T.leggiOra('14.10'), '14:10');
+  assert.strictEqual(T.leggiOra('25'), null);
 });
 prova('celle: coppie, svuota, pennello che aggiunge e toglie', () => {
   let s = T.impostaCella(T.vuota(), G, 'a', '09:00', ['p1', 'p2']);

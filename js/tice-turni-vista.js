@@ -98,6 +98,10 @@
         const modifica = puo();
         const gi = TT.giornata(S.sett, S.giorno);
         const conf = TT.conflitti(gi.voci, nomePersona, nomeBambino, oraT);
+        // chi organizza vede tutte le fasce (per riempirle); chi guarda e il foglio stampato solo quelle riempite
+        const tutte = S.tutteOre == null ? modifica : S.tutteOre;
+        const ridotte = !tutte && gi.usate.length && gi.usate.length < gi.fasce.length;
+        const righe = ridotte ? gi.usate : gi.fasce;
         const terapeuti = S.persone.filter((p) => p.ruolo !== 'tirocinante'), tiro = S.persone.filter((p) => p.ruolo === 'tirocinante');
         const chip = (p) => h`<button class="tt-pers ${S.pennello.includes(p.id) ? 'attiva' : ''} ${p.ruolo === 'tirocinante' ? 'tiro' : ''}" data-a="tt-pennello" data-id="${p.id}" aria-pressed="${S.pennello.includes(p.id)}">${p.nome}</button>`;
         const cella = (pid, ora) => {
@@ -134,8 +138,9 @@
                     <div class="tt-chips">${terapeuti.map(chip)}${tiro.length ? h`<span class="tt-sep"></span>${tiro.map(chip)}` : ''}${S.pennello.length ? h`<button class="tt-pers fine" data-a="tt-pennello-fine">Fatto</button>` : ''}</div></div>` : ''}
                 ${gi.bambini.length ? h`<div class="tt-griglia-box"><table class="tt-griglia">
                     <thead><tr><th class="tt-angolo"></th>${gi.bambini.map((pid) => { const c = TT.colore(pid); return h`<th class="tt-bambino" style="--c:${c};--t:${TT.tinta(c, 0.16)}">${nomeBambino(pid)}</th>`; })}</tr></thead>
-                    <tbody>${gi.fasce.map((ora) => h`<tr><th class="tt-ora">${oraT(ora)}</th>${gi.bambini.map((pid) => cella(pid, ora))}</tr>`)}</tbody>
+                    <tbody>${righe.map((ora) => h`<tr><th class="tt-ora">${oraT(ora)}<small>${oraT(TT.fineFascia(gi, ora))}</small></th>${gi.bambini.map((pid) => cella(pid, ora))}</tr>`)}</tbody>
                 </table></div>
+                ${gi.usate.length && gi.usate.length < gi.fasce.length ? h`<button class="bt piccolo fantasma tt-tutte" data-a="tt-tutte">${icona(ridotte ? 'up-down' : 'compress')} ${ridotte ? `Mostra tutte le ore (${oraT(gi.da)}–${oraT(gi.a)})` : 'Solo le ore con turni'}</button>` : ''}
                 ${Object.keys(conf).length ? h`<p class="sotto piccolo tt-conf-nota">${icona('triangle-exclamation')} Celle in rosso: la stessa persona con due bambini insieme, o un bambino con due turni.</p>` : ''}`
                 : S.sett ? h`<div class="vuoto">Nessun bambino in questa giornata.
                     ${modifica ? h`<div class="bottoni" style="justify-content:center;margin-top:12px"><button class="bt primario" data-a="tt-bambini">${icona('child')} Scegli i bambini</button>
@@ -173,6 +178,7 @@
 
     const azioni = {
         'tt-giorno': (b) => { S.giorno = TT.piu(S.giorno, +b.dataset.d); TiceHome.ridisegna(); },
+        'tt-tutte': () => { S.tutteOre = !(S.tutteOre == null ? puo() : S.tutteOre); TiceHome.ridisegna(); },
         'tt-oggi': () => { S.giorno = oggi(); TiceHome.ridisegna(); },
         'tt-vai': (b) => { S.giorno = b.dataset.g; TiceHome.ridisegna(); },
         'tt-data': async () => {
@@ -269,14 +275,21 @@
         },
         'tt-orari': async () => {
             const gi = TT.giornata(S.sett, S.giorno);
-            const ore = (da, a) => { const o = []; for (let m = da * 60; m <= a * 60; m += 30) o.push(TT.hhmm(m)); return o; };
-            const sel = (nome, opz, v) => h`<select name="${nome}" class="campo-in">${opz.map((x) => h`<option value="${x}" ${x === v ? grezzo('selected') : ''}>${oraT(x)}</option>`)}</select>`;
-            const r = await foglio(h`<form><h2>Orari della giornata</h2><p class="sotto">${lunga(S.giorno)}</p>
-                <div class="riga-campi"><label class="campo"><span>Dalle</span>${sel('da', ore(6, 13), gi.da)}</label><label class="campo"><span>Alle</span>${sel('a', ore(12, 22), gi.a)}</label>
-                <label class="campo"><span>Fasce di</span><select name="fascia" class="campo-in">${[30, 45, 60, 90, 120].map((n) => h`<option value="${n}" ${n === gi.fascia ? grezzo('selected') : ''}>${n} minuti</option>`)}</select></label></div>
+            const r = await foglio(h`<form><h2>Orari della giornata</h2><p class="sotto">${lunga(S.giorno)}. A schermo e sul foglio stampato compaiono solo le fasce con dei turni: qui c'è l'intervallo in cui si possono mettere.</p>
+                <div class="riga-campi"><label class="campo"><span>Dalle</span><input name="da" class="campo-in" inputmode="numeric" required value="${gi.da}" placeholder="14:10"></label>
+                <label class="campo"><span>Alle</span><input name="a" class="campo-in" inputmode="numeric" required value="${gi.a}" placeholder="18:00"></label>
+                <label class="campo"><span>Fasce di</span><select name="fascia" class="campo-in">${[30, 40, 45, 50, 60, 90, 120].map((n) => h`<option value="${n}" ${n === gi.fascia ? grezzo('selected') : ''}>${n} minuti</option>`)}</select></label></div>
+                <div class="opzioni-rapide"><span class="sotto piccolo">Rapidi:</span>
+                    <button type="button" class="bt piccolo" data-orari="14:10|18:10">Pomeriggio</button>
+                    <button type="button" class="bt piccolo" data-orari="08:30|13:30">Mattina</button>
+                    <button type="button" class="bt piccolo" data-orari="08:30|17:30">Estate, tutto il giorno</button></div>
                 <label class="spunta-riga"><input type="checkbox" name="tutti" checked> <span>Usa questi orari per tutta la settimana</span></label>
-                <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`);
-            if (!r || r.a <= r.da) return;
+                <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`, {
+                dopo: (f) => f.querySelectorAll('[data-orari]').forEach((b) => { b.onclick = () => { const [da, a] = b.dataset.orari.split('|'); f.querySelector('[name=da]').value = da; f.querySelector('[name=a]').value = a; }; })
+            });
+            if (!r) return;
+            r.da = TT.leggiOra(r.da); r.a = TT.leggiOra(r.a);
+            if (!r.da || !r.a || r.a <= r.da) { avviso('Scrivi gli orari come 14:10 e 18:00.', 'errore'); return; }
             const giorni = r.tutti ? TT.giorni(TT.lunedi(S.giorno), true) : [S.giorno];
             cambiaSettimana((d) => { giorni.forEach((g) => { d = TT.impostaGiornata(d, g, { da: r.da, a: r.a, fascia: +r.fascia }); }); return d; });
         },
