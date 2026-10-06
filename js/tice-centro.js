@@ -16,7 +16,7 @@
     const io = () => S.io || {};
     const admin = () => !!(S.io && S.io.permessi && S.io.permessi.gestisciAccessi);
     const RUOLI = { admin: 'Amministratore', professionista: 'Professionista', tirocinante: 'Tirocinante' };
-    const dataOra = (iso) => iso ? new Date(iso).toLocaleString('it-IT', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+    const dataOra = (iso) => iso ? new Date(iso).toLocaleString('it-IT', Orario.opzioniOra({ day: 'numeric', month: 'short', year: 'numeric' })) : '';
 
     // =====================================================================
     // Agganci nella presa dati

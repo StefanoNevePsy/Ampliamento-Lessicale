@@ -2560,7 +2560,7 @@ window.createEmptySet = async () => {
         items: [],
         modes: [],
         tags: [],
-        date: new Date().toLocaleDateString(),
+        date: new Date().toLocaleDateString('it-IT'),
         isClinical: false
     };
     await DB.saveSet(newSet);

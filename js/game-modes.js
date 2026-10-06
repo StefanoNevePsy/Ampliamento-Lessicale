@@ -4964,7 +4964,7 @@ window.saveQuadernoTemplate = async () => {
         items: rows.map(r => ({ label: r.name, name: r.name, ...(r.sessionType ? { sessionType: r.sessionType } : {}) })),
         modes: [modeTag],
         tags: (existingSet && existingSet.tags) || [],
-        date: new Date().toLocaleDateString(),
+        date: new Date().toLocaleDateString('it-IT'),
         isClinical: false
     };
     if (existingSet && existingSet.coverImage) setData.coverImage = existingSet.coverImage;

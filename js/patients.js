@@ -2748,7 +2748,7 @@ function renderDiaryTab(patient) {
             dayActivityNotes.forEach(s => {
                 const modeName = MODES_CONFIG[s.mode] || s.mode;
                 const modeIcon = (typeof getModeIcon === 'function') ? getModeIcon(s.mode) : 'fa-puzzle-piece';
-                const timeStr = new Date(s.date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+                const timeStr = new Date(s.date).toLocaleTimeString('it-IT', Orario.opzioniOra());
                 const escapedDate = (s.date || '').replace(/'/g, "\\'");
                 const escapedMode = (s.mode || '').replace(/'/g, "\\'");
                 const escapedSetName = (s.setName || '').replace(/'/g, "\\'");
@@ -3668,7 +3668,7 @@ function _setPatientReports(pid, reports) {
 function _saveReport(pid, patientName, reportText) {
     const now = new Date();
     const dateStr = now.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-');
-    const timeStr = now.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }).replace(/:/g, '-');
+    const timeStr = now.toLocaleTimeString('it-IT', Orario.opzioniOra()).replace(/:/g, '-');
 
     const entry = {
         id: Date.now().toString(),
@@ -3778,7 +3778,7 @@ window.openReportHistory = (pid) => {
     reports.forEach((r, i) => {
         const d = new Date(r.date);
         const dateDisplay = d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
-        const timeDisplay = d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+        const timeDisplay = d.toLocaleTimeString('it-IT', Orario.opzioniOra());
         const followUpCount = (r.followUps || []).length;
         const preview = r.text.substring(0, 120).replace(/[#*\n]/g, ' ').trim() + '...';
 
@@ -3836,7 +3836,7 @@ window.viewSavedReport = (pid, index) => {
         </div>
         <div style="margin-bottom:10px; font-size:0.8rem; color:var(--text-secondary);">
             <i class="fa-solid fa-calendar"></i> ${new Date(r.date).toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' })}
-            ${new Date(r.date).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+            ${new Date(r.date).toLocaleTimeString('it-IT', Orario.opzioniOra())}
             &middot; <i class="fa-solid fa-robot"></i> ${r.model || '?'}
         </div>
         <div style="background:rgba(var(--shade-rgb),0.2); border:1px solid var(--glass-border); border-radius:12px; padding:20px; line-height:1.7; font-size:0.9rem; color:var(--text-primary);">

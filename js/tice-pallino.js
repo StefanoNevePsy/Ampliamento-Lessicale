@@ -10,7 +10,7 @@
     'use strict';
     const Y = window.TiceSync;
     if (!Y) return;
-    const ora = (iso) => (iso ? new Date(iso).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '');
+    const ora = (iso) => (iso ? new Date(iso).toLocaleTimeString('it-IT', Orario.opzioniOra()) : '');
 
     function stato() {
         const S = Y.S;

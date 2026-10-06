@@ -579,3 +579,12 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 #tice-stampa .st-piede th { text-align: right; padding: 0 1.6mm; font-size: 7.5pt; background: var(--t); }
 #tice-stampa .st-piede td { height: 7mm; background: #fff !important; }
 #tice-stampa .st-piede.primo td, #tice-stampa .st-piede.primo th { border-top: 1.2pt solid #111; }
+
+/* Campi data in formato europeo (js/orario.js): il campo del browser resta, nascosto, col valore */
+.campo-data-eu { position: relative; display: inline-flex; align-items: center; max-width: 100%; vertical-align: middle; }
+.campo-data-eu > input[type=text] { padding-right: 30px !important; font-variant-numeric: tabular-nums; min-width: 8.5em; width: 100%; }
+.campo-data-eu-cal { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); border: 0; background: none; padding: 4px; color: inherit; opacity: .7; cursor: pointer; line-height: 1; }
+.campo-data-eu-cal:hover { opacity: 1; }
+.campo-data-eu > input.campo-data-eu-nativo { position: absolute; right: 0; bottom: 0; width: 1px !important; height: 1px !important; min-width: 0 !important; opacity: 0; pointer-events: none; border: 0 !important; padding: 0 !important; margin: 0 !important; }
+.campo-data-eu.errore > input[type=text] { outline: 2px solid rgba(220, 60, 40, .55); }
+.tice .campo .campo-data-eu, .tice-foglio .campo .campo-data-eu { display: flex; width: 100%; }

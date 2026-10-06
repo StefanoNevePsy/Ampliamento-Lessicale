@@ -183,7 +183,7 @@ window.syncWithFirebase = async () => {
         populateGlobalPatientSelect();
 
         const msg = `Sync completato!\nNuovi pazienti: ${newCount}\nPazienti aggiornati: ${mergedCount}\nTotale sincronizzati: ${updatedLocal.length}`;
-        if (statusEl) statusEl.textContent = 'Ultimo sync: ' + new Date().toLocaleTimeString('it-IT');
+        if (statusEl) statusEl.textContent = 'Ultimo sync: ' + new Date().toLocaleTimeString('it-IT', Orario.opzioniOra({ second: '2-digit' }));
         alert(msg);
 
     } catch(e) {

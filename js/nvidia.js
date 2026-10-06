@@ -150,7 +150,7 @@ window.refreshNvidiaImageModels = async function (manual) {
         const ids = results.filter(r => r.ok === true).map(r => r.id);
         localStorage.setItem('nvidia_img_available_v2', JSON.stringify({ ts: Date.now(), ids }));
         populateNvidiaImageSelect();
-        if (status) status.textContent = `${ids.length} modelli attivi sul catalogo NVIDIA · aggiornato ${new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`;
+        if (status) status.textContent = `${ids.length} modelli attivi sul catalogo NVIDIA · aggiornato ${new Date().toLocaleTimeString('it-IT', Orario.opzioniOra())}`;
     } catch (e) {
         if (status) status.textContent = 'Lista non aggiornata: ' + e.message;
         if (manual && !document.getElementById('nvidia-img-status')) alert('Aggiornamento modelli NVIDIA fallito: ' + e.message);
@@ -429,7 +429,7 @@ window.populateNvidiaSettings = function () {
     if (prov) prov.value = getTextProvider();
     const status = document.getElementById('nvidia-img-status');
     const cache = _nvAvailableCache();
-    if (status && cache) status.textContent = `${(cache.ids || []).length} modelli attivi · ultimo controllo ${new Date(cache.ts).toLocaleDateString('it-IT')} ${new Date(cache.ts).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`;
+    if (status && cache) status.textContent = `${(cache.ids || []).length} modelli attivi · ultimo controllo ${new Date(cache.ts).toLocaleDateString('it-IT')} ${new Date(cache.ts).toLocaleTimeString('it-IT', Orario.opzioniOra())}`;
     // Auto-refresh both catalogs in background when stale (self-updating selectors).
     if (!cache || (Date.now() - cache.ts) > _NV_CACHE_TTL) setTimeout(() => window.refreshNvidiaImageModels(false), 400);
     const llmCache = _nvLlmCache();

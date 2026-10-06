@@ -223,6 +223,20 @@ function renderThemePicker() {
     `).join('');
 }
 
+// Orari a 24 o 12 ore (js/orario.js): si ricarica per ridisegnare ogni orario
+function renderOrariPicker() {
+    const c = document.getElementById('orari-picker');
+    if (!c || typeof Orario === 'undefined') return;
+    const d = Orario.usaOre12();
+    const bt = (v, nome) => `<button type="button" class="btn ${v === d ? 'btn-primary' : 'btn-secondary'}" aria-pressed="${v === d}" onclick="scegliOre12(${v})">${nome} <span style="opacity:.7; font-weight:400;">${Orario.oraTesto('16:30', v)}</span></button>`;
+    c.innerHTML = bt(false, '24 ore') + bt(true, '12 ore');
+}
+window.scegliOre12 = (v) => {
+    if (typeof Orario === 'undefined' || Orario.usaOre12() === v) return;
+    Orario.impostaOre12(v);
+    location.reload();
+};
+
 window.selectTheme = (themeId) => {
     localStorage.setItem('app_theme_scelto', '1');
     applyTheme(themeId);
@@ -240,7 +254,7 @@ window.switchSettingsTab = (tab) => {
     document.querySelectorAll('#settings-tabs .settings-tab').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.tab === tab);
     });
-    if (tab === 'theme') renderThemePicker();
+    if (tab === 'theme') { renderThemePicker(); renderOrariPicker(); }
     if (tab === 'api' && typeof populateNvidiaSettings === 'function') populateNvidiaSettings();
     if (tab === 'images' && typeof populateAiEngineSettings === 'function') populateAiEngineSettings();
     if (tab === 'images' && typeof populateAiStudioStyles === 'function') populateAiStudioStyles();
@@ -591,7 +605,7 @@ window.saveGeminiSet = async () => {
         items: _lastGeminiSet.items,
         modes: _lastGeminiSet.modes || ['tact', 'ran', 'memory'],
         tags: _lastGeminiSet.tags || [],
-        date: new Date().toLocaleDateString(),
+        date: new Date().toLocaleDateString('it-IT'),
         isClinical: false,
         generatedByAI: true
     };

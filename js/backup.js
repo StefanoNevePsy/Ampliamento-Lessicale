@@ -517,7 +517,7 @@ window.executeSelectiveExport = async () => {
         }
 
         const dateStr = new Date().toLocaleDateString('it-IT').replace(/\//g, '-');
-        const timeStr = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }).replace(/:/g, '-');
+        const timeStr = new Date().toLocaleTimeString('it-IT', Orario.opzioniOra()).replace(/:/g, '-');
         const filename = `Backup_TerapiaAttiva_${dateStr}_${timeStr}.zip`;
 
         showBackupProgress('Preparazione backup...', 0);
