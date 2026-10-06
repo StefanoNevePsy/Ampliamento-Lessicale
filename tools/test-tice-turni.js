@@ -66,5 +66,40 @@ prova('stampa: bambini in colonna, chi in cella, elenco per persona, testi prote
   const vuota = T.stampaGiornata(s, G, { nomeBambino: () => 'x', persone: [], vuota: true });
   assert.ok(!vuota.includes('Elisa'));
 });
+prova('settimana tipo: un bambino lun e mer, la giornata si riempie da sola', () => {
+  let m = T.impostaModello(T.modelloVuoto(), 'a', 1, { da: '14:10', a: '16:10', persone: ['p1'] });
+  m = T.impostaModello(m, 'a', 3, { da: '15:10', a: '17:10', persone: [] });
+  m = T.impostaModello(m, 'b', 2, { da: '14:10', a: '15:10', persone: ['p2'] });
+  const lun = T.giornata(T.vuota(), '2026-10-05', m), mar = T.giornata(T.vuota(), G, m), mer = T.giornata(T.vuota(), '2026-10-07', m);
+  assert.ok(lun.virtuale);
+  assert.deepStrictEqual(lun.bambini, ['a']);
+  assert.deepStrictEqual(lun.voci.map((v) => v.ora), ['14:10', '15:10']);
+  assert.deepStrictEqual(mar.bambini, ['b']);
+  assert.deepStrictEqual([mer.bambini, mer.voci.length], [['a'], 0], 'il mercoledì viene ma senza persone fisse');
+  assert.ok(T.presente(mer, 'a', '15:10') && !T.presente(mer, 'a', '14:10'));
+  assert.deepStrictEqual(mer.usate, ['15:10', '16:10'], 'il foglio si adatta anche alle presenze');
+});
+prova('cambio dell\'ultimo minuto: la giornata diventa propria, le altre seguono il modello', () => {
+  const m = T.impostaModello(T.modelloVuoto(), 'a', 1, { da: '14:10', a: '16:10', persone: ['p1'] });
+  let s = T.materializza(T.vuota(), '2026-10-05', m);
+  s = T.impostaCella(s, '2026-10-05', 'a', '14:10', ['p3']);
+  const lun = T.giornata(s, '2026-10-05', m);
+  assert.ok(!lun.virtuale && lun.propria);
+  assert.deepStrictEqual(lun.celle['a|14:10'].persone, ['p3']);
+  assert.deepStrictEqual(lun.celle['a|15:10'].persone, ['p1'], 'il resto copiato dal modello');
+  const m2 = T.impostaModello(JSON.parse(JSON.stringify(m)), 'a', 1, { da: '14:10', a: '15:10', persone: ['p9'] });
+  assert.strictEqual(T.giornata(s, '2026-10-05', m2).celle['a|14:10'].persone[0], 'p3', 'il modello cambiato non tocca la giornata propria');
+  assert.strictEqual(T.giornata(T.vuota(), '2026-10-12', m2).celle['a|14:10'].persone[0], 'p9', 'ma vale per le prossime');
+  s = T.ripristina(s, '2026-10-05');
+  assert.ok(T.giornata(s, '2026-10-05', m2).virtuale, 'ripristinata');
+});
+prova('occupati e stampa tengono conto della settimana tipo', () => {
+  let m = T.impostaModello(T.modelloVuoto(), 'a', 1, { da: '14:10', a: '15:10', persone: ['p1'] });
+  m = T.impostaModello(m, 'b', 1, { da: '15:10', a: '16:10', persone: [] });
+  assert.deepStrictEqual(T.occupati(T.vuota(), '2026-10-05', '14:10', 'b', m), { p1: 'a' });
+  const html = T.stampaGiornata(T.vuota(), '2026-10-05', { nomeBambino: (x) => x, persone: [{ id: 'p1', nome: 'Elisa' }], modello: m });
+  assert.ok(html.includes('Elisa') && html.includes('st-fuori'));
+});
+
 console.log(`\n${passati} test passati, ${falliti.length} falliti`);
 process.exit(falliti.length ? 1 : 0);

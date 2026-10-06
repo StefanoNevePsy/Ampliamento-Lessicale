@@ -613,8 +613,21 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 .tice .tt-griglia thead th { position: sticky; top: 0; z-index: 2; }
 .tice .tt-angolo, .tice .tt-ora { position: sticky; left: 0; z-index: 1; background: var(--bg-primary, var(--taccuino-carta, #fff)); }
 .tice .tt-angolo { z-index: 3; }
+.tice .tt-griglia:not(.tt-modello) .tt-angolo, .tice .tt-griglia:not(.tt-modello) .tt-ora { width: 1%; }
 .tice .tt-ora small { display: block; font-weight: 400; font-size: .7rem; opacity: .6; }
 .tice .tt-tutte { margin-top: 8px; }
+.tice .tt-cella.fuori { background-image: repeating-linear-gradient(135deg, transparent 0 6px, rgba(0,0,0,.05) 6px 8px); }
+.tice .tt-cella.fuori .tt-piu { opacity: .12; }
+.tice .tt-origine { margin: -2px 0 8px; }
+.tice .tt-origine .link { border: 0; background: none; padding: 0; font: inherit; font-weight: 600; text-decoration: underline; color: var(--taccuino-spot, var(--accent-color)); cursor: pointer; }
+.tice .tt-modello .tt-giorno-m { position: sticky; top: 0; padding: 8px; font-size: .85rem; text-transform: capitalize; background: var(--bg-primary, #fff); min-width: 110px; }
+.tice .tt-bambino-riga { position: sticky; left: 0; z-index: 1; border-top: 0 !important; border-left: 4px solid var(--c); text-align: left; white-space: nowrap; }
+.tice .tt-mcella.pieno { background-image: linear-gradient(var(--t), var(--t)); }
+.tice .tt-mquando { width: 100%; text-align: center; font-weight: 700; font-size: .85rem; font-variant-numeric: tabular-nums; }
+.tice-foglio .tt-dow { display: flex; flex-wrap: wrap; gap: 6px; }
+.tice-foglio .tt-dow label { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border: 1px solid var(--tq-matita-forte, rgba(0,0,0,.25)); border-radius: 999px; cursor: pointer; text-transform: capitalize; }
+.tice-foglio .tt-dow label:has(input:checked) { background: var(--text-primary, #222); color: var(--taccuino-carta, #fff); }
+.tice-foglio .tt-dow input { position: absolute; opacity: 0; pointer-events: none; }
 .tice .tt-apri { display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; border: 0; background: none; color: inherit; font: inherit; font-weight: 700; cursor: pointer; padding: 2px 4px; border-radius: 8px; }
 .tice .tt-apri i { font-size: .75em; opacity: .55; }
 .tice .tt-apri:hover { background: var(--tq-hover, rgba(0,0,0,.05)); }
@@ -656,6 +669,7 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 #tice-stampa .st-pers { font-size: var(--fs, 11pt); font-weight: 700; line-height: 1.25; }
 #tice-stampa .st-giornata .st-ora { font-size: 10pt; vertical-align: middle; }
 #tice-stampa .st-nota-t { font-size: 6.5pt; font-style: italic; color: #555; }
+#tice-stampa .st-cella.st-fuori { background: repeating-linear-gradient(135deg, #fff 0 2mm, #eee 2mm 2.6mm); }
 #tice-stampa .st-cella.st-conf { outline: 1.2pt solid #c0392b; outline-offset: -1.2pt; }
 #tice-stampa .st-sottot { margin: 4mm 0 1.2mm; }
 #tice-stampa .st-colnome { width: 40mm; }

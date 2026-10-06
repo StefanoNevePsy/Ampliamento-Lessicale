@@ -18,7 +18,7 @@
     const oraT = (x) => (window.Orario ? Orario.oraTesto(x) : x);
     const oggi = () => TT.iso(new Date());
 
-    const S = { giorno: oggi(), sett: null, chiave: null, persone: [], personeCaricate: false, caricando: false, errore: '', offline: false, pennello: [] };
+    const S = { giorno: oggi(), sett: null, chiave: null, persone: [], modello: null, personeCaricate: false, caricando: false, errore: '', offline: false, pennello: [] };
 
     // ---------- dove stanno i dati ----------
     const remoto = () => !!(Y && Y.attivo() && Y.S.io && Y.pronto && Y.pronto());
@@ -43,11 +43,13 @@
         if (S.caricando || (!forza && S.chiave === k && S.personeCaricate)) return;
         S.caricando = true; S.errore = '';
         try {
-            const [sett, pers] = await Promise.all([leggi(k), forza || !S.personeCaricate ? leggi('persone') : Promise.resolve(null)]);
+            const serve = forza || !S.personeCaricate;
+            const [sett, pers, mod] = await Promise.all([leggi(k), serve ? leggi('persone') : null, serve ? leggi('modello') : null]);
             S.sett = sett.dati || TT.vuota();
             S.offline = sett.offline;
             S.chiave = k;
             if (pers) { S.persone = (pers.dati && pers.dati.persone) || []; S.personeCaricate = true; }
+            if (mod) S.modello = mod.dati || TT.modelloVuoto();
         } catch (e) {
             S.errore = e.message || String(e);
         }
@@ -65,6 +67,15 @@
             avviso('Turni non salvati: ' + (e.message || e), 'errore');
             S.chiave = null; carica(true);
         }
+    }
+    // Una modifica a una giornata: se seguiva la settimana tipo, prima diventa propria
+    const cambiaGiorno = (g, fn) => cambiaSettimana((d) => fn(TT.materializza(d, g, S.modello)), g);
+    async function cambiaModello(fn) {
+        S.modello = fn(JSON.parse(JSON.stringify(S.modello || TT.modelloVuoto())));
+        TiceHome.ridisegna();
+        try { S.modello = await modifica('modello', (x) => fn(x || TT.modelloVuoto())); }
+        catch (e) { avviso('Settimana tipo non salvata: ' + (e.message || e), 'errore'); S.personeCaricate = false; carica(true); }
+        TiceHome.ridisegna();
     }
     async function cambiaPersone(fn) {
         S.persone = fn(S.persone.slice());
@@ -96,7 +107,7 @@
     function vistaTurni() {
         if (S.chiave !== TT.lunedi(S.giorno) || !S.personeCaricate) carica();
         const modifica = puo();
-        const gi = TT.giornata(S.sett, S.giorno);
+        const gi = TT.giornata(S.sett, S.giorno, S.modello);
         const conf = TT.conflitti(gi.voci, nomePersona, nomeBambino, oraT);
         // chi organizza vede tutte le fasce (per riempirle); chi guarda e il foglio stampato solo quelle riempite
         const tutte = S.tutteOre == null ? modifica : S.tutteOre;
@@ -108,7 +119,7 @@
         const cella = (pid, ora) => {
             const v = gi.celle[pid + '|' + ora];
             const c = TT.colore(pid);
-            return h`<td class="tt-cella ${v && conf[v.id] ? 'conf' : ''}" style="--c:${c};--t:${TT.tinta(c, 0.10)}">
+            return h`<td class="tt-cella ${v && conf[v.id] ? 'conf' : ''} ${TT.presente(gi, pid, ora) ? '' : 'fuori'}" style="--c:${c};--t:${TT.tinta(c, 0.10)}">
                 <button class="tt-in" ${modifica ? grezzo(`data-a="tt-cella" data-pid="${pid}" data-ora="${ora}"`) : X.paz(pid) ? grezzo(`data-a="apri-bambino" data-pid="${pid}"`) : grezzo('disabled')} title="${v && conf[v.id] ? conf[v.id].join(' · ') : nomeBambino(pid) + ', ' + oraT(ora)}">
                     ${v ? (v.persone || []).map((p) => h`<span class="tt-nome ${(persona(p) || {}).ruolo === 'tirocinante' ? 'tiro' : ''}">${breve(nomePersona(p))}</span>`) : ''}
                     ${v && v.nota ? h`<span class="tt-nota">${v.nota}</span>` : ''}
@@ -128,11 +139,13 @@
                     <button class="bt piccolo" data-a="tt-oggi">Oggi</button>
                     <button class="bt piccolo" data-a="tt-giorno" data-d="1" aria-label="Giorno dopo">${icona('chevron-right')}</button>
                     <div class="tt-settimana">${TT.giorni(TT.lunedi(S.giorno), true).map((g) => h`<button class="tt-g ${g === S.giorno ? 'scelto' : ''} ${g === oggi() ? 'oggi' : ''}" data-a="tt-vai" data-g="${g}">
-                        <small>${TT.breveGiorno(g)}</small>${TT.daIso(g).getDate()}${(S.sett && (S.sett.voci || []).some((v) => v.giorno === g)) ? h`<i class="tt-punto"></i>` : ''}</button>`)}</div>
+                        <small>${TT.breveGiorno(g)}</small>${TT.daIso(g).getDate()}${S.sett && TT.giornata(S.sett, g, S.modello).bambini.length ? h`<i class="tt-punto"></i>` : ''}</button>`)}</div>
                 </div>
                 ${S.errore ? h`<div class="banda">${icona('triangle-exclamation')}<div>${S.errore}</div></div>` : ''}
                 ${S.offline ? h`<div class="banda">${icona('wifi')}<div>Senza connessione: vedi l'ultima versione scaricata, le modifiche quando torna la rete.</div></div>` : ''}
                 ${!modifica ? h`<div class="banda">${icona('lock')}<div>I turni li organizzano le professioniste: qui li vedi.</div></div>` : ''}
+                ${gi.virtuale ? h`<p class="sotto piccolo tt-origine">${icona('repeat')} Dalla settimana tipo. Le modifiche di oggi valgono solo per questo giorno.</p>` : ''}
+                ${gi.propria && modifica && S.modello && (S.modello.voci || []).some((x) => x.dow === TT.dow(S.giorno)) ? h`<p class="sotto piccolo tt-origine">${icona('pen')} Giornata modificata rispetto alla settimana tipo · <button class="link" data-a="tt-ripristina">torna alla settimana tipo</button></p>` : ''}
                 ${S.caricando && !S.sett ? h`<p class="sotto">${icona('spinner fa-spin')} Carico i turni…</p>` : ''}
                 ${modifica && !S.persone.length && S.personeCaricate ? h`<div class="scheda imbottita"><b>Chi fa i turni?</b>
                     <p class="sotto">Aggiungi terapeuti e tirocinanti: poi li assegni ai bambini toccando le celle.</p>
@@ -148,10 +161,12 @@
                 ${gi.usate.length && gi.usate.length < gi.fasce.length ? h`<button class="bt piccolo fantasma tt-tutte" data-a="tt-tutte">${icona(ridotte ? 'up-down' : 'compress')} ${ridotte ? `Mostra tutte le ore (${oraT(gi.da)}–${oraT(gi.a)})` : 'Solo le ore con turni'}</button>` : ''}
                 ${Object.keys(conf).length ? h`<p class="sotto piccolo tt-conf-nota">${icona('triangle-exclamation')} Celle in rosso: la stessa persona con due bambini insieme, o un bambino con due turni.</p>` : ''}`
                 : S.sett ? h`<div class="vuoto">Nessun bambino in questa giornata.
-                    ${modifica ? h`<div class="bottoni" style="justify-content:center;margin-top:12px"><button class="bt primario" data-a="tt-bambini">${icona('child')} Scegli i bambini</button>
+                    ${modifica ? h`<div class="bottoni" style="justify-content:center;margin-top:12px">${!(S.modello && (S.modello.voci || []).length) ? h`<button class="bt primario" data-a="vai-modello">${icona('calendar-week')} Prepara la settimana tipo</button>` : ''}
+                    <button class="bt ${S.modello && (S.modello.voci || []).length ? 'primario' : ''}" data-a="tt-bambini">${icona('child')} Scegli i bambini</button>
                     <button class="bt" data-a="tt-copia">${icona('copy')} Copia da un altro giorno</button></div>` : ''}</div>` : ''}
                 <button class="bt largo tt-apri-altro" data-a="tt-apri">${icona('child-reaching')} Apri un bambino <span class="sotto piccolo">· anche se non è in calendario</span></button>
                 ${modifica ? h`<div class="bottoni tt-strumenti">
+                    <button class="bt" data-a="vai-modello">${icona('calendar-week')} Settimana tipo</button>
                     <button class="bt" data-a="tt-bambini">${icona('child')} Bambini del giorno</button>
                     <button class="bt" data-a="tt-copia">${icona('copy')} Copia / ripeti</button>
                     <button class="bt" data-a="tt-persone">${icona('users')} Persone</button>
@@ -159,6 +174,60 @@
                 ${riepilogo(gi)}
             </main>`;
     }
+    // ---------- settimana tipo ----------
+    // Righe = bambini, colonne = giorni; in ogni incrocio quando viene e con chi di solito.
+    function vistaModello() {
+        if (!S.personeCaricate) carica();
+        const m = S.modello || TT.modelloVuoto();
+        const modifica = puo();
+        const conDom = (m.voci || []).some((x) => x.dow === 7);
+        const giorniN = conDom ? [1, 2, 3, 4, 5, 6, 7] : [1, 2, 3, 4, 5, 6];
+        const pids = (m.ordine || []).filter((pid) => (m.voci || []).some((x) => x.pid === pid));
+        (m.voci || []).forEach((x) => { if (!pids.includes(x.pid)) pids.push(x.pid); });
+        const cella = (pid, d) => {
+            const x = (m.voci || []).find((y) => y.pid === pid && y.dow === d);
+            const c = TT.colore(pid);
+            return h`<td class="tt-mcella ${x ? 'pieno' : ''}" style="--c:${c};--t:${TT.tinta(c, 0.12)}">
+                <button class="tt-in" ${modifica ? grezzo(`data-a="tt-mcella" data-pid="${pid}" data-dow="${d}"`) : grezzo('disabled')}>
+                    ${x ? h`<span class="tt-mquando">${oraT(x.da)}–${oraT(x.a)}</span>${(x.persone || []).map((p) => h`<span class="tt-nome ${(persona(p) || {}).ruolo === 'tirocinante' ? 'tiro' : ''}">${breve(nomePersona(p))}</span>`)}` : modifica ? h`<span class="tt-piu">+</span>` : ''}
+                </button></td>`;
+        };
+        const ore = (m.voci || []).reduce((t, x) => t + TT.minuti(x.a) - TT.minuti(x.da), 0);
+        return h`${barra({ indietro: 'vai-bambini', titolo: 'Settimana tipo', sotto: { testo: pids.length ? `${pids.length} bambini · ${Math.round(ore / 60)} ore a settimana` : 'Chi viene, quando, con chi' } })}
+            <main class="tice-main tt-main">
+                <p class="sotto">La settimana che si ripete: ogni giornata del calendario parte da qui. Un cambio dell'ultimo minuto si fa sulla giornata e vale solo per quel giorno; le modifiche qui valgono per tutti i giorni non ritoccati.</p>
+                ${!modifica ? h`<div class="banda">${icona('lock')}<div>La settimana tipo la organizzano le professioniste: qui la vedi.</div></div>` : ''}
+                ${pids.length ? h`<div class="tt-griglia-box"><table class="tt-griglia tt-modello">
+                    <thead><tr><th class="tt-angolo"></th>${giorniN.map((d) => h`<th class="tt-giorno-m">${TT.GIORNI[d - 1]}</th>`)}</tr></thead>
+                    <tbody>${pids.map((pid) => { const c = TT.colore(pid); return h`<tr><th class="tt-bambino tt-bambino-riga" style="--c:${c};--t:${TT.tinta(c, 0.16)}">${nomeBambino(pid)}</th>${giorniN.map((d) => cella(pid, d))}</tr>`; })}</tbody>
+                </table></div>` : h`<div class="vuoto">Ancora nessun bambino nella settimana tipo.</div>`}
+                ${modifica ? h`<div class="bottoni tt-strumenti">
+                    <button class="bt primario" data-a="tt-maggiungi">${icona('plus')} Aggiungi un bambino</button>
+                    <button class="bt" data-a="tt-morari">${icona('clock')} Orari di serie</button>
+</div>` : ''}
+            </main>`;
+    }
+    // Il foglio per un bambino in uno o più giorni della settimana tipo
+    function moduloModello(pid, dowScelti, x) {
+        const m = S.modello || TT.modelloVuoto();
+        const c = Object.assign({}, TT.GIORNATA, m.orari || {});
+        const fasce = []; for (let t = TT.minuti(c.da); t < TT.minuti(c.a); t += (+c.fascia || 60)) fasce.push(TT.hhmm(t));
+        const fini = fasce.map((f) => TT.hhmm(Math.min(TT.minuti(f) + (+c.fascia || 60), TT.minuti(c.a))));
+        const da = (x && x.da) || fasce[0], a = (x && x.a) || fini[Math.min(1, fini.length - 1)];
+        const gia = (x && x.persone) || [];
+        const riga = (p) => h`<label class="spunta-riga tt-scelta"><input type="checkbox" name="p" value="${p.id}" ${gia.includes(p.id) ? grezzo('checked') : ''}><span>${p.nome}</span></label>`;
+        const tutti = X.pazienti().slice().sort((u, v) => String(u.name).localeCompare(String(v.name), 'it'));
+        return foglio(h`<form><h2>${pid ? nomeBambino(pid) : 'Aggiungi un bambino'}</h2>
+            ${pid ? '' : h`<label class="campo"><span>Bambino</span><select name="pid" class="campo-in" required><option value="">Scegli…</option>${tutti.map((p) => h`<option value="${p.id}">${p.name}</option>`)}</select></label>`}
+            <div class="campo"><span>Giorni</span><div class="tt-dow">${[1, 2, 3, 4, 5, 6, 7].map((d) => h`<label><input type="checkbox" name="dow" value="${d}" ${dowScelti.includes(d) ? grezzo('checked') : ''}><span>${TT.GIORNI_BREVI[d - 1]}</span></label>`)}</div></div>
+            <div class="riga-campi"><label class="campo"><span>Dalle</span><select name="da" class="campo-in">${fasce.map((f) => h`<option value="${f}" ${f === da ? grezzo('selected') : ''}>${oraT(f)}</option>`)}</select></label>
+                <label class="campo"><span>Alle</span><select name="a" class="campo-in">${fini.map((f) => h`<option value="${f}" ${f === a ? grezzo('selected') : ''}>${oraT(f)}</option>`)}</select></label></div>
+            ${S.persone.length ? h`<div class="campo scelte-stampa"><span>Di solito con (facoltativo)</span>${S.persone.map(riga)}</div>` : ''}
+            <div class="bottoni">${x ? h`<button type="button" class="bt" data-foglio="togli">${icona('trash')} Non viene</button>` : ''}
+                <button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`,
+        { invia: (form) => { const fd = new FormData(form); return { pid: pid || fd.get('pid'), dow: fd.getAll('dow').map(Number), da: fd.get('da'), a: fd.get('a'), persone: fd.getAll('p') }; } });
+    }
+
     // Chi fa cosa oggi, in breve
     function riepilogo(gi) {
         const righe = S.persone.map((p) => ({ p, v: gi.voci.filter((v) => (v.persone || []).includes(p.id)).sort((a, b) => a.ora.localeCompare(b.ora)) })).filter((x) => x.v.length);
@@ -169,7 +238,7 @@
 
     // ---------- schede ----------
     function scegliPersone(v, gi, pid, ora) {
-        const occ = TT.occupati(S.sett, S.giorno, ora, pid);
+        const occ = TT.occupati(S.sett, S.giorno, ora, pid, S.modello);
         const gia = (v && v.persone) || [];
         const riga = (p) => h`<label class="spunta-riga tt-scelta"><input type="checkbox" name="p" value="${p.id}" ${gia.includes(p.id) ? grezzo('checked') : ''}>
             <span>${p.nome}${occ[p.id] ? h` <span class="pill arancio">con ${nomeBambino(occ[p.id])}</span>` : ''}</span></label>`;
@@ -185,12 +254,51 @@
     }
 
     const azioni = {
+        'vai-modello': () => TiceHome.vai('turni-modello'),
+        'tt-ripristina': async () => {
+            if (!await conferma('Tornare alla settimana tipo?', 'Le modifiche fatte su ' + lunga(S.giorno).toLowerCase() + ' si perdono: la giornata riprende bambini, orari e persone della settimana tipo.', { ok: 'Torna alla settimana tipo' })) return;
+            const g = S.giorno;
+            cambiaSettimana((d) => TT.ripristina(d, g));
+        },
+        'tt-mcella': async (b) => {
+            if (!puo()) return;
+            const pid = b.dataset.pid, d = +b.dataset.dow;
+            const x = ((S.modello || {}).voci || []).find((y) => y.pid === pid && y.dow === d);
+            const r = await moduloModello(pid, [d], x);
+            if (!r) return;
+            if (r === 'togli') return cambiaModello((m) => TT.impostaModello(m, pid, d, null));
+            if (r.a <= r.da) { avviso('L\'orario di fine viene prima di quello di inizio.', 'errore'); return; }
+            cambiaModello((m) => {
+                // i giorni tolti dalla scelta (se era quello toccato) e quelli aggiunti
+                if (!r.dow.includes(d)) m = TT.impostaModello(m, pid, d, null);
+                r.dow.forEach((k) => { m = TT.impostaModello(m, pid, k, { da: r.da, a: r.a, persone: r.persone }); });
+                return m;
+            });
+        },
+        'tt-maggiungi': async () => {
+            const r = await moduloModello(null, [], null);
+            if (!r || !r.pid || !r.dow.length) { if (r) avviso('Scegli il bambino e almeno un giorno.'); return; }
+            if (r.a <= r.da) { avviso('L\'orario di fine viene prima di quello di inizio.', 'errore'); return; }
+            cambiaModello((m) => { r.dow.forEach((k) => { m = TT.impostaModello(m, r.pid, k, { da: r.da, a: r.a, persone: r.persone }); }); return m; });
+        },
+        'tt-morari': async () => {
+            const c = Object.assign({}, TT.GIORNATA, (S.modello || {}).orari || {});
+            const r = await foglio(h`<form><h2>Orari di serie</h2><p class="sotto">Le fasce della settimana tipo. Per un solo giorno si cambiano dalla giornata.</p>
+                <div class="riga-campi"><label class="campo"><span>Dalle</span><input name="da" class="campo-in" inputmode="numeric" required value="${c.da}"></label>
+                <label class="campo"><span>Alle</span><input name="a" class="campo-in" inputmode="numeric" required value="${c.a}"></label>
+                <label class="campo"><span>Fasce di</span><select name="fascia" class="campo-in">${[30, 40, 45, 50, 60, 90, 120].map((n) => h`<option value="${n}" ${n === +c.fascia ? grezzo('selected') : ''}>${n} minuti</option>`)}</select></label></div>
+                <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`);
+            if (!r) return;
+            const da = TT.leggiOra(r.da), a = TT.leggiOra(r.a);
+            if (!da || !a || a <= da) { avviso('Scrivi gli orari come 14:10 e 18:10.', 'errore'); return; }
+            cambiaModello((m) => Object.assign(m, { orari: { da, a, fascia: +r.fascia } }));
+        },
         'tt-giorno': (b) => { S.giorno = TT.piu(S.giorno, +b.dataset.d); TiceHome.ridisegna(); },
         // apre il foglio di presa dati di un bambino qualsiasi (anche fuori calendario)
         'tt-apri': async () => {
             const tutti = X.pazienti().slice().sort((a, b) => String(a.name).localeCompare(String(b.name), 'it'));
             if (!tutti.length) { TiceHome.vai('bambini'); return; }
-            const gi = TT.giornata(S.sett, S.giorno);
+            const gi = TT.giornata(S.sett, S.giorno, S.modello);
             const oggiCal = tutti.filter((p) => gi.bambini.includes(p.id)), altri = tutti.filter((p) => !gi.bambini.includes(p.id));
             const voce = (p) => h`<button class="opzione" data-foglio="${'p:' + p.id}"><span class="corpo">${p.name}${p.category ? h`<small>${p.category}</small>` : ''}</span>${icona('chevron-right')}</button>`;
             const r = await foglio(h`<h2>Apri un bambino</h2>
@@ -222,7 +330,7 @@
         'tt-cella': async (b) => {
             if (!puo()) return;
             const { pid, ora } = b.dataset;
-            const gi = TT.giornata(S.sett, S.giorno);
+            const gi = TT.giornata(S.sett, S.giorno, S.modello);
             const v = gi.celle[pid + '|' + ora];
             if (S.pennello.length) {
                 // a pennello: se ci sono già tutte le persone scelte si tolgono, se no si aggiungono
@@ -230,16 +338,16 @@
                 const tutte = S.pennello.every((x) => gia.includes(x));
                 const nuove = tutte ? gia.filter((x) => !S.pennello.includes(x)) : gia.concat(S.pennello.filter((x) => !gia.includes(x)));
                 const g = S.giorno;
-                return cambiaSettimana((d) => TT.impostaCella(d, g, pid, ora, nuove, v && v.nota ? { nota: v.nota } : null));
+                return cambiaGiorno(g, (d) => TT.impostaCella(d, g, pid, ora, nuove, v && v.nota ? { nota: v.nota } : null));
             }
             const r = await scegliPersone(v, gi, pid, ora);
             if (!r) return;
             const g = S.giorno;
-            if (r === 'svuota') return cambiaSettimana((d) => TT.impostaCella(d, g, pid, ora, []));
-            cambiaSettimana((d) => TT.impostaCella(d, g, pid, ora, r.persone, { nota: r.nota }));
+            if (r === 'svuota') return cambiaGiorno(g, (d) => TT.impostaCella(d, g, pid, ora, []));
+            cambiaGiorno(g, (d) => TT.impostaCella(d, g, pid, ora, r.persone, { nota: r.nota }));
         },
         'tt-bambini': async () => {
-            const gi = TT.giornata(S.sett, S.giorno);
+            const gi = TT.giornata(S.sett, S.giorno, S.modello);
             const tutti = X.pazienti().slice().sort((a, b) => String(a.name).localeCompare(String(b.name), 'it'));
             const r = await foglio(h`<form><h2>Bambini del giorno</h2><p class="sotto">${lunga(S.giorno)}: le colonne del foglio, nell'ordine in cui li scegli.</p>
                 <div class="campo scelte-stampa">${tutti.map((p) => h`<label class="spunta-riga"><input type="checkbox" name="b" value="${p.id}" ${gi.bambini.includes(p.id) ? grezzo('checked') : ''}><span>${p.name}</span></label>`)}</div>
@@ -250,9 +358,11 @@
             const tolti = gi.bambini.filter((x) => !r.includes(x) && gi.voci.some((v) => v.pid === x));
             if (tolti.length && !await conferma('Togliere i loro turni?', tolti.map(nomeBambino).join(', ') + ': i turni di questa giornata vengono cancellati.', { ok: 'Togli', pericolo: true })) return;
             const g = S.giorno;
-            cambiaSettimana((d) => {
+            cambiaGiorno(g, (d) => {
                 d.voci = (d.voci || []).filter((v) => !(v.giorno === g && tolti.includes(v.pid)));
-                return TT.impostaGiornata(d, g, { bambini: ordine });
+                const pres = Object.assign({}, (d.giorni[g] || {}).presenze || {});
+                Object.keys(pres).forEach((k) => { if (!ordine.includes(k)) delete pres[k]; });
+                return TT.impostaGiornata(d, g, { bambini: ordine, presenze: pres });
             });
         },
         'tt-copia': async () => {
@@ -272,18 +382,18 @@
                 const src = JSON.parse(JSON.stringify(S.sett || TT.vuota()));
                 for (let i = 1; i <= +q.n; i++) {
                     const dst = TT.piu(g, 7 * i);
-                    await cambiaSettimana((d) => TT.copiaGiornata(src, g, d, dst), dst);
+                    await cambiaSettimana((d) => TT.copiaGiornata(src, g, d, dst, S.modello), dst);
                 }
                 avviso(`Ripetuta per ${q.n} ${+q.n === 1 ? 'settimana' : 'settimane'}`);
                 return;
             }
             const daG = r === 'settimana' ? TT.piu(g, -7) : TT.piu(g, -1);
-            const gi = TT.giornata(S.sett, g);
+            const gi = TT.giornata(S.sett, g, S.modello);
             if (gi.voci.length && !await conferma('Sostituire la giornata?', 'I turni di ' + lunga(g).toLowerCase() + ' vengono sostituiti con quelli copiati.', { ok: 'Sostituisci' })) return;
             try {
                 const src = TT.lunedi(daG) === S.chiave ? S.sett : (await leggi(TT.lunedi(daG))).dati;
-                if (!src || !TT.giornata(src, daG).bambini.length) { avviso('In quel giorno non ci sono turni da copiare.'); return; }
-                cambiaSettimana((d) => TT.copiaGiornata(src, daG, d, g));
+                if (!src || !TT.giornata(src, daG, S.modello).bambini.length) { avviso('In quel giorno non ci sono turni da copiare.'); return; }
+                cambiaSettimana((d) => TT.copiaGiornata(src, daG, d, g, S.modello));
             } catch (e) { avviso(e.message || String(e), 'errore'); }
         },
         'tt-menu': async () => {
@@ -301,7 +411,7 @@
             else if (r === 'ricarica') { S.personeCaricate = false; carica(true); }
         },
         'tt-orari': async () => {
-            const gi = TT.giornata(S.sett, S.giorno);
+            const gi = TT.giornata(S.sett, S.giorno, S.modello);
             const r = await foglio(h`<form><h2>Orari della giornata</h2><p class="sotto">${lunga(S.giorno)}. A schermo e sul foglio stampato compaiono solo le fasce con dei turni: qui c'è l'intervallo in cui si possono mettere.</p>
                 <div class="riga-campi"><label class="campo"><span>Dalle</span><input name="da" class="campo-in" inputmode="numeric" required value="${gi.da}" placeholder="14:10"></label>
                 <label class="campo"><span>Alle</span><input name="a" class="campo-in" inputmode="numeric" required value="${gi.a}" placeholder="18:00"></label>
@@ -364,9 +474,9 @@
                     <label class="spunta-riga"><input type="checkbox" name="vuota"> <span>Griglia vuota, da compilare a mano</span></label></div>
                 <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">${icona('print')} Stampa</button></div></form>`);
             if (!r) return;
-            const dip = { nomeBambino, persone: S.persone, oraTesto: oraT, vuota: !!r.vuota, perPersona: !!r.perPersona };
-            const giorni = r.cosa === 'settimana' ? TT.giorni(TT.lunedi(S.giorno), true).filter((g) => TT.giornata(S.sett, g).bambini.length) : [S.giorno];
-            if (!giorni.length || !TT.giornata(S.sett, giorni[0]).bambini.length) { avviso('Scegli prima i bambini della giornata.'); return; }
+            const dip = { nomeBambino, persone: S.persone, modello: S.modello, oraTesto: oraT, vuota: !!r.vuota, perPersona: !!r.perPersona };
+            const giorni = r.cosa === 'settimana' ? TT.giorni(TT.lunedi(S.giorno), true).filter((g) => TT.giornata(S.sett, g, S.modello).bambini.length) : [S.giorno];
+            if (!giorni.length || !TT.giornata(S.sett, giorni[0], S.modello).bambini.length) { avviso('Scegli prima i bambini della giornata.'); return; }
             await X.stampa(giorni.map((g) => TT.stampaGiornata(S.sett, g, dip)).join(''));
         },
     };
@@ -374,5 +484,5 @@
     document.addEventListener('toggle', (e) => { if (e.target.classList && e.target.classList.contains('tt-riepilogo')) S.riepilogoAperto = e.target.open; }, true);
     if (Y && Y.alCambio) Y.alCambio((cosa) => { if (cosa === 'turni' && TiceHome.attuale().vista === 'turni') TiceHome.ridisegna(); });
 
-    TiceHome.estendi({ viste: { turni: vistaTurni }, azioni });
+    TiceHome.estendi({ viste: { turni: vistaTurni, 'turni-modello': vistaModello }, azioni });
 })();

@@ -7,6 +7,11 @@
  *   settimana: { giorni: { 'AAAA-MM-GG': { bambini: [pid], da: 'HH:MM', a: 'HH:MM', fascia: 60 } },
  *                voci: [{ id, pid, giorno, ora: 'HH:MM', durata, persone: [idPersona], nota }] }
  *   persone:   { persone: [{ id, nome, ruolo: 'terapeuta' | 'tirocinante', email? }] }
+ *   modello:   la settimana tipo { orari: {da, a, fascia}, ordine: [pid],
+ *              voci: [{ id, pid, dow: 1..7 (lunedì = 1), da, a, persone: [] }] }
+ * Una giornata che nessuno ha toccato si costruisce dalla settimana tipo
+ * ("virtuale"); alla prima modifica diventa propria (giorni[g].proprio) e da
+ * lì non segue più la settimana tipo, finché non la si ripristina.
  * Modulo puro (niente DOM): calendario, conflitti, copie e la griglia da
  * stampare. Si prova in Node (tools/test-tice-turni.js).
  */
@@ -105,11 +110,58 @@
   // Di solito si lavora il pomeriggio; d'estate si cambia dagli orari della giornata
   var GIORNATA = { da: '14:10', a: '18:10', fascia: 60 };
   function vuota() { return { giorni: {}, voci: [] }; }
+  // ---------- la settimana tipo ----------
+  function modelloVuoto() { return { orari: Object.assign({}, GIORNATA), ordine: [], voci: [] }; }
+  function dow(g) { return ((daIso(g).getDay() + 6) % 7) + 1; }
+  function fasceDi(c) {
+    var out = [];
+    for (var m = minuti(c.da); m < minuti(c.a); m += (+c.fascia || 60)) out.push(hhmm(m));
+    return out;
+  }
+  /** Dalla settimana tipo: chi viene quel giorno, quando, e con chi di solito. */
+  function dalModello(modello, g, c) {
+    var out = { bambini: [], presenze: {}, voci: [] };
+    if (!modello || (modello.dal && g < modello.dal)) return out;
+    var qui = (modello.voci || []).filter(function (x) { return x.dow === dow(g); });
+    var ordine = modello.ordine || [];
+    qui.sort(function (x, y) { var a = ordine.indexOf(x.pid), b = ordine.indexOf(y.pid); return (a < 0 ? 999 : a) - (b < 0 ? 999 : b) || x.da.localeCompare(y.da); });
+    var fasce = fasceDi(c);
+    qui.forEach(function (x) {
+      if (out.bambini.indexOf(x.pid) < 0) out.bambini.push(x.pid);
+      (out.presenze[x.pid] = out.presenze[x.pid] || []).push([x.da, x.a]);
+      if (!(x.persone || []).length) return;
+      fasce.forEach(function (f) {
+        if (f >= x.da && f < x.a) out.voci.push({ id: 'm:' + x.id + ':' + f, pid: x.pid, giorno: g, ora: f, durata: +c.fascia || 60, persone: x.persone.slice(), nota: '', modello: true });
+      });
+    });
+    return out;
+  }
+  function impostaModello(modello, pid, dowN, dati) {
+    modello = modello || modelloVuoto();
+    modello.voci = (modello.voci || []).filter(function (x) { return !(x.pid === pid && x.dow === dowN); });
+    if (dati) modello.voci.push({ id: nuovoId('m'), pid: pid, dow: dowN, da: dati.da, a: dati.a, persone: (dati.persone || []).slice() });
+    modello.ordine = modello.ordine || [];
+    if (dati && modello.ordine.indexOf(pid) < 0) modello.ordine.push(pid);
+    if (!modello.voci.some(function (x) { return x.pid === pid; })) modello.ordine = modello.ordine.filter(function (x) { return x !== pid; });
+    return modello;
+  }
+  /** Il bambino è al centro in quella fascia? (senza orari indicati: sì) */
+  function presente(gi, pid, ora) {
+    var r = gi.presenze && gi.presenze[pid];
+    if (!r || !r.length) return true;
+    return r.some(function (x) { return ora >= x[0] && ora < x[1]; });
+  }
+
   /** Impostazioni e bambini della giornata (anche quelli con turni ma non in elenco). */
-  function giornata(sett, g) {
+  function giornata(sett, g, modello) {
     sett = sett || vuota();
-    var c = Object.assign({}, GIORNATA, (sett.giorni || {})[g] || {});
+    var propria = (sett.giorni || {})[g] || {};
+    var c = Object.assign({}, GIORNATA, (modello && modello.orari) || {}, propria);
     var voci = (sett.voci || []).filter(function (v) { return v.giorno === g; });
+    // una giornata mai toccata segue la settimana tipo
+    var virtuale = !!modello && !propria.proprio && !(propria.bambini || []).length && !voci.length && !!(modello.voci || []).length;
+    var presenze = propria.presenze || {};
+    if (virtuale) { var dm = dalModello(modello, g, c); voci = dm.voci; presenze = dm.presenze; c.bambini = dm.bambini; }
     var bambini = (c.bambini || []).slice();
     voci.forEach(function (v) { if (bambini.indexOf(v.pid) < 0) bambini.push(v.pid); });
     var fasce = [];
@@ -120,9 +172,32 @@
     var celle = {};
     voci.forEach(function (v) { celle[v.pid + '|' + v.ora] = v; });
     // le fasce davvero riempite: dalla prima all'ultima con almeno un turno
-    var piene = fasce.filter(function (f) { return voci.some(function (v) { return v.ora === f && (v.persone || []).length; }); });
+    var piene = fasce.filter(function (f) {
+      return voci.some(function (v) { return v.ora === f && (v.persone || []).length; }) ||
+        Object.keys(presenze).some(function (pid) { return (presenze[pid] || []).some(function (x) { return f >= x[0] && f < x[1]; }); });
+    });
     var usate = piene.length ? fasce.slice(fasce.indexOf(piene[0]), fasce.indexOf(piene[piene.length - 1]) + 1) : [];
-    return { giorno: g, da: c.da, a: c.a, fascia: +c.fascia || 60, bambini: bambini, fasce: fasce, usate: usate, celle: celle, voci: voci };
+    return { giorno: g, da: c.da, a: c.a, fascia: +c.fascia || 60, bambini: bambini, fasce: fasce, usate: usate, celle: celle, voci: voci,
+      presenze: presenze, virtuale: virtuale, propria: !!propria.proprio };
+  }
+  /** La giornata virtuale diventa propria (prima di ogni modifica): da qui non segue più la settimana tipo. */
+  function materializza(sett, g, modello) {
+    sett = sett || vuota();
+    var gi = giornata(sett, g, modello);
+    sett.giorni = sett.giorni || {};
+    if (!gi.virtuale) { sett.giorni[g] = Object.assign({}, sett.giorni[g] || {}, { proprio: true }); return sett; }
+    sett.giorni[g] = Object.assign({}, sett.giorni[g] || {}, { da: gi.da, a: gi.a, fascia: gi.fascia, bambini: gi.bambini.slice(), presenze: JSON.parse(JSON.stringify(gi.presenze)), proprio: true });
+    sett.voci = (sett.voci || []).filter(function (v) { return v.giorno !== g; }).concat(gi.voci.map(function (v) {
+      return { id: nuovoId(), pid: v.pid, giorno: g, ora: v.ora, durata: v.durata, persone: v.persone.slice(), nota: '' };
+    }));
+    return sett;
+  }
+  /** Torna alla settimana tipo: via i turni e le impostazioni propri di quel giorno. */
+  function ripristina(sett, g) {
+    sett = sett || vuota();
+    sett.voci = (sett.voci || []).filter(function (v) { return v.giorno !== g; });
+    if (sett.giorni) delete sett.giorni[g];
+    return sett;
   }
   /** Dove finisce una fascia (l'ultima si ferma all'orario di chiusura). */
   function fineFascia(gi, ora) {
@@ -166,22 +241,22 @@
     return sett;
   }
   /** Chi è già occupato in quella fascia (con quale bambino): { idPersona: pid } */
-  function occupati(sett, g, ora, tranne) {
+  function occupati(sett, g, ora, tranne, modello) {
     var out = {}, m = minuti(ora);
-    ((sett && sett.voci) || []).forEach(function (v) {
-      if (v.giorno !== g || v.pid === tranne) return;
+    giornata(sett, g, modello).voci.forEach(function (v) {
+      if (v.pid === tranne) return;
       if (m >= minuti(v.ora) && m < minuti(v.ora) + (+v.durata || 60)) (v.persone || []).forEach(function (p) { out[p] = v.pid; });
     });
     return out;
   }
   /** Copia una giornata (bambini, orari e turni) su un'altra; la destinazione viene sostituita. */
-  function copiaGiornata(da, gDa, verso, gVerso) {
+  function copiaGiornata(da, gDa, verso, gVerso, modello) {
     verso = verso || vuota();
-    var src = giornata(da, gDa);
+    var src = giornata(da, gDa, modello);
     verso.voci = (verso.voci || []).filter(function (v) { return v.giorno !== gVerso; }).concat(src.voci.map(function (v) {
       return { id: nuovoId(), pid: v.pid, giorno: gVerso, ora: v.ora, durata: v.durata, persone: (v.persone || []).slice(), nota: v.nota || '' };
     }));
-    verso = impostaGiornata(verso, gVerso, { bambini: src.bambini.slice(), da: src.da, a: src.a, fascia: src.fascia });
+    verso = impostaGiornata(verso, gVerso, { bambini: src.bambini.slice(), da: src.da, a: src.a, fascia: src.fascia, presenze: JSON.parse(JSON.stringify(src.presenze || {})), proprio: true });
     return verso;
   }
 
@@ -248,7 +323,7 @@
    * chi li prende. dip: { nomeBambino, persone, oraTesto, vuota, perPersona }
    */
   function stampaGiornata(sett, g, dip) {
-    var gi = giornata(sett, g);
+    var gi = giornata(sett, g, dip.modello);
     var oraT = dip.oraTesto || function (x) { return x; };
     // il foglio si adatta alle ore riempite; vuoto (da compilare) tutte le fasce
     var righeF = dip.vuota || !gi.usate.length ? gi.fasce : gi.usate;
@@ -275,7 +350,7 @@
       gi.bambini.forEach(function (pid) {
         var v = dip.vuota ? null : gi.celle[pid + '|' + ora];
         var c = colore(pid);
-        html += '<td class="st-cella' + (v && conf[v.id] ? ' st-conf' : '') + '" style="--c:' + c + ';--t:' + tinta(c, 0.10) + '">' +
+        html += '<td class="st-cella' + (v && conf[v.id] ? ' st-conf' : '') + (!presente(gi, pid, ora) ? ' st-fuori' : '') + '" style="--c:' + c + ';--t:' + tinta(c, 0.10) + '">' +
           (v ? (v.persone || []).map(function (p) { return '<div class="st-pers">' + esc(nomeP(p)) + '</div>'; }).join('') + (v.nota ? '<div class="st-nota-t">' + esc(v.nota) + '</div>' : '') : '') + '</td>';
       });
       html += '</tr>';
@@ -294,7 +369,8 @@
   }
 
   return {
-    vuota: vuota, giornata: giornata, fineFascia: fineFascia, leggiOra: leggiOra, impostaCella: impostaCella, alternaPersona: alternaPersona, impostaGiornata: impostaGiornata,
+    vuota: vuota, giornata: giornata, modelloVuoto: modelloVuoto, dow: dow, dalModello: dalModello, impostaModello: impostaModello,
+    presente: presente, materializza: materializza, ripristina: ripristina, fineFascia: fineFascia, leggiOra: leggiOra, impostaCella: impostaCella, alternaPersona: alternaPersona, impostaGiornata: impostaGiornata,
     occupati: occupati, copiaGiornata: copiaGiornata, stampaGiornata: stampaGiornata, GIORNATA: GIORNATA,
     GIORNI: GIORNI, GIORNI_BREVI: GIORNI_BREVI, RUOLI: RUOLI,
     daIso: daIso, iso: iso, piu: piu, lunedi: lunedi, giorni: giorni, minuti: minuti, hhmm: hhmm, fine: fine,

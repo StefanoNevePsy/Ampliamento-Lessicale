@@ -1150,8 +1150,8 @@ var QT = (function () {
     // --- Turni -------------------------------------------------------------------
     // Chi segue quale bambino e quando: una busta cifrata con la chiave del
     // centro per ogni settimana (chiave = il lunedì) e una per le persone dei
-    // turni. Li leggono tutti, li cambia chi gestisce i programmi.
-    var RE_TURNI = /^(persone|\d{4}-\d{2}-\d{2})$/;
+    // turni e una per la settimana tipo. Li leggono tutti, li cambia chi gestisce i programmi.
+    var RE_TURNI = /^(persone|modello|\d{4}-\d{2}-\d{2})$/;
     var MAX_TURNI = 2 * 1024 * 1024;
     azioni['turni.leggi'] = function (u, d) {
       var k = idV(d.chiave, RE_TURNI, 'chiave');
