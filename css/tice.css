@@ -616,15 +616,15 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 .tice .tt-ora small { display: block; font-weight: 400; font-size: .7rem; opacity: .6; }
 .tice .tt-tutte { margin-top: 8px; }
 .tice-foglio .opzioni-rapide { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 10px; }
-.tice .tt-ora { font-size: .8rem; font-weight: 700; padding: 6px 8px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; vertical-align: top; }
-.tice .tt-bambino { min-width: 118px; padding: 8px 8px 7px; font-weight: 700; font-size: .92rem; text-align: left; background: var(--bg-primary, #fff); background-image: linear-gradient(var(--t), var(--t)); border-top: 4px solid var(--c) !important; }
+.tice .tt-ora { font-size: .85rem; font-weight: 700; padding: 6px 8px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; vertical-align: middle; }
+.tice .tt-bambino { min-width: 130px; padding: 9px 8px 8px; font-weight: 700; font-size: 1.08rem; text-align: center; background: var(--bg-primary, #fff); background-image: linear-gradient(var(--t), var(--t)); border-top: 4px solid var(--c) !important; }
 .tice .tt-cella { padding: 0; background-image: linear-gradient(var(--t), var(--t)); vertical-align: top; }
-.tice .tt-in { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 3px; width: 100%; min-height: 46px; padding: 5px 6px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.tice .tt-in { display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 4px; width: 100%; min-height: 54px; padding: 6px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .tice .tt-in:disabled { cursor: default; }
 .tice .tt-in:hover:not(:disabled) { box-shadow: inset 0 0 0 2px var(--c); }
-.tice .tt-nome { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--bg-primary, #fff); border: 1px solid var(--c); font-size: .82rem; font-weight: 600; white-space: nowrap; }
+.tice .tt-nome { display: inline-block; padding: 3px 10px; border-radius: 999px; background: var(--bg-primary, #fff); border: 1.5px solid var(--c); font-size: .95rem; font-weight: 700; white-space: nowrap; }
 .tice .tt-nome.tiro { border-style: dashed; }
-.tice .tt-nota { width: 100%; font-size: .72rem; opacity: .75; font-style: italic; }
+.tice .tt-nota { width: 100%; text-align: center; font-size: .72rem; opacity: .75; font-style: italic; }
 .tice .tt-piu { opacity: .25; font-size: 1.1rem; margin: auto; }
 .tice .tt-cella.conf { box-shadow: inset 0 0 0 2px #d0453a; background-image: linear-gradient(rgba(208,69,58,.12), rgba(208,69,58,.12)); }
 .tice .tt-avviso { color: #d0453a; font-size: .8rem; }
@@ -642,9 +642,10 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 #tice-stampa .st-colora { width: 17mm; }
 #tice-stampa .st-ora { font-size: 8.5pt; text-align: right; padding: 1mm 1.5mm; vertical-align: top; white-space: nowrap; }
 #tice-stampa .st-ora-fine { display: block; font-size: 6.5pt; font-weight: 400; color: #777; }
-#tice-stampa .st-bcol { font-size: 9.5pt; padding: 1.6mm 1.4mm; text-align: left; border-top: 2.4mm solid var(--c) !important; background: var(--t); }
-#tice-stampa .st-cella { padding: .8mm 1.2mm; vertical-align: top; background: var(--t); }
-#tice-stampa .st-pers { font-size: 8.5pt; font-weight: 600; line-height: 1.2; }
+#tice-stampa .st-bcol { font-size: 13pt; padding: 2mm 1.4mm; text-align: center; font-family: 'Gloock', Georgia, serif; font-weight: 400; border-top: 2.4mm solid var(--c) !important; background: var(--t); }
+#tice-stampa .st-cella { text-align: center; vertical-align: middle; padding: .8mm 1.2mm; background: var(--t); }
+#tice-stampa .st-pers { font-size: var(--fs, 11pt); font-weight: 700; line-height: 1.25; }
+#tice-stampa .st-giornata .st-ora { font-size: 10pt; vertical-align: middle; }
 #tice-stampa .st-nota-t { font-size: 6.5pt; font-style: italic; color: #555; }
 #tice-stampa .st-cella.st-conf { outline: 1.2pt solid #c0392b; outline-offset: -1.2pt; }
 #tice-stampa .st-sottot { margin: 4mm 0 1.2mm; }

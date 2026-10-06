@@ -267,6 +267,9 @@
     var nPers = dip.perPersona && !dip.vuota ? (dip.persone || []).filter(function (p) { return gi.voci.some(function (v) { return (v.persone || []).indexOf(p.id) >= 0; }); }).length : 0;
     var spazio = 150 - (nPers ? 12 + nPers * 8 : 0);
     var alta = Math.max(11, Math.min(30, Math.floor(spazio / Math.max(1, righeF.length))));
+    // nomi tanto più grandi quanto più sono alte le righe
+    var fs = alta >= 24 ? 15 : alta >= 18 ? 13 : alta >= 14 ? 11.5 : 10;
+    html = html.replace('<table class="st-tturni st-giornata">', '<table class="st-tturni st-giornata" style="--fs:' + fs + 'pt">');
     righeF.forEach(function (ora) {
       html += '<tr style="height:' + alta + 'mm"><th class="st-ora">' + esc(oraT(ora)) + '<span class="st-ora-fine">' + esc(oraT(fineFascia(gi, ora))) + '</span></th>';
       gi.bambini.forEach(function (pid) {
