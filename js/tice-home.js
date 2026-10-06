@@ -302,6 +302,7 @@
             </button>`;
         });
         return h`${barra({ titolo: 'Presa dati', destra: h`
+                <button class="ib" data-a="vai-turni" aria-label="Turni" title="Turni della settimana">${icona('calendar-week')}</button>
                 <button class="ib" data-a="giochi" aria-label="Giochi e attività dell'app" title="Giochi e attività">${icona('gamepad')}</button>
                 <button class="ib" data-a="menu" aria-label="Altro">${icona('ellipsis-vertical')}</button>` })}
             <main class="tice-main">
@@ -768,6 +769,7 @@
     // =====================================================================
     const azioni = {
         'vai-bambini': () => vai('bambini'),
+        'vai-turni': () => vai('turni'),
         'vai-seduta': () => vai('seduta'),
         'vai-programma': () => vai('programma'),
         'vai-import': () => { if (!limitato()) vai('import'); },
@@ -1777,7 +1779,7 @@
         },
         attuale: () => ({ vista: T.vista, pid: T.pid }),
         ridisegna: () => { if (!radice().hidden) { T.mantieniScroll = true; disegna(); } },
-        strumenti: { h, grezzo, icona, foglio, conferma, avviso, barra, vai: (v, pid) => vai(v, pid), paz, pazienti, salvaPaziente, formatoData, T }
+        strumenti: { h, grezzo, icona, foglio, conferma, avviso, barra, vai: (v, pid) => vai(v, pid), paz, pazienti, salvaPaziente, formatoData, T, stampa, limitato: () => limitato() }
     };
     if (document.readyState === 'complete') avvia();
     else window.addEventListener('load', avvia);

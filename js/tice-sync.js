@@ -665,6 +665,50 @@
         return d;
     }
 
+    // Turni: una busta per settimana (chiave = lunedì) e una per le persone.
+    // Si legge l'ultima versione, si applica la modifica, si salva; se nel
+    // frattempo qualcuno ha salvato si rilegge e si riapplica.
+    const aadT = (k) => 'tice:turni:' + k;
+    async function leggiTurni(k) {
+        try {
+            const r = await chiama('turni.leggi', { chiave: k }, { tentativi: 2 });
+            if (r.busta && !S.chiavi[r.busta.kid]) {
+                throw new Error(S.chiave ? 'Questi turni sono cifrati con una chiave del centro precedente, che questo dispositivo non ha.'
+                    : 'La chiave del centro non è ancora arrivata su questo dispositivo: la consegna un amministratore aprendo l\'app.');
+            }
+            const dati = r.busta ? await C.decifra(chiavePer(r.busta), r.busta, aadT(k)) : null;
+            const x = { version: r.version || 0, dati, aggiornatoDa: r.aggiornatoDa || null };
+            await scriviMeta('turni:' + k, x);
+            return x;
+        } catch (e) {
+            if (e && e.custode && e.codice === 'richiesta-non-valida' && /sconosciuta/i.test(e.message)) {
+                throw new ErroreCustode('da-aggiornare', 'Il custode del centro va aggiornato per usare i turni.');
+            }
+            // senza rete: l'ultima copia vista su questo dispositivo
+            const vecchia = await meta('turni:' + k);
+            if (vecchia && (e.rete || (typeof navigator !== 'undefined' && navigator.onLine === false))) return Object.assign({ offline: true }, vecchia);
+            throw e;
+        }
+    }
+    async function modificaTurni(k, fn) {
+        if (!S.chiave || !S.cfg) throw new Error('Manca la chiave del centro su questo dispositivo.');
+        for (let i = 0; i < 5; i++) {
+            const cur = await leggiTurni(k);
+            if (cur.offline) throw new ErroreRete('Senza connessione i turni si possono solo guardare.');
+            const nuovo = fn(cur.dati ? JSON.parse(JSON.stringify(cur.dati)) : null);
+            const busta = await C.cifra(S.chiave, S.cfg.kid, nuovo, aadT(k));
+            try {
+                const r = await chiama('turni.salva', { chiave: k, busta, versioneBase: cur.version });
+                await scriviMeta('turni:' + k, { version: r.version, dati: nuovo });
+                cambiato('turni');
+                return nuovo;
+            } catch (e) {
+                if (!(e.custode && e.codice === 'conflitto')) throw e;
+            }
+        }
+        throw new Error('Troppe modifiche contemporanee ai turni: riprova.');
+    }
+
     async function dispositivi() { S.dispositivi = await chiama('dispositivi.elenco'); return S.dispositivi; }
     async function togliDispositivo(id) { await chiama('dispositivo.togli', { id }); return dispositivi(); }
     /** Porta sul Drive del centro un bambino che finora era solo su questo dispositivo. */
@@ -697,7 +741,7 @@
     window.TiceSync = {
         S, Auth, chiama, ErroreRete, ErroreCustode,
         avvia, sincronizza, condividi, esci, creaChiave, inserisciChiave, cambiaChiave, mostraFrase, dispositivi, togliDispositivo,
-        ripristina, versioni, anteprimaVersione, preparaCentro, eAdmin, leggiModalita, aggiornaModalita, ruolo: () => (S.io && S.io.ruolo) || null,
+        ripristina, versioni, anteprimaVersione, preparaCentro, eAdmin, leggiModalita, aggiornaModalita, leggiTurni, modificaTurni, ruolo: () => (S.io && S.io.ruolo) || null,
         attivo: () => !!cfgApp().custodeUrl,
         pronto, condiviso: (pid) => S.condivisi.has(pid), inAttesa: (pid) => S.coda.has(pid),
         puo: (cosa) => !S.io || !S.io.permessi || !!S.io.permessi[cosa],

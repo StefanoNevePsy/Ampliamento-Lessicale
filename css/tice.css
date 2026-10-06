@@ -588,3 +588,66 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 .campo-data-eu > input.campo-data-eu-nativo { position: absolute; right: 0; bottom: 0; width: 1px !important; height: 1px !important; min-width: 0 !important; opacity: 0; pointer-events: none; border: 0 !important; padding: 0 !important; margin: 0 !important; }
 .campo-data-eu.errore > input[type=text] { outline: 2px solid rgba(220, 60, 40, .55); }
 .tice .campo .campo-data-eu, .tice-foglio .campo .campo-data-eu { display: flex; width: 100%; }
+
+/* ==========================================================================
+   Turni (js/tice-turni-vista.js): bambini in colonna, fasce orarie in riga
+   ========================================================================== */
+.tice .tt-main { max-width: none; }
+.tice .tt-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
+.tice .tt-settimana { display: flex; gap: 4px; margin-left: auto; overflow-x: auto; }
+.tice .tt-g { position: relative; display: grid; justify-items: center; min-width: 40px; padding: 4px 6px; border: 1px solid transparent; border-radius: 10px; background: none; color: inherit; font: inherit; font-weight: 700; cursor: pointer; line-height: 1.1; }
+.tice .tt-g small { font-weight: 500; font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; opacity: .7; }
+.tice .tt-g.scelto { border-color: currentColor; }
+.tice .tt-g.oggi { color: var(--taccuino-spot, var(--accent-color)); }
+.tice .tt-punto { position: absolute; bottom: 2px; width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: .55; }
+.tice .tt-pennello { position: sticky; top: 0; z-index: 3; background: var(--bg-primary, inherit); padding: 6px 0 8px; margin-bottom: 6px; }
+.tice .tt-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.tice .tt-pers { border: 1px solid var(--tq-matita-forte, rgba(0,0,0,.25)); border-radius: 999px; padding: 5px 12px; background: transparent; color: inherit; font: inherit; font-size: .88rem; font-weight: 600; cursor: pointer; }
+.tice .tt-pers.tiro { border-style: dashed; }
+.tice .tt-pers.attiva { background: var(--text-primary, #222); color: var(--taccuino-carta, #fff); border-color: var(--text-primary, #222); border-style: solid; }
+.tice .tt-pers.fine { border-color: transparent; text-decoration: underline; }
+.tice .tt-sep { width: 1px; background: var(--tq-matita, rgba(0,0,0,.15)); margin: 2px 4px; }
+.tice .tt-griglia-box { overflow: auto; max-height: calc(100vh - 230px); border: 1px solid var(--tq-matita, rgba(0,0,0,.15)); border-radius: 12px; }
+.tice .tt-griglia { border-collapse: separate; border-spacing: 0; min-width: 100%; }
+.tice .tt-griglia th, .tice .tt-griglia td { border-right: 1px solid var(--tq-matita, rgba(0,0,0,.12)); border-bottom: 1px solid var(--tq-matita, rgba(0,0,0,.12)); }
+.tice .tt-griglia thead th { position: sticky; top: 0; z-index: 2; }
+.tice .tt-angolo, .tice .tt-ora { position: sticky; left: 0; z-index: 1; background: var(--bg-primary, var(--taccuino-carta, #fff)); }
+.tice .tt-angolo { z-index: 3; }
+.tice .tt-ora { font-size: .8rem; font-weight: 700; padding: 6px 8px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; vertical-align: top; }
+.tice .tt-bambino { min-width: 118px; padding: 8px 8px 7px; font-weight: 700; font-size: .92rem; text-align: left; background: var(--bg-primary, #fff); background-image: linear-gradient(var(--t), var(--t)); border-top: 4px solid var(--c) !important; }
+.tice .tt-cella { padding: 0; background-image: linear-gradient(var(--t), var(--t)); vertical-align: top; }
+.tice .tt-in { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 3px; width: 100%; min-height: 46px; padding: 5px 6px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.tice .tt-in:disabled { cursor: default; }
+.tice .tt-in:hover:not(:disabled) { box-shadow: inset 0 0 0 2px var(--c); }
+.tice .tt-nome { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--bg-primary, #fff); border: 1px solid var(--c); font-size: .82rem; font-weight: 600; white-space: nowrap; }
+.tice .tt-nome.tiro { border-style: dashed; }
+.tice .tt-nota { width: 100%; font-size: .72rem; opacity: .75; font-style: italic; }
+.tice .tt-piu { opacity: .25; font-size: 1.1rem; margin: auto; }
+.tice .tt-cella.conf { box-shadow: inset 0 0 0 2px #d0453a; background-image: linear-gradient(rgba(208,69,58,.12), rgba(208,69,58,.12)); }
+.tice .tt-avviso { color: #d0453a; font-size: .8rem; }
+.tice .tt-conf-nota { color: #d0453a; margin-top: 6px; }
+.tice .tt-riepilogo { margin-top: 14px; }
+.tice .tt-riepilogo ul { list-style: none; padding: 0; margin: 6px 0 0; display: grid; gap: 6px; }
+.tice .tt-rchip { display: inline-block; margin: 2px 4px 2px 0; padding: 1px 8px; border-left: 3px solid var(--c); font-size: .82rem; }
+.tice-foglio .tt-riga-p { align-items: flex-end; }
+
+/* stampa dei turni: A4 orizzontale */
+@page orizzontale { size: A4 landscape; margin: 8mm; }
+#tice-stampa .st-turni { page: orizzontale; }
+#tice-stampa .st-tturni { width: 100%; table-layout: fixed; border-collapse: collapse; }
+#tice-stampa .st-tturni th, #tice-stampa .st-tturni td { border: .5pt solid #9a9a9a; }
+#tice-stampa .st-colora { width: 17mm; }
+#tice-stampa .st-ora { font-size: 8.5pt; text-align: right; padding: 1mm 1.5mm; vertical-align: top; white-space: nowrap; }
+#tice-stampa .st-ora-fine { display: block; font-size: 6.5pt; font-weight: 400; color: #777; }
+#tice-stampa .st-bcol { font-size: 9.5pt; padding: 1.6mm 1.4mm; text-align: left; border-top: 2.4mm solid var(--c) !important; background: var(--t); }
+#tice-stampa .st-cella { height: 11mm; padding: .8mm 1.2mm; vertical-align: top; background: var(--t); }
+#tice-stampa .st-pers { font-size: 8.5pt; font-weight: 600; line-height: 1.2; }
+#tice-stampa .st-nota-t { font-size: 6.5pt; font-style: italic; color: #555; }
+#tice-stampa .st-cella.st-conf { outline: 1.2pt solid #c0392b; outline-offset: -1.2pt; }
+#tice-stampa .st-sottot { margin: 4mm 0 1.2mm; }
+#tice-stampa .st-colnome { width: 40mm; }
+#tice-stampa .st-perpersona td { padding: 1mm 1.5mm; font-size: 8pt; }
+#tice-stampa .st-pnome { text-align: left; padding: 1mm 1.5mm; font-size: 8.5pt; }
+#tice-stampa .st-ruolo { font-size: 6.5pt; font-weight: 400; color: #666; }
+#tice-stampa .st-pchip { display: inline-block; margin: .4mm 2mm .4mm 0; padding-left: 1.2mm; border-left: 1.4mm solid var(--c); }
+#tice-stampa .st-legenda-turni { font-size: 8pt; color: #555; margin: 0; }

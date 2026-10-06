@@ -433,6 +433,31 @@ prova('modalità: chiavi e identificativi strani sono rifiutati', () => {
   ko(chiama(PROPRIETARIO, 'modalita.aggiorna', { sinonimi: { tact: { modalita: 'Tact!' } } }), 'richiesta-non-valida');
 });
 
+// --- turni --------------------------------------------------------------------
+// (a questo punto la chiave del centro è già stata cambiata: le buste usano quella attuale)
+const bustaT = (o, aad) => Object.assign(busta(o, aad), { kid: ok(chiama(PROPRIETARIO, 'cifratura.leggi')).kid });
+prova('turni: settimana vuota, poi salvata cifrata; la leggono anche le tirocinanti', () => {
+  const v = ok(chiama(TIR, 'turni.leggi', { chiave: '2026-10-05' }));
+  assert.deepStrictEqual([v.version, v.busta], [0, null]);
+  const b = bustaT({ voci: [{ id: 't1', pid: PZ1, giorno: '2026-10-06', ora: '09:00', durata: 60, persone: ['p1'] }] }, 'tice:turni:2026-10-05');
+  const r = ok(chiama(PROPRIETARIO, 'turni.salva', { chiave: '2026-10-05', busta: b, versioneBase: 0 }));
+  assert.strictEqual(r.version, 1);
+  const l = ok(chiama(TIR, 'turni.leggi', { chiave: '2026-10-05' }));
+  assert.strictEqual(apri(l.busta, 'tice:turni:2026-10-05').voci[0].ora, '09:00');
+  assert.ok(!fs.readFileSync(path.join(dir, 'Turni', '2026-10-05.json'), 'utf8').includes('09:00'), 'su Drive solo la busta');
+});
+prova('turni: due modifiche insieme → conflitto, non si perde niente', () => {
+  const b = bustaT({ voci: [] }, 'tice:turni:2026-10-05');
+  const r = chiama(PROPRIETARIO, 'turni.salva', { chiave: '2026-10-05', busta: b, versioneBase: 0 });
+  ko(r, 'conflitto');
+  assert.ok(r.extra && r.extra.attuale && r.extra.attuale.version === 1);
+  ko(chiama(PROPRIETARIO, 'turni.salva', { chiave: '2026-10-05', busta: busta({ voci: [] }), versioneBase: 1 }), 'chiave-cambiata');
+});
+prova('turni: le tirocinanti non li cambiano; chiavi strane rifiutate', () => {
+  ko(chiama(TIR, 'turni.salva', { chiave: 'persone', busta: busta({ persone: [] }), versioneBase: 0 }), 'vietato');
+  ko(chiama(PROPRIETARIO, 'turni.leggi', { chiave: '../accessi' }), 'richiesta-non-valida');
+});
+
 console.log(`\n${passati} test passati, ${fallimenti.length} falliti`);
 fs.rmSync(dir, { recursive: true, force: true });
 process.exit(fallimenti.length ? 1 : 0);

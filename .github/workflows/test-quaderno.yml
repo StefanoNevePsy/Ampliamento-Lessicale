@@ -38,6 +38,8 @@ jobs:
         run: node tools/test-tice-stampa.js
       - name: Date e orari
         run: node tools/test-orario.js
+      - name: Turni
+        run: node tools/test-tice-turni.js
       - name: Task analysis nel programma
         run: node tools/test-tice-ta.js
       - name: Sintassi della presa dati

@@ -362,6 +362,7 @@ var QT = (function () {
     versione: function (pid, v) { return 'Pazienti/' + pid + '/versioni/v' + ('00000000' + v).slice(-8) + '.json'; },
     indiceMateriali: 'Materiali/indice.json',
     modalita: '_config/modalita.json',
+    turni: function (k) { return 'Turni/' + k + '.json'; },
     cartellaImmagini: 'Materiali/immagini',
     set: function (id) { return 'Materiali/set/' + id + '.json'; },
     immagine: function (hash, ext) { return 'Materiali/immagini/' + hash + '.' + ext; },
@@ -468,7 +469,7 @@ var QT = (function () {
     'cifratura.imposta': true, 'dispositivo.registra': true, 'dispositivi.abilita': true, 'dispositivo.togli': true,
     'paziente.crea': true, 'paziente.salva': true, 'paziente.archivia': true,
     'materiali.caricaImmagini': true, 'materiali.pubblica': true, 'materiali.elimina': true, 'accessi.salva': true,
-    'modalita.aggiorna': true,
+    'modalita.aggiorna': true, 'turni.salva': true,
   };
   var RE_RICHIESTA = /^[A-Za-z0-9_-]{8,64}$/;
 
@@ -1143,6 +1144,35 @@ var QT = (function () {
         x.aggiornatoDa = u.email;
         A.scriviJSON(P.modalita, x);
         return x;
+      });
+    };
+
+    // --- Turni -------------------------------------------------------------------
+    // Chi segue quale bambino e quando: una busta cifrata con la chiave del
+    // centro per ogni settimana (chiave = il lunedì) e una per le persone dei
+    // turni. Li leggono tutti, li cambia chi gestisce i programmi.
+    var RE_TURNI = /^(persone|\d{4}-\d{2}-\d{2})$/;
+    var MAX_TURNI = 2 * 1024 * 1024;
+    azioni['turni.leggi'] = function (u, d) {
+      var k = idV(d.chiave, RE_TURNI, 'chiave');
+      var x = A.leggiJSON(P.turni(k));
+      return x ? { chiave: k, version: x.version, busta: x.busta, aggiornato: x.aggiornato, aggiornatoDa: x.aggiornatoDa } : { chiave: k, version: 0, busta: null };
+    };
+    azioni['turni.salva'] = function (u, d) {
+      puo(u, 'programmi');
+      var cfg = richiediCifratura();
+      var k = idV(d.chiave, RE_TURNI, 'chiave');
+      var b = bustaV(d.busta, MAX_TURNI, 'busta');
+      richiediChiaveAttuale(cfg, b);
+      var base = interoV(d.versioneBase, 0, 1e9, 'versioneBase');
+      return conLock(function () {
+        var x = A.leggiJSON(P.turni(k));
+        if (((x && x.version) || 0) !== base) {
+          throw err('conflitto', 'I turni sono stati cambiati da ' + ((x && x.aggiornatoDa) || 'un\'altra persona') + ' nel frattempo.', { attuale: x });
+        }
+        var n = { chiave: k, version: base + 1, busta: b, aggiornato: amb.ora(), aggiornatoDa: u.email };
+        A.scriviJSON(P.turni(k), n);
+        return { chiave: k, version: n.version, aggiornato: n.aggiornato };
       });
     };
 
