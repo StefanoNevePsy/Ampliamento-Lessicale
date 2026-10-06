@@ -101,6 +101,7 @@
         // chi organizza vede tutte le fasce (per riempirle); chi guarda e il foglio stampato solo quelle riempite
         const tutte = S.tutteOre == null ? modifica : S.tutteOre;
         const ridotte = !tutte && gi.usate.length && gi.usate.length < gi.fasce.length;
+        const ora0 = new Date(), adesso = ora0.getHours() * 60 + ora0.getMinutes();
         const righe = ridotte ? gi.usate : gi.fasce;
         const terapeuti = S.persone.filter((p) => p.ruolo !== 'tirocinante'), tiro = S.persone.filter((p) => p.ruolo === 'tirocinante');
         const chip = (p) => h`<button class="tt-pers ${S.pennello.includes(p.id) ? 'attiva' : ''} ${p.ruolo === 'tirocinante' ? 'tiro' : ''}" data-a="tt-pennello" data-id="${p.id}" aria-pressed="${S.pennello.includes(p.id)}">${p.nome}</button>`;
@@ -108,17 +109,20 @@
             const v = gi.celle[pid + '|' + ora];
             const c = TT.colore(pid);
             return h`<td class="tt-cella ${v && conf[v.id] ? 'conf' : ''}" style="--c:${c};--t:${TT.tinta(c, 0.10)}">
-                <button class="tt-in" ${modifica ? grezzo(`data-a="tt-cella" data-pid="${pid}" data-ora="${ora}"`) : grezzo('disabled')} title="${v && conf[v.id] ? conf[v.id].join(' · ') : nomeBambino(pid) + ', ' + oraT(ora)}">
+                <button class="tt-in" ${modifica ? grezzo(`data-a="tt-cella" data-pid="${pid}" data-ora="${ora}"`) : X.paz(pid) ? grezzo(`data-a="apri-bambino" data-pid="${pid}"`) : grezzo('disabled')} title="${v && conf[v.id] ? conf[v.id].join(' · ') : nomeBambino(pid) + ', ' + oraT(ora)}">
                     ${v ? (v.persone || []).map((p) => h`<span class="tt-nome ${(persona(p) || {}).ruolo === 'tirocinante' ? 'tiro' : ''}">${breve(nomePersona(p))}</span>`) : ''}
                     ${v && v.nota ? h`<span class="tt-nota">${v.nota}</span>` : ''}
                     ${v && conf[v.id] ? h`<span class="tt-avviso">${icona('triangle-exclamation')}</span>` : ''}
                     ${!v && modifica ? h`<span class="tt-piu">+</span>` : ''}
                 </button></td>`;
         };
-        return h`${barra({ indietro: 'vai-bambini', titolo: 'Turni', sotto: { testo: lunga(S.giorno), azione: 'tt-data' },
-                destra: h`<button class="ib" data-a="tt-stampa" aria-label="Stampa" title="Stampa">${icona('print')}</button>
-                    <button class="ib" data-a="tt-menu" aria-label="Altro">${icona('ellipsis-vertical')}</button>` })}
+        return h`${barra({ titolo: S.giorno === oggi() ? 'Oggi' : 'Turni', sotto: { testo: S.giorno === oggi() ? lunga(S.giorno).replace(/^Oggi, /, '') : lunga(S.giorno), azione: 'tt-data' },
+                destra: h`<button class="ib" data-a="tt-stampa" aria-label="Stampa i turni" title="Stampa i turni">${icona('print')}</button>
+                    <button class="ib" data-a="vai-elenco" aria-label="Tutti i bambini" title="Tutti i bambini">${icona('children')}</button>
+                    <button class="ib" data-a="giochi" aria-label="Giochi e attività dell'app" title="Giochi e attività">${icona('gamepad')}</button>
+                    <button class="ib" data-a="menu" aria-label="Altro">${icona('ellipsis-vertical')}</button>` })}
             <main class="tice-main tt-main">
+                ${X.banner()}
                 <div class="tt-nav">
                     <button class="bt piccolo" data-a="tt-giorno" data-d="-1" aria-label="Giorno prima">${icona('chevron-left')}</button>
                     <button class="bt piccolo" data-a="tt-oggi">Oggi</button>
@@ -137,17 +141,21 @@
                     <span class="sotto piccolo">${S.pennello.length ? 'Tocca le celle per mettere o togliere ' + S.pennello.map((id) => breve(nomePersona(id))).join(' + ') : 'Assegna veloce: scegli una persona (o due) e tocca le celle'}</span>
                     <div class="tt-chips">${terapeuti.map(chip)}${tiro.length ? h`<span class="tt-sep"></span>${tiro.map(chip)}` : ''}${S.pennello.length ? h`<button class="tt-pers fine" data-a="tt-pennello-fine">Fatto</button>` : ''}</div></div>` : ''}
                 ${gi.bambini.length ? h`<div class="tt-griglia-box"><table class="tt-griglia">
-                    <thead><tr><th class="tt-angolo"></th>${gi.bambini.map((pid) => { const c = TT.colore(pid); return h`<th class="tt-bambino" style="--c:${c};--t:${TT.tinta(c, 0.16)}">${nomeBambino(pid)}</th>`; })}</tr></thead>
-                    <tbody>${righe.map((ora) => h`<tr><th class="tt-ora">${oraT(ora)}<small>${oraT(TT.fineFascia(gi, ora))}</small></th>${gi.bambini.map((pid) => cella(pid, ora))}</tr>`)}</tbody>
+                    <thead><tr><th class="tt-angolo"></th>${gi.bambini.map((pid) => { const c = TT.colore(pid); return h`<th class="tt-bambino" style="--c:${c};--t:${TT.tinta(c, 0.16)}">
+                        ${X.paz(pid) ? h`<button class="tt-apri" data-a="apri-bambino" data-pid="${pid}" title="Apri la presa dati di ${nomeBambino(pid)}">${nomeBambino(pid)} ${icona('arrow-right')}</button>` : nomeBambino(pid)}</th>`; })}</tr></thead>
+                    <tbody>${righe.map((ora) => h`<tr class="${S.giorno === oggi() && adesso >= TT.minuti(ora) && adesso < TT.minuti(TT.fineFascia(gi, ora)) ? 'adesso' : ''}"><th class="tt-ora">${oraT(ora)}<small>${oraT(TT.fineFascia(gi, ora))}</small></th>${gi.bambini.map((pid) => cella(pid, ora))}</tr>`)}</tbody>
                 </table></div>
                 ${gi.usate.length && gi.usate.length < gi.fasce.length ? h`<button class="bt piccolo fantasma tt-tutte" data-a="tt-tutte">${icona(ridotte ? 'up-down' : 'compress')} ${ridotte ? `Mostra tutte le ore (${oraT(gi.da)}–${oraT(gi.a)})` : 'Solo le ore con turni'}</button>` : ''}
                 ${Object.keys(conf).length ? h`<p class="sotto piccolo tt-conf-nota">${icona('triangle-exclamation')} Celle in rosso: la stessa persona con due bambini insieme, o un bambino con due turni.</p>` : ''}`
                 : S.sett ? h`<div class="vuoto">Nessun bambino in questa giornata.
                     ${modifica ? h`<div class="bottoni" style="justify-content:center;margin-top:12px"><button class="bt primario" data-a="tt-bambini">${icona('child')} Scegli i bambini</button>
                     <button class="bt" data-a="tt-copia">${icona('copy')} Copia da un altro giorno</button></div>` : ''}</div>` : ''}
-                ${modifica && gi.bambini.length ? h`<div class="bottoni" style="margin-top:12px">
+                <button class="bt largo tt-apri-altro" data-a="tt-apri">${icona('child-reaching')} Apri un bambino <span class="sotto piccolo">· anche se non è in calendario</span></button>
+                ${modifica ? h`<div class="bottoni tt-strumenti">
                     <button class="bt" data-a="tt-bambini">${icona('child')} Bambini del giorno</button>
-                    <button class="bt" data-a="tt-copia">${icona('copy')} Copia / ripeti</button></div>` : ''}
+                    <button class="bt" data-a="tt-copia">${icona('copy')} Copia / ripeti</button>
+                    <button class="bt" data-a="tt-persone">${icona('users')} Persone</button>
+                    <button class="bt" data-a="tt-orari">${icona('clock')} Orari</button></div>` : ''}
                 ${riepilogo(gi)}
             </main>`;
     }
@@ -178,6 +186,25 @@
 
     const azioni = {
         'tt-giorno': (b) => { S.giorno = TT.piu(S.giorno, +b.dataset.d); TiceHome.ridisegna(); },
+        // apre il foglio di presa dati di un bambino qualsiasi (anche fuori calendario)
+        'tt-apri': async () => {
+            const tutti = X.pazienti().slice().sort((a, b) => String(a.name).localeCompare(String(b.name), 'it'));
+            if (!tutti.length) { TiceHome.vai('bambini'); return; }
+            const gi = TT.giornata(S.sett, S.giorno);
+            const oggiCal = tutti.filter((p) => gi.bambini.includes(p.id)), altri = tutti.filter((p) => !gi.bambini.includes(p.id));
+            const voce = (p) => h`<button class="opzione" data-foglio="${'p:' + p.id}"><span class="corpo">${p.name}${p.category ? h`<small>${p.category}</small>` : ''}</span>${icona('chevron-right')}</button>`;
+            const r = await foglio(h`<h2>Apri un bambino</h2>
+                ${tutti.length > 8 ? h`<input class="cerca" type="search" placeholder="Cerca" aria-label="Cerca un bambino" data-filtra-foglio>` : ''}
+                ${oggiCal.length ? h`<p class="eti">In calendario ${S.giorno === oggi() ? 'oggi' : lunga(S.giorno).toLowerCase()}</p><div class="opzioni">${oggiCal.map(voce)}</div><p class="eti">Gli altri</p>` : ''}
+                <div class="opzioni">${altri.map(voce)}</div>
+                <div class="bottoni"><button class="bt" data-foglio="chiudi">Annulla</button></div>`, {
+                dopo: (f) => {
+                    const c = f.querySelector('[data-filtra-foglio]');
+                    if (c) c.oninput = () => { const q = c.value.trim().toLowerCase(); f.querySelectorAll('.opzione').forEach((o) => { o.hidden = q && !o.textContent.toLowerCase().includes(q); }); };
+                }
+            });
+            if (r && r.indexOf('p:') === 0) { X.T.aperte = {}; TiceHome.vai('seduta', r.slice(2)); }
+        },
         'tt-tutte': () => { S.tutteOre = !(S.tutteOre == null ? puo() : S.tutteOre); TiceHome.ridisegna(); },
         'tt-oggi': () => { S.giorno = oggi(); TiceHome.ridisegna(); },
         'tt-vai': (b) => { S.giorno = b.dataset.g; TiceHome.ridisegna(); },

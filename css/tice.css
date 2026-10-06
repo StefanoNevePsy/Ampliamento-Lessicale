@@ -615,6 +615,15 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 .tice .tt-angolo { z-index: 3; }
 .tice .tt-ora small { display: block; font-weight: 400; font-size: .7rem; opacity: .6; }
 .tice .tt-tutte { margin-top: 8px; }
+.tice .tt-apri { display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; border: 0; background: none; color: inherit; font: inherit; font-weight: 700; cursor: pointer; padding: 2px 4px; border-radius: 8px; }
+.tice .tt-apri i { font-size: .75em; opacity: .55; }
+.tice .tt-apri:hover { background: var(--tq-hover, rgba(0,0,0,.05)); }
+.tice .tt-apri:hover i { opacity: 1; }
+.tice .tt-griglia tr.adesso .tt-ora { color: var(--taccuino-spot, var(--accent-color)); box-shadow: inset 3px 0 0 currentColor; }
+.tice .tt-griglia tr.adesso td { box-shadow: inset 0 2px 0 var(--taccuino-spot, var(--accent-color)); }
+.tice .tt-apri-altro { margin-top: 12px; }
+.tice .tt-apri-altro .sotto { font-weight: 400; }
+.tice .tt-strumenti { margin-top: 10px; flex-wrap: wrap; }
 .tice-foglio .opzioni-rapide { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 10px; }
 .tice .tt-ora { font-size: .85rem; font-weight: 700; padding: 6px 8px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; vertical-align: middle; }
 .tice .tt-bambino { min-width: 130px; padding: 9px 8px 8px; font-weight: 700; font-size: 1.08rem; text-align: center; background: var(--bg-primary, #fff); background-image: linear-gradient(var(--t), var(--t)); border-top: 4px solid var(--c) !important; }

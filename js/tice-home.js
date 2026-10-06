@@ -36,7 +36,7 @@
     const icona = (n) => grezzo(`<i class="fa-solid fa-${n}"></i>`);
 
     // ---------- stato ----------
-    const T = { vista: 'bambini', pid: null, aperte: {}, chiusiAperti: {}, suggerimenti: {}, cerca: '', importazioni: [] };
+    const T = { vista: 'turni', pid: null, aperte: {}, chiusiAperti: {}, suggerimenti: {}, cerca: '', importazioni: [] };
     // Suggerimenti per chi somministra: dell'attività e del target in corso
     const suggerimentiDi = (att, t) => [att && att.suggerimenti, t && t.suggerimento].map((x) => String(x || '').trim()).filter(Boolean);
     const radice = () => document.getElementById('tice');
@@ -301,7 +301,7 @@
                 ${icona('chevron-right')}
             </button>`;
         });
-        return h`${barra({ titolo: 'Presa dati', destra: h`
+        return h`${barra({ indietro: VISTE.turni ? 'vai-bambini' : null, titolo: 'Tutti i bambini', destra: h`
                 <button class="ib" data-a="vai-turni" aria-label="Turni" title="Turni della settimana">${icona('calendar-week')}</button>
                 <button class="ib" data-a="giochi" aria-label="Giochi e attività dell'app" title="Giochi e attività">${icona('gamepad')}</button>
                 <button class="ib" data-a="menu" aria-label="Altro">${icona('ellipsis-vertical')}</button>` })}
@@ -768,7 +768,9 @@
     // Azioni
     // =====================================================================
     const azioni = {
-        'vai-bambini': () => vai('bambini'),
+        // "casa" sono i turni del giorno; l'elenco completo dei bambini resta a un tocco
+        'vai-bambini': () => vai(VISTE.turni ? 'turni' : 'bambini'),
+        'vai-elenco': () => vai('bambini'),
         'vai-turni': () => vai('turni'),
         'vai-seduta': () => vai('seduta'),
         'vai-programma': () => vai('programma'),
@@ -1779,7 +1781,7 @@
         },
         attuale: () => ({ vista: T.vista, pid: T.pid }),
         ridisegna: () => { if (!radice().hidden) { T.mantieniScroll = true; disegna(); } },
-        strumenti: { h, grezzo, icona, foglio, conferma, avviso, barra, vai: (v, pid) => vai(v, pid), paz, pazienti, salvaPaziente, formatoData, T, stampa, limitato: () => limitato() }
+        strumenti: { h, grezzo, icona, foglio, conferma, avviso, barra, vai: (v, pid) => vai(v, pid), paz, pazienti, salvaPaziente, formatoData, T, stampa, limitato: () => limitato(), banner: () => (EST.banner ? EST.banner() : '') }
     };
     if (document.readyState === 'complete') avvia();
     else window.addEventListener('load', avvia);
