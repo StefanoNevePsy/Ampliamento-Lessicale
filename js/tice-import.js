@@ -103,9 +103,20 @@
     return m ? [m[2].trim(), m[1].trim()] : ['Sì', 'No'];
   }
   // Secondi di time delay scritti nel target: 1"T/D, 2” TD, 3'' t/d
+  // Il time delay scritto nel quaderno, nelle sue forme: 1"T/D, 2” TD, 3'' t/d,
+  // TD 2'', (TD 2''), T.D. 3", time delay 2 sec. 0" (senza attesa) conta.
+  var RE_TD = /(?:\b(?:t\s*\.?\s*\/?\s*d\b\.?|time\s*delay)\s*:?\s*(\d{1,2})\s*(?:["”″“]|''|'|sec\w*|s\b)?)|(?:\b(\d{1,2})\s*(?:["”″“]|''|sec\w*|s\b)?\s*(?:t\s*\.?\s*\/?\s*d\b\.?|time\s*delay))/i;
   function secondiTD(t) {
-    var m = /(\d+)\s*(?:["”″]|'')\s*T\s*\/?\s*D/i.exec(t || '');
-    return m ? +m[1] : null;
+    var m = RE_TD.exec(t || '');
+    return m ? +(m[1] != null ? m[1] : m[2]) : null;
+  }
+  /** La cella dice solo il time delay (es. "2”T/D", "(TD 3'')", "passa a 2'' T/D"), senza un target. */
+  function soloTD(t) {
+    if (!RE_TD.test(t || '')) return false;
+    var resto = String(t).replace(RE_TD, ' ').toLowerCase()
+      .replace(/\b(passa|passaggio|aumenta|aumento|cambia|nuovo|a|al|di|da|con|il|tempo|ritardo|attesa|in|poi)\b/g, ' ')
+      .replace(/[()\[\]\-–—>→:,.;'"”″“\s]/g, '');
+    return !resto;
   }
   function cella(tab, r, c) { return c == null || !tab.righe[r] ? null : tab.righe[r][c]; }
   function eTabellaAttivita(tab) {
@@ -152,10 +163,18 @@
     var corrente = null, righeDati = 0, precVuota = true, precDecisione = false, ultimaData = null;
     var voci = [];
     var mappate = Object.keys(colonne).map(function (k) { return colonne[k]; }).filter(function (c) { return c != null; });
+    // time delay in vigore per le righe del target corrente (può aumentare a metà)
+    var tdCorrente = null, tdVisti = false;
     function nuovoTarget(t, d) {
       corrente = { id: 'tg_' + hash(att.id + '|' + att.target.length + '|' + t), testo: t, stato: 'chiuso', inizio: d, fine: null };
       att.target.push(corrente);
       righeDati = 0;
+      tdCorrente = secondiTD(t);
+      if (tdCorrente != null) { corrente.tdSeconds = tdCorrente; tdVisti = true; }
+    }
+    // il nome del target senza l'indicazione del time delay ("Animali — 1”T/D" → "Animali")
+    function senzaTD(t) {
+      return String(t || '').split(' — ').filter(function (x) { return !soloTD(x); }).join(' — ').replace(RE_TD, '').replace(/\(\s*\)/g, '').replace(/[\s—–-]+$/, '').trim() || String(t || '');
     }
     for (var r = 3; r < tab.righe.length; r++) {
       var tSto = testo(cella(tab, r, colonne.sto));
@@ -177,6 +196,23 @@
       if (!tSto && !d && v == null && p == null && !dec) { precVuota = true; continue; }
 
       var tornaIndietro = !!(d && ultimaData && d < ultimaData && righeDati >= 3);
+      if (tSto && corrente && soloTD(tSto)) {
+        // Solo il time delay, senza ripetere il target: aumento a metà (stesso target)
+        // o, dopo un criterio o uno stop, lo stesso target con il time delay nuovo.
+        var sec = secondiTD(tSto);
+        tdVisti = true;
+        if (precDecisione || precVuota || tornaIndietro) {
+          nuovoTarget(senzaTD(corrente.testo) + ' — ' + tSto, d);
+          corrente.tdSeconds = sec; tdCorrente = sec;
+        } else {
+          tdCorrente = sec;
+          corrente.tdSeconds = sec;
+          // nelle prime righe è la continuazione del nome (come "Animali — 1”T/D")
+          if (righeDati < 3) corrente.testo += ' — ' + tSto;
+          else corrente.tdCambi = (corrente.tdCambi || []).concat([{ data: d, secondi: sec }]);
+        }
+        tSto = '';
+      }
       if (tSto) {
         if (!corrente || precVuota || precDecisione || righeDati >= 3 || tornaIndietro) nuovoTarget(tSto, d);
         else corrente.testo += ' — ' + tSto;
@@ -185,7 +221,7 @@
       if (d && (v != null || p != null || dec)) {
         if (!corrente.inizio || d < corrente.inizio) corrente.inizio = d;
         var voce = {
-          riga: r, attivitaId: att.id, targetId: corrente.id, data: d,
+          riga: r, attivitaId: att.id, targetId: corrente.id, data: d, td: tdCorrente,
           v: v, p: p != null ? p : (colonne.p != null ? 0 : null), x: null,
           decisione: dec || null, nota: ''
         };
@@ -204,6 +240,11 @@
         var u2 = dec.toUpperCase();
         if (u2.indexOf('CRITERIO') >= 0) corrente.stato = 'criterio';
         else if (u2.indexOf('REPERTORIO') >= 0) corrente.stato = 'repertorio';
+      }
+      if (dec && corrente && RE_TD.test(dec) && /passa|aument|cambi/i.test(dec)) {
+        // "Passa a 2”T/D" nella colonna delle decisioni: vale dalla riga dopo (il
+        // target che si chiude resta con il suo); di solito segue un target nuovo
+        tdCorrente = secondiTD(dec); tdVisti = true;
       }
       precVuota = false;
       precDecisione = !!dec;
@@ -224,8 +265,10 @@
     }
     att.target.forEach(function (t) {
       var s = secondiTD(t.testo);
-      if (s) t.tdSeconds = s;
+      if (s != null && t.tdSeconds == null) t.tdSeconds = s;
     });
+    // il time delay scritto nelle righe vale più dell'intestazione mancante o generica
+    if (tdVisti) att.sessionType = 'timedelay';
     return { attivita: att, voci: voci };
   }
 
@@ -470,7 +513,10 @@
         fonteFile: pacchetto.file
       };
       if (perc) s.scala = 'percentuale';
-      if (a.sessionType === 'timedelay' && t.tdSeconds) s.timeDelaySeconds = t.tdSeconds;
+      if (a.sessionType === 'timedelay') {
+        var sec = x.td != null ? x.td : t.tdSeconds;
+        if (sec != null) s.timeDelaySeconds = sec;
+      }
       if (operatori[x.data]) s.operatore = operatori[x.data];
       var nota = [];
       if (x.decisione) nota.push('**' + x.decisione + '**');

@@ -140,6 +140,28 @@ prova('anteprima: strategia, tipo di dato e criterio si cambiano; i valori si co
   assert.ok(e.every((x) => !x.scala && x.total === 10 && x.sessionType === 'timedelay'), 'percentuale → 10 prove');
   assert.strictEqual(echo2.tdSeconds, 2);
 });
+prova('time delay: forme "TD 2\'\'", aumento a metà, nuovo dopo il criterio, 0"', () => {
+  const tab = (nome, righe) => [{ nome: 'SPEAKER', tabelle: [{ nome, righe: [['Programma: prova', null, null, null, null], [null, '90% x 2', 'Strategia insegnamento:', 'Indipendente', null], ['STO', 'DATA', 'CORRETTE', 'PROMPTATE', 'DECISIONE']].concat(righe) }] }];
+  const q = tab('TACT', [
+    ['Colori (TD 1\'\')', D('2025-04-01'), 5, 5, null],
+    [null, D('2025-04-02'), 6, 4, null],
+    [null, D('2025-04-03'), 7, 3, null],
+    ['TD 3\'\'', D('2025-04-04'), 6, 4, null],        // aumento a metà: stesso target
+    [null, D('2025-04-05'), 9, 1, 'CRITERIO'],
+    ['passa a 5" T/D', D('2025-04-08'), 6, 4, null],   // dopo il criterio: lo stesso target con 5"
+    [null, null, null, null, null],
+    ['Forme — 0"T/D', D('2025-04-10'), 2, 8, null],
+  ]);
+  const pk3 = TiceImport.analizza(q, 'x.numbers');
+  const a = pk3.attivita[0];
+  assert.strictEqual(a.sessionType, 'timedelay', 'il time delay nelle righe vale più di "Indipendente"');
+  assert.deepStrictEqual(a.target.map((t) => [t.testo, t.tdSeconds, t.stato]),
+    [['Colori (TD 1\'\')', 3, 'criterio'], ['Colori — passa a 5" T/D', 5, 'chiuso'], ['Forme — 0"T/D', 0, 'attivo']]);
+  const sec = TiceImport.sedute(pk3, { [a.id]: 10 }).filter((x) => x.attivitaId === a.id).map((x) => x.timeDelaySeconds);
+  assert.deepStrictEqual(sec, [1, 1, 1, 3, 3, 5, 0], 'ogni seduta con il suo time delay');
+  const f = TiceImport._interni.secondiTD;
+  assert.deepStrictEqual(['1"T/D', '2” TD', "3'' t/d", 'TD 2\'\'', '(TD 4\'\')', 'T.D. 3"', 'time delay 2 sec', '0”T/D', 'TAGLIA RIGA 2 CM'].map(f), [1, 2, 3, 2, 4, 3, 2, 0, null]);
+});
 prova('la data non slitta col fuso orario', () => {
   const d = new Date(s[0].date);
   assert.strictEqual(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`, s[0].date.slice(0, 10));
