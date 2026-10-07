@@ -219,6 +219,21 @@ function archivioDrive_() {
     } catch (e) { try { cache.remove(k); } catch (x) { /* solo una comodità */ } }
   }
 
+  // Una copia letta da Drive entra in cache solo se nessuno può scrivere intanto:
+  // dentro il lucchetto delle scritture, o prendendolo se è libero. Altrimenti una
+  // lettura lenta potrebbe rimettere in cache la versione vecchia di un file
+  // appena salvato da un'altra persona.
+  var inLock = false;
+  function testoDrive(p) { var f = file(p); return f ? f.getBlob().getDataAsString('UTF-8') : null; }
+  function testoDaDrive(p) {
+    if (inLock || !daTenere(p)) { var t = testoDrive(p); if (inLock) inCache(p, t); return t; }
+    var lock = LockService.getScriptLock();
+    if (lock.tryLock(0)) {
+      try { var t2 = testoDrive(p); inCache(p, t2); return t2; } finally { lock.releaseLock(); }
+    }
+    return testoDrive(p);
+  }
+
   function scriviTesto(percorso, contenuto, mime) {
     var f = file(percorso);
     if (f) {
@@ -238,9 +253,7 @@ function archivioDrive_() {
     leggiJSON: function (percorso) {
       var c = daCache(percorso);
       if (c !== undefined) return c === null ? null : JSON.parse(c);
-      var f = file(percorso);
-      var testo = f ? f.getBlob().getDataAsString('UTF-8') : null;
-      inCache(percorso, testo);
+      var testo = testoDaDrive(percorso);
       return testo == null ? null : JSON.parse(testo);
     },
     scriviJSON: function (percorso, oggetto) {
@@ -298,7 +311,8 @@ function archivioDrive_() {
         e.occupato = true;
         throw e;
       }
-      try { return fn(); } finally { lock.releaseLock(); }
+      inLock = true;
+      try { return fn(); } finally { inLock = false; lock.releaseLock(); }
     },
   };
 }

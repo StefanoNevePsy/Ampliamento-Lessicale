@@ -94,6 +94,7 @@ let chiamateTokeninfo = 0;
 const cacheDati = {};
 let emailSessione = PROPRIETARIO;
 const proprieta = { CARTELLA_RADICE: radice._id, GOOGLE_CLIENT_ID: CLIENT_ID, GOOGLE_CLIENT_ID_DESKTOP: CLIENT_ID_DESKTOP };
+let lucchettoAltrui = false;   // un'altra persona sta salvando
 const contesto = {
   console,
   DriveApp: {
@@ -108,7 +109,7 @@ const contesto = {
     getAll: (ks) => { const o = {}; ks.forEach((k) => { if (k in cacheDati) o[k] = cacheDati[k]; }); return o; },
     putAll: (o) => { Object.entries(o).forEach(([k, v]) => { if (String(v).length > 100000) throw new Error('valore troppo grande'); cacheDati[k] = v; }); },
   }) },
-  LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
+  LockService: { getScriptLock: () => ({ tryLock: () => !lucchettoAltrui, releaseLock: () => {} }) },
   UrlFetchApp: { fetch: (url) => {
     chiamateTokeninfo++;
     const tok = decodeURIComponent(url.split('id_token=')[1]);
@@ -287,6 +288,17 @@ prova('cache svuotata o con un pezzo perso: si rilegge da Drive, mai mezzo file'
   Object.keys(cacheDati).filter((k) => k.startsWith('c:')).forEach((k) => delete cacheDati[k]);
   assert.strictEqual(A().leggiJSON('_config/prova.json').a, 2);
   assert.strictEqual(typeof contesto.attivaRisveglio, 'function');
+});
+prova('mentre un\'altra persona salva, una lettura da Drive non entra in cache', () => {
+  const A = () => { vm.runInContext('_custode = null;', contesto); return vm.runInContext('archivioDrive_()', contesto); };
+  Object.keys(cacheDati).filter((k) => k.startsWith('c')).forEach((k) => delete cacheDati[k]);
+  lucchettoAltrui = true;
+  try {
+    assert.strictEqual(A().leggiJSON('_config/prova.json').a, 2);
+    assert.ok(!Object.keys(cacheDati).some((k) => /^c[^:]*:/.test(k)), 'niente in cache');
+  } finally { lucchettoAltrui = false; }
+  A().leggiJSON('_config/prova.json');
+  assert.ok(Object.keys(cacheDati).some((k) => /^c[^:]*:/.test(k)), 'con il lucchetto libero sì');
 });
 
 console.log(`\n${passati} test passati, ${falliti} falliti`);
