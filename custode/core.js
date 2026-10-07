@@ -378,11 +378,18 @@ var QT = (function () {
     var azioni = {};
 
     azioni['io'] = function (u) {
+      var c = A.leggiJSON(P.cifratura);
+      // agli admin: quanti dispositivi aspettano la chiave (l'app chiede l'elenco solo se serve)
+      var inAttesa;
+      if (permessi(u).gestisciAccessi && c) {
+        inAttesa = 0;
+        var dd = leggiDispositivi().dispositivi;
+        Object.keys(dd).forEach(function (id) { var x = dd[id]; if (!(x.chiavi && x.chiavi[c.kid]) && abilitato(x.email)) inAttesa++; });
+      }
       return {
         email: u.email, nome: u.nome, ruolo: u.ruolo, pazienti: u.pazienti,
         proprietario: u.proprietario, scadenza: u.scadenza, permessi: permessi(u),
-        cifratura: !!A.leggiJSON(P.cifratura),
-        kid: (A.leggiJSON(P.cifratura) || {}).kid || null,
+        cifratura: !!c, kid: (c || {}).kid || null, cfg: c || null, inAttesa: inAttesa,
       };
     };
 

@@ -351,6 +351,22 @@ Quando cambia il codice del custode:
 
 L'URL resta lo stesso e l'app non va toccata. Controlla la versione aprendo l'URL `/exec`.
 
+### Un custode più pronto
+Il custode tiene in memoria (la cache di Apps Script) i file che legge più spesso:
+accessi, chiave, elenco dei bambini, dispositivi, materiali. Così entrare e
+sincronizzare costa una frazione di prima; salvare resta un po' più lento, perché
+ogni salvataggio scrive davvero su Drive.
+
+- **Risveglio (facoltativo, consigliato).** Apps Script, quando per un po' nessuno lo
+  usa, alla prima richiesta impiega qualche secondo a ripartire. Nell'editor scegli la
+  funzione **attivaRisveglio** e premi ▶ **Esegui** (consenti la creazione di un
+  attivatore): ogni 10 minuti, tra le 7 e le 21, il custode si sveglia da solo per circa
+  un secondo. Per toglierlo: **disattivaRisveglio**.
+- **Dopo una modifica fatta a mano ai file nel Drive** (da evitare, per esempio un file
+  ripristinato da una versione precedente): esegui **svuotaCache** (o
+  **ricostruisciCache**, che la svuota e ricostruisce l'elenco dei bambini), altrimenti
+  per qualche ora il custode continua a usare la copia che ha in memoria.
+
 ---
 
 ## Se qualcosa non va

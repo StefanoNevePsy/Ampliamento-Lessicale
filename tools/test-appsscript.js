@@ -103,8 +103,10 @@ const contesto = {
   PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => proprieta[k] || null, setProperty: (k, v) => { proprieta[k] = v; } }) },
   CacheService: { getScriptCache: () => ({
     get: (k) => (k in cacheDati ? cacheDati[k] : null),
-    put: (k, v) => { cacheDati[k] = v; },
+    put: (k, v) => { if (String(v).length > 100000) throw new Error('valore troppo grande'); cacheDati[k] = v; },
     remove: (k) => { delete cacheDati[k]; },
+    getAll: (ks) => { const o = {}; ks.forEach((k) => { if (k in cacheDati) o[k] = cacheDati[k]; }); return o; },
+    putAll: (o) => { Object.entries(o).forEach(([k, v]) => { if (String(v).length > 100000) throw new Error('valore troppo grande'); cacheDati[k] = v; }); },
   }) },
   LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
   UrlFetchApp: { fetch: (url) => {
@@ -200,10 +202,13 @@ prova('la cache degli id evita di cercare per nome a ogni richiesta', () => {
   ok(post('tok-' + PROPRIETARIO, 'paziente.leggi', { id: PID }));
   assert.ok(statistiche.ricerche - prima <= 1, `ricerche per nome: ${statistiche.ricerche - prima}`);
 });
-prova('se un file viene spostato nel cestino, lo si ritrova per nome e non si legge quello vecchio', () => {
+prova('se un file viene spostato nel cestino, dopo svuotaCache lo si ritrova per nome e non si legge quello vecchio', () => {
   const paz = radice._cartelle.find((c) => c._nome === 'Pazienti');
   const elenco = paz._file.find((f) => f._nome === '_elenco.json');
   elenco.setTrashed(true);
+  // la copia in cache resta valida finché non si svuota (come dopo ogni modifica a mano su Drive)
+  assert.strictEqual(ok(post('tok-' + PROPRIETARIO, 'pazienti.elenco')).length, 1, 'intanto si continua a lavorare');
+  contesto.svuotaCache();
   const pazienti = ok(post('tok-' + PROPRIETARIO, 'pazienti.elenco'));
   assert.strictEqual(pazienti.length, 1);
   assert.ok(paz._file.some((f) => f._nome === '_elenco.json' && !f._cestino), 'elenco ricostruito');
@@ -252,6 +257,36 @@ prova('ricostruisciCache dall\'editor funziona', () => {
 prova('JSON non valido: risposta di errore, non un\'eccezione', () => {
   const out = JSON.parse(contesto.doPost({ postData: { contents: '{rotto' } }).getContent());
   assert.strictEqual(out.errore, 'richiesta-non-valida');
+});
+
+// ---- cache del contenuto dei file: sempre coerente con Drive ----
+prova('cache: si rilegge quello appena scritto, mai il vecchio', () => {
+  const A = () => { vm.runInContext('_custode = null;', contesto); return vm.runInContext('archivioDrive_()', contesto); };
+  A().scriviJSON('_config/prova.json', { a: 1 });
+  assert.strictEqual(A().leggiJSON('_config/prova.json').a, 1);
+  A().scriviJSON('_config/prova.json', { a: 2 });
+  assert.strictEqual(A().leggiJSON('_config/prova.json').a, 2);
+});
+prova('cache: file grandi in pezzi; assente poi creato; eliminato', () => {
+  const A = () => { vm.runInContext('_custode = null;', contesto); return vm.runInContext('archivioDrive_()', contesto); };
+  A().scriviJSON('Pazienti/x/paziente.json', { t: 'x'.repeat(300000) });
+  assert.strictEqual(A().leggiJSON('Pazienti/x/paziente.json').t.length, 300000);
+  assert.strictEqual(A().leggiJSON('_config/manca.json'), null);
+  assert.strictEqual(A().esiste('_config/manca.json'), false);
+  A().scriviJSON('_config/manca.json', { c: 3 });
+  assert.strictEqual(A().esiste('_config/manca.json'), true);
+  A().elimina('_config/manca.json');
+  assert.strictEqual(A().leggiJSON('_config/manca.json'), null);
+});
+prova('cache svuotata o con un pezzo perso: si rilegge da Drive, mai mezzo file', () => {
+  const A = () => { vm.runInContext('_custode = null;', contesto); return vm.runInContext('archivioDrive_()', contesto); };
+  A().scriviJSON('Pazienti/x/paziente.json', { t: 'y'.repeat(300000) });
+  const pezzo = Object.keys(cacheDati).find((k) => /^c:.*:1$/.test(k) && String(cacheDati[k]).startsWith('y'));
+  delete cacheDati[pezzo];
+  assert.strictEqual(A().leggiJSON('Pazienti/x/paziente.json').t, 'y'.repeat(300000));
+  Object.keys(cacheDati).filter((k) => k.startsWith('c:')).forEach((k) => delete cacheDati[k]);
+  assert.strictEqual(A().leggiJSON('_config/prova.json').a, 2);
+  assert.strictEqual(typeof contesto.attivaRisveglio, 'function');
 });
 
 console.log(`\n${passati} test passati, ${falliti} falliti`);

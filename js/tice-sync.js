@@ -410,6 +410,7 @@
 
     // ---------- ciclo ----------
     let incorso = null;
+    let ultimiControlli = 0;
     function sincronizza(opz) {
         if (!pronto()) return Promise.resolve(false);
         if (incorso) return incorso.then(() => sincronizza(opz));
@@ -427,8 +428,13 @@
                 if (!(opz && opz.soloCoda)) await tira();
                 for (const pid of [...S.coda]) await spingi(pid);   // quanto unito in ricezione
                 await scriviMeta('coda', [...S.coda]);
-                if (!(opz && opz.soloCoda)) await consegnaChiavi();
-                if (!(opz && opz.soloCoda)) await leggiModalita();
+                // dispositivi in attesa della chiave e dizionario delle modalità cambiano di rado:
+                // si chiedono all'accesso e poi ogni 10 minuti, non a ogni sincronizzazione
+                if (!(opz && opz.soloCoda)) {
+                    const aspetta = S.io && S.io.inAttesa;
+                    if (aspetta > 0 || (aspetta === undefined && Date.now() - ultimiControlli > 600000)) await consegnaChiavi();
+                    if (Date.now() - ultimiControlli > 600000) { ultimiControlli = Date.now(); await leggiModalita(); }
+                }
                 S.errore = null;
                 S.ultimo = new Date().toISOString();
                 return true;
@@ -539,7 +545,7 @@
         S.io = await chiama('io');
         await scriviMeta('io', S.io);
         leggiModalita().catch(() => {});
-        S.cfg = S.io.cifratura ? await chiama('cifratura.leggi') : null;
+        S.cfg = !S.io.cifratura ? null : S.io.cfg !== undefined ? S.io.cfg : await chiama('cifratura.leggi');
         await scriviMeta('cfg', S.cfg);
         S.chiavi = await C.portachiavi();
         S.negato = null;
