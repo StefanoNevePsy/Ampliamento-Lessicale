@@ -232,6 +232,8 @@
   // Percentuali o conteggi, e quante prove per seduta. Mai inventato in silenzio.
   function deduciScala(att, voci, daConfermare, avvisi) {
     var utili = voci.filter(function (x) { return x.v != null; });
+    // i numeri come sono scritti nel foglio: servono se in anteprima si cambia il tipo di dato
+    utili.forEach(function (x) { if (x.rv === undefined) { x.rv = x.v; x.rp = x.p; } });
     if (!utili.length) return;
     var haP = utili.some(function (x) { return x.p != null; });
     var somme = utili.map(function (x) { return x.v + (x.p || 0); });
@@ -378,6 +380,50 @@
   }
 
   /**
+   * Le scelte fatte in anteprima su un'attività: strategia (indipendente o
+   * time delay, con i secondi), tipo di dato ('conteggio' di LU o
+   * 'percentuale'), prove per seduta, criterio. Cambiando il tipo di dato i
+   * valori si convertono dai numeri scritti nel foglio: 7 su 10 → 70%, e
+   * 70% su 10 prove → 7.
+   * campi: { sessionType, tdSeconds, scala, prove, soglia, sedute }
+   */
+  function imposta(pacchetto, attId, campi) {
+    var a = pacchetto.attivita.filter(function (x) { return x.id === attId; })[0];
+    if (!a) return;
+    if (!a.scalaLetta) a.scalaLetta = a.scala || 'conteggio';
+    if (campi.sessionType) a.sessionType = campi.sessionType === 'timedelay' ? 'timedelay' : 'independent';
+    if (campi.tdSeconds != null) a.tdSeconds = +campi.tdSeconds > 0 ? +campi.tdSeconds : null;
+    if (campi.soglia || campi.sedute) a.criterio = { soglia: +campi.soglia || a.criterio.soglia, sedute: +campi.sedute || a.criterio.sedute };
+    if (campi.prove != null) a.prove = +campi.prove > 0 ? +campi.prove : null;
+    var scala = campi.scala || a.scala || 'conteggio';
+    a.scala = scala;
+    var lettiInPercentuale = a.scalaLetta === 'percentuale';
+    pacchetto.voci.forEach(function (x) {
+      if (x.attivitaId !== attId || x.rv == null) return;
+      var rv = x.rv, rp = x.rp || 0;
+      delete x.x;
+      if (scala === 'percentuale') {
+        x.scala = 'percentuale';
+        if (lettiInPercentuale) { var sm = rv + rp; x.v = sm > 100 ? Math.round(100 * rv / sm) : rv; x.p = sm > 100 ? 100 - x.v : rp; }
+        else {
+          var tot = a.prove || (rv + rp) || 1;
+          x.v = Math.min(100, Math.round(100 * rv / tot));
+          x.p = Math.min(100 - x.v, Math.round(100 * rp / tot));
+        }
+      } else {
+        delete x.scala;
+        if (lettiInPercentuale) {
+          var n = a.prove || 10, somma = rv + rp;
+          // i refusi del foglio (33 + 77 = 110%) si riportano a 100, come in lettura
+          var pv = somma > 100 ? Math.round(100 * rv / somma) : rv, pp = somma > 100 ? 100 - pv : rp;
+          x.v = Math.round(pv * n / 100);
+          x.p = Math.min(n - x.v, Math.round(pp * n / 100));
+        } else { x.v = rv; x.p = x.rp; }
+      }
+    });
+  }
+
+  /**
    * Trasforma le voci in sedute dello storico dell'app.
    * @param conferme {attivitaId: prove} dall'anteprima
    */
@@ -502,7 +548,7 @@
   }
 
   return {
-    analizza: analizza, sedute: sedute, applica: applica, nomeSet: nomeSet, nomeDaFile: nomeDaFile,
+    analizza: analizza, sedute: sedute, applica: applica, imposta: imposta, nomeSet: nomeSet, nomeDaFile: nomeDaFile,
     _interni: { dataIso: dataIso, numero: numero, leggiCriterio: leggiCriterio, secondiTD: secondiTD, hash: hash }
   };
 });

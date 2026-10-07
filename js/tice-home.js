@@ -671,6 +671,37 @@
 
     // ---------- import ----------
     const normNome = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+    // Come si raccoglieva il dato di ogni attività: strategia, tipo di dato, prove per seduta, criterio.
+    // Precompilato da quello che si legge nel quaderno; prima le attività da controllare.
+    function sezioneDato(it, i, terminata) {
+        const pk = it.pk;
+        const dubbi = {};
+        pk.daConfermare.forEach((d) => { dubbi[d.attivitaId] = d; });
+        const riga = (a) => {
+            const st = it.impost[a.id], d = dubbi[a.id];
+            const da = (campo) => grezzo(`data-cambio="imp-imp" data-i="${i}" data-att="${esc(a.id)}" data-campo="${campo}"`);
+            const sel = (campo, opz) => h`<select class="campo-in" ${da(campo)}>${opz.map(([v, n]) => h`<option value="${v}" ${String(st[campo]) === v ? grezzo('selected') : ''}>${n}</option>`)}</select>`;
+            return h`<div class="riga-dato">
+                <div><b>${(a.area || 'Terminati') + ' / ' + a.nome}</b>
+                    ${d && !d.certo ? h` <span class="pill arancio">da controllare</span>` : d ? h` <span class="pill verde">quasi certo</span>` : ''}</div>
+                ${d ? h`<div class="sotto piccolo">${d.motivo}</div>` : ''}
+                <div class="riga-campi">
+                    <label class="campo"><span>Strategia</span>${sel('sessionType', [['independent', 'Indipendente'], ['timedelay', 'Time delay']])}</label>
+                    ${st.sessionType === 'timedelay' ? h`<label class="campo stretto"><span>Secondi T/D</span><input class="campo-in" type="number" min="1" max="30" inputmode="numeric" value="${st.tdSeconds || ''}" placeholder="—" ${da('tdSeconds')}></label>` : ''}
+                    <label class="campo"><span>Dato</span>${sel('scala', [['conteggio', 'LU contate'], ['percentuale', 'Percentuale']])}</label>
+                    ${st.scala !== 'percentuale' ? h`<label class="campo stretto"><span>Prove per seduta</span><input class="campo-in" type="number" min="1" max="200" inputmode="numeric" value="${st.prove || ''}" ${da('prove')}></label>` : ''}
+                    <label class="campo stretto"><span>Criterio %</span><input class="campo-in" type="number" min="10" max="100" inputmode="numeric" value="${st.soglia}" ${da('soglia')}></label>
+                    <label class="campo stretto"><span>Giorni di fila</span><input class="campo-in" type="number" min="1" max="10" inputmode="numeric" value="${st.sedute}" ${da('sedute')}></label>
+                </div></div>`;
+        };
+        const attive = pk.attivita.filter((a) => !terminata[a.id]), finite = pk.attivita.filter((a) => terminata[a.id]);
+        const vedere = attive.filter((a) => dubbi[a.id] && !dubbi[a.id].certo), resto = attive.filter((a) => !vedere.includes(a));
+        return h`<h3 style="margin-left:0">Come si raccoglie il dato</h3>
+            <p class="sotto piccolo">Per ogni attività: la <b>strategia</b> (indipendente o time delay), il <b>dato</b> (LU contate, o percentuale come «dato in %»), le <b>prove per seduta</b> (quante LU si fanno in una seduta: dove il quaderno scrive solo le corrette, la differenza diventa errori) e il <b>criterio</b> per chiudere un target. Precompilato da quello che c'è nel quaderno: cambiando il tipo di dato i valori si convertono (7 su 10 → 70%).</p>
+            ${vedere.map(riga)}
+            ${resto.length ? h`<details data-chiusi="${'dato-i' + i}" ${T.chiusiAperti['dato-i' + i] ? grezzo('open') : ''}><summary class="sotto">${vedere.length ? 'Le altre' : 'Tutte le'} ${resto.length} attività in corso</summary>${resto.map(riga)}</details>` : ''}
+            ${finite.length ? h`<details data-chiusi="${'dato-t' + i}" ${T.chiusiAperti['dato-t' + i] ? grezzo('open') : ''}><summary class="sotto">Attività terminate (${finite.length})</summary>${finite.map(riga)}</details>` : ''}`;
+    }
     function schedaImport(it, i) {
         if (it.errore) return h`<div class="scheda imbottita"><b>${it.file}</b><p class="sotto">${icona('triangle-exclamation')} ${it.errore}</p></div>`;
         const pk = it.pk;
@@ -683,12 +714,6 @@
         const giaFatto = esistente && (esistente.importazioni || []).find((x) => x.file === pk.file);
         const terminata = {};
         pk.attivita.forEach((a) => { terminata[a.id] = a.stato !== 'attivo'; });
-        const daConf = pk.daConfermare.filter((d) => !terminata[d.attivitaId]).sort((a, b) => a.certo - b.certo);
-        const daConfTerm = pk.daConfermare.filter((d) => terminata[d.attivitaId]);
-        const campoProve = (d) => h`<label style="display:flex;gap:10px;align-items:center;margin:6px 0">
-                    <span style="flex:1;min-width:0"><b>${d.attivita}</b>${d.certo ? h` <span class="pill verde">quasi certo</span>` : ''}<br><span class="sotto piccolo">${d.motivo}</span></span>
-                    <input class="campo-in" style="width:76px" type="number" min="1" max="200" inputmode="numeric" value="${it.conferme[d.attivitaId] != null ? it.conferme[d.attivitaId] : d.proposta}" data-cambio="imp-prove" data-i="${i}" data-att="${d.attivitaId}">
-                </label>`;
         return h`<div class="scheda imbottita" data-imp="${i}">
             <div class="sotto piccolo">${icona('file')} ${pk.file}</div>
             <label style="display:block;margin:10px 0"><span class="sotto piccolo">Bambino</span>
@@ -708,10 +733,7 @@
             <details><summary>Attività in corso e target</summary><ul>
                 ${attive.map((a) => { const c = P.targetCorrente(a); return h`<li><b>${a.nome}</b>${a.area ? ' (' + a.area + ')' : ''}${c ? ': ' + c.target.testo : ''}</li>`; })}
             </ul></details>
-            ${daConf.length + daConfTerm.length ? h`<h3 style="margin-left:0">Prove per seduta da confermare</h3>
-                <p class="sotto piccolo">Questi fogli non scrivono quante prove c'erano: la differenza con le corrette diventa errori.</p>
-                ${daConf.map(campoProve)}
-                ${daConfTerm.length ? h`<details><summary class="sotto">Attività terminate (${daConfTerm.length})</summary>${daConfTerm.map(campoProve)}</details>` : ''}` : ''}
+            ${sezioneDato(it, i, terminata)}
             ${(() => {
                 const righe = pk.attivita.map((a) => [a, it.modalita[a.id]]);
                 const vedere = righe.filter(([, st]) => !st.iniziale), ok = righe.filter(([, st]) => st.iniziale);
@@ -1566,9 +1588,14 @@
                 const esistente = pazienti().find((x) => normNome(x.name) === n);
                 const conferme = {};
                 pk.daConfermare.forEach((d) => { conferme[d.attivitaId] = d.proposta; });
-                const modalita = {};
-                pk.attivita.forEach((a) => { modalita[a.id] = statoModalita(a); });
-                T.importazioni.push({ file: f.name, pk, nome: pk.nome, pazienteId: esistente ? esistente.id : '', conferme, modalita });
+                const modalita = {}, impost = {};
+                pk.attivita.forEach((a) => {
+                    modalita[a.id] = statoModalita(a);
+                    const td = a.tdSeconds || ((a.target || []).find((t) => t.tdSeconds) || {}).tdSeconds || null;
+                    impost[a.id] = { sessionType: a.sessionType || 'independent', tdSeconds: td, scala: a.scala === 'percentuale' ? 'percentuale' : 'conteggio',
+                        prove: conferme[a.id] != null ? conferme[a.id] : a.prove, soglia: (a.criterio || {}).soglia || 90, sedute: (a.criterio || {}).sedute || 2 };
+                });
+                T.importazioni.push({ file: f.name, pk, nome: pk.nome, pazienteId: esistente ? esistente.id : '', conferme, modalita, impost });
             } catch (e) {
                 console.error(e);
                 T.importazioni.push({ file: f.name, errore: e.message || String(e) });
@@ -1734,6 +1761,15 @@
             } else if (c === 'mod-variante') st.variante = el.value;
             else if (c === 'mod-nuova-nome') st.nuova.nome = el.value;
             else if (c === 'mod-nuova-cat') st.nuova.categoria = el.value;
+        } else if (c === 'imp-imp' && e.type === 'change') {
+            const it = T.importazioni[+el.dataset.i];
+            const st = it && it.impost[el.dataset.att];
+            if (!st) return;
+            const campo = el.dataset.campo;
+            st[campo] = ['prove', 'tdSeconds', 'soglia', 'sedute'].includes(campo) ? (parseInt(el.value, 10) || null) : el.value;
+            TiceImport.imposta(it.pk, el.dataset.att, st);
+            if (st.prove) it.conferme[el.dataset.att] = st.prove; else delete it.conferme[el.dataset.att];
+            T.mantieniScroll = true; disegna();
         } else if (c === 'imp-prove' && e.type === 'change') {
             const it = T.importazioni[+el.dataset.i];
             const n = parseInt(el.value, 10);

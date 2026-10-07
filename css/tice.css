@@ -252,6 +252,13 @@ body.tice-aperto #notebook-tab-handle { display: none !important; }
 }
 .tice-foglio textarea { min-height: 88px; resize: vertical; }
 .tice-foglio .riga-campi { display: flex; gap: 10px; }
+/* come si raccoglie il dato (anteprima di import) */
+.tice .riga-dato { padding: 10px 0; border-top: 1px dashed var(--border-color, rgba(0,0,0,.15)); }
+.tice .riga-dato .riga-campi { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+.tice .riga-dato .riga-campi > .campo { flex: 1 1 140px; min-width: 0; margin: 0; }
+.tice .riga-dato .riga-campi > .campo.stretto { flex: 0 1 100px; }
+.tice .riga-dato .campo > span { display: block; font-size: .75rem; opacity: .75; }
+.tice .riga-dato .campo-in { width: 100%; }
 /* scelta della modalità (anteprima di import, riordino) */
 .tice .riga-mod { padding: 10px 0; border-top: 1px dashed var(--border-color, rgba(0,0,0,.15)); }
 .tice .riga-mod .riga-campi { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }

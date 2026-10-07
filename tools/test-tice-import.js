@@ -125,6 +125,21 @@ prova('prove confermate: gli errori sono la differenza', () => {
   const v = s.filter((x) => x.setName.startsWith('VESTIRSI'));
   assert.deepStrictEqual(v.map((x) => [x.correct, x.rawX, x.total]), [[2, 2, 4], [4, 0, 4]]);
 });
+prova('anteprima: strategia, tipo di dato e criterio si cambiano; i valori si convertono', () => {
+  const pk2 = TiceImport.analizza(quaderno(), 'Mario_R_old.numbers');
+  const tact2 = pk2.attivita[0], echo2 = pk2.attivita[1];
+  TiceImport.imposta(pk2, tact2.id, { scala: 'percentuale', sessionType: 'independent', soglia: 80, sedute: 3 });
+  const t = TiceImport.sedute(pk2, {}).filter((x) => x.attivitaId === tact2.id);
+  assert.ok(t.every((x) => x.scala === 'percentuale' && x.total === 100 && x.sessionType === 'independent'));
+  assert.deepStrictEqual([tact2.criterio.soglia, tact2.criterio.sedute], [80, 3]);
+  TiceImport.imposta(pk2, tact2.id, { scala: 'conteggio' });
+  const t2 = TiceImport.sedute(pk2, {}).filter((x) => x.attivitaId === tact2.id);
+  assert.deepStrictEqual(t2.map((x) => x.total), TiceImport.sedute(TiceImport.analizza(quaderno(), 'x.numbers'), {}).filter((x) => x.attivitaId === tact2.id).map((x) => x.total), 'si torna ai numeri del foglio');
+  TiceImport.imposta(pk2, echo2.id, { scala: 'conteggio', prove: 10, sessionType: 'timedelay', tdSeconds: 2 });
+  const e = TiceImport.sedute(pk2, { [echo2.id]: 10 }).filter((x) => x.attivitaId === echo2.id);
+  assert.ok(e.every((x) => !x.scala && x.total === 10 && x.sessionType === 'timedelay'), 'percentuale → 10 prove');
+  assert.strictEqual(echo2.tdSeconds, 2);
+});
 prova('la data non slitta col fuso orario', () => {
   const d = new Date(s[0].date);
   assert.strictEqual(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`, s[0].date.slice(0, 10));
