@@ -361,17 +361,38 @@
             <div class="campo"><span>Ruolo</span><div class="scelta">
                 ${Object.keys(RUOLI).map((k) => h`<label><input type="radio" name="ruolo" value="${k}" ${u.ruolo === k ? grezzo('checked') : ''}><span>${RUOLI[k]}</span></label>`)}
             </div><span class="sotto piccolo">Tirocinante: registra le sedute e vede lo storico. Professionista: anche programmi e nuovi bambini. Amministratore: tutto, persone comprese.</span></div>
-            <label class="campo"><span>Accesso fino al (facoltativo, per i tirocini)</span><input name="scadenza" type="date" value="${u.scadenza || ''}"></label>
-            <div class="campo"><span>Bambini assegnati</span>
-                <label style="display:flex;gap:8px;align-items:center;margin:4px 0"><input type="checkbox" name="tutti" ${tutti ? grezzo('checked') : ''}> Tutti</label>
-                <div class="opzioni" style="max-height:30vh;overflow-y:auto">
+            <div class="campo"><span>Durata dell'accesso</span><div class="scelta">
+                <label><input type="radio" name="durata" value="sempre" ${!u.scadenza ? grezzo('checked') : ''}><span>Senza scadenza</span></label>
+                <label><input type="radio" name="durata" value="fino" ${u.scadenza ? grezzo('checked') : ''}><span>Con scadenza</span></label></div>
+                <label class="campo" data-solo="fino" style="margin-top:8px" ${u.scadenza ? '' : grezzo('hidden')}><span>Fino al (compreso)</span><input name="scadenza" type="date" value="${u.scadenza || ''}"></label>
+                <span class="sotto piccolo" data-solo="fino" ${u.scadenza ? '' : grezzo('hidden')}>Il giorno dopo l'accesso si chiude da solo: il custode revoca la chiave ai suoi dispositivi e i dati del centro spariscono da lì, anche senza rete. Prolungando la data, la chiave gli torna in automatico.</span></div>
+            <div class="campo"><span>Bambini</span><div class="scelta">
+                <label><input type="radio" name="quali" value="tutti" ${tutti ? grezzo('checked') : ''}><span>Tutti</span></label>
+                <label><input type="radio" name="quali" value="alcuni" ${!tutti ? grezzo('checked') : ''}><span>Solo alcuni</span></label></div>
+                <span class="sotto piccolo" data-solo="tutti" ${tutti ? '' : grezzo('hidden')}>Anche i bambini aggiunti in futuro.</span>
+                <div class="opzioni" data-solo="alcuni" style="max-height:30vh;overflow-y:auto;margin-top:8px" ${tutti ? grezzo('hidden') : ''}>
                     ${bambini.length ? bambini.map((pid) => h`<label class="opzione"><input type="checkbox" name="p" value="${pid}" ${!tutti && (u.pazienti || []).includes(pid) ? grezzo('checked') : ''}><span class="corpo">${nomeBambino(pid)}</span></label>`)
                         : h`<p class="sotto">Nessun bambino sul Drive del centro.</p>`}
                 </div></div>
             ${email ? h`<label style="display:flex;gap:8px;align-items:center;margin:6px 0"><input type="checkbox" name="attivo" ${u.attivo !== false ? grezzo('checked') : ''}> Accesso attivo</label>` : ''}
             ${email ? h`<button type="button" class="bt pericolo" data-foglio="togli" style="width:100%;margin-top:6px">Togli dall'elenco</button>` : ''}
             <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`,
-        { invia: (f) => { const d = new FormData(f); return { email: d.get('email'), nome: d.get('nome'), ruolo: d.get('ruolo'), scadenza: d.get('scadenza'), tutti: !!d.get('tutti'), p: d.getAll('p'), attivo: email ? !!d.get('attivo') : true }; } });
+        {
+            dopo: (el) => {
+                const mostra = () => {
+                    const durata = (el.querySelector('[name=durata]:checked') || {}).value, quali = (el.querySelector('[name=quali]:checked') || {}).value;
+                    el.querySelectorAll('[data-solo]').forEach((x) => { x.hidden = x.dataset.solo !== durata && x.dataset.solo !== quali; });
+                    const sc = el.querySelector('[name=scadenza]');
+                    sc.required = durata === 'fino';
+                };
+                el.querySelectorAll('[name=durata], [name=quali]').forEach((x) => x.addEventListener('change', mostra));
+            },
+            invia: (f) => {
+                const d = new FormData(f);
+                return { email: d.get('email'), nome: d.get('nome'), ruolo: d.get('ruolo'), scadenza: d.get('durata') === 'fino' ? d.get('scadenza') : '',
+                    tutti: d.get('quali') === 'tutti', p: d.getAll('p'), attivo: email ? !!d.get('attivo') : true };
+            }
+        });
         if (!r) return;
         const nuovi = JSON.parse(JSON.stringify(a));
         const em = String(email || r.email).trim().toLowerCase();

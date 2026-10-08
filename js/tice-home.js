@@ -195,11 +195,7 @@
             </ol>
             <div class="ta-piede">
                 <div class="ta-ora"><small>Passo ${st.i + 1} di ${passi.length}</small><b>${st.passo.testo}</b></div>
-                <div class="tasti">
-                    <button class="tasto v" data-a="segna" data-id="${att.id}" data-r="V">✓<small>Corretta</small></button>
-                    <button class="tasto p" data-a="segna" data-id="${att.id}" data-r="P">P<small>${att.nomeP || (tipo === 'timedelay' ? 'Promptata' : 'Con aiuto')}</small></button>
-                    <button class="tasto x" data-a="segna" data-id="${att.id}" data-r="X">✗<small>Errata</small></button>
-                </div>
+                ${tasti(att, tipo)}
                 <button class="bt piccolo fantasma" data-a="salta-passo" data-id="${att.id}">Salta il passo ${icona('forward')}</button>
             </div>
         </div>`;
@@ -329,6 +325,27 @@
         const oggiS = { date: b.data + 'T12:00:00', percentage: Math.round(100 * v.v / tot) };
         return P.criterioRaggiunto(serie.concat([oggiS]), att.criterio) === b.data ? 'Con questi dati oggi raggiunge il criterio.' : null;
     }
+    // In time delay la risposta non corretta è quella promptata, in indipendente è l'errore:
+    // si punteggia solo corretta / promptata oppure corretta / errata
+    const nonCorretta = (tipo) => (tipo === 'timedelay' ? 'P' : 'X');
+    function tasti(att, tipo) {
+        return h`<div class="tasti due">
+            <button class="tasto v" data-a="segna" data-id="${att.id}" data-r="V">✓<small>Corretta</small></button>
+            ${nonCorretta(tipo) === 'P'
+                ? h`<button class="tasto p" data-a="segna" data-id="${att.id}" data-r="P">P<small>${att.nomeP || 'Promptata'}</small></button>`
+                : h`<button class="tasto x" data-a="segna" data-id="${att.id}" data-r="X">✗<small>Errata</small></button>`}
+        </div>`;
+    }
+    // Cambiando strategia le risposte non corrette passano dall'una all'altra colonna
+    function convertiVoce(v, tipo) {
+        const da = nonCorretta(tipo) === 'P' ? 'X' : 'P', a = nonCorretta(tipo);
+        const k = da.toLowerCase(), j = a.toLowerCase();
+        if (!v[k]) return;
+        v[j] += v[k]; v[k] = 0;
+        v.sequenza = (v.sequenza || '').split(da).join(a);
+        if (v.esiti) Object.keys(v.esiti).forEach((id) => { v.esiti[id] = v.esiti[id].split(da).join(a); });
+    }
+
     function schedaAttivita(p, att) {
         const b = bozza(p.id);
         const v = b.voci[att.id];
@@ -381,11 +398,7 @@
                     <small>Passo ${st.i + 1} di ${passi.length}${st.giri ? ` · giro ${st.giri + 1}` : ''}</small><b>${st.passo.testo}</b>
                     <span class="ta-punti">${passi.map((ps, k) => h`<i class="${k === st.i ? 'qui' : ''} ${((v && v.esiti && v.esiti[ps.id]) || '').slice(-1)}"></i>`)}</span>
                 </div>` : ''}
-                <div class="tasti">
-                    <button class="tasto v" data-a="segna" data-id="${att.id}" data-r="V">✓<small>Corretta</small></button>
-                    <button class="tasto p" data-a="segna" data-id="${att.id}" data-r="P">P<small>${att.nomeP || (tipo === 'timedelay' ? 'Promptata' : 'Con aiuto')}</small></button>
-                    <button class="tasto x" data-a="segna" data-id="${att.id}" data-r="X">✗<small>Errata</small></button>
-                </div>
+                ${tasti(att, tipo)}
                 <div class="sotto-tasti">
                     <div class="sequenza" aria-label="Sequenza delle risposte">${(v ? v.sequenza : '').split('').map((r) => h`<i class="${r}"></i>`)}</div>
                     ${st ? h`<button class="ib" data-a="salta-passo" data-id="${att.id}" aria-label="Salta il passo" title="Salta il passo">${icona('forward')}</button>
@@ -1031,9 +1044,8 @@
                 </div></div>
                 <label class="campo"><span>Correggi i conteggi</span><div class="riga-campi">
                     <input name="v" type="number" min="0" max="999" inputmode="numeric" value="${v.v}" aria-label="Corrette">
-                    <input name="p" type="number" min="0" max="999" inputmode="numeric" value="${v.p}" aria-label="Promptate">
-                    <input name="x" type="number" min="0" max="999" inputmode="numeric" value="${v.x}" aria-label="Errate">
-                </div><span class="sotto piccolo">✓ corrette · P promptate · ✗ errate</span></label>
+                    <input name="no" type="number" min="0" max="999" inputmode="numeric" value="${v.p + v.x}" aria-label="Non corrette">
+                </div><span class="sotto piccolo">✓ corrette · poi le promptate (time delay) o le errate (indipendente)</span></label>
                 <label class="campo"><span>Decisione (facoltativa)</span><input name="decisione" maxlength="200" value="${v.decisione || ''}" placeholder="es. Passa a 1&quot; T/D" list="tice-decisioni"></label>
                 <datalist id="tice-decisioni"><option value='Passa a 0" T/D'><option value='Passa a 1" T/D'><option value='Passa a 2" T/D'><option value="Probe"><option value="Stop"></datalist>
                 <label class="campo"><span>Nota</span><textarea name="nota" maxlength="2000">${v.nota || ''}</textarea></label>
@@ -1053,14 +1065,15 @@
                 v.mantenimento = !!(tt && tt.stato !== 'attivo');
             }
             v.sessionType = r.tipo === 'timedelay' ? 'timedelay' : 'independent';
-            ['v', 'p', 'x'].forEach((k) => {
-                const n = Math.max(0, Math.min(999, parseInt(r[k], 10) || 0));
-                if (n !== v[k]) {
-                    // la sequenza non corrisponde più ai conteggi: la si ricostruisce in blocco
-                    v[k] = n;
-                    v.sequenza = 'V'.repeat(v.v) + 'P'.repeat(v.p) + 'X'.repeat(v.x);
-                }
-            });
+            convertiVoce(v, v.sessionType);
+            const no = nonCorretta(v.sessionType).toLowerCase();
+            const nv = Math.max(0, Math.min(999, parseInt(r.v, 10) || 0));
+            const nn = Math.max(0, Math.min(999, parseInt(r.no, 10) || 0));
+            if (nv !== v.v || nn !== v[no]) {
+                // la sequenza non corrisponde più ai conteggi: la si ricostruisce in blocco
+                v.v = nv; v[no] = nn;
+                v.sequenza = 'V'.repeat(v.v) + 'P'.repeat(v.p) + 'X'.repeat(v.x);
+            }
             v.decisione = r.decisione.trim();
             v.nota = r.nota.trim();
             salvaBozza();

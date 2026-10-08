@@ -372,6 +372,8 @@ function risveglio() {
   var a = archivioDrive_();
   ['_config/accessi.json', '_config/cifratura.json', '_config/dispositivi.json', 'Pazienti/_elenco.json', 'Materiali/indice.json', '_config/modalita.json']
     .forEach(function (p) { try { a.leggiJSON(p); } catch (e) { /* al prossimo giro */ } });
+  // accessi scaduti: le chiavi dei loro dispositivi si revocano (scrive solo se ce n'è)
+  try { custode_().revocaScaduti(); } catch (e) { /* al prossimo giro */ }
 }
 
 // Dopo una modifica fatta a mano sui file in Drive (da evitare: es. un file

@@ -485,6 +485,19 @@
         })().catch((e) => console.warn('verifica dell\'accesso', codice, e)).finally(() => { verifica = null; });
         return verifica;
     }
+    // Accesso a tempo: passata la data, i dati del centro lasciano il dispositivo
+    // anche senza rete (il custode intanto ha già revocato la chiave)
+    const oggiQui = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+    async function controllaScadenza() {
+        const sc = S.io && S.io.scadenza;
+        if (!sc || oggiQui() <= sc || pulizia) return false;
+        pulizia = cancellaDatiCentro().finally(() => { pulizia = null; });
+        await pulizia;
+        S.fase = 'fuori';
+        S.negato = 'Il tuo accesso è scaduto il ' + sc.split('-').reverse().join('/') + ': i dati del centro sono stati tolti da questo dispositivo.';
+        cambiato('pazienti'); cambiato('stato');
+        return true;
+    }
     async function cancellaDatiCentro() {
         for (const r of await tuttiRec()) { await togliLocale(r.id); await togliRec(r.id); }
         S.condivisi.clear(); S.coda.clear();
@@ -571,9 +584,11 @@
         S.modalita = (await meta('modalita')) || null;
         S.chiavi = await C.portachiavi();
         if (S.io && S.io.email === u.email) aggiornaFase(); else S.fase = 'fuori';
+        await controllaScadenza();
         cambiato('stato');
         try { await preparaCentro(); } catch (e) { gestisciErrore(e); cambiato('stato'); }
         setInterval(() => {
+            controllaScadenza();
             if (document.visibilityState !== 'visible' || navigator.onLine === false) return;
             if (S.fase === 'attesa') preparaCentro().catch(gestisciErrore);
             else sincronizza();

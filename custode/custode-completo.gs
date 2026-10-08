@@ -378,6 +378,8 @@ function risveglio() {
   var a = archivioDrive_();
   ['_config/accessi.json', '_config/cifratura.json', '_config/dispositivi.json', 'Pazienti/_elenco.json', 'Materiali/indice.json', '_config/modalita.json']
     .forEach(function (p) { try { a.leggiJSON(p); } catch (e) { /* al prossimo giro */ } });
+  // accessi scaduti: le chiavi dei loro dispositivi si revocano (scrive solo se ce n'è)
+  try { custode_().revocaScaduti(); } catch (e) { /* al prossimo giro */ }
 }
 
 // Dopo una modifica fatta a mano sui file in Drive (da evitare: es. un file
@@ -702,9 +704,30 @@ var QT = (function () {
         return { email: email, nome: (voce && voce.nome) || identita.nome || email, ruolo: 'admin', pazienti: '*', proprietario: true, scadenza: null };
       }
       if (!voce) throw err('non-autorizzato', 'L\'account ' + email + ' non è abilitato. Chiedi a un amministratore di aggiungerti.');
-      if (voce.attivo === false) throw err('disattivato', 'L\'account ' + email + ' è stato disattivato.');
-      if (voce.scadenza && oggi() > voce.scadenza) throw err('scaduto', 'L\'accesso di ' + email + ' è scaduto il ' + voce.scadenza + '.');
+      if (voce.attivo === false) { revocaSeServe(email); throw err('disattivato', 'L\'account ' + email + ' è stato disattivato.'); }
+      if (voce.scadenza && oggi() > voce.scadenza) { revocaSeServe(email); throw err('scaduto', 'L\'accesso di ' + email + ' è scaduto il ' + voce.scadenza + '.'); }
       return { email: email, nome: voce.nome || identita.nome || email, ruolo: voce.ruolo, pazienti: voce.pazienti, proprietario: false, scadenza: voce.scadenza || null };
+    }
+
+    // Revoca della chiave: chi non è più abilitato (scaduto, disattivato) perde
+    // la busta con la chiave del centro su tutti i suoi dispositivi. Se torna
+    // abilitato, un admin gliela riconsegna in automatico come a un nuovo dispositivo.
+    function revocaChiavi() {
+      var disp = leggiDispositivi(), n = 0;
+      Object.keys(disp.dispositivi).forEach(function (id) {
+        var r = disp.dispositivi[id];
+        if (r.chiavi && Object.keys(r.chiavi).length && !abilitato(r.email)) {
+          r.chiavi = {}; r.revocatoIl = amb.ora(); delete r.abilitatoDa; delete r.abilitatoIl; n++;
+        }
+      });
+      if (n) A.scriviJSON(P.dispositivi, disp);
+      return n;
+    }
+    function revocaSeServe(email) {
+      var dd = leggiDispositivi().dispositivi;
+      var ha = Object.keys(dd).some(function (id) { return dd[id].email === email && dd[id].chiavi && Object.keys(dd[id].chiavi).length; });
+      if (!ha) return;
+      try { conLock(revocaChiavi); } catch (e) { /* al prossimo tentativo, o al risveglio */ }
     }
 
     function permessi(u) { return PERMESSI[u.ruolo] || PERMESSI.tirocinante; }
@@ -1340,6 +1363,7 @@ var QT = (function () {
           if (e !== String(amb.proprietario() || '').toLowerCase() && !nuovo.utenti[e]) { delete disp.dispositivi[id]; cambiati = true; }
         });
         if (cambiati) A.scriviJSON(P.dispositivi, disp);
+        revocaChiavi();
         return nuovo;
       });
     };
@@ -1389,7 +1413,10 @@ var QT = (function () {
       return conLock(function () { return Object.keys(ricostruisciElenco().pazienti).length; });
     }
 
-    return { gestisci: gestisci, azioni: Object.keys(azioni), ricostruisci: ricostruisci };
+    /** Dal risveglio periodico: le chiavi di chi è scaduto si revocano anche se non si ripresenta. */
+    function revocaScaduti() { return conLock(revocaChiavi); }
+
+    return { gestisci: gestisci, azioni: Object.keys(azioni), ricostruisci: ricostruisci, revocaScaduti: revocaScaduti };
   }
 
   return {

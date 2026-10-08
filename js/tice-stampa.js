@@ -129,9 +129,10 @@
   }
   function foglioLU(p, elenco, colori, opz) {
     var html = '<section class="st-foglio st-lu">' + testata(p, 'Presa dati · learn unit', { data: opz.data, seduta: true }) +
-      '<div class="st-legenda"><b>+</b> corretta <b>−</b> errore <b>P</b> con aiuto <b>NR</b> nessuna risposta' +
-      '<span class="st-sep"></span><span class="st-c on demo"></span> prove previste' +
-      '<span class="st-sep"></span><span class="st-badge">T/D</span> time delay <span class="st-badge chiaro">IND</span> indipendente</div>';
+      '<div class="st-legenda"><b>+</b> corretta' +
+      '<span class="st-sep"></span><span class="st-badge">T/D</span> time delay: <b>P</b> promptata' +
+      '<span class="st-sep"></span><span class="st-badge chiaro">IND</span> indipendente: <b>−</b> errata' +
+      '<span class="st-sep"></span><span class="st-c on demo"></span> prove previste</div>';
     var cat = null;
     elenco.forEach(function (v) {
       if (!cat || cat !== v.categoria.id) {

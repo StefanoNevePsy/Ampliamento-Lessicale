@@ -333,6 +333,41 @@ prova('dopo la scadenza la tirocinante non entra piu\'', () => {
   ko(chiama(TIR, 'io'), 'scaduto');
   adesso = salvato;
 });
+prova('alla scadenza la chiave si revoca dai suoi dispositivi; prolungando torna in attesa', () => {
+  const DEV3 = 'dev' + crypto.randomBytes(8).toString('hex');
+  ok(chiama(TIR, 'dispositivo.registra', { id: DEV3, nome: 'Chrome · Android', pubblica: PUB }));
+  ok(chiama(PROPRIETARIO, 'dispositivi.abilita', { id: DEV3, kid: 'k2', chiave: consegna(PUB), pubblica: PUB }));
+  const salvato = adesso;
+  adesso = new Date('2027-03-01T08:00:00Z');
+  // anche se non si ripresenta: il risveglio periodico la revoca
+  assert.strictEqual(custode.revocaScaduti(), 1);
+  assert.strictEqual(custode.revocaScaduti(), 0);
+  ko(chiama(TIR, 'io'), 'scaduto');
+  const d = ok(chiama(PROPRIETARIO, 'dispositivi.elenco')).find((x) => x.id === DEV3);
+  assert.strictEqual(d.abilitato, false);
+  assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(dir, '_config', 'dispositivi.json'), 'utf8')).dispositivi[DEV3].chiavi, {});
+  // l'admin prolunga: la persona torna abilitata e il dispositivo aspetta una nuova consegna
+  const a = ok(chiama(PROPRIETARIO, 'accessi.leggi'));
+  a.utenti[TIR].scadenza = '2027-06-30';
+  ok(chiama(PROPRIETARIO, 'accessi.salva', { accessi: a, versioneBase: a.version }));
+  const d2 = ok(chiama(PROPRIETARIO, 'dispositivi.elenco')).find((x) => x.id === DEV3);
+  assert.strictEqual(d2.personaAbilitata, true);
+  assert.strictEqual(d2.abilitato, false);
+  assert.strictEqual(ok(chiama(PROPRIETARIO, 'io')).inAttesa >= 1, true);
+  ok(chiama(TIR, 'dispositivo.togli', { id: DEV3 }));
+  adesso = salvato;
+});
+prova('chi è scaduto e si ripresenta perde la chiave anche senza risveglio', () => {
+  const DEV4 = 'dev' + crypto.randomBytes(8).toString('hex');
+  ok(chiama(TIR, 'dispositivo.registra', { id: DEV4, nome: 'x', pubblica: PUB }));
+  ok(chiama(PROPRIETARIO, 'dispositivi.abilita', { id: DEV4, kid: 'k2', chiave: consegna(PUB), pubblica: PUB }));
+  const salvato = adesso;
+  adesso = new Date('2027-08-01T08:00:00Z');
+  ko(chiama(TIR, 'dispositivo.chiave', { id: DEV4 }), 'scaduto');
+  assert.strictEqual(ok(chiama(PROPRIETARIO, 'dispositivi.elenco')).find((x) => x.id === DEV4).abilitato, false);
+  adesso = salvato;
+  ok(chiama(TIR, 'dispositivo.togli', { id: DEV4 }));
+});
 prova('un utente disattivato non entra', () => {
   const a = ok(chiama(PROPRIETARIO, 'accessi.leggi'));
   a.utenti[PROF].attivo = false;
