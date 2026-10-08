@@ -1007,6 +1007,23 @@ var QT = (function () {
       return leggiRecord(pid);
     };
 
+    // Più bambini in una richiesta (la prima sincronizzazione di un dispositivo):
+    // si fermano prima di superare la dimensione massima della risposta, e quelli
+    // rimasti fuori l'app li richiede subito dopo.
+    azioni['pazienti.leggi'] = function (u, d) {
+      var ids = listaV(d.ids, 100, 'ids').map(function (x) { return idV(x, RE.pz, 'ids'); });
+      var out = [], peso = 0;
+      for (var i = 0; i < ids.length; i++) {
+        if (!vede(u, ids[i])) continue;
+        var r = A.leggiJSON(P.paziente(ids[i]));
+        if (!r) continue;
+        var n = JSON.stringify(r).length;
+        if (out.length && peso + n > MAX_RISPOSTA) break;
+        out.push(r); peso += n;
+      }
+      return out;
+    };
+
     azioni['paziente.crea'] = function (u, d) {
       puo(u, 'creaPazienti');
       var cfg = richiediCifratura();

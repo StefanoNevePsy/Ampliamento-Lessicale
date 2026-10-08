@@ -161,8 +161,13 @@
     // allora invece di rifarla.
     const RIPETIBILE = (e) => (e && e.rete) || (e && e.custode && (e.codice === 'occupato' || e.codice === 'interno'));
     const ATTESE = [1500, 4000, 9000, 15000];
+    // Letture e registrazioni brevi: Apps Script risponde in pochi secondi, quindi
+    // se una risposta si perde per strada non si aspettano minuti prima di riprovare.
+    // Le scritture pesanti (salvataggi, materiali, cambio chiave) tengono il margine lungo.
+    const BREVI = new Set(['io', 'pazienti.elenco', 'pazienti.leggi', 'paziente.leggi', 'dispositivo.registra', 'dispositivo.chiave',
+        'dispositivi.elenco', 'modalita.leggi', 'turni.leggi', 'cifratura.leggi', 'paziente.versioni', 'paziente.versione', 'accessi.leggi']);
     async function chiama(azione, dati, opzioni) {
-        const o = opzioni || {};
+        const o = Object.assign({ attesaMax: BREVI.has(azione) ? 45000 : undefined }, opzioni || {});
         const tentativi = o.tentativi || 4, rid = nuovoRid();
         for (let n = 1; ; n++) {
             try { return await chiamaUnaVolta(azione, dati, rid, o.attesaMax); }
@@ -368,12 +373,37 @@
     }
 
     // ---------- ricezione ----------
+    // Il custode legge più bambini per richiesta; uno alla volta se è di una versione precedente
+    async function applicaRemoto(record, r) {
+        let remoto;
+        try { remoto = await apri(record); }
+        catch (e) { if (e.senzaChiave) { S.condivisi.add(record.id); return; } throw e; }   // in ricifratura: si riprova dopo
+        const locale = await leggiLocale(record.id);
+        let nuovo = remoto;
+        if (locale && (S.coda.has(record.id) || !r)) {
+            nuovo = U.unisci(r && r.base, locale, remoto);
+            if (!U.uguali(nuovo, remoto)) S.coda.add(record.id);
+        }
+        await salvaLocale(nuovo);
+        await scriviRec(record.id, { version: record.version, base: remoto });
+        S.condivisi.add(record.id);
+        cambiato('paziente:' + record.id);
+    }
+    let leggeAGruppi = true;
+    async function leggiRecord(ids) {
+        if (leggeAGruppi) {
+            try { return await chiama('pazienti.leggi', { ids }); }
+            catch (e) { if (!(e && e.custode && e.codice === 'richiesta-non-valida' && /Azione sconosciuta/.test(e.message))) throw e; leggeAGruppi = false; }
+        }
+        return [await chiama('paziente.leggi', { id: ids[0] })];
+    }
     async function tira() {
         const elenco = await chiama('pazienti.elenco');
         const visti = new Set();
         const recs = await tuttiRec();
         const perId = {};
         recs.forEach((r) => { perId[r.id] = r; });
+        const daLeggere = [];
         for (const v of elenco) {
             visti.add(v.id);
             try { S.etichette[v.id] = await C.decifra(chiavePer(v.etichetta), v.etichetta, aadE(v.id)); } catch (e) { S.etichette[v.id] = { nome: '(in attesa della chiave)' }; }
@@ -383,21 +413,25 @@
                 continue;
             }
             if (r && r.version >= v.version) { S.condivisi.add(v.id); continue; }
-            const record = await chiama('paziente.leggi', { id: v.id });
-            let remoto;
-            try { remoto = await apri(record); }
-            catch (e) { if (e.senzaChiave) { S.condivisi.add(v.id); continue; } throw e; }   // in ricifratura: si riprova dopo
-            const locale = await leggiLocale(v.id);
-            let nuovo = remoto;
-            if (locale && (S.coda.has(v.id) || !r)) {
-                nuovo = U.unisci(r && r.base, locale, remoto);
-                if (!U.uguali(nuovo, remoto)) S.coda.add(v.id);
-            }
-            await salvaLocale(nuovo);
-            await scriviRec(v.id, { version: record.version, base: remoto });
-            S.condivisi.add(v.id);
-            cambiato('paziente:' + v.id);
+            daLeggere.push(v.id);
         }
+        // a gruppi: con molti bambini (primo accesso) sono poche richieste invece di una per bambino
+        S.scaricati = { fatti: 0, totale: daLeggere.length };
+        if (daLeggere.length) cambiato('stato');
+        try {
+            let resto = daLeggere.slice();
+            while (resto.length) {
+                const gruppo = resto.slice(0, 25);
+                const arrivati = await leggiRecord(gruppo);
+                for (const record of arrivati) await applicaRemoto(record, perId[record.id]);
+                // il custode risponde nell'ordine chiesto, salta chi non c'è più e si ferma a risposta piena:
+                // fino all'ultimo arrivato sono tutti sistemati, gli altri si chiedono al giro dopo
+                const ultimo = arrivati.length ? gruppo.indexOf(arrivati[arrivati.length - 1].id) : -1;
+                resto = resto.slice(ultimo < 0 ? gruppo.length : ultimo + 1);
+                S.scaricati.fatti = daLeggere.length - resto.length;
+                cambiato('stato');
+            }
+        } finally { S.scaricati = null; cambiato('stato'); }
         // Non più assegnati (o tolti dal custode): la copia locale va via
         for (const r of recs) {
             if (visti.has(r.id)) continue;
@@ -571,9 +605,32 @@
         cambiato('stato');
         if (S.fase === 'pronto' && !senzaSincronizzare) sincronizza();
     }
+    // I giri periodici partono subito, anche prima dell'accesso: al primo accesso
+    // su un dispositivo nuovo devono già esserci (chiave da ricevere, prima sincronizzazione)
+    function avviaCicli() {
+        setInterval(() => {
+            controllaScadenza();
+            if (document.visibilityState !== 'visible' || navigator.onLine === false) return;
+            if (S.fase === 'attesa' || S.fase === 'chiave') return;   // la chiave si controlla più spesso, qui sotto
+            sincronizza();
+        }, 90000);
+        // In attesa della chiave: si ricontrolla ogni 15 secondi (poi ogni minuto),
+        // anche sui dispositivi degli amministratori, che possono anche inserirla a mano
+        let controlli = 0, controllando = false;
+        setInterval(() => {
+            if ((S.fase !== 'attesa' && S.fase !== 'chiave') || controllando) return;
+            if (document.visibilityState !== 'visible' || navigator.onLine === false) return;
+            if (++controlli > 40 && controlli % 4) return;
+            controllando = true;
+            preparaCentro().catch(gestisciErrore).finally(() => { controllando = false; });
+        }, 15000);
+        window.addEventListener('online', () => sincronizza());
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') sincronizza({ soloCoda: false }); });
+    }
     async function avvia() {
         if (!cfgApp().custodeUrl) { S.fase = 'spento'; cambiato('stato'); return; }
         agganciaDB();
+        avviaCicli();
         S.coda = new Set((await meta('coda')) || []);
         (await tuttiRec()).forEach((r) => S.condivisi.add(r.id));
         const u = Auth.inizia();
@@ -587,14 +644,6 @@
         await controllaScadenza();
         cambiato('stato');
         try { await preparaCentro(); } catch (e) { gestisciErrore(e); cambiato('stato'); }
-        setInterval(() => {
-            controllaScadenza();
-            if (document.visibilityState !== 'visible' || navigator.onLine === false) return;
-            if (S.fase === 'attesa') preparaCentro().catch(gestisciErrore);
-            else sincronizza();
-        }, 90000);
-        window.addEventListener('online', () => sincronizza());
-        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') sincronizza({ soloCoda: false }); });
     }
     Auth.alCambio(async (u) => {
         if (!u) return;

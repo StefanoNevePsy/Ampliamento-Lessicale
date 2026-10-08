@@ -205,6 +205,13 @@ function applyTheme(themeId) {
     const metaTheme = document.querySelector('meta[name="theme-color"]');
     const theme = APP_THEMES.find(t => t.id === effettivo);
     if (metaTheme && theme) metaTheme.setAttribute('content', theme.colors[0]);
+    // le barre di sistema (Android) prendono il colore vero dello sfondo, non uno fisso
+    requestAnimationFrame(() => {
+        try {
+            const c = getComputedStyle(document.body).backgroundColor;
+            if (metaTheme && c && c !== 'rgba(0, 0, 0, 0)' && c !== 'transparent') metaTheme.setAttribute('content', c);
+        } catch (e) { /* resta quello del tema */ }
+    });
 }
 
 function renderThemePicker() {

@@ -69,6 +69,9 @@
                         <button class="bt" data-a="controlla-chiave">${icona('rotate')} Controlla se è arrivata</button></div>`}
             </div>`;
         }
+        if (S.lavoro && S.scaricati && S.scaricati.totale > 1) {
+            return h`<div class="banda">${icona('spinner fa-spin')}<div>Scarico i bambini dal Drive del centro: ${S.scaricati.fatti} di ${S.scaricati.totale}…</div></div>`;
+        }
         if (S.errore && !S.lavoro) {
             return h`<div class="banda" style="justify-content:space-between">${icona('triangle-exclamation')}<div style="flex:1">${S.errore}</div>
                 <button class="bt piccolo" data-a="sincronizza">Riprova</button></div>`;

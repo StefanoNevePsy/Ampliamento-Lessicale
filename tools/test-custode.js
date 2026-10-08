@@ -240,6 +240,17 @@ prova('la professionista che crea un paziente se lo ritrova assegnato', () => {
   assert.deepStrictEqual(ok(chiama(PROF, 'pazienti.elenco')).map((p) => p.id), [PZ3]);
 });
 
+prova('più pazienti in una richiesta: nell\'ordine chiesto, solo quelli visibili', () => {
+  const tutti = ok(chiama(PROPRIETARIO, 'pazienti.elenco')).map((p) => p.id);
+  const r = ok(chiama(PROPRIETARIO, 'pazienti.leggi', { ids: tutti.slice().reverse().concat(['999999']) }));
+  assert.deepStrictEqual(r.map((x) => x.id), tutti.slice().reverse());
+  assert.ok(r.every((x) => x.busta && x.version));
+  const prof = ok(chiama(PROF, 'pazienti.leggi', { ids: tutti }));
+  assert.deepStrictEqual(prof.map((x) => x.id), ok(chiama(PROF, 'pazienti.elenco')).map((p) => p.id));
+  ko(chiama(PROPRIETARIO, 'pazienti.leggi', { ids: ['../x'] }), 'richiesta-non-valida');
+  ko(chiama(PROPRIETARIO, 'pazienti.leggi', { ids: Array(101).fill(PZ1) }), 'richiesta-non-valida');
+});
+
 console.log('\nArchiviazione e ricostruzione');
 prova('un paziente archiviato resta nel Drive con le sue versioni', () => {
   const r = ok(chiama(PROPRIETARIO, 'paziente.archivia', { id: PZ2 }));
