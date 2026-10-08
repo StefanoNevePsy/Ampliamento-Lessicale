@@ -26,6 +26,7 @@ jobs:
   # macOS Build (DMG) — Tahoe dark/tinted icon support
   # ==========================================
   build-macos:
+    if: github.event_name != 'workflow_dispatch' || inputs.build_target == 'all' || inputs.build_target == 'macos'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -112,13 +113,14 @@ jobs:
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
-          name: StimolatoreClinico-macOS
+          name: CentroTICE-macOS
           path: dist/*.dmg
 
   # ==========================================
   # Windows Build (EXE / NSIS Installer)
   # ==========================================
   build-windows:
+    if: github.event_name != 'workflow_dispatch' || inputs.build_target == 'all' || inputs.build_target == 'windows'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -150,13 +152,14 @@ jobs:
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: StimolatoreClinico-Windows
+          name: CentroTICE-Windows
           path: dist/*.exe
 
   # ==========================================
   # Android Build (APK via Capacitor) — Monet/Material You support
   # ==========================================
   build-android:
+    if: github.event_name != 'workflow_dispatch' || inputs.build_target == 'all' || inputs.build_target == 'android'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -253,7 +256,7 @@ jobs:
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
-          name: StimolatoreClinico-Android
+          name: CentroTICE-Android
           path: android/app/build/outputs/apk/debug/*.apk
 
   # ==========================================
@@ -275,9 +278,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/StimolatoreClinico-macOS/*
-            artifacts/StimolatoreClinico-Windows/*
-            artifacts/StimolatoreClinico-Android/*
+            artifacts/CentroTICE-macOS/*
+            artifacts/CentroTICE-Windows/*
+            artifacts/CentroTICE-Android/*
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -883,11 +883,13 @@
                 ${limitato() ? '' : h`<button class="opzione" data-foglio="import">${icona('file-import')}<span class="corpo">Importa quaderni Numbers</span></button>
                 <button class="opzione" data-foglio="archivio">${icona('folder-open')}<span class="corpo">Archivio set</span></button>
                 <button class="opzione" data-foglio="opzioni">${icona('gear')}<span class="corpo">Impostazioni e tema</span></button>`}
+                <button class="opzione" data-foglio="schermo">${icona('expand')}<span class="corpo">Schermo<small>Dimensione dell'interfaccia e schermo intero</small></span></button>
                 ${EST.opzioniMenu ? EST.opzioniMenu() : ''}
                 ${window.TicePwa && TicePwa.puoInstallare() ? h`<button class="opzione" data-foglio="installa">${icona('download')}<span class="corpo">Installa l'app<small>Si apre come un'app e funziona anche senza rete</small></span></button>` : ''}
             </div><div class="bottoni"><button class="bt" data-foglio="chiudi">Chiudi</button></div>`);
             if (r && r.indexOf('est:') === 0 && EST.sceltaMenu) return EST.sceltaMenu(r.slice(4));
             if (r === 'installa') { TicePwa.installa(); return; }
+            if (r === 'schermo') { await opzioniSchermo(); return; }
             if (r === 'giochi') chiudi();
             else if (r === 'cartelle') apriDaQui(openPatients);
             else if (r === 'import') vai('import');
@@ -2010,6 +2012,50 @@
         if (typeof populateGlobalPatientSelect === 'function') populateGlobalPatientSelect();
         aggiornaLinguetta();
     }
+    // ---------- schermo: dimensione dell'interfaccia e schermo intero (per dispositivo) ----------
+    const SCALE = [['0.9', 'Piccola'], ['1', 'Normale'], ['1.15', 'Grande'], ['1.3', 'Molto grande']];
+    const leggiPref = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+    const scriviPref = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* solo per questa volta */ } };
+    function applicaScala() {
+        const z = parseFloat(leggiPref('tice_scala') || '1');
+        document.documentElement.style.zoom = z && z !== 1 ? String(z) : '';
+    }
+    const puoSchermoIntero = () => !!(document.fullscreenEnabled && document.documentElement.requestFullscreen);
+    const aSchermoIntero = () => !!document.fullscreenElement;
+    function schermoIntero(si) {
+        try {
+            if (si && !aSchermoIntero()) return document.documentElement.requestFullscreen({ navigationUI: 'hide' }).catch(() => {});
+            if (!si && aSchermoIntero()) return document.exitFullscreen().catch(() => {});
+        } catch (e) { /* non disponibile */ }
+        return Promise.resolve();
+    }
+    // Il browser concede lo schermo intero solo dopo un tocco: si chiede al primo
+    function schermoInteroAlTocco() {
+        if (leggiPref('tice_schermo_intero') !== '1' || !puoSchermoIntero()) return;
+        const una = () => { if (!aSchermoIntero()) schermoIntero(true); };
+        document.addEventListener('pointerup', una, { capture: true, once: true });
+    }
+    async function opzioniSchermo() {
+        const z = leggiPref('tice_scala') || '1', fs = leggiPref('tice_schermo_intero') === '1';
+        const r = await foglio(h`<form><h2>Schermo</h2>
+            <div class="campo"><span>Dimensione dell'interfaccia</span><div class="scelta">
+                ${SCALE.map(([v, n]) => h`<label><input type="radio" name="scala" value="${v}" ${v === z ? grezzo('checked') : ''}><span>${n}</span></label>`)}
+            </div><span class="sotto piccolo">Vale solo per questo dispositivo: più grande sui telefoni, più piccola sui monitor grandi.</span></div>
+            ${puoSchermoIntero() ? h`<label class="spunta-riga"><input type="checkbox" name="intero" ${fs ? grezzo('checked') : ''}> <span><b>Schermo intero</b><br><span class="sotto piccolo">Senza barre del browser e di sistema. Si attiva al primo tocco dopo l'apertura; per uscire, scorri dal bordo dello schermo (o Esc sul computer).</span></span></label>`
+                : h`<p class="sotto piccolo">Su questo dispositivo lo schermo intero non è disponibile: aggiungi l'app alla schermata Home per aprirla senza barre del browser.</p>`}
+            <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`,
+        { dopo: (el) => el.querySelectorAll('[name=scala]').forEach((x) => x.addEventListener('change', () => { document.documentElement.style.zoom = x.value === '1' ? '' : x.value; })) });
+        if (!r) { applicaScala(); return; }
+        scriviPref('tice_scala', r.scala && r.scala !== '1' ? r.scala : null);
+        applicaScala();
+        if (puoSchermoIntero()) {
+            scriviPref('tice_schermo_intero', r.intero ? '1' : null);
+            await schermoIntero(!!r.intero);
+        }
+    }
+    applicaScala();
+    schermoInteroAlTocco();
+
     async function avvia() {
         const r = radice();
         if (!r) return;
