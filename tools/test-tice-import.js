@@ -162,6 +162,31 @@ prova('time delay: forme "TD 2\'\'", aumento a metà, nuovo dopo il criterio, 0"
   const f = TiceImport._interni.secondiTD;
   assert.deepStrictEqual(['1"T/D', '2” TD', "3'' t/d", 'TD 2\'\'', '(TD 4\'\')', 'T.D. 3"', 'time delay 2 sec', '0”T/D', 'TAGLIA RIGA 2 CM'].map(f), [1, 2, 3, 2, 4, 3, 2, 0, null]);
 });
+prova('fusione: programma creato nell\'app, quaderno importato dopo', () => {
+  const P = require(path.join(__dirname, '..', 'js', 'tice-programma.js'));
+  const bimbo = { id: 'b9', name: 'Mario R', history: [], programma: { attivita: [] } };
+  const app = P.nuovaAttivita(bimbo, { nome: 'Tact animali', sessionType: 'timedelay', target: 'Animali 5 target' });
+  P.nuovaAttivita(bimbo, { nome: 'Lettura', target: 'Sillabe piane' });
+  bimbo.history.push({ date: '2026-10-01T10:00:00Z', setName: 'Tact animali · Animali 5 target', mode: 'quaderno', attivitaId: app.id, targetId: app.target[0].id, correct: 8, total: 10, percentage: 80 });
+  const pk4 = TiceImport.analizza(quaderno(), 'Mario_R_old.numbers');
+  const tact = pk4.attivita.find((a) => a.nome === 'TACT');
+  const prop = TiceImport.abbina(pk4, bimbo);
+  assert.strictEqual(prop[tact.id].id, app.id, 'TACT proposta con "Tact animali"');
+  assert.strictEqual(prop[pk4.attivita.find((a) => a.nome === 'VESTIRSI').id].id, null, 'niente di simile: nuova');
+  TiceImport.applica(bimbo, pk4, { [pk4.attivita[2].id]: 4 }, { unisci: { [tact.id]: app.id } });
+  const nomi = bimbo.programma.attivita.map((a) => a.nome);
+  assert.ok(!nomi.includes('TACT') && nomi.includes('Tact animali') && nomi.includes('VESTIRSI'), 'nessun doppione: ' + nomi.join(', '));
+  assert.deepStrictEqual(app.target.map((t) => [t.testo, t.stato]), [['Frutta 5 target', 'chiuso'], ['Veicoli', 'chiuso'], ['Animali 5 target', 'attivo']], 'la storia del quaderno prima, il target dell\'app resta il corrente');
+  const suoi = bimbo.history.filter((x) => x.attivitaId === app.id);
+  assert.strictEqual(suoi.filter((x) => x.targetId === app.target[2].id).length, 4, 'le 3 sedute del quaderno su Animali + quella dell\'app nello stesso target');
+  // reimportare lo stesso file: si riunisce da solo, niente doppioni
+  const pk5 = TiceImport.analizza(quaderno(), 'Mario_R_old.numbers');
+  const prop2 = TiceImport.abbina(pk5, bimbo);
+  assert.strictEqual(prop2[tact.id].id, app.id, 'ricorda l\'unione');
+  TiceImport.applica(bimbo, pk5, {}, { unisci: { [tact.id]: app.id } });
+  assert.strictEqual(app.target.length, 3);
+  assert.strictEqual(bimbo.history.filter((x) => x.attivitaId === app.id).length, suoi.length);
+});
 prova('la data non slitta col fuso orario', () => {
   const d = new Date(s[0].date);
   assert.strictEqual(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`, s[0].date.slice(0, 10));

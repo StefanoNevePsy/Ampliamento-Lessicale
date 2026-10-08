@@ -671,6 +671,41 @@
 
     // ---------- import ----------
     const normNome = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+    // Fusione con un programma già creato nell'app: per ogni attività del quaderno
+    // quella del programma che le somiglia (proposta), o "nuova attività".
+    function proponiUnione(it) {
+        const p = it.pazienteId ? paz(it.pazienteId) : null;
+        it.unisci = {}; it.proposte = {};
+        if (!p || !(P.programma(p).attivita || []).length) return;
+        const diz = dizionario();
+        // i nomi ambigui (FD) non si abbinano per modalità: solo per nome
+        const mod = (a) => { if (a.modalita) return a.modalita; const r = M.riconosci(a, diz); return r.ambiguo ? null : r.modalita; };
+        const r = TiceImport.abbina(it.pk, p, { modalita: mod });
+        Object.entries(r).forEach(([id, x]) => { if (x.id) { it.unisci[id] = x.id; it.proposte[id] = x.punteggio; } });
+    }
+    function sezioneUnione(it, i) {
+        const p = it.pazienteId ? paz(it.pazienteId) : null;
+        const esistenti = p ? (P.programma(p).attivita || []).filter((a) => a.origine !== 'numbers' || (a.unitoDa || []).length) : [];
+        if (!p || !esistenti.length) return '';
+        const giaImportate = new Set((P.programma(p).attivita || []).map((a) => a.id));
+        const righe = it.pk.attivita.filter((a) => !giaImportate.has(a.id));
+        if (!righe.length) return '';
+        const diz = dizionario();
+        const opz = (scelto) => perCategoria(esistenti).map((g) => h`<optgroup label="${g.area}">${g.att.map((x) => h`<option value="${x.id}" ${scelto === x.id ? grezzo('selected') : ''}>${x.nome}${x.stato !== 'attivo' ? ' (' + (ETICHETTE_STATO[x.stato] || x.stato) + ')' : ''}</option>`)}</optgroup>`);
+        const n = righe.filter((a) => it.unisci[a.id]).length;
+        return h`<h3 style="margin-left:0">Unisci con il programma di ${p.name}</h3>
+            <p class="sotto piccolo">${p.name} ha già un programma nell'app. Ogni attività del quaderno si può unire a una già esistente (i target uguali si uniscono, gli altri entrano come storia chiusa, le sedute nello stesso grafico) o aggiungere come nuova. ${n ? `Proposte ${n} unioni per nome simile: controllale.` : ''}</p>
+            ${(() => {
+                const riga = (a) => h`<div class="riga-dato"><div><b>${(a.area || 'Terminati') + ' / ' + a.nome}</b>
+                    ${it.proposte[a.id] && it.unisci[a.id] ? h` <span class="pill verde">proposta</span>` : ''}</div>
+                <div class="riga-campi"><label class="campo"><span>Nel programma</span>
+                    <select class="campo-in" data-cambio="imp-unisci" data-i="${i}" data-att="${a.id}">
+                        <option value="" ${!it.unisci[a.id] ? grezzo('selected') : ''}>Aggiungi come nuova attività</option>${opz(it.unisci[a.id])}</select></label></div></div>`;
+                const unite = righe.filter((a) => it.unisci[a.id] || it.proposte[a.id]), altre = righe.filter((a) => !unite.includes(a));
+                return h`${unite.map(riga)}
+                    ${altre.length ? h`<details data-chiusi="${'unisci-i' + i}" ${T.chiusiAperti['unisci-i' + i] ? grezzo('open') : ''}><summary class="sotto">${unite.length ? 'Le altre' : 'Tutte le'} ${altre.length} attività: aggiunte come nuove (si possono unire anche queste)</summary>${altre.map(riga)}</details>` : ''}`;
+            })()}`;
+    }
     // Come si raccoglieva il dato di ogni attività: strategia, tipo di dato, prove per seduta, criterio.
     // Precompilato da quello che si legge nel quaderno; prima le attività da controllare.
     function sezioneDato(it, i, terminata) {
@@ -733,6 +768,7 @@
             <details><summary>Attività in corso e target</summary><ul>
                 ${attive.map((a) => { const c = P.targetCorrente(a); return h`<li><b>${a.nome}</b>${a.area ? ' (' + a.area + ')' : ''}${c ? ': ' + c.target.testo : ''}</li>`; })}
             </ul></details>
+            ${sezioneUnione(it, i)}
             ${sezioneDato(it, i, terminata)}
             ${(() => {
                 const righe = pk.attivita.map((a) => [a, it.modalita[a.id]]);
@@ -1560,7 +1596,8 @@
             const soglia = typeof DEFAULT_CRITERION !== 'undefined' ? DEFAULT_CRITERION : 90;
             const nuovo = !paz(p.id);
             const aggiunte = applicaScelte(it.pk.attivita.map((a) => [a, it.modalita[a.id]]));
-            const r = TiceImport.applica(p, it.pk, it.conferme, { sogliaPredefinita: soglia });
+            const r = TiceImport.applica(p, it.pk, it.conferme, { sogliaPredefinita: soglia, unisci: it.unisci || {} });
+            new Set(Object.values(it.unisci || {})).forEach((id) => { const a = P.attivita(p, id); if (a) rinominaSedute(p, a); });
             await salvaPaziente(p);
             await condividiScelte(aggiunte);
             if (nuovo && EST.nuovoBambino) await EST.nuovoBambino(p);
@@ -1595,7 +1632,9 @@
                     impost[a.id] = { sessionType: a.sessionType || 'independent', tdSeconds: td, scala: a.scala === 'percentuale' ? 'percentuale' : 'conteggio',
                         prove: conferme[a.id] != null ? conferme[a.id] : a.prove, soglia: (a.criterio || {}).soglia || 90, sedute: (a.criterio || {}).sedute || 2 };
                 });
-                T.importazioni.push({ file: f.name, pk, nome: pk.nome, pazienteId: esistente ? esistente.id : '', conferme, modalita, impost });
+                const nuovo = { file: f.name, pk, nome: pk.nome, pazienteId: esistente ? esistente.id : '', conferme, modalita, impost, unisci: {}, proposte: {} };
+                proponiUnione(nuovo);
+                T.importazioni.push(nuovo);
             } catch (e) {
                 console.error(e);
                 T.importazioni.push({ file: f.name, errore: e.message || String(e) });
@@ -1744,8 +1783,13 @@
             const files = [...el.files];
             el.value = '';
             leggiFile(files);
+        } else if (c === 'imp-unisci' && e.type === 'change') {
+            const it = T.importazioni[+el.dataset.i];
+            if (el.value) it.unisci[el.dataset.att] = el.value; else delete it.unisci[el.dataset.att];
+            T.mantieniScroll = true; disegna();
         } else if (c === 'imp-paziente' && e.type === 'change') {
             T.importazioni[+el.dataset.i].pazienteId = el.value;
+            proponiUnione(T.importazioni[+el.dataset.i]);
             T.mantieniScroll = true; disegna();
         } else if (c === 'imp-nome') {
             T.importazioni[+el.dataset.i].nome = el.value;

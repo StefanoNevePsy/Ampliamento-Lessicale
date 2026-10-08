@@ -532,6 +532,86 @@
    * Reimportare lo stesso file sostituisce le sedute importate da quel file;
    * le sedute registrate nell'app e le attività create nell'app restano.
    */
+  // ---------- fusione con un programma già creato nell'app ----------
+  var PAROLE_VUOTE = /^(task|programma|attivita|di|da|del|della|e|il|la|lo|le|i|gli|con|su|a|in|per)$/;
+  function paroleNome(t) {
+    return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim()
+      .split(' ').filter(function (w) { return w && !PAROLE_VUOTE.test(w); });
+  }
+  function somiglianza(a, b) {
+    var x = paroleNome(a), y = paroleNome(b);
+    if (!x.length || !y.length) return 0;
+    if (x.join(' ') === y.join(' ')) return 1;
+    // stessa radice: "ritaglia" e "ritaglio", "pregrafismo" e "pregrafismi"
+    var radice = function (w) { return w.length >= 5 ? w.slice(0, Math.max(5, w.length - 2)) : w; };
+    var ry = y.map(radice);
+    var comuni = x.filter(function (w) { return y.indexOf(w) >= 0 || ry.indexOf(radice(w)) >= 0; }).length;
+    // "TACT" dentro "Tact animali" conta molto: tutte le parole dell'uno nell'altro
+    var contenuto = comuni === Math.min(x.length, y.length) ? 0.75 : 0;
+    return Math.max(contenuto, comuni / (x.length + y.length - comuni));
+  }
+  /**
+   * Per un bambino che ha già un programma: per ogni attività del quaderno,
+   * quella del programma che le somiglia di più (stesso nome a meno di
+   * maiuscole e parole di contorno, o stessa modalità e nome simile).
+   * → { idAttivitàQuaderno: { id: idEsistente|null, punteggio } }
+   * opz.modalita(att) → id della modalità (facoltativo)
+   */
+  function abbina(pacchetto, paziente, opz) {
+    opz = opz || {};
+    var esistenti = ((paziente && paziente.programma && paziente.programma.attivita) || []);
+    var giaUniti = (paziente && paziente.abbinamenti) || {};
+    var out = {};
+    pacchetto.attivita.forEach(function (a) {
+      if (esistenti.some(function (x) { return x.id === a.id; })) { out[a.id] = { id: null, punteggio: 1, stesso: true }; return; }
+      if (giaUniti[a.id] && esistenti.some(function (x) { return x.id === giaUniti[a.id]; })) { out[a.id] = { id: giaUniti[a.id], punteggio: 1 }; return; }
+      var meglio = null, pm = 0;
+      var terminata = a.stato !== 'attivo';
+      esistenti.forEach(function (x) {
+        if (x.origine === 'numbers') return;   // già venuta da un quaderno
+        var sc = somiglianza(a.nome, x.nome), stessoNome = sc === 1;
+        var ma = opz.modalita && opz.modalita(a), mx = opz.modalita && opz.modalita(x);
+        // la stessa modalità basta a proporre l'unione per un'attività in corso
+        if (ma && mx) sc = ma === mx ? (terminata ? Math.min(1, sc + 0.25) : Math.max(0.55, Math.min(1, sc + 0.25))) : sc * 0.6;
+        // un programma terminato si propone solo con lo stesso nome (es. ECHO TO TACT non è il Tact di oggi)
+        if (terminata && !stessoNome) sc = Math.min(sc, 0.45);
+        if (sc > pm) { pm = sc; meglio = x; }
+      });
+      out[a.id] = pm >= 0.5 ? { id: meglio.id, punteggio: Math.round(pm * 100) / 100 } : { id: null, punteggio: Math.round(pm * 100) / 100 };
+    });
+    return out;
+  }
+  // I target del quaderno dentro un'attività del programma: quelli con lo stesso
+  // testo si uniscono, gli altri entrano prima come storia (chiusi).
+  function unisciAttivita(esistente, a) {
+    var mappa = {};
+    // un target si riconosce dal testo intero o da una sua parte ("Full echo — Nuotare, leggere…")
+    var parti = function (t) {
+      var l = String(t.testo || '').split(/\s+—\s+/).map(function (x) { return paroleNome(x).join(' '); }).filter(Boolean);
+      l.push(paroleNome(t.testo).join(' '));
+      return l.filter(function (x) { return x.length > 2 && !/^\d+ ?t ?d$/.test(x); });
+    };
+    var perTesto = {};
+    (esistente.target || []).forEach(function (t) { parti(t).forEach(function (k) { if (!perTesto[k]) perTesto[k] = t; }); });
+    var storia = [];
+    a.target.forEach(function (t) {
+      var uguale = null;
+      parti(t).forEach(function (k) { if (!uguale && perTesto[k] && perTesto[k].origine !== 'numbers') uguale = perTesto[k]; });
+      if (uguale) { mappa[t.id] = uguale.id; return; }
+      var c = {}; for (var k in t) c[k] = t[k];
+      if (c.stato === 'attivo' || c.stato === 'pianificato') c.stato = 'chiuso';
+      c.origine = 'numbers';
+      storia.push(c);
+      mappa[t.id] = c.id;
+    });
+    // la storia del quaderno prima dei target nati nell'app (senza doppioni a ogni reimport)
+    var ids = {};
+    (esistente.target || []).forEach(function (t) { ids[t.id] = true; });
+    esistente.target = storia.filter(function (t) { return !ids[t.id]; }).concat(esistente.target || []);
+    esistente.unitoDa = (esistente.unitoDa || []).filter(function (x) { return x !== a.id; }).concat([a.id]);
+    return mappa;
+  }
+
   function applica(paziente, pacchetto, conferme, opzioni) {
     opzioni = opzioni || {};
     var p = paziente;
@@ -543,7 +623,20 @@
     // (stessa area e nome); quelle create nell'app restano. I target creati
     // nell'app dentro un'attività importata restano anche loro, in coda.
     var prog = p.programma || (p.programma = { attivita: [] });
+    // attività del quaderno unite a quelle già nel programma (scelte in anteprima)
+    var unisci = opzioni.unisci || {};
+    var mappaTarget = {}, unite = {};
     pacchetto.attivita.forEach(function (a) {
+      var dest = unisci[a.id] && prog.attivita.filter(function (x) { return x.id === unisci[a.id]; })[0];
+      if (!dest) return;
+      unite[a.id] = dest;
+      var m = unisciAttivita(dest, a);
+      for (var k in m) mappaTarget[k] = m[k];
+      p.abbinamenti = p.abbinamenti || {};
+      p.abbinamenti[a.id] = dest.id;
+    });
+    pacchetto.attivita.forEach(function (a) {
+      if (unite[a.id]) return;
       var i = -1;
       prog.attivita.forEach(function (x, k) { if (x.id === a.id) i = k; });
       if (i < 0) { prog.attivita.push(a); return; }
@@ -571,12 +664,23 @@
 
     // Storico: fuori le sedute importate prima da questo file, dentro le nuove
     var nuove = sedute(pacchetto, conferme);
+    // le sedute delle attività unite vanno sull'attività e sui target del programma
+    nuove.forEach(function (s) {
+      var dest = unite[s.attivitaId];
+      if (!dest) return;
+      var tid = mappaTarget[s.targetId] || s.targetId;
+      var t = (dest.target || []).filter(function (x) { return x.id === tid; })[0];
+      s.attivitaId = dest.id;
+      s.targetId = tid;
+      s.setName = t && t.setId ? t.testo : (t && t.testo ? dest.nome + ' · ' + t.testo : dest.nome);
+      if (dest.area) s.setCat = dest.area;
+    });
     p.history = p.history.filter(function (s) { return !(s.fonte === 'numbers' && s.fonteFile === pacchetto.file); });
     p.history = p.history.concat(nuove);
 
     // Soglie diverse dal 90% scritte nel foglio
     pacchetto.attivita.forEach(function (a) {
-      if (!a.criterio || !a.criterio.soglia) return;
+      if (unite[a.id] || !a.criterio || !a.criterio.soglia) return;
       var predef = p.criterionThreshold || opzioni.sogliaPredefinita || 90;
       if (a.criterio.soglia === predef) return;
       p.criterionOverrides = p.criterionOverrides || {};
@@ -594,7 +698,7 @@
   }
 
   return {
-    analizza: analizza, sedute: sedute, applica: applica, imposta: imposta, nomeSet: nomeSet, nomeDaFile: nomeDaFile,
+    analizza: analizza, sedute: sedute, applica: applica, imposta: imposta, abbina: abbina, somiglianza: somiglianza, nomeSet: nomeSet, nomeDaFile: nomeDaFile,
     _interni: { dataIso: dataIso, numero: numero, leggiCriterio: leggiCriterio, secondiTD: secondiTD, hash: hash }
   };
 });
