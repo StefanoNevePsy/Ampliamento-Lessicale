@@ -485,7 +485,8 @@
         const nonOggi = b.data !== oggi();
         return h`${barra({ indietro: 'vai-bambini', titolo: p.name,
                 sotto: { testo: (nonOggi ? 'Seduta del ' : 'Oggi, ') + formatoData(b.data, true), azione: 'data' },
-                destra: h`<button class="ib" data-a="vai-programma" aria-label="Programma" title="Programma">${icona('list-check')}</button>
+                destra: h`<button class="ib" data-a="apri-cartella" aria-label="Cartella clinica" title="Cartella clinica">${icona('chart-line')}</button>
+                    <button class="ib" data-a="vai-programma" aria-label="Programma" title="Programma">${icona('list-check')}</button>
                     <button class="ib" data-a="menu-bambino" aria-label="Altro">${icona('ellipsis-vertical')}</button>` })}
             <main class="tice-main">
                 ${nonOggi ? h`<div class="banda">${icona('calendar-day')}<div>Stai registrando una seduta del <b>${formatoData(b.data, true)}</b>, non di oggi.</div></div>` : ''}
@@ -680,7 +681,8 @@
         const altre = tutte.filter((a) => a.stato !== 'attivo');
         const gruppi = perCategoria(attive);
         const senza = tutte.filter((a) => !a.modalita || !M.trovaModalita(a.modalita, dizionario()));
-        return h`${barra({ indietro: 'vai-seduta', titolo: 'Programma', sotto: { testo: p.name } })}
+        return h`${barra({ indietro: 'vai-seduta', titolo: 'Programma', sotto: { testo: p.name },
+                destra: h`<button class="ib" data-a="apri-cartella" aria-label="Cartella clinica" title="Cartella clinica">${icona('chart-line')}</button>` })}
             <main class="tice-main">
                 <p class="sotto">Le attività in corso compaiono nella presa dati con il loro target. Quando un target raggiunge il criterio l'app propone di passare al successivo.</p>
                 <button class="bt largo fantasma" data-a="stampa-griglie" style="margin-bottom:8px">${icona('print')} Stampa le griglie per la presa dati su carta</button>
@@ -873,6 +875,7 @@
         'vai-turni': () => vai('turni'),
         'vai-seduta': () => vai('seduta'),
         'vai-programma': () => vai('programma'),
+        'apri-cartella': () => { if (T.pid) apriCartella(T.pid); },
         'vai-import': () => { if (!limitato()) vai('import'); },
         'apri-bambino': (b) => { T.aperte = {}; vai('seduta', b.dataset.pid); },
         giochi: () => chiudi(),
