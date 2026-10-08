@@ -399,7 +399,7 @@
                     ${lu && (lu.prec || lu.oggi) ? h`<span class="target lu-attesa">${icona('hourglass-half')} ${lu.prec ? `${lu.prec.seq.length} prove in attesa dal ${formatoData(lu.prec.dal)} · ` : ''}${lu.blocchi.length
                         ? `salvando, ${lu.blocchi.length === 1 ? 'una LU completa entra' : lu.blocchi.length + ' LU complete entrano'} nei dati${lu.resto ? `, ${lu.resto} prove restano in attesa` : ''}`
                         : `ne mancano ${lu.n - lu.resto} per completare la LU da ${lu.n}`}</span>` : ''}
-                    ${oggiT ? h`<span class="target">${icona('circle-check')} già oggi: ${oggiV}/${oggiT} (${Math.round(100 * oggiV / oggiT)}%)</span>` : ''}
+                    ${oggiT ? h`<span class="target">${icona('circle-check')} già oggi: ${oggiV}/${oggiT} (${Math.round(100 * oggiV / oggiT)}%)${(() => { const chi = [...new Set(giaOggi.map((x) => x.operatore).filter(Boolean))]; return chi.length ? h` <span class="chi">· ${chi.join(', ')}</span>` : ''; })()}</span>` : ''}
                 </span>
                 <span class="conto">${tot ? h`<b class="${classePct(pct, soglia)}">${pct}%</b><br><span class="piccolo sotto">${v.v}/${tot}${att.prove ? ' di ' + att.prove : ''}</span>`
                     : h`<span class="piccolo sotto">${att.prove ? att.prove + ' prove' : 'tocca'}</span>`}</span>
@@ -484,7 +484,7 @@
         const perArea = perCategoria(lista);
         const nonOggi = b.data !== oggi();
         return h`${barra({ indietro: 'vai-bambini', titolo: p.name,
-                sotto: { testo: (nonOggi ? 'Seduta del ' : 'Oggi, ') + formatoData(b.data, true), azione: 'data' },
+                sotto: { testo: (nonOggi ? 'Seduta del ' : 'Oggi, ') + formatoData(b.data, true) + (chiDellaSeduta(p, b) ? ' · ' + chiDellaSeduta(p, b) : ''), azione: 'data' },
                 destra: h`<button class="ib" data-a="apri-cartella" aria-label="Cartella clinica" title="Cartella clinica">${icona('chart-line')}</button>
                     <button class="ib" data-a="vai-programma" aria-label="Programma" title="Programma">${icona('list-check')}</button>
                     <button class="ib" data-a="menu-bambino" aria-label="Altro">${icona('ellipsis-vertical')}</button>` })}
@@ -1079,6 +1079,7 @@
                 <label class="campo"><span>Decisione (facoltativa)</span><input name="decisione" maxlength="200" value="${v.decisione || ''}" placeholder="es. Passa a 1&quot; T/D" list="tice-decisioni"></label>
                 <datalist id="tice-decisioni"><option value='Passa a 0" T/D'><option value='Passa a 1" T/D'><option value='Passa a 2" T/D'><option value="Probe"><option value="Stop"></datalist>
                 <label class="campo"><span>Nota</span><textarea name="nota" maxlength="2000">${v.nota || ''}</textarea></label>
+                <label class="campo campo-chi"><span>Svolta da <small class="sotto">· solo se diverso da chi ha svolto la seduta</small></span><input name="operatore" maxlength="120" value="${v.operatore || ''}" placeholder="${chiDellaSeduta(p, bozza(p.id)) || 'Nome'}" autocomplete="off"></label>
                 ${attesaV ? h`<label class="spunta-riga"><input type="checkbox" name="scarta"> <span><b>Scarta le ${attesaV.seq.length} prove in attesa</b><br><span class="sotto piccolo">Registrate dal ${formatoData(attesaV.dal)} senza arrivare a una LU da ${att.prove}: non entreranno nei dati.</span></span></label>` : ''}
                 ${att.temporanea ? h`<button type="button" class="bt pericolo" data-foglio="togli" style="width:100%">Togli dalla seduta</button>` : ''}
                 <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`);
@@ -1107,6 +1108,7 @@
             }
             v.decisione = r.decisione.trim();
             v.nota = r.nota.trim();
+            if (String(r.operatore || '').trim()) v.operatore = String(r.operatore).trim(); else delete v.operatore;
             if (r.scarta && attesaV && att.inAttesa) {
                 delete att.inAttesa[P.chiaveAttesa(tV)];
                 if (!Object.keys(att.inAttesa).length) delete att.inAttesa;
@@ -1194,16 +1196,21 @@
                 const lu = a ? statoLU(a, v, tt) : null;
                 return h`<tr><td>${a ? a.nome : '?'}${lu ? h`<br><small class="sotto">${lu.blocchi.length ? `${lu.blocchi.length} LU nei dati` : 'non entra ancora nei dati'}${lu.resto ? ` · ${lu.resto}/${lu.n} in attesa` : ''}</small>` : ''}</td><td class="num">${v.v}/${tot}</td><td class="num"><b class="${classePct(pct, a && a.criterio && a.criterio.soglia)}">${pct}%</b></td></tr>`;
             });
-            let operatore = '';
-            try { operatore = localStorage.getItem('tice_operatore') || ''; } catch (e) { /* niente */ }
+            // chi ha svolto la seduta: dai turni del calendario; se non c'è nessuno, lo si chiede
+            const cal = EST.chiDi ? await EST.chiDi(p.id, b.data).catch(() => ({ nomi: [], persone: [] })) : { nomi: [], persone: [] };
+            const operatore = b.operatore || cal.nomi.join(' + ');
+            let ultimo = '';
+            try { ultimo = localStorage.getItem('tice_operatore') || ''; } catch (e) { /* niente */ }
+            const suggeriti = [...new Set([ultimo, ...cal.persone].filter(Boolean))];
             const dati = await foglio(h`<form><h2>Fine seduta</h2>
                 <table class="tabella" style="margin-bottom:14px"><tbody>${righe}</tbody>
                     <tfoot><tr><th>Learn unit</th><th class="num">${r0.corrette}/${r0.prove}</th><th class="num">${Math.round(100 * r0.corrette / r0.prove)}%</th></tr></tfoot></table>
-                <label class="campo"><span>Chi ha condotto la seduta</span><input name="operatore" maxlength="120" value="${operatore}" placeholder="Nome, o più nomi separati da +"></label>
+                <label class="campo campo-chi"><span>Chi ha svolto la seduta${!b.operatore && cal.nomi.length ? h` <small class="sotto">· dal calendario</small>` : ''}</span><input name="operatore" maxlength="120" required value="${operatore}" placeholder="Nome, o più nomi separati da +" list="tice-chi" autocomplete="off">
+                    <datalist id="tice-chi">${suggeriti.map((n) => h`<option value="${n}">`)}</datalist></label>
                 <label class="campo"><span>Note sulla seduta (vanno nel diario del giorno)</span><textarea name="nota" maxlength="5000" placeholder="Comportamento, rinforzatori, osservazioni…"></textarea></label>
                 <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Continua</button><button class="bt primario">${icona('check')} Salva</button></div></form>`);
             if (!dati) return;
-            try { localStorage.setItem('tice_operatore', dati.operatore.trim()); } catch (e) { /* niente */ }
+            try { localStorage.setItem('tice_operatore', dati.operatore.trim().split('+')[0].trim()); } catch (e) { /* niente */ }
             await salvaSeduta(p, b, dati);
         },
         'chiudi-target': async (b) => {
@@ -1626,6 +1633,21 @@
         s.note = s.note ? testo + ' — ' + s.note : testo;
     }
 
+    // Chi ha svolto la seduta: dai turni del calendario, se c'è qualcuno in turno con il bambino
+    const chiCache = {};
+    function chiDalCalendario(pid, data) {
+        const k = pid + '|' + data;
+        if (!EST.chiDi) return { nomi: [], persone: [] };
+        if (!chiCache[k] || Date.now() - chiCache[k].il > 120000) {
+            const prima = chiCache[k] || { nomi: [], persone: [] };
+            chiCache[k] = Object.assign({}, prima, { il: Date.now() });
+            EST.chiDi(pid, data).then((r) => { const cambiato = (r.nomi || []).join() !== (prima.nomi || []).join(); chiCache[k] = Object.assign(r, { il: Date.now() }); if (cambiato && T.vista === 'seduta' && T.pid === pid) TiceHome.ridisegna(); })
+                .catch(() => { /* resta quello di prima */ });
+        }
+        return chiCache[k];
+    }
+    const chiDellaSeduta = (p, b) => (b.operatore ? b.operatore : chiDalCalendario(p.id, b.data).nomi.join(' + '));
+
     async function salvaSeduta(p, b, dati) {
         const quando = b.data === oggi() ? new Date().toISOString() : b.data + 'T12:00:00';
         const operatore = String(dati.operatore || '').trim();
@@ -1637,7 +1659,7 @@
             if (!haDati(v)) return;
             const att = attivitaDi(p, k);
             if (!att) return;
-            const voceS = Object.assign({}, v, { operatore });
+            const voceS = Object.assign({}, v, { operatore: String(v.operatore || '').trim() || operatore });
             // il time delay di oggi resta scritto nella seduta, anche se poi il programma cambia
             if (!att.temporanea && (v.sessionType || att.sessionType) === 'timedelay' && P.secondiTD(v.tdSeconds) == null) {
                 const tt = v.targetId ? att.target.find((x) => x.id === v.targetId) : null;

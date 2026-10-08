@@ -174,6 +174,8 @@ body.tice-aperto #notebook-tab-handle { display: none !important; }
     color: inherit; font: inherit; text-align: left; cursor: pointer;
 }
 .tice .att-testa .corpo { flex: 1; min-width: 0; }
+.tice .att-testa .chi { opacity: 0.75; }
+.tice-foglio .campo-chi small { font-weight: 500; }
 .tice .att-testa .nome { display: block; font-weight: 750; }
 .tice .att-testa .target { display: block; color: var(--text-secondary); font-size: 0.86rem; margin-top: 2px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .tice .conto { text-align: right; flex-shrink: 0; min-width: 58px; line-height: 1.2; }

@@ -484,5 +484,21 @@
     document.addEventListener('toggle', (e) => { if (e.target.classList && e.target.classList.contains('tt-riepilogo')) S.riepilogoAperto = e.target.open; }, true);
     if (Y && Y.alCambio) Y.alCambio((cosa) => { if (cosa === 'turni' && TiceHome.attuale().vista === 'turni') TiceHome.ridisegna(); });
 
-    TiceHome.estendi({ viste: { turni: vistaTurni, 'turni-modello': vistaModello }, azioni });
+    // Chi è in turno con un bambino in un giorno (nell'ordine delle fasce): serve alla
+    // seduta per sapere chi l'ha svolta senza chiederlo. Più l'elenco delle persone.
+    async function chiDi(pid, g) {
+        const k = TT.lunedi(g);
+        const [sett, pers, mod] = await Promise.all([
+            k === S.chiave && S.sett ? { dati: S.sett } : leggi(k),
+            S.personeCaricate ? { dati: { persone: S.persone } } : leggi('persone'),
+            S.modello ? { dati: S.modello } : leggi('modello')]);
+        const elenco = (pers.dati && pers.dati.persone) || [];
+        const gi = TT.giornata(sett.dati || TT.vuota(), g, mod.dati || null);
+        const ids = [];
+        gi.voci.filter((v) => v.pid === pid).sort((a, b) => (a.ora < b.ora ? -1 : 1))
+            .forEach((v) => (v.persone || []).forEach((id) => { if (!ids.includes(id)) ids.push(id); }));
+        return { nomi: ids.map((id) => (elenco.find((x) => x.id === id) || {}).nome).filter(Boolean), persone: elenco.map((x) => x.nome).filter(Boolean) };
+    }
+
+    TiceHome.estendi({ viste: { turni: vistaTurni, 'turni-modello': vistaModello }, azioni, aggancio: { chiDi } });
 })();
