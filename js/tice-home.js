@@ -2029,14 +2029,25 @@
         } catch (e) { /* non disponibile */ }
         return Promise.resolve();
     }
+    // Nell'app installata su telefono e tablet lo schermo intero è la scelta di partenza:
+    // alcuni browser (Firefox per Android) lasciano le barre di sistema anche con il manifest
+    const installata = () => ['fullscreen', 'standalone', 'minimal-ui'].some((m) => window.matchMedia && matchMedia('(display-mode: ' + m + ')').matches);
+    const touch = () => !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+    const vuoleSchermoIntero = () => { const v = leggiPref('tice_schermo_intero'); return v === '1' || (v == null && installata() && touch()); };
     // Il browser concede lo schermo intero solo dopo un tocco: si chiede al primo
+    // tocco, e di nuovo quando l'app torna in primo piano (Android lo toglie uscendo)
     function schermoInteroAlTocco() {
-        if (leggiPref('tice_schermo_intero') !== '1' || !puoSchermoIntero()) return;
-        const una = () => { if (!aSchermoIntero()) schermoIntero(true); };
-        document.addEventListener('pointerup', una, { capture: true, once: true });
+        if (!puoSchermoIntero()) return;
+        const arma = () => {
+            if (!vuoleSchermoIntero() || aSchermoIntero()) return;
+            document.addEventListener('pointerup', () => { if (vuoleSchermoIntero() && !aSchermoIntero()) schermoIntero(true); }, { capture: true, once: true });
+        };
+        arma();
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') arma(); });
+        document.addEventListener('fullscreenchange', () => { if (!aSchermoIntero()) setTimeout(arma, 300); });
     }
     async function opzioniSchermo() {
-        const z = leggiPref('tice_scala') || '1', fs = leggiPref('tice_schermo_intero') === '1';
+        const z = leggiPref('tice_scala') || '1', fs = vuoleSchermoIntero();
         const r = await foglio(h`<form><h2>Schermo</h2>
             <div class="campo"><span>Dimensione dell'interfaccia</span><div class="scelta">
                 ${SCALE.map(([v, n]) => h`<label><input type="radio" name="scala" value="${v}" ${v === z ? grezzo('checked') : ''}><span>${n}</span></label>`)}
@@ -2049,7 +2060,7 @@
         scriviPref('tice_scala', r.scala && r.scala !== '1' ? r.scala : null);
         applicaScala();
         if (puoSchermoIntero()) {
-            scriviPref('tice_schermo_intero', r.intero ? '1' : null);
+            scriviPref('tice_schermo_intero', r.intero ? '1' : '0');
             await schermoIntero(!!r.intero);
         }
     }
