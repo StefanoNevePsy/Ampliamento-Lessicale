@@ -86,6 +86,50 @@
     }
     return null;
   }
+  // ---------- time delay ----------
+  // Secondi validi (0 = senza attesa); null se non indicati
+  function secondi(x) {
+    if (x === null || x === undefined || x === '') return null;
+    var n = +x;
+    return isFinite(n) && n >= 0 && n <= 60 ? Math.round(n) : null;
+  }
+  /** Il time delay in uso: quello scritto sul target (quaderni importati) o quello dell'attività. */
+  function tdDi(att, target) {
+    var t = target === undefined ? (targetCorrente(att) || {}).target : target;
+    var dt = t ? secondi(t.tdSeconds) : null;
+    return dt != null ? dt : secondi(att && att.tdSeconds);
+  }
+  /**
+   * Cambia il time delay dell'attività da qui in avanti e lo annota in att.tdCambi
+   * ({ il, da, a, chi }). Il target in corso, se ne aveva uno suo, lo segue.
+   * Restituisce true se il valore è cambiato.
+   */
+  function impostaTD(att, sec, opz) {
+    var o = opz || {};
+    var nuovo = secondi(sec);
+    if (nuovo == null) return false;
+    var c = targetCorrente(att);
+    var vecchio = tdDi(att);
+    if (vecchio === nuovo && secondi(att.tdSeconds) === nuovo) return false;
+    att.tdSeconds = nuovo;
+    if (c && c.target && secondi(c.target.tdSeconds) != null) c.target.tdSeconds = nuovo;
+    if (vecchio !== nuovo) {
+      att.tdCambi = att.tdCambi || [];
+      var voce = { il: o.il || new Date().toISOString().slice(0, 10), da: vecchio, a: nuovo };
+      if (o.chi) voce.chi = String(o.chi);
+      if (c && c.target) voce.targetId = c.target.id;
+      att.tdCambi.push(voce);
+    }
+    return vecchio !== nuovo;
+  }
+  /** "Passa a 2" T/D", "aumenta TD a 3''": i secondi decisi, se la decisione li indica. */
+  function tdDaDecisione(testo) {
+    var t = String(testo || '');
+    var m = /(\d{1,2})\s*(?:["”″“]|''|sec\w*|s\b)?\s*(?:t\s*\.?\s*\/?\s*d\b|time\s*delay)/i.exec(t)
+      || /(?:t\s*\.?\s*\/?\s*d\b|time\s*delay)\s*(?:a\s+)?(\d{1,2})/i.exec(t);
+    return m ? secondi(m[1]) : null;
+  }
+
   function prossimoTarget(att) {
     return (att.target || []).filter(function (x) { return x.stato === 'pianificato'; })[0] || null;
   }
@@ -160,7 +204,10 @@
       targetId: target ? target.id : null,
       fonte: 'app'
     };
-    if (s.sessionType === 'timedelay') s.timeDelaySeconds = voce.tdSeconds || (target && target.tdSeconds) || att.tdSeconds || 5;
+    if (s.sessionType === 'timedelay') {
+      var td = secondi(voce.tdSeconds) != null ? secondi(voce.tdSeconds) : tdDi(att, target);
+      if (td != null) s.timeDelaySeconds = td;
+    }
     if (voce.sequenza) s.sequenza = voce.sequenza;
     // task analysis: il dettaglio per passo, come la modalità Task Analysis
     var passi = passiDi(target);
@@ -207,7 +254,7 @@
       creato: new Date().toISOString(),
       modificato: new Date().toISOString()
     };
-    if (dati.tdSeconds) att.tdSeconds = +dati.tdSeconds;
+    if (secondi(dati.tdSeconds) != null) att.tdSeconds = secondi(dati.tdSeconds);
     if (dati.mode) att.mode = String(dati.mode);
     if (dati.modalita) { att.modalita = String(dati.modalita); if (dati.variante) att.variante = String(dati.variante).trim(); }
     programma(p).attivita.push(att);
@@ -272,6 +319,7 @@
     nuovoId: nuovoId, giorno: giorno, oggi: oggi,
     programma: programma, attivita: attivita, nomeSet: nomeSet, modoTarget: modoTarget,
     targetCorrente: targetCorrente, prossimoTarget: prossimoTarget,
+    secondiTD: secondi, tdDi: tdDi, impostaTD: impostaTD, tdDaDecisione: tdDaDecisione,
     passiDi: passiDi, nuoviPassi: nuoviPassi,
     sedute: sedute, criterioRaggiunto: criterioRaggiunto, seduta: seduta,
     nuovaAttivita: nuovaAttivita, aggiungiTarget: aggiungiTarget,

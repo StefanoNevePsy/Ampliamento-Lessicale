@@ -185,6 +185,9 @@ body.tice-aperto #notebook-tab-handle { display: none !important; }
 .tice .tasto.e { background: var(--t-sup-2); color: var(--text-primary); font-size: 1rem; min-height: 54px; }
 .tice .tasto:active { filter: brightness(0.9); transform: scale(0.97); }
 .tice .sotto-tasti { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.tice .sotto-tasti .td-voce { flex: none; font-variant-numeric: tabular-nums; }
+.tice-foglio .scelta-rapida { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 12px; }
+.tice-foglio .scelta-rapida .bt { min-width: 44px; justify-content: center; }
 .tice .sequenza { flex: 1; display: flex; flex-wrap: wrap; gap: 4px; min-height: 14px; }
 .tice .sequenza i { width: 12px; height: 12px; border-radius: 50%; display: block; }
 .tice .sequenza i.V { background: var(--t-v); }

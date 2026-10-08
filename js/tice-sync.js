@@ -207,6 +207,8 @@
             if (j.errore === 'non-autenticato') { Auth.invalida(); throw new Auth.ErroreAccesso(j.messaggio); }
             throw new ErroreCustode(j.errore, j.messaggio, j.extra);
         }
+        // la risposta di "sono attivo" (GET): la richiesta non è arrivata, si riprova
+        if (!('dati' in j)) throw new ErroreRete('Il custode non ha ricevuto la richiesta: riprovo.');
         return j.dati;
     }
 
@@ -420,6 +422,7 @@
                 // Ruolo, chiave attuale: possono essere cambiati da un'altra parte
                 if (!(opz && opz.soloCoda)) {
                     const io = await chiama('io');
+                    if (!io || typeof io !== 'object') throw new ErroreRete('Risposta del custode incompleta.');
                     S.io = io; await scriviMeta('io', io);
                     if (!S.cfg || io.kid !== S.cfg.kid) { await preparaCentro(true); if (!pronto()) return false; }
                 }

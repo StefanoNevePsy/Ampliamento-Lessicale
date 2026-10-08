@@ -348,12 +348,13 @@
         const hint = suggerimentiDi(att, t).length;
         const passi = P.passiDi(t);
         const st = passi.length ? statoTA(v, passi) : null;
+        const tdS = tipo === 'timedelay' ? tdOggi(att, v, t || null) : null;
         return h`<div class="att ${haDati(v) ? 'con-dati' : ''} ${hint ? 'con-hint' : ''}" data-att="${att.id}">
             ${hint ? h`<button class="ib hint-tasto ${T.suggerimenti[att.id] ? 'on' : ''}" data-a="suggerimenti" data-id="${att.id}" aria-expanded="${T.suggerimenti[att.id] ? 'true' : 'false'}" aria-label="Suggerimenti" title="Suggerimenti per chi somministra">${icona('lightbulb')}</button>` : ''}
             <button class="att-testa" data-a="apri-att" data-id="${att.id}" aria-expanded="${aperta ? 'true' : 'false'}">
                 <span class="corpo">
                     <span class="nome">${att.nome}
-                        ${tipo === 'timedelay' ? h` <span class="pill">T/D</span>` : ''}
+                        ${tipo === 'timedelay' ? h` <span class="pill">T/D${tdS != null ? ' ' + sec(tdS) : ''}</span>` : ''}
                         ${att.temporanea ? h` <span class="pill grigia">solo oggi</span>` : ''}
                         ${att.stato && att.stato !== 'attivo' ? h` <span class="pill grigia">${att.stato}</span>` : ''}
                         ${mant ? h` <span class="pill arancio" title="Il target ha già raggiunto il criterio: si registra come mantenimento finché non si apre il prossimo">mantenimento</span>` : ''}
@@ -389,6 +390,7 @@
                     <div class="sequenza" aria-label="Sequenza delle risposte">${(v ? v.sequenza : '').split('').map((r) => h`<i class="${r}"></i>`)}</div>
                     ${st ? h`<button class="ib" data-a="salta-passo" data-id="${att.id}" aria-label="Salta il passo" title="Salta il passo">${icona('forward')}</button>
                     <button class="ib" data-a="apri-ta" data-id="${att.id}" aria-label="Lista dei passi" title="Lista dei passi">${icona('list-ol')}</button>` : ''}
+                    ${tipo === 'timedelay' ? h`<button class="bt piccolo fantasma td-voce" data-a="td-voce" data-id="${att.id}" title="Cambia il time delay">${icona('stopwatch')} ${tdS != null ? sec(tdS) : 'T/D ?'}</button>` : ''}
                     <button class="ib" data-a="annulla" data-id="${att.id}" aria-label="Annulla l'ultima" title="Annulla l'ultima">${icona('rotate-left')}</button>
                     <button class="ib" data-a="nota-voce" data-id="${att.id}" aria-label="Nota e opzioni" title="Nota e opzioni">${icona('pen')}</button>
                 </div>
@@ -615,7 +617,10 @@
             <button class="att-testa" ${modifica ? grezzo(`data-a="mod-att" data-id="${esc(att.id)}"`) : ''}>
                 <span class="corpo"><span class="nome">${att.nome}
                     ${(() => { const e = M.etichetta(att, dizionario()); return e && M.normalizza(e) !== M.normalizza(att.nome) ? h` <span class="pill grigia">${e}</span>` : ''; })()}
-                    ${att.sessionType === 'timedelay' ? h` <span class="pill">T/D</span>` : h` <span class="pill grigia">Indip.</span>`}
+                    ${att.sessionType === 'timedelay' ? (() => {
+                        const d = P.tdDi(att), u = (att.tdCambi || []).slice(-1)[0];
+                        return h` <span class="pill" title="${u ? `Cambiato il ${formatoData(u.il)}${u.da != null ? ' da ' + sec(u.da) : ''} a ${sec(u.a)}` : 'Time delay'}">T/D${d != null ? ' ' + sec(d) : ''}</span>`;
+                    })() : h` <span class="pill grigia">Indip.</span>`}
                     ${att.stato !== 'attivo' ? h` <span class="pill arancio">${ETICHETTE_STATO[att.stato] || att.stato}</span>` : ''}
                     ${att.suggerimenti ? h` <span class="pill grigia" title="${att.suggerimenti}">${icona('lightbulb')} suggerimenti</span>` : ''}</span>
                     <span class="target">Criterio ${att.criterio.soglia}% per ${att.criterio.sedute} giorni${att.prove ? ' · ' + att.prove + ' prove' : ''}${att.descrizione ? ' · ' + att.descrizione : ''}</span></span>
@@ -981,6 +986,37 @@
         'chiudi-ta': () => { T.ta = null; aggiornaSovra(paz(T.pid)); },
         'nascondi-ta': () => { if (T.ta) T.ta.nascosta = true; aggiornaSovra(paz(T.pid)); },
         'mostra-ta': () => { if (T.ta) { T.ta.nascosta = false; T.ta.anima = true; } aggiornaSovra(paz(T.pid)); },
+        'td-voce': async (b) => {
+            const p = paz(T.pid);
+            const att = attivitaDi(p, b.dataset.id);
+            const v = voce(p, att);
+            const t = v.targetId ? (att.target || []).find((x) => x.id === v.targetId) : null;
+            const ora = tdOggi(att, v, t);
+            const prog = att.temporanea ? null : P.tdDi(att);
+            const aggiorna = !att.temporanea && puoProgrammi(p);
+            const r = await foglio(h`<form><h2>Time delay · ${att.nome}</h2>
+                <label class="campo"><span>Secondi di attesa prima dell'aiuto</span><input name="sec" type="number" min="0" max="60" inputmode="numeric" required value="${ora != null ? ora : ''}" autofocus></label>
+                <div class="scelta-rapida">${[0, 1, 2, 3, 4, 5].map((n) => h`<button type="button" class="bt piccolo ${n === ora ? 'primario' : ''}" data-td-rapido="${n}">${sec(n)}</button>`)}</div>
+                ${aggiorna ? h`<label class="spunta-riga"><input type="checkbox" name="programma" checked> <span><b>Da oggi in poi</b><br><span class="sotto piccolo">Aggiorna il programma${prog != null ? ` (ora ${sec(prog)})` : ''}: il cambio resta segnato con la data. Senza spunta vale solo per questa seduta.</span></span></label>`
+                    : h`<p class="sotto piccolo">Vale per questa seduta: il programma lo aggiorna la referente.</p>`}
+                <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`, {
+                dopo: (el) => el.querySelectorAll('[data-td-rapido]').forEach((x) => x.addEventListener('click', () => {
+                    el.querySelector('[name=sec]').value = x.dataset.tdRapido;
+                    el.querySelectorAll('[data-td-rapido]').forEach((y) => y.classList.toggle('primario', y === x));
+                }))
+            });
+            if (!r) return;
+            const n = P.secondiTD(r.sec);
+            if (n == null) return;
+            v.tdSeconds = n;
+            salvaBozza();
+            if (r.programma && aggiorna && P.impostaTD(att, n, { chi: chiOpera(), il: bozza(p.id).data })) {
+                att.modificato = new Date().toISOString();
+                await salvaPaziente(p);
+                avviso(`${att.nome}: time delay a ${sec(n)} da oggi`);
+            }
+            aggiornaScheda(p, att.id);
+        },
         'nota-voce': async (b) => {
             const p = paz(T.pid);
             const att = attivitaDi(p, b.dataset.id);
@@ -1238,6 +1274,7 @@
                 att.suggerimenti = String(r.suggerimenti || '').trim();
                 att.cronometro = !!r.cronometro;
                 att.sessionType = r.sessionType;
+                if (P.secondiTD(r.tdSeconds) != null) P.impostaTD(att, r.tdSeconds, { chi: chiOpera() });
                 att.criterio = { soglia: +r.soglia || 90, sedute: +r.sedute || 2 };
                 att.prove = +r.prove || null;
                 rinominaSedute(p, att);   // nome e categoria delle sedute
@@ -1464,6 +1501,7 @@
     }
     function moduloAttivita(p, att) {
         const a = att || { nome: '', area: '', descrizione: '', sessionType: 'independent', criterio: { soglia: 90, sedute: 2 }, prove: null };
+        const tdA = att ? P.tdDi(att) : null;
         return foglio(h`<form><h2>${att ? 'Modifica attività' : 'Nuova attività'}</h2>
             <label class="campo"><span>Nome</span><input name="nome" required maxlength="120" value="${a.nome}" ${att ? '' : grezzo('autofocus')} placeholder="es. TACT, Imitazione motoria"></label>
             <div class="riga-campi">
@@ -1482,6 +1520,8 @@
                 <label class="campo"><span>Giorni di fila</span><input name="sedute" type="number" min="1" max="10" inputmode="numeric" value="${a.criterio.sedute}"></label>
                 <label class="campo"><span>Prove</span><input name="prove" type="number" min="1" max="200" inputmode="numeric" value="${a.prove || ''}" placeholder="—"></label>
             </div>
+            <label class="campo"><span>Secondi di time delay (solo per il time delay)</span><input name="tdSeconds" type="number" min="0" max="60" inputmode="numeric" value="${tdA != null ? tdA : ''}" placeholder="es. 0, 1, 2…">
+                <span class="sotto piccolo">Si vede in seduta e finisce nei dati di ogni seduta. Se lo cambi, il cambio resta segnato con la data${(a.tdCambi || []).length ? h` (finora: ${a.tdCambi.map((c) => `${formatoData(c.il)} ${c.da != null ? sec(c.da) + '→' : ''}${sec(c.a)}`).join(', ')})` : ''}.</span></label>
             ${att ? '' : h`<label class="campo"><span>Target, uno per riga (il primo è quello da cui si parte)</span><textarea name="target" placeholder="es. Animali: cane, gatto&#10;Frutta: mela, banana"></textarea>
                 <span class="sotto piccolo">Lascia vuoto per sceglierli dall'archivio dei set o da una lista del Quaderno.</span></label>`}
             ${att ? h`<div class="opzioni" style="margin-top:6px">
@@ -1508,6 +1548,27 @@
         window.print();
     }
 
+    const chiOpera = () => { try { return localStorage.getItem('tice_operatore') || ''; } catch (e) { return ''; } };
+    const sec = (n) => n + '″';
+    // Il time delay di oggi: quello cambiato in seduta, altrimenti quello del programma
+    const tdOggi = (att, v, t) => {
+        const d = v ? P.secondiTD(v.tdSeconds) : null;
+        return d != null ? d : P.tdDi(att, t === undefined ? undefined : (t || null));
+    };
+
+    // Se i secondi sono diversi dall'ultima seduta in time delay dell'attività,
+    // il cambio si legge nella seduta (nota e campo tdCambio) e quindi nei grafici
+    function annotaTD(p, att, s) {
+        if (s.sessionType !== 'timedelay' || s.timeDelaySeconds == null) return;
+        const prima = P.sedute(p, att).filter((x) => x.sessionType === 'timedelay' && x.timeDelaySeconds != null);
+        if (!prima.length) return;
+        const da = prima[prima.length - 1].timeDelaySeconds;
+        if (da === s.timeDelaySeconds) return;
+        s.tdCambio = { da, a: s.timeDelaySeconds };
+        const testo = `Time delay da ${sec(da)} a ${sec(s.timeDelaySeconds)}`;
+        s.note = s.note ? testo + ' — ' + s.note : testo;
+    }
+
     async function salvaSeduta(p, b, dati) {
         const quando = b.data === oggi() ? new Date().toISOString() : b.data + 'T12:00:00';
         const operatore = String(dati.operatore || '').trim();
@@ -1519,6 +1580,12 @@
             const att = attivitaDi(p, k);
             if (!att) return;
             const voceS = Object.assign({}, v, { operatore });
+            // il time delay di oggi resta scritto nella seduta, anche se poi il programma cambia
+            if (!att.temporanea && (v.sessionType || att.sessionType) === 'timedelay' && P.secondiTD(v.tdSeconds) == null) {
+                const tt = v.targetId ? att.target.find((x) => x.id === v.targetId) : null;
+                const d = P.tdDi(att, tt);
+                if (d != null) voceS.tdSeconds = d;
+            }
             let s;
             if (att.temporanea) {
                 s = P.seduta({ id: null, nome: att.nome, area: '', sessionType: att.sessionType }, null, voceS, quando);
@@ -1528,6 +1595,7 @@
                 const t = v.targetId ? att.target.find((x) => x.id === v.targetId) : null;
                 const prima = t ? P.criterioRaggiunto(P.sedute(p, att, t), att.criterio) : null;
                 s = P.seduta(att, t, voceS, quando);
+                annotaTD(p, att, s);
                 if (t && !t.inizio) t.inizio = b.data;
                 if (t && t.stato === 'attivo' && !prima) controlla.push({ att, t });
             }
@@ -1535,6 +1603,18 @@
         });
         if (!p.history) p.history = [];
         p.history.push(...nuove);
+        // "Passa a 2" T/D" nella decisione: dalla prossima seduta il programma usa i nuovi secondi
+        const passati = [];
+        if (puoProgrammi(p)) Object.keys(b.voci).forEach((k) => {
+            const v = b.voci[k], att = attivitaDi(p, k);
+            if (!att || att.temporanea || !haDati(v)) return;
+            const n = P.tdDaDecisione(v.decisione);
+            if (n != null && P.impostaTD(att, n, { chi: operatore || chiOpera(), il: b.data })) {
+                att.sessionType = 'timedelay';
+                att.modificato = new Date().toISOString();
+                passati.push(`${att.nome} → ${sec(n)}`);
+            }
+        });
         const nota = String(dati.nota || '').trim();
         if (nota) {
             p.dailyNotes = p.dailyNotes || {};
@@ -1543,7 +1623,7 @@
         await salvaPaziente(p);
         eliminaBozza(p.id);
         T.aperte = {};
-        avviso(`Seduta salvata: ${nuove.length} attività`);
+        avviso(`Seduta salvata: ${nuove.length} attività${passati.length ? ' · time delay: ' + passati.join(', ') : ''}`);
         disegna();
         // Criteri raggiunti con questa seduta: si propone il passo successivo
         for (const { att, t } of controlla) {
@@ -1661,8 +1741,9 @@
             selectModeFromDropdown(modo);
             const campo = document.getElementById('session-type-select');
             if (campo) { campo.value = tipo === 'timedelay' ? 'timedelay' : 'independent'; onSessionTypeChange(); }
-            const sec = document.getElementById('td-seconds-ctrl');
-            if (sec && (t.tdSeconds || att.tdSeconds)) sec.value = t.tdSeconds || att.tdSeconds;
+            const secCtrl = document.getElementById('td-seconds-ctrl');
+            const td = tdOggi(att, v, t);
+            if (secCtrl && td != null) secCtrl.value = td;
             selectSetFromDropdown(t.setId);
         } catch (e) {
             console.error(e);
