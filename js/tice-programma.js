@@ -328,6 +328,30 @@
     return !!att && (att.scala === 'percentuale' || !(att.target || []).length);
   }
 
+  // ---------- learn unit contate: le prove aspettano di arrivare al numero previsto ----------
+  // Un'attività a target con N prove per LU entra nei dati solo a blocchi di N:
+  // il resto aspetta le sedute successive (att.inAttesa[targetId] = { seq, dal, note }).
+  // In percentuale, a tempo o in task analysis il dato è sempre quello del giorno.
+  function conAttesa(att, target) {
+    return !!att && !att.temporanea && !inPercentuale(att) && +att.prove > 0 && !att.cronometro && !passiDi(target).length;
+  }
+  function chiaveAttesa(target) { return target ? target.id : '_'; }
+  function inAttesaDi(att, target) {
+    var x = (att && att.inAttesa || {})[chiaveAttesa(target)];
+    return x && x.seq ? x : null;
+  }
+  /** Le prove in attesa più quelle di oggi, in blocchi da n e il resto. */
+  function dividiLU(prima, oggi, n) {
+    var tutta = String(prima || '') + String(oggi || ''), blocchi = [], i = 0;
+    while (n > 0 && tutta.length - i >= n) { blocchi.push(tutta.slice(i, i + n)); i += n; }
+    return { blocchi: blocchi, resto: tutta.slice(i) };
+  }
+  function contaRisposte(seq) {
+    var c = { v: 0, p: 0, x: 0 };
+    String(seq || '').split('').forEach(function (r) { if (r === 'V') c.v++; else if (r === 'P') c.p++; else if (r === 'X') c.x++; });
+    return c;
+  }
+
   function attiveOggi(p) {
     return programma(p).attivita.filter(function (a) { return a.stato === 'attivo'; });
   }
@@ -340,6 +364,7 @@
     secondiTD: secondi, tdDi: tdDi, impostaTD: impostaTD, tdDaDecisione: tdDaDecisione,
     passiDi: passiDi, nuoviPassi: nuoviPassi,
     PALETTE: PALETTE, coloreDi: coloreDi, inPercentuale: inPercentuale,
+    conAttesa: conAttesa, chiaveAttesa: chiaveAttesa, inAttesaDi: inAttesaDi, dividiLU: dividiLU, contaRisposte: contaRisposte,
     sedute: sedute, criterioRaggiunto: criterioRaggiunto, seduta: seduta,
     nuovaAttivita: nuovaAttivita, aggiungiTarget: aggiungiTarget,
     chiudiTarget: chiudiTarget, rendiCorrente: rendiCorrente, spostaTarget: spostaTarget,

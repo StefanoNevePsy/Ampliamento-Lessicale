@@ -44,5 +44,7 @@ jobs:
         run: node tools/test-tice-ta.js
       - name: Time delay nel programma
         run: node tools/test-tice-td.js
+      - name: Learn unit contate
+        run: node tools/test-tice-lu.js
       - name: Sintassi della presa dati
         run: for f in js/numbers-reader.js js/tice-*.js js/state.js js/patients.js js/dataviz.js js/gemini.js tice-config.js sw.js electron/*.js; do node --check "$f"; done

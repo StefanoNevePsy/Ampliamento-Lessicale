@@ -78,6 +78,9 @@
         if (!T.bozza || T.bozza.pid !== pid) {
             T.bozza = leggiBozza(pid) || { pid, data: oggi(), inizio: new Date().toISOString(), voci: {}, extra: [], temp: [] };
         }
+        // una bozza ancora vuota di un altro giorno (app rimasta aperta) diventa di oggi
+        const b = T.bozza;
+        if (b.data !== oggi() && !Object.values(b.voci).some(haDati) && !b.extra.length && !b.temp.length) { b.data = oggi(); b.inizio = new Date().toISOString(); }
         return T.bozza;
     }
     function salvaBozza() {
@@ -85,7 +88,7 @@
         const b = T.bozza;
         const vuota = !Object.values(b.voci).some(haDati) && !b.extra.length && !b.temp.length;
         try {
-            if (vuota && b.data === oggi()) localStorage.removeItem(chiaveBozza(b.pid));
+            if (vuota) localStorage.removeItem(chiaveBozza(b.pid));
             else localStorage.setItem(chiaveBozza(b.pid), JSON.stringify(b));
         } catch (e) { console.warn('Bozza non salvata', e); }
     }
@@ -314,6 +317,14 @@
     }
 
     // ---------- presa dati ----------
+    // Learn unit contate: quante prove aspettano e cosa entra nei dati salvando ora
+    function statoLU(att, v, t) {
+        if (!P.conAttesa(att, t)) return null;
+        const n = +att.prove, prec = P.inAttesaDi(att, t);
+        const seq = v ? ((v.sequenza || '').length === v.v + v.p + v.x ? v.sequenza : 'V'.repeat(v.v) + 'P'.repeat(v.p) + 'X'.repeat(v.x)) : '';
+        const d = P.dividiLU(prec && prec.seq, seq, n);
+        return { n, prec, oggi: seq.length, blocchi: d.blocchi, resto: d.resto.length };
+    }
     function previsione(p, att, v) {
         if (att.temporanea || !v || !haDati(v)) return null;
         const senza = !(att.target || []).length;
@@ -322,9 +333,10 @@
         const b = bozza(p.id);
         const serie = senza ? P.sedute(p, att) : P.sedute(p, att, t);
         if (P.criterioRaggiunto(serie, att.criterio)) return null;
-        const tot = v.v + v.p + v.x;
-        const oggiS = { date: b.data + 'T12:00:00', percentage: Math.round(100 * v.v / tot) };
-        return P.criterioRaggiunto(serie.concat([oggiS]), att.criterio) === b.data ? 'Con questi dati oggi raggiunge il criterio.' : null;
+        const lu = statoLU(att, v, t);
+        const oggiS = lu ? lu.blocchi.map((bl) => ({ date: b.data + 'T12:00:00', percentage: Math.round(100 * P.contaRisposte(bl).v / bl.length) }))
+            : [{ date: b.data + 'T12:00:00', percentage: Math.round(100 * v.v / (v.v + v.p + v.x)) }];
+        return oggiS.length && P.criterioRaggiunto(serie.concat(oggiS), att.criterio) === b.data ? 'Con questi dati oggi raggiunge il criterio.' : null;
     }
     // In time delay la risposta non corretta è quella promptata, in indipendente è l'errore:
     // si punteggia solo corretta / promptata oppure corretta / errata
@@ -369,6 +381,7 @@
         const passi = P.passiDi(t);
         const st = passi.length ? statoTA(v, passi) : null;
         const tdS = tipo === 'timedelay' ? tdOggi(att, v, t || null) : null;
+        const lu = statoLU(att, v, t || null);
         return h`<div class="att ${haDati(v) ? 'con-dati' : ''} ${hint ? 'con-hint' : ''}" data-att="${att.id}" style="--col:${P.coloreDi(p, att)}">
             ${hint ? h`<button class="ib hint-tasto ${T.suggerimenti[att.id] ? 'on' : ''}" data-a="suggerimenti" data-id="${att.id}" aria-expanded="${T.suggerimenti[att.id] ? 'true' : 'false'}" aria-label="Suggerimenti" title="Suggerimenti per chi somministra">${icona('lightbulb')}</button>` : ''}
             <button class="att-testa" data-a="apri-att" data-id="${att.id}" aria-expanded="${aperta ? 'true' : 'false'}">
@@ -383,6 +396,9 @@
                     ${t ? h`<span class="target">${t.setId ? h`${icona(giocabile ? 'layer-group' : 'triangle-exclamation')} ` : ''}${t.testo}${t.setId ? h` · ${etichettaModo(P.modoTarget(att, t))}` : ''}</span>` : (senzaTarget ? h`<span class="target">${icona('percent')} Dato in percentuale a ogni seduta</span>`
                         : !att.temporanea ? h`<span class="target"><i>Nessun target in corso: aggiungilo dal programma.</i></span>` : '')}
                     ${st ? h`<span class="target ta-riga">${icona('list-ol')} passo <b>${st.i + 1}/${passi.length}</b> · ${st.passo.testo}${st.giri ? h` <span class="pill grigia">giro ${st.giri + 1}</span>` : ''}</span>` : ''}
+                    ${lu && (lu.prec || lu.oggi) ? h`<span class="target lu-attesa">${icona('hourglass-half')} ${lu.prec ? `${lu.prec.seq.length} prove in attesa dal ${formatoData(lu.prec.dal)} · ` : ''}${lu.blocchi.length
+                        ? `salvando, ${lu.blocchi.length === 1 ? 'una LU completa entra' : lu.blocchi.length + ' LU complete entrano'} nei dati${lu.resto ? `, ${lu.resto} prove restano in attesa` : ''}`
+                        : `ne mancano ${lu.n - lu.resto} per completare la LU da ${lu.n}`}</span>` : ''}
                     ${oggiT ? h`<span class="target">${icona('circle-check')} già oggi: ${oggiV}/${oggiT} (${Math.round(100 * oggiV / oggiT)}%)</span>` : ''}
                 </span>
                 <span class="conto">${tot ? h`<b class="${classePct(pct, soglia)}">${pct}%</b><br><span class="piccolo sotto">${v.v}/${tot}${att.prove ? ' di ' + att.prove : ''}</span>`
@@ -1042,6 +1058,8 @@
             const att = attivitaDi(p, b.dataset.id);
             const v = voce(p, att);
             const targets = (att.target || []).filter((t) => t.stato === 'attivo' || t.stato === 'criterio' || t.stato === 'repertorio' || t.id === v.targetId);
+            const tV = v.targetId ? (att.target || []).find((x) => x.id === v.targetId) : null;
+            const attesaV = P.conAttesa(att, tV) ? P.inAttesaDi(att, tV) : null;
             const r = await foglio(h`<form><h2>${att.nome}</h2>
                 ${targets.length > 1 ? h`<label class="campo"><span>Target registrato</span><select name="targetId">
                     ${targets.map((t) => h`<option value="${t.id}" ${t.id === v.targetId ? grezzo('selected') : ''}>${t.testo} (${P.STATI_TARGET[t.stato]})</option>`)}</select></label>` : ''}
@@ -1056,6 +1074,7 @@
                 <label class="campo"><span>Decisione (facoltativa)</span><input name="decisione" maxlength="200" value="${v.decisione || ''}" placeholder="es. Passa a 1&quot; T/D" list="tice-decisioni"></label>
                 <datalist id="tice-decisioni"><option value='Passa a 0" T/D'><option value='Passa a 1" T/D'><option value='Passa a 2" T/D'><option value="Probe"><option value="Stop"></datalist>
                 <label class="campo"><span>Nota</span><textarea name="nota" maxlength="2000">${v.nota || ''}</textarea></label>
+                ${attesaV ? h`<label class="spunta-riga"><input type="checkbox" name="scarta"> <span><b>Scarta le ${attesaV.seq.length} prove in attesa</b><br><span class="sotto piccolo">Registrate dal ${formatoData(attesaV.dal)} senza arrivare a una LU da ${att.prove}: non entreranno nei dati.</span></span></label>` : ''}
                 ${att.temporanea ? h`<button type="button" class="bt pericolo" data-foglio="togli" style="width:100%">Togli dalla seduta</button>` : ''}
                 <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`);
             if (r === 'togli') {
@@ -1083,6 +1102,11 @@
             }
             v.decisione = r.decisione.trim();
             v.nota = r.nota.trim();
+            if (r.scarta && attesaV && att.inAttesa) {
+                delete att.inAttesa[P.chiaveAttesa(tV)];
+                if (!Object.keys(att.inAttesa).length) delete att.inAttesa;
+                await salvaPaziente(p);
+            }
             salvaBozza();
             aggiornaScheda(p, att.id);
         },
@@ -1161,7 +1185,9 @@
             if (!r0.n) { avviso('Nessuna risposta registrata.', 'errore'); return; }
             const righe = Object.keys(b.voci).filter((k) => haDati(b.voci[k])).map((k) => {
                 const v = b.voci[k], a = attivitaDi(p, k), tot = v.v + v.p + v.x, pct = Math.round(100 * v.v / tot);
-                return h`<tr><td>${a ? a.nome : '?'}</td><td class="num">${v.v}/${tot}</td><td class="num"><b class="${classePct(pct, a && a.criterio && a.criterio.soglia)}">${pct}%</b></td></tr>`;
+                const tt = a && v.targetId ? (a.target || []).find((x) => x.id === v.targetId) : null;
+                const lu = a ? statoLU(a, v, tt) : null;
+                return h`<tr><td>${a ? a.nome : '?'}${lu ? h`<br><small class="sotto">${lu.blocchi.length ? `${lu.blocchi.length} LU nei dati` : 'non entra ancora nei dati'}${lu.resto ? ` · ${lu.resto}/${lu.n} in attesa` : ''}</small>` : ''}</td><td class="num">${v.v}/${tot}</td><td class="num"><b class="${classePct(pct, a && a.criterio && a.criterio.soglia)}">${pct}%</b></td></tr>`;
             });
             let operatore = '';
             try { operatore = localStorage.getItem('tice_operatore') || ''; } catch (e) { /* niente */ }
@@ -1600,6 +1626,7 @@
         const operatore = String(dati.operatore || '').trim();
         const nuove = [];
         const controlla = [];
+        const attese = [];   // { nome, n, di }: prove che aspettano di completare la LU
         Object.keys(b.voci).forEach((k) => {
             const v = b.voci[k];
             if (!haDati(v)) return;
@@ -1621,16 +1648,48 @@
                 const t = v.targetId ? att.target.find((x) => x.id === v.targetId) : null;
                 const senza = !(att.target || []).length;
                 const prima = t ? P.criterioRaggiunto(P.sedute(p, att, t), att.criterio) : senza ? P.criterioRaggiunto(P.sedute(p, att), att.criterio) : null;
-                s = P.seduta(att, t, voceS, quando);
-                annotaTD(p, att, s);
                 if (t && !t.inizio) t.inizio = b.data;
                 if (t && t.stato === 'attivo' && !prima) controlla.push({ att, t });
                 if (senza && !prima) controlla.push({ att, t: null });
+                if (P.conAttesa(att, t)) {
+                    // LU contate: entrano nei dati solo a blocchi completi, il resto aspetta
+                    const n = +att.prove, k = P.chiaveAttesa(t), prec = P.inAttesaDi(att, t);
+                    const seq = (v.sequenza || '').length === v.v + v.p + v.x ? v.sequenza : 'V'.repeat(v.v) + 'P'.repeat(v.p) + 'X'.repeat(v.x);
+                    const { blocchi, resto } = P.dividiLU(prec && prec.seq, seq, n);
+                    const testoOggi = [voceS.decisione ? '**' + voceS.decisione + '**' : '', voceS.nota].filter(Boolean).join(' — ');
+                    blocchi.forEach((bl, i) => {
+                        const ultimo = i === blocchi.length - 1;
+                        const vb = Object.assign({}, voceS, P.contaRisposte(bl), { sequenza: bl, nota: '', decisione: '' });
+                        const sb = P.seduta(att, t, vb, quando);
+                        const note = [];
+                        if (i === 0 && prec && prec.seq) {
+                            note.push(`LU iniziata il ${formatoData(prec.dal)} (${prec.seq.length} prove) e completata oggi`);
+                            (prec.note || []).forEach((x) => note.push(x));
+                        }
+                        if (ultimo && testoOggi) note.push(testoOggi);
+                        if (note.length) sb.note = note.join(' — ');
+                        if (i === 0 && prec && prec.dal) sb.iniziata = prec.dal;
+                        annotaTD(p, att, sb);
+                        nuove.push(sb);
+                        p.history = p.history || [];
+                        p.history.push(sb);   // la seduta dopo confronta il time delay con questa
+                    });
+                    att.inAttesa = att.inAttesa || {};
+                    if (resto) {
+                        att.inAttesa[k] = { seq: resto, dal: blocchi.length ? b.data : ((prec && prec.dal) || b.data),
+                            note: blocchi.length ? [] : ((prec && prec.note) || []).concat(testoOggi ? [testoOggi] : []) };
+                        attese.push({ nome: att.nome, n: resto.length, di: n });
+                    } else delete att.inAttesa[k];
+                    if (!Object.keys(att.inAttesa).length) delete att.inAttesa;
+                    return;
+                }
+                s = P.seduta(att, t, voceS, quando);
+                annotaTD(p, att, s);
             }
             nuove.push(s);
+            p.history = p.history || [];
+            p.history.push(s);
         });
-        if (!p.history) p.history = [];
-        p.history.push(...nuove);
         // "Passa a 2" T/D" nella decisione: dalla prossima seduta il programma usa i nuovi secondi
         const passati = [];
         if (puoProgrammi(p)) Object.keys(b.voci).forEach((k) => {
@@ -1651,7 +1710,7 @@
         await salvaPaziente(p);
         eliminaBozza(p.id);
         T.aperte = {};
-        avviso(`Seduta salvata: ${nuove.length} attività${passati.length ? ' · time delay: ' + passati.join(', ') : ''}`);
+        avviso(`Seduta salvata${attese.length ? ' · in attesa di completare la LU: ' + attese.map((x) => `${x.nome} ${x.n}/${x.di}`).join(', ') : ''}${passati.length ? ' · time delay: ' + passati.join(', ') : ''}`);
         disegna();
         // Criteri raggiunti con questa seduta: si propone il passo successivo
         for (const { att, t } of controlla) {
