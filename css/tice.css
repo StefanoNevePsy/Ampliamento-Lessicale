@@ -155,6 +155,18 @@ body.tice-aperto #notebook-tab-handle { display: none !important; }
 /* --- presa dati ------------------------------------------------------------ */
 .tice .att { background: var(--t-sup); border: 1px solid var(--t-bordo); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; }
 .tice .att + .att { margin-top: 10px; }
+/* il colore dell'attività, come sui fogli stampati */
+.tice .att[style*="--col"], .tice .scheda[data-prog] { position: relative; padding-left: 6px; }
+.tice .att[style*="--col"]::before, .tice .scheda[data-prog]::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; background: var(--col, var(--t-bordo)); pointer-events: none; }
+.tice .att[style*="--col"] > .att-testa, .tice .scheda[data-prog] > .att-testa { background: color-mix(in srgb, var(--col) 12%, transparent); }
+.tice .targets .senza-target .punto { background: var(--col, var(--accent-color)); }
+.tice-foglio .colori-att { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 4px; }
+.tice-foglio .colori-att label { cursor: pointer; }
+.tice-foglio .colori-att input { position: absolute; opacity: 0; pointer-events: none; }
+.tice-foglio .colori-att span { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--col); color: #fff; font-weight: 700; font-size: 0.8rem; border: 3px solid transparent; box-shadow: 0 0 0 1px rgba(0,0,0,.15); }
+.tice-foglio .colori-att .auto { background: repeating-linear-gradient(45deg, var(--col), var(--col) 6px, transparent 6px, transparent 9px); color: var(--text-primary); text-shadow: 0 0 3px var(--bg-card, #fff); }
+.tice-foglio .colori-att input:checked + span { border-color: var(--text-primary); }
+.tice-foglio .colori-att input:focus-visible + span { outline: 2px solid var(--accent-color); outline-offset: 2px; }
 .tice .att.con-dati { border-color: rgba(var(--accent-rgb), 0.55); }
 .tice .att-testa {
     display: flex; align-items: center; gap: 10px; width: 100%;

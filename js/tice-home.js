@@ -315,11 +315,12 @@
 
     // ---------- presa dati ----------
     function previsione(p, att, v) {
-        if (att.temporanea || !v || !v.targetId || !haDati(v)) return null;
-        const t = att.target.find((x) => x.id === v.targetId);
-        if (!t) return null;
+        if (att.temporanea || !v || !haDati(v)) return null;
+        const senza = !(att.target || []).length;
+        const t = v.targetId ? att.target.find((x) => x.id === v.targetId) : null;
+        if (!t && !senza) return null;
         const b = bozza(p.id);
-        const serie = P.sedute(p, att, t);
+        const serie = senza ? P.sedute(p, att) : P.sedute(p, att, t);
         if (P.criterioRaggiunto(serie, att.criterio)) return null;
         const tot = v.v + v.p + v.x;
         const oggiS = { date: b.data + 'T12:00:00', percentage: Math.round(100 * v.v / tot) };
@@ -357,7 +358,9 @@
         const pct = tot ? Math.round(100 * v.v / tot) : null;
         const soglia = (att.criterio && att.criterio.soglia) || 90;
         const tipo = (v && v.sessionType) || att.sessionType;
-        const aCriterio = !att.temporanea && t && t.stato === 'attivo' && P.criterioRaggiunto(P.sedute(p, att, t), att.criterio);
+        const senzaTarget = !att.temporanea && !(att.target || []).length;
+        const aCriterio = !att.temporanea && (senzaTarget ? P.criterioRaggiunto(P.sedute(p, att), att.criterio)
+            : t && t.stato === 'attivo' && P.criterioRaggiunto(P.sedute(p, att, t), att.criterio));
         const giocabile = t && t.setId && setArchivio().some((x) => x.id === t.setId);
         const giaOggi = !att.temporanea && t ? P.sedute(p, att, t).filter((x) => P.giorno(x.date) === b.data) : [];
         const oggiV = giaOggi.reduce((n, x) => n + (x.correct || 0), 0), oggiT = giaOggi.reduce((n, x) => n + (x.total || 0), 0);
@@ -366,7 +369,7 @@
         const passi = P.passiDi(t);
         const st = passi.length ? statoTA(v, passi) : null;
         const tdS = tipo === 'timedelay' ? tdOggi(att, v, t || null) : null;
-        return h`<div class="att ${haDati(v) ? 'con-dati' : ''} ${hint ? 'con-hint' : ''}" data-att="${att.id}">
+        return h`<div class="att ${haDati(v) ? 'con-dati' : ''} ${hint ? 'con-hint' : ''}" data-att="${att.id}" style="--col:${P.coloreDi(p, att)}">
             ${hint ? h`<button class="ib hint-tasto ${T.suggerimenti[att.id] ? 'on' : ''}" data-a="suggerimenti" data-id="${att.id}" aria-expanded="${T.suggerimenti[att.id] ? 'true' : 'false'}" aria-label="Suggerimenti" title="Suggerimenti per chi somministra">${icona('lightbulb')}</button>` : ''}
             <button class="att-testa" data-a="apri-att" data-id="${att.id}" aria-expanded="${aperta ? 'true' : 'false'}">
                 <span class="corpo">
@@ -377,7 +380,8 @@
                         ${mant ? h` <span class="pill arancio" title="Il target ha già raggiunto il criterio: si registra come mantenimento finché non si apre il prossimo">mantenimento</span>` : ''}
                         ${aCriterio ? h` <span class="pill verde">${icona('flag-checkered')} criterio</span>` : ''}
                     </span>
-                    ${t ? h`<span class="target">${t.setId ? h`${icona(giocabile ? 'layer-group' : 'triangle-exclamation')} ` : ''}${t.testo}${t.setId ? h` · ${etichettaModo(P.modoTarget(att, t))}` : ''}</span>` : (!att.temporanea ? h`<span class="target"><i>Nessun target in corso: aggiungilo dal programma.</i></span>` : '')}
+                    ${t ? h`<span class="target">${t.setId ? h`${icona(giocabile ? 'layer-group' : 'triangle-exclamation')} ` : ''}${t.testo}${t.setId ? h` · ${etichettaModo(P.modoTarget(att, t))}` : ''}</span>` : (senzaTarget ? h`<span class="target">${icona('percent')} Dato in percentuale a ogni seduta</span>`
+                        : !att.temporanea ? h`<span class="target"><i>Nessun target in corso: aggiungilo dal programma.</i></span>` : '')}
                     ${st ? h`<span class="target ta-riga">${icona('list-ol')} passo <b>${st.i + 1}/${passi.length}</b> · ${st.passo.testo}${st.giri ? h` <span class="pill grigia">giro ${st.giri + 1}</span>` : ''}</span>` : ''}
                     ${oggiT ? h`<span class="target">${icona('circle-check')} già oggi: ${oggiV}/${oggiT} (${Math.round(100 * oggiV / oggiT)}%)</span>` : ''}
                 </span>
@@ -408,7 +412,8 @@
                     <button class="ib" data-a="nota-voce" data-id="${att.id}" aria-label="Nota e opzioni" title="Nota e opzioni">${icona('pen')}</button>
                 </div>
                 ${prev ? h`<p class="avviso-criterio">${icona('flag-checkered')} ${prev}</p>` : ''}
-                ${aCriterio ? h`<p class="avviso-criterio">${icona('flag-checkered')} Criterio raggiunto il ${formatoData(aCriterio)}. <button class="bt piccolo" data-a="chiudi-target" data-id="${att.id}" data-t="${t.id}">Passa al prossimo target</button></p>` : ''}
+                ${aCriterio ? (senzaTarget ? h`<p class="avviso-criterio">${icona('flag-checkered')} Criterio raggiunto il ${formatoData(aCriterio)}: dal programma puoi terminare l'attività o aggiungere un target.</p>`
+                    : h`<p class="avviso-criterio">${icona('flag-checkered')} Criterio raggiunto il ${formatoData(aCriterio)}. <button class="bt piccolo" data-a="chiudi-target" data-id="${att.id}" data-t="${t.id}">Passa al prossimo target</button></p>`) : ''}
                 ${v && (v.nota || v.decisione) ? h`<p class="nota-voce">${icona('note-sticky')} ${v.decisione ? h`<b>${v.decisione}</b> ` : ''}${v.nota}</p>` : ''}
             </div>` : ''}
         </div>`;
@@ -626,7 +631,8 @@
                     <span class="tt">${P.passiDi(tg).length ? h`${icona('list-ol')} ` : ''}${tg.testo}${P.passiDi(tg).length ? h` <span class="sotto piccolo">· ${P.passiDi(tg).length} passi</span>` : ''}${tg.suggerimento ? h` <span class="sotto" title="Ha dei suggerimenti">${icona('lightbulb')}</span>` : ''}${celerazioneTarget(p, att, tg)}<small>${P.STATI_TARGET[tg.stato] || tg.stato}${tg.fine ? ' il ' + formatoData(tg.fine) : ''}${ultimo(tg)}</small></span>
                     ${modifica || tg.setId ? h`<button class="ib" data-a="menu-target" data-id="${att.id}" data-t="${tg.id}" aria-label="Opzioni del target">${icona('ellipsis')}</button>` : ''}
                 </li>`;
-        return h`<div class="scheda" data-prog="${att.id}">
+        const ultimaS = !t.length ? P.sedute(p, att).slice(-1)[0] : null;
+        return h`<div class="scheda" data-prog="${att.id}" style="--col:${P.coloreDi(p, att)}">
             <button class="att-testa" ${modifica ? grezzo(`data-a="mod-att" data-id="${esc(att.id)}"`) : ''}>
                 <span class="corpo"><span class="nome">${att.nome}
                     ${(() => { const e = M.etichetta(att, dizionario()); return e && M.normalizza(e) !== M.normalizza(att.nome) ? h` <span class="pill grigia">${e}</span>` : ''; })()}
@@ -643,6 +649,7 @@
                 ${chiusi.length ? h`<li><details class="chiusi" ${T.chiusiAperti[att.id] ? grezzo('open') : ''} data-chiusi="${att.id}"><summary class="sotto piccolo">${chiusi.length} ${chiusi.length === 1 ? 'target chiuso' : 'target chiusi'}</summary>
                     <ul class="targets" style="padding:0">${chiusi.map(riga)}</ul></details></li>` : ''}
                 ${aperti.map(riga)}
+                ${!t.length ? h`<li class="senza-target"><span class="punto"></span><span class="tt">${icona('percent')} Senza target: il dato si prende in percentuale a ogni seduta<small>${ultimaS ? `${P.sedute(p, att).length} sedute, ultima ${formatoData(P.giorno(ultimaS.date))} ${ultimaS.percentage}%` : 'Nessuna seduta ancora'}</small></span></li>` : ''}
                 <li class="azioni-att">${modifica ? h`<button class="bt piccolo fantasma" data-a="nuovo-target" data-id="${att.id}">${icona('plus')} Target</button>` : ''}
                     ${P.sedute(p, att).length ? h`<button class="bt piccolo fantasma" data-a="scc-att" data-id="${att.id}">${icona('chart-line')} Andamento</button>` : ''}</li>
             </ul>
@@ -1256,6 +1263,7 @@
             if (!r) return;
             const righe = String(r.target || '').split('\n').map((x) => x.trim()).filter(Boolean);
             const att = P.nuovaAttivita(p, Object.assign({}, r, { target: null }));
+            if (r.colore) att.colore = r.colore;
             modalitaDaModulo(att, r);
             righe.forEach((x, i) => P.aggiungiTarget(att, x, i === 0));
             await salvaPaziente(p);
@@ -1287,6 +1295,7 @@
                 att.suggerimenti = String(r.suggerimenti || '').trim();
                 att.cronometro = !!r.cronometro;
                 att.sessionType = r.sessionType;
+                if (r.colore) att.colore = r.colore; else delete att.colore;
                 if (P.secondiTD(r.tdSeconds) != null) P.impostaTD(att, r.tdSeconds, { chi: chiOpera() });
                 att.criterio = { soglia: +r.soglia || 90, sedute: +r.sedute || 2 };
                 att.prove = +r.prove || null;
@@ -1524,6 +1533,10 @@
             <label class="campo"><span>Descrizione (facoltativa)</span><input name="descrizione" maxlength="300" value="${a.descrizione || ''}"></label>
             <label class="campo"><span>Suggerimenti per chi somministra (facoltativi)</span><textarea name="suggerimenti" maxlength="3000" rows="3" placeholder="Come presentare lo stimolo, che aiuto dare, quando rinforzare, errori da evitare…">${a.suggerimenti || ''}</textarea>
                 <span class="sotto piccolo">In seduta compaiono sotto l'attività con il tasto «Suggerimenti». Per un solo target: dal target, «Suggerimenti per questo target».</span></label>
+            <div class="campo"><span>Colore</span><div class="colori-att">
+                <label title="Automatico"><input type="radio" name="colore" value="" ${!a.colore ? grezzo('checked') : ''}><span class="auto" style="--col:${att ? P.coloreDi(p, att, true) : P.PALETTE[P.programma(p).attivita.length % P.PALETTE.length]}">A</span></label>
+                ${P.PALETTE.map((c) => h`<label><input type="radio" name="colore" value="${c}" ${a.colore === c ? grezzo('checked') : ''}><span style="--col:${c}"></span></label>`)}
+            </div><span class="sotto piccolo">Lo stesso colore in seduta, nel programma e sui fogli stampati.</span></div>
             <div class="campo"><span>Tipo di seduta</span><div class="scelta">
                 <label><input type="radio" name="sessionType" value="independent" ${a.sessionType !== 'timedelay' ? grezzo('checked') : ''}><span>Indipendente</span></label>
                 <label><input type="radio" name="sessionType" value="timedelay" ${a.sessionType === 'timedelay' ? grezzo('checked') : ''}><span>Time delay</span></label></div></div>
@@ -1536,7 +1549,7 @@
             <label class="campo"><span>Secondi di time delay (solo per il time delay)</span><input name="tdSeconds" type="number" min="0" max="60" inputmode="numeric" value="${tdA != null ? tdA : ''}" placeholder="es. 0, 1, 2…">
                 <span class="sotto piccolo">Si vede in seduta e finisce nei dati di ogni seduta. Se lo cambi, il cambio resta segnato con la data${(a.tdCambi || []).length ? h` (finora: ${a.tdCambi.map((c) => `${formatoData(c.il)} ${c.da != null ? sec(c.da) + '→' : ''}${sec(c.a)}`).join(', ')})` : ''}.</span></label>
             ${att ? '' : h`<label class="campo"><span>Target, uno per riga (il primo è quello da cui si parte)</span><textarea name="target" placeholder="es. Animali: cane, gatto&#10;Frutta: mela, banana"></textarea>
-                <span class="sotto piccolo">Lascia vuoto per sceglierli dall'archivio dei set o da una lista del Quaderno.</span></label>`}
+                <span class="sotto piccolo">Lascia vuoto per sceglierli dall'archivio dei set o da una lista del Quaderno. Senza target, il dato si prende in percentuale a ogni seduta.</span></label>`}
             ${att ? h`<div class="opzioni" style="margin-top:6px">
                 ${att.stato === 'attivo' ? h`<button type="button" class="opzione" data-foglio="sospeso">${icona('pause')}<span class="corpo">Sospendi<small>Non compare più nella presa dati</small></span></button>
                     <button type="button" class="opzione" data-foglio="terminato">${icona('flag-checkered')}<span class="corpo">Termina l'attività</span></button>`
@@ -1606,11 +1619,13 @@
                 s.setId = 'quaderno_' + att.nome.replace(/\s+/g, '_').toLowerCase();
             } else {
                 const t = v.targetId ? att.target.find((x) => x.id === v.targetId) : null;
-                const prima = t ? P.criterioRaggiunto(P.sedute(p, att, t), att.criterio) : null;
+                const senza = !(att.target || []).length;
+                const prima = t ? P.criterioRaggiunto(P.sedute(p, att, t), att.criterio) : senza ? P.criterioRaggiunto(P.sedute(p, att), att.criterio) : null;
                 s = P.seduta(att, t, voceS, quando);
                 annotaTD(p, att, s);
                 if (t && !t.inizio) t.inizio = b.data;
                 if (t && t.stato === 'attivo' && !prima) controlla.push({ att, t });
+                if (senza && !prima) controlla.push({ att, t: null });
             }
             nuove.push(s);
         });
@@ -1640,6 +1655,10 @@
         disegna();
         // Criteri raggiunti con questa seduta: si propone il passo successivo
         for (const { att, t } of controlla) {
+            if (!t) {
+                if (P.criterioRaggiunto(P.sedute(p, att), att.criterio)) avviso(`${att.nome}: criterio raggiunto (${att.criterio.soglia}% per ${att.criterio.sedute} giorni).`);
+                continue;
+            }
             const data = P.criterioRaggiunto(P.sedute(p, att, t), att.criterio);
             if (data) await proponiProssimo(p, att, t, data);
         }

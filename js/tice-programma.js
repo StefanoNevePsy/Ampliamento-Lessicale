@@ -310,6 +310,24 @@
   }
 
   /** Attività da mostrare nella presa dati, nell'ordine del programma. */
+  // ---------- colore e tipo di dato ----------
+  // Lo stesso colore per l'attività sullo schermo e sui fogli stampati
+  var PALETTE = ['#c0392b', '#2471a3', '#1e8449', '#b9770e', '#7d3c98', '#148f77', '#a93279', '#5d6d7e', '#3949ab', '#8d6e63', '#d35400', '#0e6655'];
+  function coloreDi(p, att, automatico) {
+    if (!automatico && att && /^#[0-9a-f]{6}$/i.test(att.colore || '')) return att.colore;
+    var i = p ? programma(p).attivita.indexOf(att) : -1;
+    if (i < 0) {   // attività solo per oggi: dal nome
+      var nome = String((att && att.nome) || ''), h = 0;
+      for (var k = 0; k < nome.length; k++) h = (h * 31 + nome.charCodeAt(k)) % 997;
+      i = h;
+    }
+    return PALETTE[i % PALETTE.length];
+  }
+  /** Senza target il dato si prende in percentuale a ogni seduta. */
+  function inPercentuale(att) {
+    return !!att && (att.scala === 'percentuale' || !(att.target || []).length);
+  }
+
   function attiveOggi(p) {
     return programma(p).attivita.filter(function (a) { return a.stato === 'attivo'; });
   }
@@ -321,6 +339,7 @@
     targetCorrente: targetCorrente, prossimoTarget: prossimoTarget,
     secondiTD: secondi, tdDi: tdDi, impostaTD: impostaTD, tdDaDecisione: tdDaDecisione,
     passiDi: passiDi, nuoviPassi: nuoviPassi,
+    PALETTE: PALETTE, coloreDi: coloreDi, inPercentuale: inPercentuale,
     sedute: sedute, criterioRaggiunto: criterioRaggiunto, seduta: seduta,
     nuovaAttivita: nuovaAttivita, aggiungiTarget: aggiungiTarget,
     chiudiTarget: chiudiTarget, rendiCorrente: rendiCorrente, spostaTarget: spostaTarget,

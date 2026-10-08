@@ -24,6 +24,8 @@
     motricita: 'hand', autonomie: 'person-walking', sociale: 'people-group', comportamento: 'hourglass-half', altro: 'shapes',
   };
   var CHIUSI = ['criterio', 'repertorio', 'chiuso'];
+  // in percentuale: per scelta, o perché l'attività non ha target
+  var perc = function (a) { return a.scala === 'percentuale' || !(a.target || []).length; };
 
   function esc(v) {
     return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
@@ -74,7 +76,7 @@
     var parti = [];
     if (c.soglia) parti.push(c.soglia + '% × ' + (c.sedute || 2) + ' gg');
     if (a.prove) parti.push(a.prove + ' prove');
-    if (a.scala === 'percentuale') parti.push('dato in %');
+    if (perc(a)) parti.push('dato in %');
     return parti.join(' · ');
   }
   function testata(p, titolo, opz) {
@@ -96,14 +98,14 @@
   }
   function bloccoLU(v, colore, opz) {
     var a = v.att, col = opz.colonne;
-    var perc = a.scala === 'percentuale';
-    var marcate = perc ? 0 : (+a.prove || 0);
+    var inPerc = perc(a);
+    var marcate = inPerc ? 0 : (+a.prove || 0);
     var base = Math.max(1, Math.ceil(marcate / col));
     var righe = Math.max(base, v.righe || 0);
     var stile = ' style="--c:' + colore + ';--t:' + tinta(colore, 0.16) + '"';
     var totale = function (r) {
       if (r < righe - 1) return '<td class="st-tot"></td>';
-      var testo = perc ? '<b></b> %' : righe > base || !marcate ? '<b></b> / <b></b>' + (marcate ? '<div class="st-min">previste ' + marcate + '</div>' : '') : '<b></b> / ' + marcate;
+      var testo = inPerc ? '<b></b> %' : righe > base || !marcate ? '<b></b> / <b></b>' + (marcate ? '<div class="st-min">previste ' + marcate + '</div>' : '') : '<b></b> / ' + marcate;
       return '<td class="st-tot">' + testo + (a.cronometro ? '<div class="st-crono"><i class="fa-solid fa-stopwatch"></i> ____ s</div>' : '') + '</td>';
     };
     var etTarget = function (t, extra) {
@@ -179,7 +181,7 @@
   // Misure in mm come nel CSS: servono a riempire il foglio senza sforare.
   var MM = { pagina: 278, testata: 31, note: 28, cat: 9, riga: 8.5, mant: 6.5, spazio: 1.4, margine: 4 };
   function righeBase(v, col) {
-    var a = v.att, marcate = a.scala === 'percentuale' ? 0 : (+a.prove || 0);
+    var a = v.att, marcate = perc(a) ? 0 : (+a.prove || 0);
     return Math.max(1, Math.ceil(marcate / col));
   }
   function altezzaInfo(v, opz) {
@@ -217,7 +219,7 @@
     var pagine = Math.max(1, Math.ceil(usato() / (MM.pagina - MM.margine)));
     var limite = pagine * MM.pagina - pagine * MM.margine;
     var libere = elenco.filter(function (v) { return !fisse[v.att.id]; })
-      .sort(function (x, y) { return (y.att.scala === 'percentuale') - (x.att.scala === 'percentuale'); });
+      .sort(function (x, y) { return perc(y.att) - perc(x.att); });
     if (!libere.length) return;
     // al massimo 6 righe (60-90 LU) per attività: oltre si sceglie a mano
     for (var giro = 0; giro < 6; giro++) {
@@ -225,7 +227,7 @@
       for (var i = 0; i < libere.length; i++) {
         var v = libere[i];
         // le attività in percentuale prendono due righe a giro
-        var passo = v.att.scala === 'percentuale' ? 2 : 1;
+        var passo = perc(v.att) ? 2 : 1;
         var prima = v.righe;
         v.righe += passo;
         if (usato() > limite) { v.righe = prima; continue; }
@@ -246,7 +248,7 @@
     var tutte = voci(p, dip);
     var scelte = tutte.filter(function (v) { return !opz.ids || opz.ids.indexOf(v.att.id) >= 0; });
     var colori = {};
-    scelte.forEach(function (v, i) { colori[v.att.id] = PALETTE[i % PALETTE.length]; });
+    scelte.forEach(function (v, i) { colori[v.att.id] = dip && dip.P && dip.P.coloreDi ? dip.P.coloreDi(p, v.att) : PALETTE[i % PALETTE.length]; });
     var out = '';
     var lu = scelte.filter(function (v) { return !v.ta; });
     if (opz.lu && lu.length) { pianificaRighe(lu, opz); out += foglioLU(p, lu, colori, opz); }
