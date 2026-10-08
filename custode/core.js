@@ -48,6 +48,8 @@ var QT = (function () {
   // Versioni precedenti di ogni paziente: le ultime RECENTI, piu' l'ultima di
   // ciascun giorno per GIORNI giorni. Un errore si recupera anche settimane dopo.
   var VERSIONI = { recenti: 20, giorni: 60 };
+  // salvataggi della stessa persona entro 30 minuti: una versione precedente sola
+  var BOZZE_MS = 30 * 60000;
 
   var P = {
     accessi: '_config/accessi.json',
@@ -56,6 +58,7 @@ var QT = (function () {
     elenco: 'Pazienti/_elenco.json',
     paziente: function (pid) { return 'Pazienti/' + pid + '/paziente.json'; },
     versioni: function (pid) { return 'Pazienti/' + pid + '/versioni'; },
+    indiceVersioni: function (pid) { return 'Pazienti/' + pid + '/versioni.json'; },
     versione: function (pid, v) { return 'Pazienti/' + pid + '/versioni/v' + ('00000000' + v).slice(-8) + '.json'; },
     indiceMateriali: 'Materiali/indice.json',
     modalita: '_config/modalita.json',
@@ -348,10 +351,31 @@ var QT = (function () {
       A.scriviJSON(P.elenco, elenco);
     }
 
+    // Le versioni precedenti di un paziente hanno un piccolo indice (numero, quando,
+    // chi): per elencarle e potarle non si rileggono più i file uno per uno.
+    function leggiIndiceVersioni(pid) {
+      var x = A.leggiJSON(P.indiceVersioni(pid));
+      if (x && Array.isArray(x.versioni)) return x;
+      // la prima volta: dalle versioni già nella cartella (lette una volta sola)
+      return { schema: SCHEMA, versioni: elencoVersioni(pid).map(function (v) {
+        var r = A.leggiJSON(P.versioni(pid) + '/' + v.nome) || {};
+        return { v: v.version, il: r.aggiornato || null, da: r.aggiornatoDa || null };
+      }) };
+    }
     // Prima di sovrascrivere, la versione attuale va nelle versioni precedenti.
+    // Più salvataggi della stessa persona a pochi minuti l'uno dall'altro (si sta
+    // lavorando al programma) sono una versione sola: se ne tiene l'ultima.
     function archiviaVersione(r) {
+      var idx = leggiIndiceVersioni(r.id), l = idx.versioni, prec = l[0];
       A.scriviJSON(P.versione(r.id, r.version), r);
-      potaVersioni(r.id);
+      var voce = { v: r.version, il: r.aggiornato || null, da: r.aggiornatoDa || null };
+      if (prec && prec.v !== voce.v && prec.da && prec.da === voce.da && prec.il && voce.il &&
+          Math.abs(Date.parse(voce.il) - Date.parse(prec.il)) < BOZZE_MS) {
+        A.elimina(P.versione(r.id, prec.v));
+        l[0] = voce;
+      } else if (!prec || prec.v !== voce.v) l.unshift(voce);
+      potaVersioni(r.id, idx);
+      A.scriviJSON(P.indiceVersioni(r.id), idx);
     }
     function elencoVersioni(pid) {
       return A.elenca(P.versioni(pid)).file
@@ -359,19 +383,19 @@ var QT = (function () {
         .filter(Boolean)
         .sort(function (a, b) { return b.version - a.version; });
     }
-    function potaVersioni(pid) {
-      var tutte = elencoVersioni(pid);
+    function potaVersioni(pid, idx) {
+      var tutte = idx.versioni;
       if (tutte.length <= VERSIONI.recenti) return;
       var limite = new Date(Date.parse(amb.ora()) - VERSIONI.giorni * 86400000).toISOString().slice(0, 10);
-      var giorniVisti = {};
-      tutte.forEach(function (v, i) {
-        if (i < VERSIONI.recenti) return;
-        var r = A.leggiJSON(P.versioni(pid) + '/' + v.nome);
-        var giorno = r && r.aggiornato ? r.aggiornato.slice(0, 10) : '';
+      var giorniVisti = {}, tenute = [];
+      tutte.forEach(function (x, i) {
+        if (i < VERSIONI.recenti) { tenute.push(x); return; }
+        var giorno = x.il ? x.il.slice(0, 10) : '';
         // si tiene la piu' recente di ogni giorno (le versioni sono in ordine decrescente)
-        if (giorno && giorno >= limite && !giorniVisti[giorno]) { giorniVisti[giorno] = true; return; }
-        A.elimina(P.versioni(pid) + '/' + v.nome);
+        if (giorno && giorno >= limite && !giorniVisti[giorno]) { giorniVisti[giorno] = true; tenute.push(x); return; }
+        A.elimina(P.versione(pid, x.v));
       });
+      idx.versioni = tenute;
     }
 
     // --- Azioni ---------------------------------------------------------------
@@ -629,9 +653,8 @@ var QT = (function () {
     azioni['paziente.versioni'] = function (u, d) {
       var pid = idV(d.id, RE.pz, 'id');
       richiediVisibile(u, pid);
-      return elencoVersioni(pid).map(function (v) {
-        var r = A.leggiJSON(P.versioni(pid) + '/' + v.nome) || {};
-        return { version: v.version, aggiornato: r.aggiornato || null, aggiornatoDa: r.aggiornatoDa || null };
+      return leggiIndiceVersioni(pid).versioni.map(function (x) {
+        return { version: x.v, aggiornato: x.il, aggiornatoDa: x.da };
       });
     };
 

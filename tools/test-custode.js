@@ -163,7 +163,7 @@ prova('si tengono le ultime 20 e una al giorno per 60 giorni', () => {
   let ver = 2;
   // 10 giorni con 5 salvataggi al giorno
   for (let g = 0; g < 10; g++) {
-    for (let k = 0; k < 5; k++) { tick(60000); ver = ok(salvaP(PROPRIETARIO, PZ1, paziente(PZ1, 'Mario Rossi', { note: `g${g}k${k}` }), ver)).version; }
+    for (let k = 0; k < 5; k++) { tick(40 * 60000); ver = ok(salvaP(PROPRIETARIO, PZ1, paziente(PZ1, 'Mario Rossi', { note: `g${g}k${k}` }), ver)).version; }
     tick(86400000);
   }
   const v = ok(chiama(PROPRIETARIO, 'paziente.versioni', { id: PZ1 }));
@@ -171,6 +171,18 @@ prova('si tengono le ultime 20 e una al giorno per 60 giorni', () => {
   assert.ok(v.length >= 20 && v.length <= 20 + 11, 'versioni tenute: ' + v.length);
   assert.ok(giorni.size >= 10, 'giorni coperti: ' + giorni.size);
   assert.strictEqual(v[0].version, ver - 1);
+});
+prova('salvataggi a pochi minuti l\'uno dall\'altro: una versione sola, senza rileggere i file', () => {
+  let ver = ok(chiama(PROPRIETARIO, 'paziente.leggi', { id: PZ1 })).version;
+  const prima = ok(chiama(PROPRIETARIO, 'paziente.versioni', { id: PZ1 })).length;
+  tick(3 * 3600000);
+  for (let k = 0; k < 6; k++) { tick(90000); ver = ok(salvaP(PROPRIETARIO, PZ1, paziente(PZ1, 'Mario Rossi', { note: 'bozza ' + k }), ver)).version; }
+  const v = ok(chiama(PROPRIETARIO, 'paziente.versioni', { id: PZ1 }));
+  assert.ok(v.length <= prima + 2, 'sei salvataggi in nove minuti: al più due versioni in più (' + (v.length - prima) + ')');
+  assert.strictEqual(apri(ok(chiama(PROPRIETARIO, 'paziente.versione', { id: PZ1, version: v[0].version })).busta, 'tice:paziente:' + PZ1).note, 'bozza 4', 'la più recente è l\'ultima bozza prima di quella attuale');
+  // i file delle bozze sostituite non restano nel Drive
+  const file = fs.readdirSync(path.join(dir, 'Pazienti', PZ1, 'versioni'));
+  assert.strictEqual(file.length, v.length);
 });
 prova('dopo 60 giorni restano le ultime 20', () => {
   tick(90 * 86400000);

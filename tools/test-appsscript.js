@@ -193,8 +193,8 @@ prova('crea un paziente: i file finiscono nelle cartelle giuste', () => {
 prova('un salvataggio aggiorna il file e mette la versione prima in versioni/', () => {
   ok(post('tok-' + PROPRIETARIO, 'paziente.salva', { id: PID, versioneBase: 1, busta: busta('due') }));
   const cart = radice._cartelle.find((c) => c._nome === 'Pazienti')._cartelle.find((c) => c._nome === PID);
-  assert.strictEqual(cart._file.length, 1);
-  assert.strictEqual(JSON.parse(cart._file[0]._buf.toString()).version, 2);
+  assert.deepStrictEqual(cart._file.map((f) => f._nome).sort(), ['paziente.json', 'versioni.json'], 'il paziente e l\'indice delle sue versioni');
+  assert.strictEqual(JSON.parse(cart._file.find((f) => f._nome === 'paziente.json')._buf.toString()).version, 2);
   const ver = cart._cartelle.find((c) => c._nome === 'versioni');
   assert.deepStrictEqual(ver._file.map((f) => f._nome), ['v00000001.json']);
 });
