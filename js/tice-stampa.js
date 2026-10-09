@@ -129,7 +129,7 @@
       misure.forEach(function (m) {
         for (var rm = 0; rm < righe; rm++) {
           html += '<tr class="st-sub' + (rm === 0 ? ' inizio' : '') + (rm === righe - 1 ? ' fine' : '') + '">' +
-            '<td class="st-target st-presa">' + (rm === 0 ? '– ' + esc(m.nome) : '') + '</td>' +
+            '<td class="st-target st-presa">' + (rm === 0 ? '– ' + esc(m.nome) + (m.mantenimento ? ' <span class="st-mini">mant.</span>' : '') : '') + '</td>' +
             rigaCaselle(col, marcate, rm * col) + totale(rm) + '</tr>';
         }
       });

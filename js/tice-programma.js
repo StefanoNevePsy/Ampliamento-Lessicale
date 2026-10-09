@@ -161,7 +161,10 @@
   function criterioDi(p, att, target) {
     var t = target || undefined;
     if (!(att.misure || []).length) return criterioRaggiunto(sedute(p, att, t), att.criterio);
-    var date = att.misure.map(function (m) { return criterioRaggiunto(sedute(p, att, t, m.id), att.criterio); });
+    // le sottoattività in mantenimento non contano per il criterio dell'attività
+    var attive = att.misure.filter(function (m) { return !m.mantenimento; });
+    if (!attive.length) return null;
+    var date = attive.map(function (m) { return criterioRaggiunto(sedute(p, att, t, m.id), att.criterio); });
     return date.every(Boolean) ? date.sort().pop() : null;
   }
   function criterioRaggiunto(elenco, criterio) {

@@ -405,8 +405,8 @@
         const valuta = !att.temporanea && !att.mantenimento && (senzaTarget || (t && t.stato === 'attivo'));
         const aCriterio = valuta && P.criterioDi(p, att, senzaTarget ? null : t);
         // ogni presa dati arriva a criterio per conto suo; l'attività quando ci arrivano tutte
-        const critM = ms.map((m) => (valuta ? P.criterioRaggiunto(P.sedute(p, att, senzaTarget ? undefined : t, m.id), att.criterio) : null));
-        const nCrit = critM.filter(Boolean).length;
+        const critM = ms.map((m) => (valuta && !m.mantenimento ? P.criterioRaggiunto(P.sedute(p, att, senzaTarget ? undefined : t, m.id), att.criterio) : null));
+        const nCrit = critM.filter(Boolean).length, nAcq = ms.filter((m) => !m.mantenimento).length;
         const giocabile = t && t.setId && setArchivio().some((x) => x.id === t.setId);
         const giaOggi = !att.temporanea && t ? P.sedute(p, att, t).filter((x) => P.giorno(x.date) === b.data) : [];
         const oggiV = giaOggi.reduce((n, x) => n + (x.correct || 0), 0), oggiT = giaOggi.reduce((n, x) => n + (x.total || 0), 0);
@@ -425,7 +425,7 @@
                         ${att.temporanea ? h` <span class="pill grigia">solo oggi</span>` : ''}
                         ${att.stato && att.stato !== 'attivo' ? h` <span class="pill grigia">${att.stato}</span>` : ''}
                         ${mant ? h` <span class="pill arancio" title="${att.mantenimento ? 'Il dato si prende ma non entra nelle statistiche' : 'Il target ha già raggiunto il criterio: si registra come mantenimento finché non si apre il prossimo'}">mantenimento</span>` : ''}
-                        ${aCriterio ? h` <span class="pill verde">${icona('flag-checkered')} criterio</span>` : nCrit ? h` <span class="pill verde chiara" title="${ms.filter((m, i) => critM[i]).map((m) => m.nome).join(', ')} a criterio">${icona('flag-checkered')} ${nCrit} di ${ms.length}</span>` : ''}
+                        ${aCriterio ? h` <span class="pill verde">${icona('flag-checkered')} criterio</span>` : nCrit ? h` <span class="pill verde chiara" title="${ms.filter((m, i) => critM[i]).map((m) => m.nome).join(', ')} a criterio">${icona('flag-checkered')} ${nCrit} di ${nAcq}</span>` : ''}
                     </span>
                     ${t ? h`<span class="target">${t.setId ? h`${icona(giocabile ? 'layer-group' : 'triangle-exclamation')} ` : ''}${t.testo}${t.setId ? h` · ${etichettaModo(P.modoTarget(att, t))}` : ''}</span>` : (senzaTarget ? (P.inPercentuale(att) ? h`<span class="target">${icona('percent')} Dato in percentuale a ogni seduta</span>` : h`<span class="target">${icona('layer-group')} LU da ${att.prove} prove</span>`)
                         : !att.temporanea ? h`<span class="target"><i>Nessun target in corso: aggiungilo dal programma.</i></span>` : '')}
@@ -475,6 +475,7 @@
         const lu = statoLU(att, v, t || null, m.id);
         return h`<div class="presa ${crit ? 'a-criterio' : ''}">
             <div class="presa-testa"><b>${m.nome}</b>
+                ${m.mantenimento ? h`<span class="pill grigia" title="Il dato si prende ma resta fuori da statistiche e criterio">mantenimento</span>` : ''}
                 ${crit ? h`<span class="pill verde">${icona('flag-checkered')} criterio il ${formatoData(crit)}</span>` : ''}
                 <span class="presa-conto">${tot ? h`<b class="${classePct(Math.round(100 * v.v / tot), soglia)}">${Math.round(100 * v.v / tot)}%</b> <span class="sotto">${v.v}/${tot}${att.prove ? ' di ' + att.prove : ''}</span>` : h`<span class="sotto">${att.prove ? att.prove + ' prove' : ''}</span>`}</span></div>
             ${lu && (lu.prec || lu.oggi) ? h`<p class="sotto piccolo lu-attesa">${icona('hourglass-half')} ${lu.prec ? `${lu.prec.seq.length} in attesa dal ${formatoData(lu.prec.dal)} · ` : ''}${lu.blocchi.length ? 'salvando entra nei dati' + (lu.resto ? `, ${lu.resto} restano in attesa` : '') : `ne mancano ${lu.n - lu.resto} per la LU da ${lu.n}`}</p>` : ''}
@@ -519,7 +520,7 @@
         const b = bozza(p.id);
         let corrette = 0, prove = 0, n = 0;
         // le attività in mantenimento non entrano nel conto delle LU della giornata
-        Object.keys(b.voci).forEach((k) => { const v = b.voci[k], a = attivitaDi(p, k); if (haDati(v) && !(a && a.mantenimento)) { n++; corrette += v.v; prove += v.v + v.p + v.x; } });
+        Object.keys(b.voci).forEach((k) => { const v = b.voci[k], a = attivitaDi(p, k), mm = a ? misure(a).find((x) => x.id === msDi(k)) : null; if (haDati(v) && !(a && a.mantenimento) && !(mm && mm.mantenimento)) { n++; corrette += v.v; prove += v.v + v.p + v.x; } });
         return { corrette, prove, n };
     }
     function testoPiede(p) {
@@ -701,8 +702,9 @@
         // con più prese dati: quali sono già a criterio su quel target
         const statoMisure = (tg) => {
             if (!(att.misure || []).length || tg.stato !== 'attivo') return '';
-            const ok = att.misure.filter((m) => P.criterioRaggiunto(P.sedute(p, att, tg, m.id), att.criterio));
-            return ok.length ? h` <span class="pill verde chiara" title="${ok.map((m) => m.nome).join(', ')} a criterio">${icona('flag-checkered')} ${ok.length} di ${att.misure.length}: ${ok.map((m) => m.nome).join(', ')}</span>` : '';
+            const acq = att.misure.filter((m) => !m.mantenimento);
+            const ok = acq.filter((m) => P.criterioRaggiunto(P.sedute(p, att, tg, m.id), att.criterio));
+            return ok.length ? h` <span class="pill verde chiara" title="${ok.map((m) => m.nome).join(', ')} a criterio">${icona('flag-checkered')} ${ok.length} di ${acq.length}: ${ok.map((m) => m.nome).join(', ')}</span>` : '';
         };
         const riga = (tg) => h`<li class="${CHIUSI.includes(tg.stato) ? 'chiuso' : ''}">
                     <span class="punto ${tg.stato}"></span>
@@ -721,7 +723,7 @@
                     ${att.stato !== 'attivo' ? h` <span class="pill arancio">${ETICHETTE_STATO[att.stato] || att.stato}</span>` : ''}
                     ${att.mantenimento ? h` <span class="pill grigia" title="Il dato si prende ma non entra nelle statistiche">mantenimento</span>` : ''}
                     ${att.suggerimenti ? h` <span class="pill grigia" title="${att.suggerimenti}">${icona('lightbulb')} suggerimenti</span>` : ''}</span>
-                    <span class="target">${(att.misure || []).length ? h`${icona('table-cells')} ${att.misure.map((m) => m.nome).join(' · ')} — ` : ''}Criterio ${att.criterio.soglia}% per ${att.criterio.sedute} giorni${att.prove ? ' · ' + att.prove + ' prove' : ''}${att.descrizione ? ' · ' + att.descrizione : ''}</span></span>
+                    <span class="target">${(att.misure || []).length ? h`${icona('table-cells')} ${att.misure.map((m) => m.nome + (m.mantenimento ? ' (mant.)' : '')).join(' · ')} — ` : ''}Criterio ${att.criterio.soglia}% per ${att.criterio.sedute} giorni${att.prove ? ' · ' + att.prove + ' prove' : ''}${att.descrizione ? ' · ' + att.descrizione : ''}</span></span>
                 ${modifica ? icona('pen') : ''}
             </button>
             <ul class="targets">
@@ -1411,7 +1413,7 @@
             const att = P.nuovaAttivita(p, Object.assign({}, r, { target: null, sessionType: r.sessionType === 'timedelay' ? 'timedelay' : 'independent' }));
             if (r.sessionType === 'ecoico') { att.risposte = 'ecoico'; att.nomeP = 'Ecoica'; }
             if (r.colore) att.colore = r.colore;
-            impostaMisure(att, r.misure);
+            impostaMisure(att, r);
             modalitaDaModulo(att, r);
             righe.forEach((x, i) => P.aggiungiTarget(att, x, i === 0));
             await salvaPaziente(p);
@@ -1442,7 +1444,7 @@
                 att.descrizione = r.descrizione.trim();
                 att.suggerimenti = String(r.suggerimenti || '').trim();
                 att.cronometro = !!r.cronometro;
-                impostaMisure(att, r.misure);
+                impostaMisure(att, r);
                 if (r.mantenimento) att.mantenimento = true; else delete att.mantenimento;
                 att.sessionType = r.sessionType === 'timedelay' ? 'timedelay' : 'independent';
                 if (r.sessionType === 'ecoico') { att.risposte = 'ecoico'; att.nomeP = 'Ecoica'; }
@@ -1674,12 +1676,20 @@
         else { delete att.modalita; att.variante = String(r.variante || '').trim(); }
     }
     // Le prese dati scritte nel modulo: quelle già esistenti tengono il loro id (e i dati)
-    function impostaMisure(att, testoMisure) {
-        const nomi = [...new Set(String(testoMisure || '').split('\n').map((x) => x.trim()).filter(Boolean))].slice(0, 6);
-        if (nomi.length < 2) { delete att.misure; return; }
+    function impostaMisure(att, r) {
+        const righe = Object.keys(r).filter((k) => /^ms_nome_\d+$/.test(k)).sort((x, y) => +x.slice(8) - +y.slice(8))
+            .map((k) => { const i = k.slice(8); return { id: String(r['ms_id_' + i] || ''), nome: String(r[k] || '').trim(), mant: !!r['ms_mant_' + i] }; })
+            .filter((x) => x.nome);
+        const viste = new Set();
+        const nuove = righe.filter((x) => { const k = x.nome.toLowerCase(); if (viste.has(k)) return false; viste.add(k); return true; }).slice(0, 8);
+        if (nuove.length < 2) { delete att.misure; return; }
         const prima = att.misure || [];
-        att.misure = nomi.map((n) => prima.find((m) => m.nome.toLowerCase() === n.toLowerCase()) || { id: P.nuovoId('ms'), nome: n })
-            .map((m, i) => Object.assign({}, m, { nome: nomi[i] }));
+        att.misure = nuove.map((x) => {
+            const vecchia = prima.find((m) => m.id === x.id) || prima.find((m) => m.nome.toLowerCase() === x.nome.toLowerCase());
+            const m = { id: vecchia ? vecchia.id : P.nuovoId('ms'), nome: x.nome };
+            if (x.mant) m.mantenimento = true;
+            return m;
+        });
     }
     function moduloAttivita(p, att) {
         const a = att || { nome: '', area: '', descrizione: '', sessionType: 'independent', criterio: { soglia: 90, sedute: 2 }, prove: null };
@@ -1710,8 +1720,10 @@
                 <label class="campo"><span>Prove per LU</span><input name="prove" type="number" min="1" max="200" inputmode="numeric" value="${a.prove || ''}" placeholder="in %"></label>
             </div>
             <p class="sotto piccolo" style="margin:-4px 0 10px">Con le prove per LU (es. 20) il dato entra quando se ne completano 20, anche in più sedute. Vuoto: dato in percentuale a ogni seduta.</p>
-            <label class="campo"><span>Più prese dati nella stessa attività (facoltativo)</span><textarea name="misure" rows="2" maxlength="600" placeholder="Una per riga, es.&#10;Categorizza&#10;Tact mix">${(a.misure || []).map((m) => m.nome).join('\n')}</textarea>
-                <span class="sotto piccolo">In seduta ognuna ha i suoi tasti e il suo dato, sullo stesso target. Ognuna arriva a criterio per conto suo; l'attività quando ci arrivano tutte.</span></label>
+            <div class="campo"><span>Sottoattività (facoltative)</span>
+                <div class="sottoattivita" data-sotto>${(a.misure || []).map((m, i) => rigaSotto(i, m))}</div>
+                <button type="button" class="bt piccolo fantasma" data-sotto-aggiungi>${icona('plus')} Aggiungi sottoattività</button>
+                <span class="sotto piccolo">Es. Categorizza e Tact mix: in seduta ognuna ha i suoi tasti e il suo dato, sullo stesso target, e arriva a criterio per conto suo; l'attività quando ci arrivano tutte. In mantenimento: si segna, ma resta fuori da statistiche e criterio.</span></div>
             <label class="campo"><span>Secondi di time delay (solo per il time delay)</span><input name="tdSeconds" type="number" min="0" max="60" inputmode="numeric" value="${tdA != null ? tdA : ''}" placeholder="es. 0, 1, 2…">
                 <span class="sotto piccolo">Si vede in seduta e finisce nei dati di ogni seduta. Se lo cambi, il cambio resta segnato con la data${(a.tdCambi || []).length ? h` (finora: ${a.tdCambi.map((c) => `${formatoData(c.il)} ${c.da != null ? sec(c.da) + '→' : ''}${sec(c.a)}`).join(', ')})` : ''}.</span></label>
             ${att ? '' : h`<label class="campo"><span>Target, uno per riga (il primo è quello da cui si parte)</span><textarea name="target" placeholder="es. Animali: cane, gatto&#10;Frutta: mela, banana"></textarea>
@@ -1722,7 +1734,24 @@
                     : h`<button type="button" class="opzione" data-foglio="attivo">${icona('play')}<span class="corpo">Riprendi l'attività</span></button>`}
                 <button type="button" class="opzione" data-foglio="elimina">${icona('trash')}<span class="corpo">Elimina dal programma</span></button>
             </div>` : ''}
-            <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`);
+            <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`, {
+            dopo: (el) => {
+                const box = el.querySelector('[data-sotto]');
+                let n = box.children.length;
+                const nuova = () => { box.insertAdjacentHTML('beforeend', String(rigaSotto(n++, null))); box.lastElementChild.querySelector('input').focus(); };
+                el.querySelector('[data-sotto-aggiungi]').addEventListener('click', nuova);
+                box.addEventListener('click', (e) => { const x = e.target.closest('[data-sotto-togli]'); if (x) x.closest('.riga-sotto').remove(); });
+            }
+        });
+    }
+    // Una riga del modulo: nome della sottoattività e i suoi flag (l'id tiene i dati già presi)
+    function rigaSotto(i, m) {
+        return h`<div class="riga-sotto">
+            <input type="hidden" name="${'ms_id_' + i}" value="${m ? m.id : ''}">
+            <input class="campo-in" name="${'ms_nome_' + i}" maxlength="60" value="${m ? m.nome : ''}" placeholder="es. Categorizza" aria-label="Nome della sottoattività">
+            <label class="spunta-riga" title="Il dato si prende ma resta fuori da statistiche e criterio"><input type="checkbox" name="${'ms_mant_' + i}" ${m && m.mantenimento ? grezzo('checked') : ''}> <span>Mantenimento</span></label>
+            <button type="button" class="ib" data-sotto-togli aria-label="Togli la sottoattività" title="Togli">${icona('xmark')}</button>
+        </div>`;
     }
 
     // Stampa: il foglio va in un contenitore che in stampa è l'unica cosa visibile
@@ -1789,7 +1818,13 @@
             if (!att) return;
             // una delle prese dati dell'attività: seduta a sé, con il suo nome e il suo grafico
             const m = misure(att).find((x) => x.id === msDi(k)) || null;
-            const marca = (x) => { if (m && x) { x.setName += ' · ' + m.nome; x.setId += '~' + m.id; x.misura = m.id; x.misuraNome = m.nome; } return x; };
+            const marca = (x) => {
+                if (m && x) {
+                    x.setName += ' · ' + m.nome; x.setId += '~' + m.id; x.misura = m.id; x.misuraNome = m.nome;
+                    if (m.mantenimento) { x.mantenimento = true; x.fuoriStatistiche = true; }
+                }
+                return x;
+            };
             const voceS = Object.assign({}, v, { operatore: String(v.operatore || '').trim() || operatore });
             // il time delay di oggi resta scritto nella seduta, anche se poi il programma cambia
             if (!att.temporanea && (v.sessionType || att.sessionType) === 'timedelay' && P.secondiTD(v.tdSeconds) == null) {
@@ -1809,7 +1844,7 @@
                 if (t && !t.inizio) t.inizio = b.data;
                 const giaIn = controlla.some((c) => c.att === att);
                 // con più prese dati: quali erano già a criterio, per avvisare di quelle nuove
-                const primaM = misure(att).map((x) => !!P.criterioRaggiunto(P.sedute(p, att, t || undefined, x.id), att.criterio));
+                const primaM = misure(att).map((x) => x.mantenimento || !!P.criterioRaggiunto(P.sedute(p, att, t || undefined, x.id), att.criterio));
                 if (!giaIn && ((t && t.stato === 'attivo') || senza) && !prima && !att.mantenimento) controlla.push({ att, t: t || null, primaM });
                 if (P.conAttesa(att, t)) {
                     // LU contate: entrano nei dati solo a blocchi completi, il resto aspetta
@@ -1877,8 +1912,9 @@
             // una presa dati arrivata a criterio, le altre ancora no
             misure(att).forEach((x, i) => {
                 if (!primaM[i] && P.criterioRaggiunto(P.sedute(p, att, t || undefined, x.id), att.criterio) && !P.criterioDi(p, att, t)) {
-                    const fatte = misure(att).filter((y) => P.criterioRaggiunto(P.sedute(p, att, t || undefined, y.id), att.criterio)).length;
-                    avviso(`${att.nome} · ${x.nome}: a criterio (${fatte} di ${misure(att).length}). L'attività ci arriva quando ci arrivano tutte.`);
+                    const acq = misure(att).filter((y) => !y.mantenimento);
+                    const fatte = acq.filter((y) => P.criterioRaggiunto(P.sedute(p, att, t || undefined, y.id), att.criterio)).length;
+                    avviso(`${att.nome} · ${x.nome}: a criterio (${fatte} di ${acq.length}). L'attività ci arriva quando ci arrivano tutte.`);
                 }
             });
             if (!t) {
