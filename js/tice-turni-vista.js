@@ -271,7 +271,7 @@
         let ultimoTaglio = 0; try { ultimoTaglio = +localStorage.getItem('tice_turni_taglio') || 0; } catch (e) { /* niente */ }
         const taglio = (x && x.taglio) || ultimoTaglio || +c.fascia || 60;
         const da = (x && x.da) || c.da;
-        const n = (x && x.n) || (x ? Math.max(1, Math.round((TT.minuti(x.a) - TT.minuti(x.da)) / taglio)) : 2);
+        const n = (x && x.n) || (x ? Math.max(1, Math.round((TT.minuti(x.a) - TT.minuti(x.da)) / taglio)) : 1);
         const a = (x && x.a) || TT.hhmm(TT.minuti(da) + n * taglio);
         const TAGLI = [30, 40, 45, 50, 55, 60, 90];
         const gia = (x && x.persone) || [];
