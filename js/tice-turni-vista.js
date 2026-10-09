@@ -48,7 +48,7 @@
             S.sett = sett.dati || TT.vuota();
             S.offline = sett.offline;
             S.chiave = k;
-            if (pers) { S.persone = (pers.dati && pers.dati.persone) || []; S.personeCaricate = true; }
+            if (pers) { S.persone = (pers.dati && pers.dati.persone) || []; S.personeCaricate = true; setTimeout(() => allineaAlCentro(), 0); }
             if (mod) S.modello = mod.dati || TT.modelloVuoto();
         } catch (e) {
             S.errore = e.message || String(e);
@@ -87,6 +87,61 @@
         TiceHome.ridisegna();
     }
 
+    // ---------- persone del centro: la lista si allinea a «Persone e accessi» ----------
+    // Chi ha accesso entra da solo con il nome assegnato là (mai la mail); se il
+    // nome cambia si aggiorna, se l'accesso viene tolto esce. Le persone aggiunte
+    // a mano (senza account) restano come sono.
+    function nomeLeggibile(nome, email) {
+        const n = String(nome || '').trim(), locale = String(email || '').split('@')[0];
+        if (n && !n.includes('@') && n.toLowerCase() !== locale.toLowerCase()) return n;
+        // nessun nome assegnato: dalla mail, ma come nome ("mario.rossi" → "Mario Rossi")
+        return locale.split(/[._-]+/).filter(Boolean).map((x) => x.charAt(0).toUpperCase() + x.slice(1)).join(' ') || locale;
+    }
+    function personeDalCentro(a) {
+        const out = [];
+        const prop = String(a.proprietario || '').toLowerCase();
+        Object.entries(a.utenti || {}).forEach(([email, u]) => {
+            if (u.attivo === false || (u.scadenza && u.scadenza < oggi())) return;
+            out.push({ email: email.toLowerCase(), nome: nomeLeggibile(u.nome, email), ruolo: u.ruolo === 'tirocinante' ? 'tirocinante' : 'terapeuta' });
+        });
+        if (prop && !out.some((x) => x.email === prop)) {
+            const io = Y.S && Y.S.io && Y.S.io.email === prop ? Y.S.io.nome : '';
+            out.push({ email: prop, nome: nomeLeggibile(io, prop), ruolo: 'terapeuta' });
+        }
+        return out;
+    }
+    function allinea(lista, centro) {
+        const out = [];
+        let cambiate = false;
+        lista.forEach((p) => {
+            const em = p.email ? p.email.toLowerCase() : null;
+            // senza mail ma con la mail come nome (aggiunta prima): la si collega
+            const c = centro.find((x) => x.email === em) || (!em && centro.find((x) => x.email === String(p.nome || '').trim().toLowerCase()));
+            if (!c) { if (em) { cambiate = true; return; } out.push(p); return; }   // accesso tolto: esce
+            const n = Object.assign({}, p, { email: c.email, nome: c.nome });
+            if (n.nome !== p.nome || n.email !== p.email) cambiate = true;
+            out.push(n);
+        });
+        centro.forEach((c) => {
+            if (out.some((p) => p.email === c.email)) return;
+            // una persona già scritta a mano con lo stesso nome diventa quella del centro
+            const uguale = out.find((p) => !p.email && p.nome.toLowerCase() === c.nome.toLowerCase());
+            if (uguale) uguale.email = c.email; else out.push({ id: TT.nuovoId('p'), nome: c.nome, ruolo: c.ruolo, email: c.email });
+            cambiate = true;
+        });
+        return { lista: out, cambiate };
+    }
+    let ultimoAllineamento = 0;
+    async function allineaAlCentro(forza) {
+        if (!remoto() || !(Y.eAdmin && Y.eAdmin()) || !S.personeCaricate) return;
+        if (!forza && Date.now() - ultimoAllineamento < 60000) return;
+        ultimoAllineamento = Date.now();
+        try {
+            const centro = personeDalCentro(await Y.chiama('accessi.leggi'));
+            if (allinea(S.persone, centro).cambiate) await cambiaPersone((l) => allinea(l, centro).lista);
+        } catch (e) { console.warn('persone del centro', e); }
+    }
+
     // ---------- nomi ----------
     const nomeBambino = (pid) => {
         const p = X.paz(pid);
@@ -106,6 +161,7 @@
     // ---------- vista ----------
     function vistaTurni() {
         if (S.chiave !== TT.lunedi(S.giorno) || !S.personeCaricate) carica();
+        else allineaAlCentro();
         const modifica = puo();
         const gi = TT.giornata(S.sett, S.giorno, S.modello);
         const conf = TT.conflitti(gi.voci, nomePersona, nomeBambino, oraT);
@@ -432,23 +488,16 @@
         },
         'tt-persone': async () => {
             const centro = remoto() && Y.eAdmin && Y.eAdmin();
+            if (centro) await allineaAlCentro(true);
             const r = await foglio(h`<form><h2>Persone dei turni</h2><p class="sotto">Chi si può assegnare ai bambini. Il nome compare nelle celle e sui fogli stampati.</p>
-                ${S.persone.map((p, i) => h`<div class="riga-campi tt-riga-p"><label class="campo"><span>Nome</span><input name="${'nome' + i}" value="${p.nome}" maxlength="40"></label>
+                ${S.persone.map((p, i) => h`<div class="riga-campi tt-riga-p"><label class="campo"><span>Nome${p.email ? h` <small class="sotto">· dal centro</small>` : ''}</span><input name="${'nome' + i}" value="${p.nome}" maxlength="40" ${p.email ? grezzo('readonly') : ''}></label>
                     <label class="campo"><span>Ruolo</span><select name="${'ruolo' + i}" class="campo-in"><option value="terapeuta" ${p.ruolo !== 'tirocinante' ? grezzo('selected') : ''}>Terapeuta</option><option value="tirocinante" ${p.ruolo === 'tirocinante' ? grezzo('selected') : ''}>Tirocinante</option></select></label>
-                    <label class="spunta-riga" title="Toglila dall'elenco"><input type="checkbox" name="${'via' + i}"> <span>togli</span></label></div>`)}
+                    ${p.email ? h`<span class="sotto piccolo tt-dal-centro" title="Esce da sola quando le togli l'accesso">${icona('user-check')}</span>` : h`<label class="spunta-riga" title="Toglila dall'elenco"><input type="checkbox" name="${'via' + i}"> <span>togli</span></label>`}</div>`)}
                 <div class="riga-campi"><label class="campo"><span>Nuova persona</span><input name="nuovo" maxlength="40" placeholder="Nome e iniziale del cognome"></label>
                     <label class="campo"><span>Ruolo</span><select name="nuovoRuolo" class="campo-in"><option value="terapeuta">Terapeuta</option><option value="tirocinante">Tirocinante</option></select></label></div>
-                ${centro ? h`<label class="spunta-riga"><input type="checkbox" name="centro"> <span>Aggiungi anche le persone del centro che mancano<br><span class="sotto piccolo">da «Persone e accessi»: admin e professioniste come terapeuti, tirocinanti come tirocinanti</span></span></label>` : ''}
+                ${centro ? h`<p class="sotto piccolo">Chi ha accesso al centro è già qui, con il nome di «Persone e accessi»: per cambiarlo, cambialo là. Qui aggiungi chi lavora con i bambini senza usare l'app.</p>` : ''}
                 <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`);
             if (!r) return;
-            let aggiunte = [];
-            if (r.centro) {
-                try {
-                    const a = await Y.chiama('accessi.leggi');
-                    aggiunte = Object.entries(a.utenti || {}).filter(([, u]) => u.attivo !== false)
-                        .map(([email, u]) => ({ id: TT.nuovoId('p'), nome: u.nome || email.split('@')[0], ruolo: u.ruolo === 'tirocinante' ? 'tirocinante' : 'terapeuta', email }));
-                } catch (e) { avviso('Persone del centro non lette: ' + (e.message || e), 'errore'); }
-            }
             const nuove = [];
             if (String(r.nuovo || '').trim()) nuove.push({ id: TT.nuovoId('p'), nome: r.nuovo.trim(), ruolo: r.nuovoRuolo });
             const vecchie = S.persone;
@@ -459,7 +508,6 @@
                     if (r['via' + i]) return null;
                     return Object.assign({}, p, { nome: String(r['nome' + i] || p.nome).trim() || p.nome, ruolo: r['ruolo' + i] || p.ruolo });
                 }).filter(Boolean);
-                aggiunte.forEach((x) => { if (!out.some((p) => (x.email && p.email === x.email) || p.nome.toLowerCase() === x.nome.toLowerCase())) out.push(x); });
                 nuove.forEach((x) => out.push(x));
                 return out;
             });
