@@ -201,6 +201,26 @@
         return g === oggi() ? 'Oggi, ' + s : s.charAt(0).toUpperCase() + s.slice(1);
     }
 
+    // L'errore si mostra dentro il foglio, che resta aperto con quanto scritto
+    function erroreFoglio(form, testo) {
+        let e = form.querySelector('.errore-foglio');
+        if (!e) { e = document.createElement('p'); e.className = 'errore-foglio'; e.setAttribute('role', 'alert'); form.querySelector('.bottoni').before(e); }
+        e.textContent = testo;
+        return undefined;
+    }
+    function validaOrari(form) {
+        const r = Object.fromEntries(new FormData(form));
+        r.da = TT.leggiOra(r.da); r.a = TT.leggiOra(r.a);
+        if (!r.da || !r.a) return erroreFoglio(form, 'Scrivi gli orari come 14:10 e 18:10.');
+        if (r.a <= r.da) return erroreFoglio(form, '«Alle» viene prima di «Dalle»: controlla gli orari.');
+        return r;
+    }
+    // orari rapidi: gli inizi delle fasce, da toccare invece di scrivere
+    const chipInizi = (c, scelto) => {
+        const inizi = []; for (let m = TT.minuti(c.da); m < TT.minuti(c.a) && inizi.length < 12; m += TT.passoDi(c)) inizi.push(TT.hhmm(m));
+        return inizi.length > 1 ? h`<div class="opzioni-rapide tt-inizi">${inizi.map((o) => h`<button type="button" class="bt piccolo ${o === scelto ? 'scelto' : ''}" data-inizio="${o}">${oraT(o)}</button>`)}</div>` : '';
+    };
+
     // ---------- vista ----------
     // sotto il nome del bambino: la seduta di quel giorno è iniziata o già salvata?
     function statoBreve(st) {
@@ -351,6 +371,7 @@
                 <label class="campo"><span>Ore da</span><select name="taglio" class="campo-in" data-tt-calc>${TAGLI.concat(TAGLI.includes(taglio) ? [] : [taglio]).map((t) => h`<option value="${t}" ${t === taglio ? grezzo('selected') : ''}>${t} min</option>`)}</select></label>
                 <label class="campo"><span>Quante</span><input name="n" type="number" min="1" max="10" class="campo-in" inputmode="numeric" value="${n}" data-tt-calc></label>
                 <label class="campo"><span>Fine</span><input name="a" class="campo-in" inputmode="numeric" required value="${a}" autocomplete="off" data-tt-fine></label></div>
+            ${chipInizi(c, da)}
             <p class="sotto piccolo" data-tt-spiega></p>
             ${visibili().length ? h`<div class="campo scelte-stampa"><span>Di solito con (facoltativo)</span>${visibili().map(riga)}</div>` : ''}
             <div class="bottoni">${x ? h`<button type="button" class="bt" data-foglio="togli">${icona('trash')} Non viene</button>` : ''}
@@ -369,13 +390,21 @@
                 el.querySelectorAll('[data-tt-calc]').forEach((x) => x.addEventListener('input', calcola));
                 el.querySelectorAll('[data-tt-calc]').forEach((x) => x.addEventListener('change', calcola));
                 fine.addEventListener('input', () => { spiega.textContent = 'Fine scritta a mano.'; });
+                el.querySelectorAll('[data-inizio]').forEach((b) => b.addEventListener('click', () => {
+                    el.querySelector('[name=da]').value = b.dataset.inizio;
+                    el.querySelectorAll('[data-inizio]').forEach((x) => x.classList.toggle('scelto', x === b));
+                    calcola();
+                }));
                 const i0 = TT.leggiOra(el.querySelector('[name=da]').value);
                 spiega.textContent = i0 ? `${n} ${n === 1 ? 'ora' : 'ore'} da ${taglio} minuti: dalle ${oraT(i0)} alle ${oraT(a)}.` : '';
             },
             invia: (form) => {
                 const fd = new FormData(form);
                 const da = TT.leggiOra(fd.get('da')), a = TT.leggiOra(fd.get('a'));
-                if (!da || !a) { avviso('Scrivi gli orari come 14:10.', 'errore'); return undefined; }
+                if (!pid && !fd.get('pid')) return erroreFoglio(form, 'Scegli il bambino.');
+                if (!fd.getAll('dow').length && !x) return erroreFoglio(form, 'Scegli almeno un giorno.');
+                if (!da || !a) return erroreFoglio(form, 'Scrivi gli orari come 14:10.');
+                if (a <= da) return erroreFoglio(form, 'La fine viene prima dell\'inizio: controlla gli orari.');
                 try { localStorage.setItem('tice_turni_taglio', String(fd.get('taglio'))); } catch (e) { /* niente */ }
                 return { pid: pid || fd.get('pid'), dow: fd.getAll('dow').map(Number), da, a, taglio: +fd.get('taglio'), n: +fd.get('n'), persone: fd.getAll('p') };
             }
@@ -442,10 +471,9 @@
                 <label class="campo"><span>Alle</span><input name="a" class="campo-in" inputmode="numeric" required value="${c.a}"></label>
                 <label class="campo"><span>Fasce di</span><select name="fascia" class="campo-in">${[30, 40, 45, 50, 60, 90, 120].map((n) => h`<option value="${n}" ${n === +c.fascia ? grezzo('selected') : ''}>${n} minuti</option>`)}</select></label>
                 <label class="campo"><span>Pausa fra le fasce</span><select name="pausa" class="campo-in">${[0, 5, 10, 15, 20].map((n) => h`<option value="${n}" ${n === TT.pausaDi(c) ? grezzo('selected') : ''}>${n ? n + ' minuti' : 'nessuna'}</option>`)}</select></label></div>
-                <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`);
+                <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`, { invia: validaOrari });
             if (!r) return;
-            const da = TT.leggiOra(r.da), a = TT.leggiOra(r.a);
-            if (!da || !a || a <= da) { avviso('Scrivi gli orari come 14:10 e 18:10.', 'errore'); return; }
+            const da = r.da, a = r.a;
             cambiaModello((m) => Object.assign(m, { orari: { da, a, fascia: +r.fascia, pausa: +r.pausa } }));
         },
         'tt-giorno': (b) => { S.giorno = TT.piu(S.giorno, +b.dataset.d); TiceHome.ridisegna(); },
@@ -532,9 +560,23 @@
                 </div><div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button></div></form>`);
             if (!r) return;
             if (r === 'ripeti') {
+                // quali dei prossimi giorni hanno già turni propri (non solo quelli della settimana tipo):
+                // si controlla mentre il foglio è già aperto, per non farlo aspettare
+                let gia = null;
+                const sovrascritti = (n) => Object.keys(gia).filter((i) => +i <= n && gia[i]).map((i) => TT.daIso(TT.piu(g, 7 * i)).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' }));
+                const testoSov = (n) => { if (!gia) return 'Controllo se qualche giorno ha già dei turni…'; const l = sovrascritti(n); return l.length ? (l.length === 1 ? `Il ${l[0]} era già stato modificato a mano: verrà sostituito.` : `Erano già stati modificati a mano e verranno sostituiti: ${l.join(', ')}.`) : `Nessuno di questi ${nomeG} era stato modificato a mano: niente viene perso.`; };
+                const controlla = Promise.all(Array.from({ length: 12 }, (_, k) => k + 1).map(async (i) => {
+                    const dst = TT.piu(g, 7 * i);
+                    try { const sd = TT.lunedi(dst) === S.chiave ? S.sett : (await leggi(TT.lunedi(dst))).dati; const gd = sd && TT.giornata(sd, dst, S.modello); return [i, !!(gd && gd.propria)]; } catch (e) { return [i, false]; }
+                })).then((l) => { gia = Object.fromEntries(l); });
                 const q = await foglio(h`<form><h2>Ripeti ogni ${nomeG}</h2><label class="campo"><span>Per quante settimane</span><select name="n" class="campo-in">${[1, 2, 3, 4, 6, 8, 12].map((n) => h`<option value="${n}" ${n === 4 ? grezzo('selected') : ''}>${n}</option>`)}</select></label>
-                    <p class="sotto piccolo">I ${nomeG} che hanno già dei turni vengono sostituiti.</p>
-                    <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Ripeti</button></div></form>`);
+                    <p class="sotto piccolo" data-sovrascritti>${testoSov(4)}</p>
+                    <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Ripeti</button></div></form>`, {
+                    dopo: (f) => {
+                        const sel = f.querySelector('[name=n]'), out = f.querySelector('[data-sovrascritti]'), agg = () => { out.textContent = testoSov(+sel.value); };
+                        sel.addEventListener('change', agg); controlla.then(agg);
+                    }
+                });
                 if (!q) return;
                 const src = JSON.parse(JSON.stringify(S.sett || TT.vuota()));
                 for (let i = 1; i <= +q.n; i++) {
@@ -580,11 +622,10 @@
                     <button type="button" class="bt piccolo" data-orari="08:30|17:30">Estate, tutto il giorno</button></div>
                 <label class="spunta-riga"><input type="checkbox" name="tutti" checked> <span>Usa questi orari per tutta la settimana</span></label>
                 <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`, {
-                dopo: (f) => f.querySelectorAll('[data-orari]').forEach((b) => { b.onclick = () => { const [da, a] = b.dataset.orari.split('|'); f.querySelector('[name=da]').value = da; f.querySelector('[name=a]').value = a; }; })
+                dopo: (f) => f.querySelectorAll('[data-orari]').forEach((b) => { b.onclick = () => { const [da, a] = b.dataset.orari.split('|'); f.querySelector('[name=da]').value = da; f.querySelector('[name=a]').value = a; }; }),
+                invia: validaOrari
             });
             if (!r) return;
-            r.da = TT.leggiOra(r.da); r.a = TT.leggiOra(r.a);
-            if (!r.da || !r.a || r.a <= r.da) { avviso('Scrivi gli orari come 14:10 e 18:00.', 'errore'); return; }
             const giorni = r.tutti ? TT.giorni(TT.lunedi(S.giorno), true) : [S.giorno];
             cambiaSettimana((d) => { giorni.forEach((g) => { d = TT.impostaGiornata(d, g, { da: r.da, a: r.a, fascia: +r.fascia, pausa: +r.pausa }); }); return d; });
         },

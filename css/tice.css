@@ -700,7 +700,7 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 .tice .tt-mcella.pieno { background-image: linear-gradient(var(--t), var(--t)); }
 .tice .tt-mquando { width: 100%; text-align: center; font-weight: 700; font-size: .85rem; font-variant-numeric: tabular-nums; }
 .tice-foglio .tt-dow { display: flex; flex-wrap: wrap; gap: 6px; }
-.tice-foglio .tt-dow label { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border: 1px solid var(--tq-matita-forte, rgba(0,0,0,.25)); border-radius: 999px; cursor: pointer; text-transform: capitalize; }
+.tice-foglio .tt-dow label { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; min-height: 44px; border: 1px solid var(--tq-matita-forte, rgba(0,0,0,.25)); border-radius: 999px; cursor: pointer; text-transform: capitalize; }
 .tice-foglio .tt-dow label:has(input:checked) { background: var(--text-primary, #222); color: var(--taccuino-carta, #fff); }
 .tice-foglio .tt-dow input { position: absolute; opacity: 0; pointer-events: none; }
 .tice .tt-apri { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; width: 100%; min-height: 44px; border: 0; background: none; color: inherit; font: inherit; font-weight: 700; cursor: pointer; padding: 4px; border-radius: 8px; }
@@ -721,6 +721,8 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 .tice .tt-apri-altro { margin-top: 12px; }
 .tice .tt-apri-altro .sotto { font-weight: 400; }
 .tice .tt-strumenti { margin-top: 10px; flex-wrap: wrap; }
+.tice-foglio .errore-foglio { color: var(--danger-color, #c0392b); font-weight: 600; margin: 4px 0 8px; }
+.tice-foglio .tt-inizi .bt.scelto { background: var(--text-primary, #222); color: var(--taccuino-carta, #fff); border-color: var(--text-primary, #222); }
 .tice-foglio .opzioni-rapide { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 10px; }
 .tice .tt-ora { font-size: .85rem; font-weight: 700; padding: 6px 8px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; vertical-align: middle; }
 .tice .tt-bambino { min-width: 84px; padding: 7px 5px 6px; font-weight: 700; font-size: .9rem; line-height: 1.15; white-space: normal; text-align: center; color: var(--text-primary); background: var(--t-sup, var(--bg-primary, #fff)); background-image: linear-gradient(var(--t), var(--t)); border-top: 4px solid var(--c) !important; }
