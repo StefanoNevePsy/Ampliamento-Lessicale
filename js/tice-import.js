@@ -58,7 +58,8 @@
   function dataIso(v) {
     // Le date di Numbers sono "ora locale scritta come UTC": si leggono in UTC.
     if (v instanceof Date) return isNaN(v) ? null : v.getUTCFullYear() + '-' + due(v.getUTCMonth() + 1) + '-' + due(v.getUTCDate());
-    var m = /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/.exec(testo(v));
+    // anche con i refusi di battitura: "24//9/26", "24 / 9 / 26", "24.9.2026"
+    var m = /^(\d{1,2})\s*[\/.-]+\s*(\d{1,2})\s*[\/.-]+\s*(\d{2,4})$/.exec(testo(v));
     if (!m) return null;
     var g = +m[1], mm = +m[2], a = +m[3];
     if (a < 100) a += 2000;
@@ -124,6 +125,37 @@
   }
 
   // ---------- un'attività (tabella) ----------
+  // "+: no cp (urla)", "-: urla": cosa conta come risposta corretta o errata
+  var RE_DEFINIZIONE = /^\s*([+\-−–])\s*:\s*(.*)$/;
+  // Un anno sbagliato a mano ("22/09/2025" fra date del 2026): se spostando l'anno
+  // di uno la data cade fra quella prima e quella dopo, si corregge e si avvisa
+  function correggiAnni(elenco, prendi, metti, etichetta, avvisi) {
+    var giorni = function (a, b) { return (Date.parse(b) - Date.parse(a)) / 86400000; };
+    var lontane = function (a, b) { return Math.abs(giorni(a, b)) > 200; };
+    var date = elenco.map(prendi), pos = [];
+    date.forEach(function (d, i) { if (d) pos.push(i); });
+    pos.forEach(function (i, k) {
+      var d = date[i], prima = k > 0 ? date[pos[k - 1]] : null, dopo = k < pos.length - 1 ? date[pos[k + 1]] : null;
+      var prima2 = k > 1 ? date[pos[k - 2]] : null, dopo2 = k < pos.length - 2 ? date[pos[k + 2]] : null;
+      // fuori posto: lontana dalle vicine, che invece sono coerenti fra loro
+      var fuori = prima && dopo ? lontane(prima, d) && lontane(d, dopo) && !lontane(prima, dopo)
+        : dopo ? lontane(d, dopo) && !!dopo2 && !lontane(dopo, dopo2)
+          : prima ? lontane(prima, d) && !!prima2 && !lontane(prima2, prima) : false;
+      if (!fuori) return;
+      [1, -1].some(function (delta) {
+        var c = (+d.slice(0, 4) + delta) + d.slice(4);
+        if (isNaN(Date.parse(c))) return false;
+        var vicina = (!prima || !lontane(prima, c)) && (!dopo || !lontane(c, dopo));
+        if (vicina) {
+          avvisi.push(etichetta + ': data ' + d.split('-').reverse().join('/') + ' letta come ' + c.split('-').reverse().join('/') + ' (anno sbagliato nel foglio originale).');
+          metti(elenco[i], c);
+          date[i] = c;
+        }
+        return vicina;
+      });
+    });
+  }
+
   function leggiAttivita(tab, area, terminato, avvisi) {
     var nc = tab.righe[0] ? tab.righe[0].length : 0;
     var r0 = tab.righe[0], r1 = tab.righe[1], r2 = tab.righe[2];
@@ -194,6 +226,13 @@
       var evRaw = colonne.evento != null ? cella(tab, r, colonne.evento) : null;
 
       if (!tSto && !d && v == null && p == null && !dec) { precVuota = true; continue; }
+      // "+: …" sotto il target: la definizione della risposta corretta (o errata), non un nome
+      var def = RE_DEFINIZIONE.exec(tSto);
+      if (def && corrente) {
+        var cosa = (def[1] === '+' ? 'Corretta: ' : 'Errata: ') + def[2].trim();
+        corrente.suggerimento = corrente.suggerimento ? corrente.suggerimento + ' — ' + cosa : cosa;
+        tSto = '';
+      }
 
       var tornaIndietro = !!(d && ultimaData && d < ultimaData && righeDati >= 3);
       if (tSto && corrente && soloTD(tSto)) {
@@ -202,8 +241,10 @@
         var sec = secondiTD(tSto);
         tdVisti = true;
         if (precDecisione || precVuota || tornaIndietro) {
+          var chiuso = corrente;
           nuovoTarget(senzaTD(corrente.testo) + ' — ' + tSto, d);
           corrente.tdSeconds = sec; tdCorrente = sec;
+          corrente.daTD = chiuso;   // se non arrivano dati è solo un'annotazione del target sopra
         } else {
           tdCorrente = sec;
           corrente.tdSeconds = sec;
@@ -249,6 +290,27 @@
       precVuota = false;
       precDecisione = !!dec;
     }
+
+    // Solo il time delay sotto un target chiuso, senza dati dopo: è come era
+    // stato svolto quel target ("1” T/D" sotto RISPETTO TURNO … REPERTORIO)
+    var usati = {};
+    voci.forEach(function (x) { usati[x.targetId] = true; });
+    att.target = att.target.filter(function (t) {
+      var da = t.daTD;
+      delete t.daTD;
+      if (!da || usati[t.id]) return true;
+      if (da.tdSeconds == null && t.tdSeconds != null) da.tdSeconds = t.tdSeconds;
+      return false;
+    });
+    correggiAnni(voci, function (x) { return x.data; }, function (x, d) { x.data = d; }, etich, avvisi);
+    voci.forEach(function (x) {
+      var t = att.target.filter(function (y) { return y.id === x.targetId; })[0];
+      if (t && (!t.inizio || x.data < t.inizio)) t.inizio = x.data;
+    });
+    att.target.forEach(function (t) {
+      var date = voci.filter(function (x) { return x.targetId === t.id; }).map(function (x) { return x.data; }).sort();
+      if (date.length) t.inizio = date[0];
+    });
 
     // Target scritti ma ancora senza dati: sono il piano successivo.
     var conDati = {};
@@ -335,7 +397,7 @@
     ['tipologia', ['tipologia']],
     ['compilatore', ['iniziali']]
   ];
-  function leggiStorico(tab, fonte) {
+  function leggiStorico(tab, fonte, avvisi) {
     var intest = (tab.righe[0] || []).map(function (x) { return testo(x).toLowerCase(); });
     var idx = {}, usate = [];
     MAPPA_STORICO.forEach(function (m) {
@@ -350,11 +412,15 @@
       var d = dataIso(cella(tab, r, idx.data));
       if (!d) continue;
       var riga = { data: d, fonte: fonte };
+      var note = [];
       ['criteri', 'assessment', 'corrette', 'totali', 'durata'].forEach(function (k) {
         if (idx[k] == null) return;
         var n = numero(cella(tab, r, idx[k]));
         if (n != null) riga[k] = n;
+        // testo al posto del numero ("CONDIZIONAMENTO TAVOLO"): cosa si è fatto quel giorno
+        else if (testo(cella(tab, r, idx[k])) && note.indexOf(testo(cella(tab, r, idx[k]))) < 0) note.push(testo(cella(tab, r, idx[k])));
       });
+      if (note.length) riga.nota = note.join(' — ');
       ['operatori', 'tipologia', 'compilatore'].forEach(function (k) {
         if (idx[k] == null) return;
         var s = testo(cella(tab, r, idx[k]));
@@ -362,6 +428,7 @@
       });
       righe.push(riga);
     }
+    if (avvisi) correggiAnni(righe, function (x) { return x.data; }, function (x, d) { x.data = d; }, fonte, avvisi);
     return righe;
   }
 
@@ -386,7 +453,7 @@
       }
       if (FOGLI_STORICO.some(function (s) { return basso.indexOf(s) >= 0; })) {
         foglio.tabelle.forEach(function (tab) {
-          var righe = leggiStorico(tab, nome + ' / ' + testo(tab.nome));
+          var righe = leggiStorico(tab, nome + ' / ' + testo(tab.nome), avvisi);
           if (righe.length) storico.push.apply(storico, righe);
           else avvisi.push('"' + nome + ' / ' + testo(tab.nome) + '": nessuna data riconosciuta, saltata.');
         });
@@ -685,6 +752,15 @@
       if (a.criterio.soglia === predef) return;
       p.criterionOverrides = p.criterionOverrides || {};
       a.target.forEach(function (t) { p.criterionOverrides[nomeSet(a, t) + '::quaderno'] = a.criterio.soglia; });
+    });
+
+    // Cosa si è fatto nei giorni senza numeri ("CONDIZIONAMENTO TAVOLO"): nel diario del giorno
+    pacchetto.storico.forEach(function (r) {
+      if (!r.nota) return;
+      var riga = 'Dal quaderno: ' + r.nota + (r.operatori ? ' (' + r.operatori + ')' : '');
+      p.dailyNotes = p.dailyNotes || {};
+      var gia = p.dailyNotes[r.data] || '';
+      if (gia.indexOf(riga) < 0) p.dailyNotes[r.data] = gia ? gia + '\n\n' + riga : riga;
     });
 
     // Learn unit storiche: sostituite quelle dello stesso file

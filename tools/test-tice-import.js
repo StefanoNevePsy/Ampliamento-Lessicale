@@ -192,6 +192,66 @@ prova('la data non slitta col fuso orario', () => {
   assert.strictEqual(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`, s[0].date.slice(0, 10));
 });
 
+console.log('Refusi e annotazioni dei quaderni');
+{
+  const doc = [
+    { nome: 'LEARN UNIT TOTALI GIORNALIERE', tabelle: [{ nome: 'LU', righe: [
+      ['DATA', 'CRITERI', 'Risposte corrette', 'Risposte totali', 'PSICO'],
+      [D('2026-09-22'), null, 13, 16, 'Anna'],
+      ['24//9/26', null, 'CONDIZIONAMENTO', null, 'Bea'],
+      [D('2026-09-29'), null, 'LAVORO AL TAVOLO', null, 'Anna'],
+      [D('2026-10-06'), null, 38, 65, 'Anna']
+    ] }] },
+    { nome: 'REPERTORI GENERALI', tabelle: [
+      { nome: 'COLLABORAZIONE', righe: [
+        ['Programma: COLLABORAZIONE', null, null, null],
+        ['Criterio:', '90/100% per 2 GIORNI consecutivi', 'Strategia insegnamento:', 'Indipendente'],
+        ['STO', 'DATA', 'Risposte corrette', 'DECISIONE'],
+        [null, null, null, null],
+        ['TRANSIZIONI', D('2026-09-17'), 50, null],
+        ['Accetta cambi di attività', D('2025-09-22'), 50, null],
+        ['+: niente urla', D('2026-10-06'), 69, null],
+        [null, D('2026-10-08'), 67, null]
+      ] },
+      { nome: 'TURNO', righe: [
+        ['Programma: RISPETTO TURNO', null, null, null, null],
+        ['Criterio:', '90/100% per 2 GIORNI consecutivi', 'Strategia insegnamento:', 'TIME DELAY', null],
+        ['STO', 'DATA', 'Risposte corrette', 'Risposte promptate', 'DECISIONE'],
+        [null, null, null, null, null],
+        ['RISPETTA IL TURNO', D('2025-11-11'), 100, 0, 'REPERTORIO'],
+        ['1” T/D', null, null, null, null]
+      ] }
+    ] }
+  ];
+  const pk = TiceImport.analizza(doc, 'prova.numbers');
+  const coll = pk.attivita.find((a) => a.nome === 'COLLABORAZIONE');
+  prova('data con refuso di battitura ("24//9/26") letta', () => {
+    assert.ok(pk.storico.some((r) => r.data === '2026-09-24' && r.operatori === 'Bea'));
+  });
+  prova('testo al posto dei numeri nelle LU del giorno: diventa la nota del giorno', () => {
+    assert.strictEqual(pk.storico.find((r) => r.data === '2026-09-29').nota, 'LAVORO AL TAVOLO');
+    const p = TiceImport.applica({ id: 'pz_refusi', name: 'Prova', history: [] }, pk, {}).paziente;
+    assert.ok(/Dal quaderno: CONDIZIONAMENTO \(Bea\)/.test(p.dailyNotes['2026-09-24']));
+    TiceImport.applica(p, pk, {});
+    assert.strictEqual(p.dailyNotes['2026-09-24'].split('Dal quaderno').length, 2, 'reimportando non si duplica');
+  });
+  prova('anno sbagliato fra date vicine: corretto, con avviso', () => {
+    const date = pk.voci.filter((x) => x.attivitaId === coll.id).map((x) => x.data);
+    assert.deepStrictEqual(date, ['2026-09-17', '2026-09-22', '2026-10-06', '2026-10-08']);
+    assert.ok(pk.avvisi.some((x) => /22\/09\/2025 letta come 22\/09\/2026/.test(x)));
+  });
+  prova('"+: …" sotto il target: definizione della risposta corretta, non parte del nome', () => {
+    assert.deepStrictEqual(coll.target.map((t) => t.testo), ['TRANSIZIONI — Accetta cambi di attività']);
+    assert.strictEqual(coll.target[0].suggerimento, 'Corretta: niente urla');
+  });
+  prova('T/D scritto sotto un target in repertorio, senza dati: non è un target vuoto', () => {
+    const tu = pk.attivita.find((a) => a.nome === 'TURNO');
+    assert.strictEqual(tu.target.length, 1);
+    assert.strictEqual(tu.target[0].stato, 'repertorio');
+    assert.strictEqual(tu.target[0].tdSeconds, 1);
+  });
+}
+
 console.log('Applicare a un paziente');
 const paziente = { id: 'p1', name: 'Mario R', history: [
   { date: '2025-04-01T10:00:00.000Z', setName: 'Animali', mode: 'tact', correct: 5, total: 10, percentage: 50 }] };
