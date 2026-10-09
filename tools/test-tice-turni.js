@@ -120,5 +120,20 @@ prova('orario preciso nelle fasce toccate a metà', () => {
   assert.strictEqual(T.orarioPreciso(gi, 'x', '15:10'), '');
   assert.strictEqual(T.orarioPreciso(gi, 'x', '16:10'), 'fino alle 16:50');
 });
+prova('ore da 50 minuti con 10 di pausa: 14:10–15:00, 15:10–16:00…', () => {
+  const gi = T.giornata(T.impostaGiornata(T.vuota(), G, { bambini: ['a'], fascia: 50 }), G);
+  assert.deepStrictEqual(gi.fasce, ['14:10', '15:10', '16:10', '17:10']);
+  assert.strictEqual(T.fineFascia(gi, '14:10'), '15:00');
+  const g2 = T.giornata(T.impostaGiornata(T.vuota(), G, { bambini: ['a'], fascia: 45, pausa: 15 }), G);
+  assert.deepStrictEqual(g2.fasce, ['14:10', '15:10', '16:10', '17:10']);
+  const g3 = T.giornata(T.impostaGiornata(T.vuota(), G, { bambini: ['a'], fascia: 60, pausa: 0 }), G);
+  assert.deepStrictEqual(g3.fasce, ['14:10', '15:10', '16:10', '17:10']);
+  // un bambino dalle 15:10 alle 16:00 occupa esattamente la sua fascia: niente orario preciso
+  let m = T.modelloVuoto();
+  m = T.impostaModello(m, 'x', 1, { da: '15:10', a: '16:00' });
+  const gm = T.giornata(T.vuota(), T.lunedi(G), m);
+  assert.strictEqual(T.orarioPreciso(gm, 'x', '15:10'), '');
+  assert.ok(!T.presente(gm, 'x', '14:10') && !T.presente(gm, 'x', '16:10'));
+});
 console.log(`\n${passati} test passati, ${falliti.length} falliti`);
 process.exit(falliti.length ? 1 : 0);

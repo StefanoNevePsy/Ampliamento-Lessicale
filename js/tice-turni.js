@@ -108,14 +108,19 @@
 
   // ---------- la giornata ----------
   // Di solito si lavora il pomeriggio; d'estate si cambia dagli orari della giornata
-  var GIORNATA = { da: '14:10', a: '18:10', fascia: 60 };
+  var GIORNATA = { da: '14:10', a: '18:10', fascia: 50 };
+  // Le fasce iniziano ogni (durata + pausa): ore da 50 minuti con 10 di pausa →
+  // 14:10–15:00, 15:10–16:00… Senza pausa indicata, una fascia più corta di
+  // un'ora parte comunque ogni ora (come si lavora al centro).
+  function pausaDi(c) { var f = +c.fascia || 60; return c.pausa != null ? +c.pausa : (f < 60 ? 60 - f : 0); }
+  function passoDi(c) { return (+c.fascia || 60) + pausaDi(c); }
   function vuota() { return { giorni: {}, voci: [] }; }
   // ---------- la settimana tipo ----------
   function modelloVuoto() { return { orari: Object.assign({}, GIORNATA), ordine: [], voci: [] }; }
   function dow(g) { return ((daIso(g).getDay() + 6) % 7) + 1; }
   function fasceDi(c) {
     var out = [];
-    for (var m = minuti(c.da); m < minuti(c.a); m += (+c.fascia || 60)) out.push(hhmm(m));
+    for (var m = minuti(c.da); m < minuti(c.a); m += passoDi(c)) out.push(hhmm(m));
     return out;
   }
   /** Dalla settimana tipo: chi viene quel giorno, quando, e con chi di solito. */
@@ -188,7 +193,7 @@
     var bambini = (c.bambini || []).slice();
     voci.forEach(function (v) { if (bambini.indexOf(v.pid) < 0) bambini.push(v.pid); });
     var fasce = [];
-    for (var m = minuti(c.da); m < minuti(c.a); m += (+c.fascia || 60)) fasce.push(hhmm(m));
+    for (var m = minuti(c.da); m < minuti(c.a); m += passoDi(c)) fasce.push(hhmm(m));
     // fasce fuori orario che hanno turni restano visibili
     voci.forEach(function (v) { if (fasce.indexOf(v.ora) < 0) fasce.push(v.ora); });
     fasce.sort();
@@ -208,7 +213,7 @@
     };
     var pos = {}; bambini.forEach(function (pid, i) { pos[pid] = i; });
     bambini.sort(function (x, y) { var a = inizio(x), b = inizio(y); return a < b ? -1 : a > b ? 1 : pos[x] - pos[y]; });
-    return { giorno: g, da: c.da, a: c.a, fascia: +c.fascia || 60, bambini: bambini, fasce: fasce, usate: usate, celle: celle, voci: voci,
+    return { giorno: g, da: c.da, a: c.a, fascia: +c.fascia || 60, pausa: pausaDi(c), bambini: bambini, fasce: fasce, usate: usate, celle: celle, voci: voci,
       presenze: presenze, virtuale: virtuale, propria: !!propria.proprio };
   }
   /** La giornata virtuale diventa propria (prima di ogni modifica): da qui non segue più la settimana tipo. */
@@ -217,7 +222,7 @@
     var gi = giornata(sett, g, modello);
     sett.giorni = sett.giorni || {};
     if (!gi.virtuale) { sett.giorni[g] = Object.assign({}, sett.giorni[g] || {}, { proprio: true }); return sett; }
-    sett.giorni[g] = Object.assign({}, sett.giorni[g] || {}, { da: gi.da, a: gi.a, fascia: gi.fascia, bambini: gi.bambini.slice(), presenze: JSON.parse(JSON.stringify(gi.presenze)), proprio: true });
+    sett.giorni[g] = Object.assign({}, sett.giorni[g] || {}, { da: gi.da, a: gi.a, fascia: gi.fascia, pausa: gi.pausa, bambini: gi.bambini.slice(), presenze: JSON.parse(JSON.stringify(gi.presenze)), proprio: true });
     sett.voci = (sett.voci || []).filter(function (v) { return v.giorno !== g; }).concat(gi.voci.map(function (v) {
       return { id: nuovoId(), pid: v.pid, giorno: g, ora: v.ora, durata: v.durata, persone: v.persone.slice(), nota: '' };
     }));
@@ -287,7 +292,7 @@
     verso.voci = (verso.voci || []).filter(function (v) { return v.giorno !== gVerso; }).concat(src.voci.map(function (v) {
       return { id: nuovoId(), pid: v.pid, giorno: gVerso, ora: v.ora, durata: v.durata, persone: (v.persone || []).slice(), nota: v.nota || '' };
     }));
-    verso = impostaGiornata(verso, gVerso, { bambini: src.bambini.slice(), da: src.da, a: src.a, fascia: src.fascia, presenze: JSON.parse(JSON.stringify(src.presenze || {})), proprio: true });
+    verso = impostaGiornata(verso, gVerso, { bambini: src.bambini.slice(), da: src.da, a: src.a, fascia: src.fascia, pausa: src.pausa, presenze: JSON.parse(JSON.stringify(src.presenze || {})), proprio: true });
     return verso;
   }
 
@@ -366,7 +371,7 @@
     var titolo = GIORNI[(d.getDay() + 6) % 7] + ' ' + d.getDate() + ' ' + MESI[d.getMonth()] + ' ' + d.getFullYear();
     var html = '<section class="st-foglio st-turni"><header class="st-testa"><div class="st-tit"><img class="st-logo" src="img/tice/logo-scuro.svg" alt="">' +
       '<div><div class="st-eti">Turni della giornata</div><div class="st-bambino">' + esc(titolo) + '</div></div></div>' +
-      '<div class="st-legenda st-legenda-turni">' + gi.bambini.length + ' bambini · fasce di ' + gi.fascia + ' minuti</div></header>' +
+      '<div class="st-legenda st-legenda-turni">' + gi.bambini.length + ' bambini · fasce di ' + gi.fascia + ' minuti' + (gi.pausa ? ' + ' + gi.pausa + ' di pausa' : '') + '</div></header>' +
       '<table class="st-tturni st-giornata"><colgroup><col class="st-colora">' + gi.bambini.map(function () { return '<col>'; }).join('') + '</colgroup>' +
       '<thead><tr><th></th>' + gi.bambini.map(function (pid) { var c = colore(pid); return '<th class="st-bcol" style="--c:' + c + ';--t:' + tinta(c, 0.16) + '">' + esc(dip.nomeBambino(pid)) + '</th>'; }).join('') + '</tr></thead><tbody>';
     // righe alte quanto serve a riempire la pagina (A4 orizzontale: ~150 mm per la griglia)
@@ -403,7 +408,7 @@
   return {
     vuota: vuota, giornata: giornata, modelloVuoto: modelloVuoto, dow: dow, dalModello: dalModello, impostaModello: impostaModello,
     presente: presente, orarioPreciso: orarioPreciso, materializza: materializza, ripristina: ripristina, fineFascia: fineFascia, leggiOra: leggiOra, impostaCella: impostaCella, alternaPersona: alternaPersona, impostaGiornata: impostaGiornata,
-    occupati: occupati, copiaGiornata: copiaGiornata, stampaGiornata: stampaGiornata, GIORNATA: GIORNATA,
+    occupati: occupati, copiaGiornata: copiaGiornata, stampaGiornata: stampaGiornata, GIORNATA: GIORNATA, passoDi: passoDi, pausaDi: pausaDi,
     GIORNI: GIORNI, GIORNI_BREVI: GIORNI_BREVI, RUOLI: RUOLI,
     daIso: daIso, iso: iso, piu: piu, lunedi: lunedi, giorni: giorni, minuti: minuti, hhmm: hhmm, fine: fine,
     nuovoId: nuovoId, nomeGiorno: nomeGiorno, breveGiorno: breveGiorno, titoloSettimana: titoloSettimana,

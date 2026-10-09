@@ -406,12 +406,13 @@
             const r = await foglio(h`<form><h2>Orari di serie</h2><p class="sotto">Le fasce della settimana tipo. Per un solo giorno si cambiano dalla giornata.</p>
                 <div class="riga-campi"><label class="campo"><span>Dalle</span><input name="da" class="campo-in" inputmode="numeric" required value="${c.da}"></label>
                 <label class="campo"><span>Alle</span><input name="a" class="campo-in" inputmode="numeric" required value="${c.a}"></label>
-                <label class="campo"><span>Fasce di</span><select name="fascia" class="campo-in">${[30, 40, 45, 50, 60, 90, 120].map((n) => h`<option value="${n}" ${n === +c.fascia ? grezzo('selected') : ''}>${n} minuti</option>`)}</select></label></div>
+                <label class="campo"><span>Fasce di</span><select name="fascia" class="campo-in">${[30, 40, 45, 50, 60, 90, 120].map((n) => h`<option value="${n}" ${n === +c.fascia ? grezzo('selected') : ''}>${n} minuti</option>`)}</select></label>
+                <label class="campo"><span>Pausa fra le fasce</span><select name="pausa" class="campo-in">${[0, 5, 10, 15, 20].map((n) => h`<option value="${n}" ${n === TT.pausaDi(c) ? grezzo('selected') : ''}>${n ? n + ' minuti' : 'nessuna'}</option>`)}</select></label></div>
                 <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`);
             if (!r) return;
             const da = TT.leggiOra(r.da), a = TT.leggiOra(r.a);
             if (!da || !a || a <= da) { avviso('Scrivi gli orari come 14:10 e 18:10.', 'errore'); return; }
-            cambiaModello((m) => Object.assign(m, { orari: { da, a, fascia: +r.fascia } }));
+            cambiaModello((m) => Object.assign(m, { orari: { da, a, fascia: +r.fascia, pausa: +r.pausa } }));
         },
         'tt-giorno': (b) => { S.giorno = TT.piu(S.giorno, +b.dataset.d); TiceHome.ridisegna(); },
         // apre il foglio di presa dati di un bambino qualsiasi (anche fuori calendario)
@@ -535,7 +536,8 @@
             const r = await foglio(h`<form><h2>Orari della giornata</h2><p class="sotto">${lunga(S.giorno)}. A schermo e sul foglio stampato compaiono solo le fasce con dei turni: qui c'è l'intervallo in cui si possono mettere.</p>
                 <div class="riga-campi"><label class="campo"><span>Dalle</span><input name="da" class="campo-in" inputmode="numeric" required value="${gi.da}" placeholder="14:10"></label>
                 <label class="campo"><span>Alle</span><input name="a" class="campo-in" inputmode="numeric" required value="${gi.a}" placeholder="18:00"></label>
-                <label class="campo"><span>Fasce di</span><select name="fascia" class="campo-in">${[30, 40, 45, 50, 60, 90, 120].map((n) => h`<option value="${n}" ${n === gi.fascia ? grezzo('selected') : ''}>${n} minuti</option>`)}</select></label></div>
+                <label class="campo"><span>Fasce di</span><select name="fascia" class="campo-in">${[30, 40, 45, 50, 60, 90, 120].map((n) => h`<option value="${n}" ${n === gi.fascia ? grezzo('selected') : ''}>${n} minuti</option>`)}</select></label>
+                <label class="campo"><span>Pausa fra le fasce</span><select name="pausa" class="campo-in">${[0, 5, 10, 15, 20].map((n) => h`<option value="${n}" ${n === TT.pausaDi(gi) ? grezzo('selected') : ''}>${n ? n + ' minuti' : 'nessuna'}</option>`)}</select></label></div>
                 <div class="opzioni-rapide"><span class="sotto piccolo">Rapidi:</span>
                     <button type="button" class="bt piccolo" data-orari="14:10|18:10">Pomeriggio</button>
                     <button type="button" class="bt piccolo" data-orari="08:30|13:30">Mattina</button>
@@ -548,7 +550,7 @@
             r.da = TT.leggiOra(r.da); r.a = TT.leggiOra(r.a);
             if (!r.da || !r.a || r.a <= r.da) { avviso('Scrivi gli orari come 14:10 e 18:00.', 'errore'); return; }
             const giorni = r.tutti ? TT.giorni(TT.lunedi(S.giorno), true) : [S.giorno];
-            cambiaSettimana((d) => { giorni.forEach((g) => { d = TT.impostaGiornata(d, g, { da: r.da, a: r.a, fascia: +r.fascia }); }); return d; });
+            cambiaSettimana((d) => { giorni.forEach((g) => { d = TT.impostaGiornata(d, g, { da: r.da, a: r.a, fascia: +r.fascia, pausa: +r.pausa }); }); return d; });
         },
         'tt-persone': async () => {
             const centro = remoto() && Y.eAdmin && Y.eAdmin();
