@@ -2575,6 +2575,23 @@
     applicaScala();
     schermoInteroAlTocco();
 
+    // Il tasto/gesto «indietro» di Android (e lo swipe dell'app installata) non deve chiudere
+    // l'app: si tiene sempre una voce in più nella cronologia e, quando viene consumata,
+    // si fa quello che farebbe la freccia ← (o si chiude il foglio aperto) e la si rimette.
+    // Solo dalla schermata iniziale l'indietro esce davvero.
+    function agganciaIndietro() {
+        const segna = () => { try { history.pushState({ tice: 1 }, ''); } catch (e) { /* niente */ } };
+        if (!(history.state && history.state.tice)) { try { history.replaceState({ tice: 0 }, ''); } catch (e) { /* niente */ } segna(); }
+        window.addEventListener('popstate', () => {
+            const fogli = document.querySelectorAll('.tice-foglio-sfondo');
+            if (fogli.length) { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); segna(); return; }
+            const r = radice();
+            if (r && r.hidden) { apri(); segna(); return; }   // dai giochi si torna al Centro TICE
+            const freccia = r && r.querySelector('.tice-barra [aria-label="Indietro"]');
+            if (freccia) { freccia.click(); segna(); return; }
+            history.back();   // schermata iniziale: si esce davvero
+        });
+    }
     async function avvia() {
         const r = radice();
         if (!r) return;
@@ -2585,6 +2602,7 @@
         window.addEventListener('pagehide', salvaBozza);
         document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') salvaBozza(); });
         agganciaSalvataggi();
+        agganciaIndietro();
         try { T.lancio = JSON.parse(sessionStorage.getItem('tice_lancio') || 'null'); } catch (e) { T.lancio = null; }
         await apri();
     }
