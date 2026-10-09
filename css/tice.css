@@ -199,6 +199,13 @@ body.tice-aperto #notebook-tab-handle { display: none !important; }
 .tice .tasto.e { background: var(--t-sup-2); color: var(--text-primary); font-size: 1rem; min-height: 54px; }
 .tice .tasto:active { filter: brightness(0.9); transform: scale(0.97); }
 .tice .sotto-tasti { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.tice .presa { border-top: 1px dashed var(--t-bordo); padding-top: 10px; margin-top: 10px; }
+.tice .presa:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+.tice .presa-testa { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.tice .presa-testa .presa-conto { margin-left: auto; font-size: 0.9rem; }
+.tice .presa.a-criterio .presa-testa b:first-child { color: var(--success-color, #2f7d4f); }
+.tice .conto-ms { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.tice .pill.verde.chiara { opacity: 0.8; }
 .tice .sotto-tasti .td-voce { flex: none; font-variant-numeric: tabular-nums; }
 .tice-foglio .scelta-rapida { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 12px; }
 .tice-foglio .scelta-rapida .bt { min-width: 44px; justify-content: center; }

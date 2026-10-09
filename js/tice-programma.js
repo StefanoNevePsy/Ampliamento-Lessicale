@@ -135,9 +135,11 @@
   }
 
   /** Sedute dello storico che appartengono a un target (o all'attività). */
-  function sedute(p, att, target) {
+  /** Le sedute di un'attività (di un target, di una sua presa dati se ms). */
+  function sedute(p, att, target, ms) {
     var nome = target ? nomeSet(att, target) : null;
     return (p.history || []).filter(function (s) {
+      if (ms && s.misura !== ms) return false;
       if (target && target.setId) {
         // anche le sedute di quel set giocate prima che entrasse nel programma
         return s.targetId ? s.targetId === target.id : (s.setId === target.setId && s.mode === modoTarget(att, target));
@@ -152,6 +154,16 @@
    * fila con percentuale ≥ soglia (una seduta sotto soglia azzera il conto,
    * come checkCriterion dell'app). Restituisce la data o null.
    */
+  /**
+   * Criterio di un target (o dell'attività senza target): con più prese dati
+   * nella stessa attività, quando ci arrivano tutte (la data dell'ultima).
+   */
+  function criterioDi(p, att, target) {
+    var t = target || undefined;
+    if (!(att.misure || []).length) return criterioRaggiunto(sedute(p, att, t), att.criterio);
+    var date = att.misure.map(function (m) { return criterioRaggiunto(sedute(p, att, t, m.id), att.criterio); });
+    return date.every(Boolean) ? date.sort().pop() : null;
+  }
   function criterioRaggiunto(elenco, criterio) {
     var soglia = (criterio && criterio.soglia) || 90, n = (criterio && criterio.sedute) || 2;
     var fila = 0, ultimo = null;
@@ -342,9 +354,9 @@
   function conAttesa(att, target) {
     return !!att && !att.temporanea && !inPercentuale(att) && +att.prove > 0 && !att.cronometro && !passiDi(target).length;
   }
-  function chiaveAttesa(target) { return target ? target.id : '_'; }
-  function inAttesaDi(att, target) {
-    var x = (att && att.inAttesa || {})[chiaveAttesa(target)];
+  function chiaveAttesa(target, ms) { return (target ? target.id : '_') + (ms ? '~' + ms : ''); }
+  function inAttesaDi(att, target, ms) {
+    var x = (att && att.inAttesa || {})[chiaveAttesa(target, ms)];
     return x && x.seq ? x : null;
   }
   /** Le prove in attesa più quelle di oggi, in blocchi da n e il resto. */
@@ -372,7 +384,7 @@
     passiDi: passiDi, nuoviPassi: nuoviPassi,
     PALETTE: PALETTE, coloreDi: coloreDi, inPercentuale: inPercentuale,
     conAttesa: conAttesa, chiaveAttesa: chiaveAttesa, inAttesaDi: inAttesaDi, dividiLU: dividiLU, contaRisposte: contaRisposte,
-    sedute: sedute, criterioRaggiunto: criterioRaggiunto, seduta: seduta,
+    sedute: sedute, criterioRaggiunto: criterioRaggiunto, criterioDi: criterioDi, seduta: seduta,
     nuovaAttivita: nuovaAttivita, aggiungiTarget: aggiungiTarget,
     chiudiTarget: chiudiTarget, rendiCorrente: rendiCorrente, spostaTarget: spostaTarget,
     attiveOggi: attiveOggi

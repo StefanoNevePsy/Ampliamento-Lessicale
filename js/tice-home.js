@@ -111,20 +111,28 @@
         b.temp.forEach((t) => lista.push(Object.assign({ temporanea: true, target: [], criterio: { soglia: 90, sedute: 2 } }, t)));
         return lista;
     }
+    // Più prese dati nella stessa attività: la voce della seduta è "idAttività~idPresa"
+    const baseId = (k) => String(k).split('~')[0];
+    const msDi = (k) => String(k).split('~')[1] || null;
+    const misure = (att) => (att && !att.temporanea && att.misure) || [];
     function attivitaDi(p, id) {
+        id = baseId(id);
         const a = P.attivita(p, id);
         if (a) return a;
         const t = bozza(p.id).temp.find((x) => x.id === id);
         return t ? Object.assign({ temporanea: true, target: [], criterio: { soglia: 90, sedute: 2 } }, t) : null;
     }
-    function voce(p, att) {
+    function voce(p, att, k) {
         const b = bozza(p.id);
-        if (!b.voci[att.id]) {
+        k = k || att.id;
+        if (!b.voci[k]) {
             const c = att.temporanea ? null : P.targetCorrente(att);
-            b.voci[att.id] = { v: 0, p: 0, x: 0, sequenza: '', nota: '', decisione: '', targetId: c ? c.target.id : null,
-                mantenimento: !!(c && c.mantenimento), sessionType: att.sessionType || 'independent' };
+            // una presa dati segue il target scelto per le altre della stessa attività
+            const gia = Object.keys(b.voci).filter((x) => baseId(x) === att.id).map((x) => b.voci[x])[0];
+            b.voci[k] = { v: 0, p: 0, x: 0, sequenza: '', nota: '', decisione: '', targetId: gia ? gia.targetId : (c ? c.target.id : null),
+                mantenimento: gia ? gia.mantenimento : !!(c && c.mantenimento), sessionType: att.sessionType || 'independent' };
         }
-        return b.voci[att.id];
+        return b.voci[k];
     }
 
     // ---------- task analysis: un passo alla volta ----------
@@ -151,7 +159,8 @@
             const r = v.sequenza.slice(-1);
             const passi = passiVoce(att, v);
             const ps = passi.length && v.ordine ? passi.find((x) => x.id === v.ordine[v.ordine.length - 1]) : null;
-            return { att, r, testo: att.nome + (ps ? ' · ' + ps.testo : '') };
+            const m = misure(att).find((x) => x.id === msDi(u[k]));
+            return { att, r, testo: att.nome + (m ? ' · ' + m.nome : '') + (ps ? ' · ' + ps.testo : '') };
         }
         return null;
     }
@@ -328,9 +337,9 @@
 
     // ---------- presa dati ----------
     // Learn unit contate: quante prove aspettano e cosa entra nei dati salvando ora
-    function statoLU(att, v, t) {
+    function statoLU(att, v, t, ms) {
         if (!P.conAttesa(att, t)) return null;
-        const n = +att.prove, prec = P.inAttesaDi(att, t);
+        const n = +att.prove, prec = P.inAttesaDi(att, t, ms);
         const seq = v ? ((v.sequenza || '').length === v.v + v.p + v.x ? v.sequenza : 'V'.repeat(v.v) + 'P'.repeat(v.p) + 'X'.repeat(v.x)) : '';
         const d = P.dividiLU(prec && prec.seq, seq, n);
         return { n, prec, oggi: seq.length, blocchi: d.blocchi, resto: d.resto.length };
@@ -353,17 +362,18 @@
     const nonCorretta = (tipo) => (tipo === 'timedelay' ? 'P' : 'X');
     // Echo to tact: si segna se lo dice da solo (✓), se lo ripete in ecoico (e+) o se no (✗)
     const ecoico = (att) => att && att.risposte === 'ecoico';
-    function tasti(att, tipo) {
+    function tasti(att, tipo, k) {
+        k = k || att.id;
         if (ecoico(att)) return h`<div class="tasti">
-            <button class="tasto v" data-a="segna" data-id="${att.id}" data-r="V">✓<small>Autonoma</small></button>
-            <button class="tasto p" data-a="segna" data-id="${att.id}" data-r="P">e+<small>Ecoica</small></button>
-            <button class="tasto x" data-a="segna" data-id="${att.id}" data-r="X">✗<small>Errata</small></button>
+            <button class="tasto v" data-a="segna" data-id="${k}" data-r="V">✓<small>Autonoma</small></button>
+            <button class="tasto p" data-a="segna" data-id="${k}" data-r="P">e+<small>Ecoica</small></button>
+            <button class="tasto x" data-a="segna" data-id="${k}" data-r="X">✗<small>Errata</small></button>
         </div>`;
         return h`<div class="tasti due">
-            <button class="tasto v" data-a="segna" data-id="${att.id}" data-r="V">✓<small>Corretta</small></button>
+            <button class="tasto v" data-a="segna" data-id="${k}" data-r="V">✓<small>Corretta</small></button>
             ${nonCorretta(tipo) === 'P'
-                ? h`<button class="tasto p" data-a="segna" data-id="${att.id}" data-r="P">P<small>${att.nomeP || 'Promptata'}</small></button>`
-                : h`<button class="tasto x" data-a="segna" data-id="${att.id}" data-r="X">✗<small>Errata</small></button>`}
+                ? h`<button class="tasto p" data-a="segna" data-id="${k}" data-r="P">P<small>${att.nomeP || 'Promptata'}</small></button>`
+                : h`<button class="tasto x" data-a="segna" data-id="${k}" data-r="X">✗<small>Errata</small></button>`}
         </div>`;
     }
     // Cambiando strategia le risposte non corrette passano dall'una all'altra colonna
@@ -379,28 +389,34 @@
 
     function schedaAttivita(p, att) {
         const b = bozza(p.id);
-        const v = b.voci[att.id];
+        const ms = misure(att);
+        const vm = ms.map((m) => b.voci[att.id + '~' + m.id] || null);
+        // con più prese dati, il target e le opzioni comuni si leggono dalla prima voce aperta
+        const v = b.voci[att.id] || vm.find(Boolean);
         const c = att.temporanea ? null : P.targetCorrente(att);
         const t = v && v.targetId ? att.target.find((x) => x.id === v.targetId) : (c && c.target);
         const mant = att.mantenimento || (v ? v.mantenimento : (c && c.mantenimento));
         const aperta = T.aperte[att.id];
-        const tot = v ? v.v + v.p + v.x : 0;
+        const tot = !ms.length && v ? v.v + v.p + v.x : 0;
         const pct = tot ? Math.round(100 * v.v / tot) : null;
         const soglia = (att.criterio && att.criterio.soglia) || 90;
         const tipo = (v && v.sessionType) || att.sessionType;
         const senzaTarget = !att.temporanea && !(att.target || []).length;
-        const aCriterio = !att.temporanea && !att.mantenimento && (senzaTarget ? P.criterioRaggiunto(P.sedute(p, att), att.criterio)
-            : t && t.stato === 'attivo' && P.criterioRaggiunto(P.sedute(p, att, t), att.criterio));
+        const valuta = !att.temporanea && !att.mantenimento && (senzaTarget || (t && t.stato === 'attivo'));
+        const aCriterio = valuta && P.criterioDi(p, att, senzaTarget ? null : t);
+        // ogni presa dati arriva a criterio per conto suo; l'attività quando ci arrivano tutte
+        const critM = ms.map((m) => (valuta ? P.criterioRaggiunto(P.sedute(p, att, senzaTarget ? undefined : t, m.id), att.criterio) : null));
+        const nCrit = critM.filter(Boolean).length;
         const giocabile = t && t.setId && setArchivio().some((x) => x.id === t.setId);
         const giaOggi = !att.temporanea && t ? P.sedute(p, att, t).filter((x) => P.giorno(x.date) === b.data) : [];
         const oggiV = giaOggi.reduce((n, x) => n + (x.correct || 0), 0), oggiT = giaOggi.reduce((n, x) => n + (x.total || 0), 0);
-        const prev = previsione(p, att, v);
+        const prev = ms.length ? null : previsione(p, att, v);
         const hint = suggerimentiDi(att, t).length;
         const passi = P.passiDi(t);
         const st = passi.length ? statoTA(v, passi) : null;
         const tdS = tipo === 'timedelay' ? tdOggi(att, v, t || null) : null;
-        const lu = statoLU(att, v, t || null);
-        return h`<div class="att ${haDati(v) ? 'con-dati' : ''} ${hint ? 'con-hint' : ''}" data-att="${att.id}" style="--col:${P.coloreDi(p, att)}">
+        const lu = ms.length ? null : statoLU(att, v, t || null);
+        return h`<div class="att ${haDati(v) || vm.some(haDati) ? 'con-dati' : ''} ${hint ? 'con-hint' : ''}" data-att="${att.id}" style="--col:${P.coloreDi(p, att)}">
             ${hint ? h`<button class="ib hint-tasto ${T.suggerimenti[att.id] ? 'on' : ''}" data-a="suggerimenti" data-id="${att.id}" aria-expanded="${T.suggerimenti[att.id] ? 'true' : 'false'}" aria-label="Suggerimenti" title="Suggerimenti per chi somministra">${icona('lightbulb')}</button>` : ''}
             <button class="att-testa" data-a="apri-att" data-id="${att.id}" aria-expanded="${aperta ? 'true' : 'false'}">
                 <span class="corpo">
@@ -409,7 +425,7 @@
                         ${att.temporanea ? h` <span class="pill grigia">solo oggi</span>` : ''}
                         ${att.stato && att.stato !== 'attivo' ? h` <span class="pill grigia">${att.stato}</span>` : ''}
                         ${mant ? h` <span class="pill arancio" title="${att.mantenimento ? 'Il dato si prende ma non entra nelle statistiche' : 'Il target ha già raggiunto il criterio: si registra come mantenimento finché non si apre il prossimo'}">mantenimento</span>` : ''}
-                        ${aCriterio ? h` <span class="pill verde">${icona('flag-checkered')} criterio</span>` : ''}
+                        ${aCriterio ? h` <span class="pill verde">${icona('flag-checkered')} criterio</span>` : nCrit ? h` <span class="pill verde chiara" title="${ms.filter((m, i) => critM[i]).map((m) => m.nome).join(', ')} a criterio">${icona('flag-checkered')} ${nCrit} di ${ms.length}</span>` : ''}
                     </span>
                     ${t ? h`<span class="target">${t.setId ? h`${icona(giocabile ? 'layer-group' : 'triangle-exclamation')} ` : ''}${t.testo}${t.setId ? h` · ${etichettaModo(P.modoTarget(att, t))}` : ''}</span>` : (senzaTarget ? (P.inPercentuale(att) ? h`<span class="target">${icona('percent')} Dato in percentuale a ogni seduta</span>` : h`<span class="target">${icona('layer-group')} LU da ${att.prove} prove</span>`)
                         : !att.temporanea ? h`<span class="target"><i>Nessun target in corso: aggiungilo dal programma.</i></span>` : '')}
@@ -419,7 +435,7 @@
                         : `ne mancano ${lu.n - lu.resto} per completare la LU da ${lu.n}`}</span>` : ''}
                     ${oggiT ? h`<span class="target">${icona('circle-check')} già oggi: ${oggiV}/${oggiT} (${Math.round(100 * oggiV / oggiT)}%)${(() => { const chi = [...new Set(giaOggi.map((x) => x.operatore).filter(Boolean))]; return chi.length ? h` <span class="chi">· ${chi.join(', ')}</span>` : ''; })()}</span>` : ''}
                 </span>
-                <span class="conto">${tot ? h`<b class="${classePct(pct, soglia)}">${pct}%</b><br><span class="piccolo sotto">${v.v}/${tot}${att.prove ? ' di ' + att.prove : ''}</span>`
+                <span class="conto">${ms.length ? h`<span class="piccolo sotto conto-ms">${ms.map((m, i) => { const x = vm[i], n = x ? x.v + x.p + x.x : 0; return h`<span>${m.nome}: <b class="${n ? classePct(Math.round(100 * x.v / n), soglia) : ''}">${n ? Math.round(100 * x.v / n) + '%' : '—'}</b></span>`; })}</span>` : tot ? h`<b class="${classePct(pct, soglia)}">${pct}%</b><br><span class="piccolo sotto">${v.v}/${tot}${att.prove ? ' di ' + att.prove : ''}</span>`
                     : h`<span class="piccolo sotto">${att.prove ? att.prove + ' prove' : 'tocca'}</span>`}</span>
             </button>
             ${hint && T.suggerimenti[att.id] ? h`<div class="att-suggerimenti aperti">
@@ -436,7 +452,7 @@
                     <small>Passo ${st.i + 1} di ${passi.length}${st.giri ? ` · giro ${st.giri + 1}` : ''}</small><b>${st.passo.testo}</b>
                     <span class="ta-punti">${passi.map((ps, k) => h`<i class="${k === st.i ? 'qui' : ''} ${((v && v.esiti && v.esiti[ps.id]) || '').slice(-1)}"></i>`)}</span>
                 </div>` : ''}
-                ${tasti(att, tipo)}
+                ${ms.length ? ms.map((m, i) => presaDati(p, att, t, tipo, m, vm[i], critM[i], soglia)) : h`${tasti(att, tipo)}
                 <div class="sotto-tasti">
                     <div class="sequenza" aria-label="Sequenza delle risposte">${(v ? v.sequenza : '').split('').map((r) => h`<i class="${r}"></i>`)}</div>
                     ${st ? h`<button class="ib" data-a="salta-passo" data-id="${att.id}" aria-label="Salta il passo" title="Salta il passo">${icona('forward')}</button>
@@ -444,12 +460,31 @@
                     ${tipo === 'timedelay' ? h`<button class="bt piccolo fantasma td-voce" data-a="td-voce" data-id="${att.id}" title="Cambia il time delay">${icona('stopwatch')} ${tdS != null ? sec(tdS) : 'T/D ?'}</button>` : ''}
                     <button class="ib" data-a="annulla" data-id="${att.id}" aria-label="Annulla l'ultima" title="Annulla l'ultima">${icona('rotate-left')}</button>
                     <button class="ib" data-a="nota-voce" data-id="${att.id}" aria-label="Nota e opzioni" title="Nota e opzioni">${icona('pen')}</button>
-                </div>
+                </div>`}
                 ${prev ? h`<p class="avviso-criterio">${icona('flag-checkered')} ${prev}</p>` : ''}
                 ${aCriterio ? (senzaTarget ? h`<p class="avviso-criterio">${icona('flag-checkered')} Criterio raggiunto il ${formatoData(aCriterio)}: dal programma puoi terminare l'attività o aggiungere un target.</p>`
                     : h`<p class="avviso-criterio">${icona('flag-checkered')} Criterio raggiunto il ${formatoData(aCriterio)}. <button class="bt piccolo" data-a="chiudi-target" data-id="${att.id}" data-t="${t.id}">Passa al prossimo target</button></p>`) : ''}
-                ${v && (v.nota || v.decisione) ? h`<p class="nota-voce">${icona('note-sticky')} ${v.decisione ? h`<b>${v.decisione}</b> ` : ''}${v.nota}</p>` : ''}
+                ${!ms.length && v && (v.nota || v.decisione) ? h`<p class="nota-voce">${icona('note-sticky')} ${v.decisione ? h`<b>${v.decisione}</b> ` : ''}${v.nota}</p>` : ''}
             </div>` : ''}
+        </div>`;
+    }
+    // Una delle prese dati dell'attività (es. Categorizzazione → «Categorizza», «Tact mix»)
+    function presaDati(p, att, t, tipo, m, v, crit, soglia) {
+        const k = att.id + '~' + m.id;
+        const tot = v ? v.v + v.p + v.x : 0;
+        const lu = statoLU(att, v, t || null, m.id);
+        return h`<div class="presa ${crit ? 'a-criterio' : ''}">
+            <div class="presa-testa"><b>${m.nome}</b>
+                ${crit ? h`<span class="pill verde">${icona('flag-checkered')} criterio il ${formatoData(crit)}</span>` : ''}
+                <span class="presa-conto">${tot ? h`<b class="${classePct(Math.round(100 * v.v / tot), soglia)}">${Math.round(100 * v.v / tot)}%</b> <span class="sotto">${v.v}/${tot}${att.prove ? ' di ' + att.prove : ''}</span>` : h`<span class="sotto">${att.prove ? att.prove + ' prove' : ''}</span>`}</span></div>
+            ${lu && (lu.prec || lu.oggi) ? h`<p class="sotto piccolo lu-attesa">${icona('hourglass-half')} ${lu.prec ? `${lu.prec.seq.length} in attesa dal ${formatoData(lu.prec.dal)} · ` : ''}${lu.blocchi.length ? 'salvando entra nei dati' + (lu.resto ? `, ${lu.resto} restano in attesa` : '') : `ne mancano ${lu.n - lu.resto} per la LU da ${lu.n}`}</p>` : ''}
+            ${tasti(att, tipo, k)}
+            <div class="sotto-tasti">
+                <div class="sequenza" aria-label="Sequenza delle risposte">${(v ? v.sequenza : '').split('').map((r) => h`<i class="${r}"></i>`)}</div>
+                <button class="ib" data-a="annulla" data-id="${k}" aria-label="Annulla l'ultima di ${m.nome}" title="Annulla l'ultima">${icona('rotate-left')}</button>
+                <button class="ib" data-a="nota-voce" data-id="${k}" aria-label="Nota e opzioni di ${m.nome}" title="Nota e opzioni">${icona('pen')}</button>
+            </div>
+            ${v && (v.nota || v.decisione) ? h`<p class="nota-voce">${icona('note-sticky')} ${v.decisione ? h`<b>${v.decisione}</b> ` : ''}${v.nota}</p>` : ''}
         </div>`;
     }
     // ---------- cronometro per le attività di fluency ----------
@@ -546,6 +581,7 @@
         aggiornaScheda(p, id);
     }
     function aggiornaScheda(p, id) {
+        id = baseId(id);
         const el = radice().querySelector(`[data-att="${CSS.escape(id)}"]`);
         const att = attivitaDi(p, id);
         if (el && att) el.outerHTML = String(schedaAttivita(p, att));
@@ -662,9 +698,15 @@
         const CHIUSI = ['criterio', 'repertorio', 'chiuso'];
         const chiusi = t.filter((tg) => CHIUSI.includes(tg.stato));
         const aperti = t.filter((tg) => !CHIUSI.includes(tg.stato));
+        // con più prese dati: quali sono già a criterio su quel target
+        const statoMisure = (tg) => {
+            if (!(att.misure || []).length || tg.stato !== 'attivo') return '';
+            const ok = att.misure.filter((m) => P.criterioRaggiunto(P.sedute(p, att, tg, m.id), att.criterio));
+            return ok.length ? h` <span class="pill verde chiara" title="${ok.map((m) => m.nome).join(', ')} a criterio">${icona('flag-checkered')} ${ok.length} di ${att.misure.length}: ${ok.map((m) => m.nome).join(', ')}</span>` : '';
+        };
         const riga = (tg) => h`<li class="${CHIUSI.includes(tg.stato) ? 'chiuso' : ''}">
                     <span class="punto ${tg.stato}"></span>
-                    <span class="tt">${P.passiDi(tg).length ? h`${icona('list-ol')} ` : ''}${tg.testo}${P.passiDi(tg).length ? h` <span class="sotto piccolo">· ${P.passiDi(tg).length} passi</span>` : ''}${tg.suggerimento ? h` <span class="sotto" title="Ha dei suggerimenti">${icona('lightbulb')}</span>` : ''}${celerazioneTarget(p, att, tg)}<small>${P.STATI_TARGET[tg.stato] || tg.stato}${tg.fine ? ' il ' + formatoData(tg.fine) : ''}${ultimo(tg)}</small></span>
+                    <span class="tt">${P.passiDi(tg).length ? h`${icona('list-ol')} ` : ''}${tg.testo}${P.passiDi(tg).length ? h` <span class="sotto piccolo">· ${P.passiDi(tg).length} passi</span>` : ''}${tg.suggerimento ? h` <span class="sotto" title="Ha dei suggerimenti">${icona('lightbulb')}</span>` : ''}${celerazioneTarget(p, att, tg)}${statoMisure(tg)}<small>${P.STATI_TARGET[tg.stato] || tg.stato}${tg.fine ? ' il ' + formatoData(tg.fine) : ''}${ultimo(tg)}</small></span>
                     ${modifica || tg.setId ? h`<button class="ib" data-a="menu-target" data-id="${att.id}" data-t="${tg.id}" aria-label="Opzioni del target">${icona('ellipsis')}</button>` : ''}
                 </li>`;
         const ultimaS = !t.length ? P.sedute(p, att).slice(-1)[0] : null;
@@ -679,7 +721,7 @@
                     ${att.stato !== 'attivo' ? h` <span class="pill arancio">${ETICHETTE_STATO[att.stato] || att.stato}</span>` : ''}
                     ${att.mantenimento ? h` <span class="pill grigia" title="Il dato si prende ma non entra nelle statistiche">mantenimento</span>` : ''}
                     ${att.suggerimenti ? h` <span class="pill grigia" title="${att.suggerimenti}">${icona('lightbulb')} suggerimenti</span>` : ''}</span>
-                    <span class="target">Criterio ${att.criterio.soglia}% per ${att.criterio.sedute} giorni${att.prove ? ' · ' + att.prove + ' prove' : ''}${att.descrizione ? ' · ' + att.descrizione : ''}</span></span>
+                    <span class="target">${(att.misure || []).length ? h`${icona('table-cells')} ${att.misure.map((m) => m.nome).join(' · ')} — ` : ''}Criterio ${att.criterio.soglia}% per ${att.criterio.sedute} giorni${att.prove ? ' · ' + att.prove + ' prove' : ''}${att.descrizione ? ' · ' + att.descrizione : ''}</span></span>
                 ${modifica ? icona('pen') : ''}
             </button>
             <ul class="targets">
@@ -1014,11 +1056,11 @@
             const p = paz(T.pid);
             const att = attivitaDi(p, b.dataset.id);
             if (!att) return;
-            const v = voce(p, att);
+            const v = voce(p, att, b.dataset.id);
             const r = b.dataset.r;
             v[r.toLowerCase()] += 1;
             v.sequenza += r;
-            ultimeDi(bozza(p.id)).push(att.id);
+            ultimeDi(bozza(p.id)).push(b.dataset.id);
             // task analysis: si segna il passo corrente e si passa al successivo
             const passi = passiVoce(att, v);
             if (passi.length) {
@@ -1119,7 +1161,7 @@
         'nota-voce': async (b) => {
             const p = paz(T.pid);
             const att = attivitaDi(p, b.dataset.id);
-            const v = voce(p, att);
+            const v = voce(p, att, b.dataset.id);
             const targets = (att.target || []).filter((t) => t.stato === 'attivo' || t.stato === 'criterio' || t.stato === 'repertorio' || t.id === v.targetId);
             const tV = v.targetId ? (att.target || []).find((x) => x.id === v.targetId) : null;
             const attesaV = P.conAttesa(att, tV) ? P.inAttesaDi(att, tV) : null;
@@ -1152,9 +1194,12 @@
             }
             if (!r) return;
             if (r.targetId && r.targetId !== v.targetId) {
-                v.targetId = r.targetId;
                 const tt = att.target.find((x) => x.id === r.targetId);
-                v.mantenimento = !!(tt && tt.stato !== 'attivo');
+                // il target è dell'attività: vale per tutte le sue prese dati
+                const bz = bozza(p.id);
+                Object.keys(bz.voci).filter((x) => baseId(x) === att.id).map((x) => bz.voci[x]).concat([v]).forEach((x) => {
+                    x.targetId = r.targetId; x.mantenimento = !!(tt && tt.stato !== 'attivo');
+                });
             }
             v.sessionType = r.tipo === 'timedelay' ? 'timedelay' : 'independent';
             convertiVoce(v, v.sessionType, att);
@@ -1255,8 +1300,9 @@
             const righe = Object.keys(b.voci).filter((k) => haDati(b.voci[k])).map((k) => {
                 const v = b.voci[k], a = attivitaDi(p, k), tot = v.v + v.p + v.x, pct = Math.round(100 * v.v / tot);
                 const tt = a && v.targetId ? (a.target || []).find((x) => x.id === v.targetId) : null;
-                const lu = a ? statoLU(a, v, tt) : null;
-                return h`<tr><td>${a ? a.nome : '?'}${lu ? h`<br><small class="sotto">${lu.blocchi.length ? `${lu.blocchi.length} LU nei dati` : 'non entra ancora nei dati'}${lu.resto ? ` · ${lu.resto}/${lu.n} in attesa` : ''}</small>` : ''}</td><td class="num">${v.v}/${tot}</td><td class="num"><b class="${classePct(pct, a && a.criterio && a.criterio.soglia)}">${pct}%</b></td></tr>`;
+                const lu = a ? statoLU(a, v, tt, msDi(k)) : null;
+                const mm = a ? misure(a).find((x) => x.id === msDi(k)) : null;
+                return h`<tr><td>${a ? a.nome : '?'}${mm ? ' · ' + mm.nome : ''}${lu ? h`<br><small class="sotto">${lu.blocchi.length ? `${lu.blocchi.length} LU nei dati` : 'non entra ancora nei dati'}${lu.resto ? ` · ${lu.resto}/${lu.n} in attesa` : ''}</small>` : ''}</td><td class="num">${v.v}/${tot}</td><td class="num"><b class="${classePct(pct, a && a.criterio && a.criterio.soglia)}">${pct}%</b></td></tr>`;
             });
             // chi ha svolto la seduta: dai turni del calendario; se non c'è nessuno, lo si chiede
             const cal = EST.chiDi ? await EST.chiDi(p.id, b.data).catch(() => ({ nomi: [], persone: [] })) : { nomi: [], persone: [] };
@@ -1280,7 +1326,7 @@
             const att = P.attivita(p, b.dataset.id);
             const t = att && att.target.find((x) => x.id === b.dataset.t);
             if (!t) return;
-            await proponiProssimo(p, att, t, P.criterioRaggiunto(P.sedute(p, att, t), att.criterio));
+            await proponiProssimo(p, att, t, P.criterioDi(p, att, t));
             disegna();
         },
 
@@ -1365,6 +1411,7 @@
             const att = P.nuovaAttivita(p, Object.assign({}, r, { target: null, sessionType: r.sessionType === 'timedelay' ? 'timedelay' : 'independent' }));
             if (r.sessionType === 'ecoico') { att.risposte = 'ecoico'; att.nomeP = 'Ecoica'; }
             if (r.colore) att.colore = r.colore;
+            impostaMisure(att, r.misure);
             modalitaDaModulo(att, r);
             righe.forEach((x, i) => P.aggiungiTarget(att, x, i === 0));
             await salvaPaziente(p);
@@ -1395,6 +1442,7 @@
                 att.descrizione = r.descrizione.trim();
                 att.suggerimenti = String(r.suggerimenti || '').trim();
                 att.cronometro = !!r.cronometro;
+                impostaMisure(att, r.misure);
                 if (r.mantenimento) att.mantenimento = true; else delete att.mantenimento;
                 att.sessionType = r.sessionType === 'timedelay' ? 'timedelay' : 'independent';
                 if (r.sessionType === 'ecoico') { att.risposte = 'ecoico'; att.nomeP = 'Ecoica'; }
@@ -1426,7 +1474,7 @@
             const att = P.attivita(p, b.dataset.id);
             const t = att.target.find((x) => x.id === b.dataset.t);
             const n = P.sedute(p, att, t).length;
-            const crit = P.criterioRaggiunto(P.sedute(p, att, t), att.criterio);
+            const crit = P.criterioDi(p, att, t);
             const r = await foglio(h`<h2>${t.testo}</h2>
                 <p class="sotto">${P.STATI_TARGET[t.stato]}${n ? ` · ${n} sedute` : ''}${crit ? ` · criterio raggiunto il ${formatoData(crit)}` : ''}</p>
                 <div class="opzioni">
@@ -1625,6 +1673,14 @@
         if (x.modalita && x.certo) { att.modalita = x.modalita; att.variante = String(r.variante || '').trim() || x.variante; }
         else { delete att.modalita; att.variante = String(r.variante || '').trim(); }
     }
+    // Le prese dati scritte nel modulo: quelle già esistenti tengono il loro id (e i dati)
+    function impostaMisure(att, testoMisure) {
+        const nomi = [...new Set(String(testoMisure || '').split('\n').map((x) => x.trim()).filter(Boolean))].slice(0, 6);
+        if (nomi.length < 2) { delete att.misure; return; }
+        const prima = att.misure || [];
+        att.misure = nomi.map((n) => prima.find((m) => m.nome.toLowerCase() === n.toLowerCase()) || { id: P.nuovoId('ms'), nome: n })
+            .map((m, i) => Object.assign({}, m, { nome: nomi[i] }));
+    }
     function moduloAttivita(p, att) {
         const a = att || { nome: '', area: '', descrizione: '', sessionType: 'independent', criterio: { soglia: 90, sedute: 2 }, prove: null };
         const tdA = att ? P.tdDi(att) : null;
@@ -1654,6 +1710,8 @@
                 <label class="campo"><span>Prove per LU</span><input name="prove" type="number" min="1" max="200" inputmode="numeric" value="${a.prove || ''}" placeholder="in %"></label>
             </div>
             <p class="sotto piccolo" style="margin:-4px 0 10px">Con le prove per LU (es. 20) il dato entra quando se ne completano 20, anche in più sedute. Vuoto: dato in percentuale a ogni seduta.</p>
+            <label class="campo"><span>Più prese dati nella stessa attività (facoltativo)</span><textarea name="misure" rows="2" maxlength="600" placeholder="Una per riga, es.&#10;Categorizza&#10;Tact mix">${(a.misure || []).map((m) => m.nome).join('\n')}</textarea>
+                <span class="sotto piccolo">In seduta ognuna ha i suoi tasti e il suo dato, sullo stesso target. Ognuna arriva a criterio per conto suo; l'attività quando ci arrivano tutte.</span></label>
             <label class="campo"><span>Secondi di time delay (solo per il time delay)</span><input name="tdSeconds" type="number" min="0" max="60" inputmode="numeric" value="${tdA != null ? tdA : ''}" placeholder="es. 0, 1, 2…">
                 <span class="sotto piccolo">Si vede in seduta e finisce nei dati di ogni seduta. Se lo cambi, il cambio resta segnato con la data${(a.tdCambi || []).length ? h` (finora: ${a.tdCambi.map((c) => `${formatoData(c.il)} ${c.da != null ? sec(c.da) + '→' : ''}${sec(c.a)}`).join(', ')})` : ''}.</span></label>
             ${att ? '' : h`<label class="campo"><span>Target, uno per riga (il primo è quello da cui si parte)</span><textarea name="target" placeholder="es. Animali: cane, gatto&#10;Frutta: mela, banana"></textarea>
@@ -1729,6 +1787,9 @@
             if (!haDati(v)) return;
             const att = attivitaDi(p, k);
             if (!att) return;
+            // una delle prese dati dell'attività: seduta a sé, con il suo nome e il suo grafico
+            const m = misure(att).find((x) => x.id === msDi(k)) || null;
+            const marca = (x) => { if (m && x) { x.setName += ' · ' + m.nome; x.setId += '~' + m.id; x.misura = m.id; x.misuraNome = m.nome; } return x; };
             const voceS = Object.assign({}, v, { operatore: String(v.operatore || '').trim() || operatore });
             // il time delay di oggi resta scritto nella seduta, anche se poi il programma cambia
             if (!att.temporanea && (v.sessionType || att.sessionType) === 'timedelay' && P.secondiTD(v.tdSeconds) == null) {
@@ -1744,20 +1805,22 @@
             } else {
                 const t = v.targetId ? att.target.find((x) => x.id === v.targetId) : null;
                 const senza = !(att.target || []).length;
-                const prima = t ? P.criterioRaggiunto(P.sedute(p, att, t), att.criterio) : senza ? P.criterioRaggiunto(P.sedute(p, att), att.criterio) : null;
+                const prima = t || senza ? P.criterioDi(p, att, t) : null;
                 if (t && !t.inizio) t.inizio = b.data;
-                if (t && t.stato === 'attivo' && !prima && !att.mantenimento) controlla.push({ att, t });
-                if (senza && !prima && !att.mantenimento) controlla.push({ att, t: null });
+                const giaIn = controlla.some((c) => c.att === att);
+                // con più prese dati: quali erano già a criterio, per avvisare di quelle nuove
+                const primaM = misure(att).map((x) => !!P.criterioRaggiunto(P.sedute(p, att, t || undefined, x.id), att.criterio));
+                if (!giaIn && ((t && t.stato === 'attivo') || senza) && !prima && !att.mantenimento) controlla.push({ att, t: t || null, primaM });
                 if (P.conAttesa(att, t)) {
                     // LU contate: entrano nei dati solo a blocchi completi, il resto aspetta
-                    const n = +att.prove, k = P.chiaveAttesa(t), prec = P.inAttesaDi(att, t);
+                    const n = +att.prove, k = P.chiaveAttesa(t, m && m.id), prec = P.inAttesaDi(att, t, m && m.id);
                     const seq = (v.sequenza || '').length === v.v + v.p + v.x ? v.sequenza : 'V'.repeat(v.v) + 'P'.repeat(v.p) + 'X'.repeat(v.x);
                     const { blocchi, resto } = P.dividiLU(prec && prec.seq, seq, n);
                     const testoOggi = [voceS.decisione ? '**' + voceS.decisione + '**' : '', voceS.nota].filter(Boolean).join(' — ');
                     blocchi.forEach((bl, i) => {
                         const ultimo = i === blocchi.length - 1;
                         const vb = Object.assign({}, voceS, P.contaRisposte(bl), { sequenza: bl, nota: '', decisione: '' });
-                        const sb = P.seduta(att, t, vb, quando);
+                        const sb = marca(P.seduta(att, t, vb, quando));
                         const note = [];
                         if (i === 0 && prec && prec.seq) {
                             note.push(`LU iniziata il ${formatoData(prec.dal)} (${prec.seq.length} prove) e completata oggi`);
@@ -1775,12 +1838,12 @@
                     if (resto) {
                         att.inAttesa[k] = { seq: resto, dal: blocchi.length ? b.data : ((prec && prec.dal) || b.data),
                             note: blocchi.length ? [] : ((prec && prec.note) || []).concat(testoOggi ? [testoOggi] : []) };
-                        attese.push({ nome: att.nome, n: resto.length, di: n });
+                        attese.push({ nome: att.nome + (m ? ' · ' + m.nome : ''), n: resto.length, di: n });
                     } else delete att.inAttesa[k];
                     if (!Object.keys(att.inAttesa).length) delete att.inAttesa;
                     return;
                 }
-                s = P.seduta(att, t, voceS, quando);
+                s = marca(P.seduta(att, t, voceS, quando));
                 annotaTD(p, att, s);
             }
             nuove.push(s);
@@ -1810,12 +1873,19 @@
         avviso(`Seduta salvata${attese.length ? ' · in attesa di completare la LU: ' + attese.map((x) => `${x.nome} ${x.n}/${x.di}`).join(', ') : ''}${passati.length ? ' · time delay: ' + passati.join(', ') : ''}`);
         disegna();
         // Criteri raggiunti con questa seduta: si propone il passo successivo
-        for (const { att, t } of controlla) {
+        for (const { att, t, primaM } of controlla) {
+            // una presa dati arrivata a criterio, le altre ancora no
+            misure(att).forEach((x, i) => {
+                if (!primaM[i] && P.criterioRaggiunto(P.sedute(p, att, t || undefined, x.id), att.criterio) && !P.criterioDi(p, att, t)) {
+                    const fatte = misure(att).filter((y) => P.criterioRaggiunto(P.sedute(p, att, t || undefined, y.id), att.criterio)).length;
+                    avviso(`${att.nome} · ${x.nome}: a criterio (${fatte} di ${misure(att).length}). L'attività ci arriva quando ci arrivano tutte.`);
+                }
+            });
             if (!t) {
-                if (P.criterioRaggiunto(P.sedute(p, att), att.criterio)) avviso(`${att.nome}: criterio raggiunto (${att.criterio.soglia}% per ${att.criterio.sedute} giorni).`);
+                if (P.criterioDi(p, att, null)) avviso(`${att.nome}: criterio raggiunto (${att.criterio.soglia}% per ${att.criterio.sedute} giorni).`);
                 continue;
             }
-            const data = P.criterioRaggiunto(P.sedute(p, att, t), att.criterio);
+            const data = P.criterioDi(p, att, t);
             if (data) await proponiProssimo(p, att, t, data);
         }
         disegna();
@@ -2004,7 +2074,7 @@
                     avviso(`${L.nome}: ${ok}/${tot} salvato dal gioco`);
                     const pp = paz(L.pid), att = pp && P.attivita(pp, L.attId), t = att && att.target.find((x) => x.id === L.targetId);
                     if (t && t.stato === 'attivo') {
-                        const data = P.criterioRaggiunto(P.sedute(pp, att, t), att.criterio);
+                        const data = P.criterioDi(pp, att, t);
                         if (data === P.oggi()) { await proponiProssimo(pp, att, t, data); disegna(); }
                     }
                 }, 350);
