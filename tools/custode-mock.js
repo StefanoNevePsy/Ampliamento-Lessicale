@@ -116,9 +116,23 @@ function aggiornaChiavi() {
   });
 }
 
+const SEGRETO_SESSIONE = crypto.randomBytes(32).toString('hex');
+const firmaSessione = (d) => crypto.createHmac('sha256', SEGRETO_SESSIONE).update(d).digest('base64url');
+function creaSessione(id) {
+  const scade = Math.floor(Date.now() / 1000) + 30 * 86400;
+  const d = Buffer.from(JSON.stringify({ e: id.email, n: id.nome, x: scade })).toString('base64url');
+  return { token: 's1.' + d + '.' + firmaSessione(d), scade };
+}
 function verificatore(o) {
   return function verificaToken(token) {
     if (typeof token !== 'string' || !token) throw new Error('token mancante');
+    if (token.startsWith('s1.')) {
+      const p = token.split('.');
+      if (p.length !== 3 || firmaSessione(p[1]) !== p[2]) throw new Error('sessione non valida');
+      const d = JSON.parse(Buffer.from(p[1], 'base64url').toString('utf8'));
+      if (!(d.x > Date.now() / 1000)) throw new Error('sessione scaduta');
+      return { email: String(d.e).toLowerCase(), nome: d.n || d.e, sessione: true };
+    }
     if (o.dev && token.startsWith('dev:')) {
       const [email, nome] = token.slice(4).split('|');
       return { email: email.trim().toLowerCase(), nome: (nome || email.split('@')[0]).trim() };
@@ -146,6 +160,7 @@ function creaServer(o) {
   const custode = QT.creaCustode({
     archivio: archivioSuDisco(o.dati),
     verificaToken: verificatore(o),
+    creaSessione,
     proprietario: () => o.proprietario,
     ora: () => (o.ora ? o.ora() : new Date().toISOString()),
     sha256Hex,

@@ -24,8 +24,20 @@
     // Accesso con Google: solo un "ID token" (chi sei), nessun accesso a Drive
     // o posta dell'utente. Il custode lo verifica a ogni richiesta.
     // =====================================================================
+    let Auth_creaSessione = null;
     const Auth = (function () {
-        const K_TOKEN = 'tice:token', K_UTENTE = 'tice:utente';
+        const K_TOKEN = 'tice:token', K_UTENTE = 'tice:utente', K_SESS = 'tice:sessione';
+        // Sessione lunga rilasciata dal custode (settimane): evita di rientrare con Google ogni ora
+        let sessione = null, chiedendoSessione = null, sessionePer = null;
+        try { const x = JSON.parse(localStorage.getItem(K_SESS) || 'null'); if (x && x.token) sessione = x; } catch (e) { /* ok */ }
+        const sessioneValida = () => !!sessione && Date.now() < sessione.scade * 1000 - 3600000;
+        function chiediSessione(g) {
+            if (!Auth_creaSessione || chiedendoSessione || sessionePer === g || cfgApp().dev) return;
+            sessionePer = g;
+            chiedendoSessione = Auth_creaSessione(g).then((r) => {
+                if (r && r.token) { sessione = { token: r.token, scade: r.scade }; try { localStorage.setItem(K_SESS, JSON.stringify(sessione)); } catch (e) { /* ok */ } }
+            }, () => { /* custode senza sessioni: si resta con il token di Google */ }).then(() => { chiedendoSessione = null; });
+        }
         let token = null, scadenza = 0, utente = null, gis = null, attesa = null;
         const ascoltatori = [];
         function ErroreAccesso(m) { this.message = m; this.accesso = true; }
@@ -144,7 +156,8 @@
         // Token valido; se è scaduto (dura un'ora) prova a rinnovarlo in silenzio.
         function prendi() {
             if (cfgApp().dev) return token ? Promise.resolve(token) : Promise.reject(new ErroreAccesso('Serve l\'accesso.'));
-            if (valido()) return Promise.resolve(token);
+            if (sessioneValida()) return Promise.resolve(sessione.token);
+            if (valido()) { chiediSessione(token); return Promise.resolve(token); }
             if (nativo()) {
                 return window.ticeNativo.token(cfgNativo()).then((r) => {
                     if (r && imposta(r.idToken)) return token;
@@ -161,7 +174,8 @@
             }));
         }
         function invalida() {
-            token = null; scadenza = 0;
+            token = null; scadenza = 0; sessione = null;
+            try { localStorage.removeItem(K_SESS); } catch (e) { /* ok */ }
             try { sessionStorage.removeItem(K_TOKEN); sessionStorage.removeItem(K_TOKEN + ':dev'); } catch (e) { /* ok */ }
         }
         function esci() {
@@ -171,7 +185,7 @@
             if (nativo()) window.ticeNativo.esci().catch(() => {});
             avvisa();
         }
-        return { inizia, pulsante, accessoDev, token: prendi, utente: () => utente, haToken: () => cfgApp().dev ? !!token : valido(), invalida, esci, alCambio: (f) => ascoltatori.push(f), ErroreAccesso };
+        return { inizia, pulsante, accessoDev, token: prendi, utente: () => utente, haToken: () => cfgApp().dev ? !!token : (valido() || sessioneValida()), invalida, esci, alCambio: (f) => ascoltatori.push(f), ErroreAccesso };
     })();
 
     // =====================================================================
@@ -211,10 +225,11 @@
             }
         }
     }
-    async function chiamaUnaVolta(azione, dati, rid, attesaMax) {
+    Auth_creaSessione = (g) => chiamaUnaVolta('sessione.crea', {}, nuovoRid(), 45000, g);
+    async function chiamaUnaVolta(azione, dati, rid, attesaMax, tokenFisso) {
         const url = cfgApp().custodeUrl;
         if (!url) throw new ErroreCustode('non-configurato', 'Il custode non è configurato (tice-config.js).');
-        const token = await Auth.token();
+        const token = tokenFisso || await Auth.token();
         // Apps Script chiude ogni esecuzione dopo 6 minuti: oltre non arriva piu' niente
         const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
         const timer = ctrl ? setTimeout(() => ctrl.abort(), attesaMax || 330000) : null;

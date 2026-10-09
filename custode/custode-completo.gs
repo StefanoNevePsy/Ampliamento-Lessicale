@@ -70,6 +70,7 @@ function custode_() {
   _custode = QT.creaCustode({
     archivio: archivioDrive_(),
     verificaToken: verificaToken_,
+    creaSessione: creaSessione_,
     proprietario: proprietario_,
     ora: function () { return new Date().toISOString(); },
     sha256Hex: function (b64) { return hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, Utilities.base64Decode(b64))); },
@@ -85,8 +86,33 @@ function custode_() {
 // ---------------------------------------------------------------------------
 // Identita': verifica dell'ID token di "Accedi con Google"
 // ---------------------------------------------------------------------------
+// Sessione del custode: «s1.<dati>.<firma>», firmata con un segreto che il custode
+// crea da solo nelle proprietà dello script. Dura SESSIONE_GIORNI giorni.
+var SESSIONE_GIORNI = 30;
+function segretoSessione_() {
+  var s = PROP.getProperty('SESSIONE_SEGRETO');
+  if (!s) { s = Utilities.getUuid() + Utilities.getUuid(); PROP.setProperty('SESSIONE_SEGRETO', s); }
+  return s;
+}
+function firmaSessione_(dati) {
+  return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(dati, segretoSessione_())).replace(/=+$/, '');
+}
+function creaSessione_(id) {
+  var scade = Math.floor(Date.now() / 1000) + SESSIONE_GIORNI * 86400;
+  var dati = Utilities.base64EncodeWebSafe(JSON.stringify({ e: id.email, n: id.nome, x: scade }), Utilities.Charset.UTF_8).replace(/=+$/, '');
+  return { token: 's1.' + dati + '.' + firmaSessione_(dati), scade: scade };
+}
+function verificaSessione_(token) {
+  var p = token.split('.');
+  if (p.length !== 3 || firmaSessione_(p[1]) !== p[2]) throw new Error('sessione non valida');
+  var d = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(p[1])).getDataAsString());
+  if (!(d.x > Date.now() / 1000)) throw new Error('sessione scaduta');
+  return { email: String(d.e).toLowerCase(), nome: d.n || d.e, sessione: true };
+}
+
 function verificaToken_(token) {
   if (typeof token !== 'string' || token.length < 20 || token.length > 4096) throw new Error('token mancante');
+  if (token.indexOf('s1.') === 0) return verificaSessione_(token);
   // Client dell'app web e, se c'è, dell'app desktop (accesso dal browser di sistema)
   var clientIds = [PROP.getProperty('GOOGLE_CLIENT_ID'), PROP.getProperty('GOOGLE_CLIENT_ID_DESKTOP')].filter(Boolean);
   if (!clientIds.length) throw new Error('GOOGLE_CLIENT_ID non configurato');
@@ -1396,11 +1422,18 @@ var QT = (function () {
         if (!richiesta || typeof richiesta !== 'object') throw err('richiesta-non-valida', 'Richiesta vuota.');
         if (richiesta.v !== 1) throw err('richiesta-non-valida', 'Versione del protocollo non supportata: aggiorna l\'app.');
         var fn = azioni[richiesta.azione];
-        if (!fn) throw err('richiesta-non-valida', 'Azione sconosciuta: ' + String(richiesta.azione).slice(0, 40));
+        if (!fn && !(richiesta.azione === 'sessione.crea' && amb.creaSessione)) throw err('richiesta-non-valida', 'Azione sconosciuta: ' + String(richiesta.azione).slice(0, 40));
         var identita;
         try { identita = amb.verificaToken(richiesta.token); }
         catch (e) { throw err('non-autenticato', 'Accesso scaduto o non valido: rientra con Google.'); }
         var u = utenteDa(identita);
+        // Accesso lungo sul dispositivo: dopo un accesso con Google (non da un'altra
+        // sessione) il custode rilascia un suo gettone firmato, valido qualche settimana.
+        // Chi viene disattivato o scade resta fuori lo stesso: utenteDa si controlla sempre.
+        if (richiesta.azione === 'sessione.crea') {
+          if (identita.sessione) throw err('richiesta-non-valida', 'Serve un accesso con Google.');
+          return { ok: true, dati: amb.creaSessione({ email: u.email, nome: u.nome }) };
+        }
         var dati = richiesta.dati && typeof richiesta.dati === 'object' ? richiesta.dati : {};
         registroImmagini = null;
         var chiave = amb.ricordo && RIPETIBILI[richiesta.azione] && typeof richiesta.rid === 'string' && RE_RICHIESTA.test(richiesta.rid)
