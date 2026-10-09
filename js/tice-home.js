@@ -334,9 +334,9 @@
             const attive = P.attiveOggi(p).length;
             const risposte = b ? Object.values(b.voci).reduce((n, v) => n + v.v + v.p + v.x, 0) : 0;
             return h`<button class="riga" data-a="apri-bambino" data-pid="${p.id}">
-                <span class="avatar">${p.photo ? h`<img src="${p.photo}" alt="">` : iniziali(p.name)}</span>
+                <span class="avatar ${eGruppo(p) ? 'gruppo' : ''}">${eGruppo(p) ? icona('users') : p.photo ? h`<img src="${p.photo}" alt="">` : iniziali(p.name)}</span>
                 <span class="corpo"><span class="t1">${p.name}</span>
-                    <span class="t2">${EST.pillola ? EST.pillola(p) : ''}${b && risposte ? h`<span class="pill arancio">seduta in corso · ${risposte} risposte</span> ` : ''}${attive ? `${attive} attività in corso` : 'nessun programma'}${u ? ' · ultima ' + formatoData(P.giorno(u)) : ''}${p.category ? ' · ' + p.category : ''}${eta(p) ? ' · ' + eta(p) : ''}</span></span>
+                    <span class="t2">${EST.pillola ? EST.pillola(p) : ''}${b && risposte ? h`<span class="pill arancio">seduta in corso · ${risposte} risposte</span> ` : ''}${attive ? `${attive} attività in corso` : 'nessun programma'}${u ? ' · ultima ' + formatoData(P.giorno(u)) : ''}${eGruppo(p) ? ' · gruppo di ' + membriDi(p).length : ''}${p.category ? ' · ' + p.category : ''}${eta(p) ? ' · ' + eta(p) : ''}</span></span>
                 ${icona('chevron-right')}
             </button>`;
         });
@@ -351,9 +351,37 @@
                     : h`<div class="vuoto">${q ? 'Nessun bambino con questo nome.' : 'Ancora nessun bambino.'}</div>`}
                 ${limitato() ? '' : h`<div class="bottoni" style="margin-top:14px">
                     <button class="bt" data-a="nuovo-bambino">${icona('user-plus')} Nuovo bambino</button>
+                    <button class="bt" data-a="nuovo-gruppo">${icona('users')} Nuovo gruppo</button>
                     <button class="bt" data-a="vai-import">${icona('file-import')} Importa quaderni</button>
                 </div>`}
             </main>`;
+    }
+
+    // ---------- gruppi ----------
+    // Un gruppo è una cartella a sé (nome, membri, programma, storico) che si
+    // sincronizza come un bambino. Ogni sua attività ha una riga per bambino:
+    // sono le sue "sottoattività" (id = id del bambino), tenute allineate ai membri.
+    const eGruppo = (p) => !!(p && p.gruppo);
+    const membriDi = (g) => (g.membri || []).map((id) => paz(id)).filter(Boolean);
+    function allineaMembri(g) {
+        const membri = membriDi(g);
+        P.programma(g).attivita.forEach((a) => {
+            const prima = a.misure || [];
+            a.misure = membri.map((b) => Object.assign({}, prima.find((m) => m.id === b.id) || {}, { id: b.id, nome: b.name, bambino: true }));
+        });
+    }
+    // Presenti di oggi: tutti i membri, tranne quelli segnati assenti nella bozza
+    const presente = (b, pid) => !(b.assenti || []).includes(pid);
+    async function moduloGruppo(g) {
+        const tutti = pazienti().filter((x) => !eGruppo(x)).sort((u, v) => String(u.name).localeCompare(String(v.name), 'it'));
+        const gia = (g && g.membri) || [];
+        return foglio(h`<form><h2>${g ? 'Modifica il gruppo' : 'Nuovo gruppo'}</h2>
+            <label class="campo"><span>Nome del gruppo</span><input name="nome" required maxlength="80" value="${(g && g.name) || ''}" placeholder="es. Abilità sociali martedì" autocomplete="off" ${g ? '' : grezzo('autofocus')}></label>
+            <div class="campo"><span>Bambini del gruppo</span>
+                <div class="opzioni" style="max-height:40vh;overflow-y:auto">${tutti.map((x) => h`<label class="opzione"><input type="checkbox" name="m" value="${x.id}" ${gia.includes(x.id) ? grezzo('checked') : ''}><span class="corpo">${x.name}</span></label>`)}</div>
+                <span class="sotto piccolo">In seduta, per ogni attività, una riga per bambino. I dati restano nella cartella del gruppo, separati per bambino.</span></div>
+            <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">${g ? 'Salva' : 'Crea'}</button></div></form>`,
+        { invia: (form) => { const fd = new FormData(form); return { nome: String(fd.get('nome') || '').trim(), membri: fd.getAll('m') }; } });
     }
 
     // ---------- presa dati ----------
@@ -410,7 +438,7 @@
 
     function schedaAttivita(p, att) {
         const b = bozza(p.id);
-        const ms = misure(att);
+        const ms = misure(att).filter((m) => !eGruppo(p) || presente(b, m.id));
         const vm = ms.map((m) => b.voci[att.id + '~' + m.id] || null);
         // con più prese dati, il target e le opzioni comuni si leggono dalla prima voce aperta
         const v = b.voci[att.id] || vm.find(Boolean);
@@ -497,7 +525,7 @@
         const tipoM = (v && v.sessionType) || tm.sessionType;
         const tot = v ? v.v + v.p + v.x : 0;
         const lu = statoLU(attM, v, t || null, m.id);
-        return h`<div class="presa ${crit ? 'a-criterio' : ''}">
+        return h`<div class="presa ${crit ? 'a-criterio' : ''} ${m.bambino ? 'compatta' : ''}">
             <div class="presa-testa"><b>${m.nome}</b>
                 ${m.tipo ? h`<span class="pill">${tm.eco ? 'Echo to tact' : tipoM === 'timedelay' ? 'T/D' : 'Indip.'}</span>` : ''}
                 ${m.mantenimento ? h`<span class="pill grigia" title="Il dato si prende ma resta fuori da statistiche e criterio">mantenimento</span>` : ''}
@@ -556,6 +584,7 @@
     function vistaSeduta() {
         const p = paz(T.pid);
         if (!p) { T.vista = 'bambini'; return vistaBambini(); }
+        if (eGruppo(p)) allineaMembri(p);
         const b = bozza(p.id);
         const lista = attivitaSeduta(p);
         const unica = lista.length === 1 && lista[0];
@@ -570,6 +599,7 @@
                     <button class="ib" data-a="menu-bambino" aria-label="Altro">${icona('ellipsis-vertical')}</button>` })}
             <main class="tice-main">
                 ${nonOggi ? h`<div class="banda">${icona('calendar-day')}<div>Stai registrando una seduta del <b>${formatoData(b.data, true)}</b>, non di oggi.</div></div>` : ''}
+                ${eGruppo(p) ? h`<div class="presenti"><span class="sotto piccolo">Presenti oggi</span>${membriDi(p).map((x) => h`<button class="pill-presenza ${presente(b, x.id) ? 'si' : ''}" data-a="presente" data-pid="${x.id}" aria-pressed="${presente(b, x.id) ? 'true' : 'false'}">${presente(b, x.id) ? icona('check') : icona('xmark')} ${x.name}</button>`)}</div>` : ''}
                 ${!P.programma(p).attivita.length ? h`<div class="scheda imbottita">
                     <b>Nessun programma per ${p.name}.</b>
                     <p class="sotto">Crea le attività su cui lavorate, con i loro target, oppure importa il suo quaderno Numbers. Intanto puoi aggiungere attività solo per oggi.</p>
@@ -764,6 +794,7 @@
     function vistaProgramma() {
         const p = paz(T.pid);
         if (!p) { T.vista = 'bambini'; return vistaBambini(); }
+        if (eGruppo(p)) allineaMembri(p);
         const tutte = P.programma(p).attivita;
         const modifica = puoProgrammi(p);
         const attive = tutte.filter((a) => a.stato === 'attivo');
@@ -1001,7 +1032,8 @@
                 <button class="opzione" data-foglio="stampa">${icona('print')}<span class="corpo">Stampa le griglie<small>Per prendere i dati su carta e ricopiarli dopo</small></span></button>
                 <button class="opzione" data-foglio="data">${icona('calendar-day')}<span class="corpo">Cambia la data della seduta<small>Per ricopiare un foglio di un altro giorno</small></span></button>
                 <button class="opzione" data-foglio="annulla">${icona('rotate-left')}<span class="corpo">Annulla la seduta in corso</span></button>
-                ${limitato() ? '' : h`<button class="opzione" data-foglio="dati">${icona('pen')}<span class="corpo">Modifica i dati del bambino<small>Nome, data di nascita, categoria</small></span></button>`}
+                ${limitato() ? '' : eGruppo(p) ? h`<button class="opzione" data-foglio="dati">${icona('users')}<span class="corpo">Modifica il gruppo<small>Nome e bambini</small></span></button>`
+                    : h`<button class="opzione" data-foglio="dati">${icona('pen')}<span class="corpo">Modifica i dati del bambino<small>Nome, data di nascita, categoria</small></span></button>`}
                 ${EST.opzioniBambino ? EST.opzioniBambino(p) : ''}
                 ${!limitato() && !(EST.condiviso && EST.condiviso(p.id)) ? h`<button class="opzione" data-foglio="elimina">${icona('trash')}<span class="corpo">Elimina il bambino<small>Con il suo programma e le sue sedute, da questo dispositivo</small></span></button>` : ''}
             </div><div class="bottoni"><button class="bt" data-foglio="chiudi">Chiudi</button></div>`);
@@ -1015,8 +1047,40 @@
             else if (r === 'dati') azioni['modifica-bambino']();
             else if (r === 'elimina') azioni['elimina-bambino']();
         },
+        'nuovo-gruppo': async () => {
+            if (limitato()) return;
+            const r = await moduloGruppo(null);
+            if (!r || !r.nome) return;
+            if (r.membri.length < 2) { avviso('Scegli almeno due bambini.', 'errore'); return; }
+            const g = { id: 'g' + Date.now().toString(), name: r.nome, gruppo: true, membri: r.membri, history: [], programma: { attivita: [] } };
+            await salvaPaziente(g);
+            if (EST.nuovoBambino) await EST.nuovoBambino(g);
+            if (typeof state !== 'undefined' && Array.isArray(state.patients) && !state.patients.some((x) => x.id === g.id)) state.patients.push(g);
+            T.ritorno = 'bambini';
+            vai('programma', g.id);
+        },
+        'modifica-gruppo': async () => {
+            const g = paz(T.pid);
+            if (!eGruppo(g) || limitato()) return;
+            const r = await moduloGruppo(g);
+            if (!r || !r.nome) return;
+            if (r.membri.length < 1) { avviso('Il gruppo deve avere almeno un bambino.', 'errore'); return; }
+            g.name = r.nome; g.membri = r.membri;
+            allineaMembri(g);
+            await salvaPaziente(g);
+            avviso('Gruppo salvato');
+            disegna();
+        },
+        'presente': (b) => {
+            const p = paz(T.pid), bz = bozza(p.id);
+            bz.assenti = bz.assenti || [];
+            const id = b.dataset.pid;
+            bz.assenti = bz.assenti.includes(id) ? bz.assenti.filter((x) => x !== id) : bz.assenti.concat([id]);
+            salvaBozza(); T.mantieniScroll = true; disegna();
+        },
         'modifica-bambino': async () => {
             const p = paz(T.pid);
+            if (eGruppo(p)) return azioni['modifica-gruppo']();
             if (!p || limitato()) return;
             const r = await foglio(h`<form><h2>Dati del bambino</h2>
                 <label class="campo"><span>Nome (o iniziali)</span><input name="nome" required maxlength="80" value="${p.name || ''}" autocomplete="off"></label>
@@ -1442,7 +1506,7 @@
             const att = P.nuovaAttivita(p, Object.assign({}, r, { target: null, sessionType: r.sessionType === 'timedelay' ? 'timedelay' : 'independent' }));
             if (r.sessionType === 'ecoico') { att.risposte = 'ecoico'; att.nomeP = 'Ecoica'; }
             if (r.colore) att.colore = r.colore;
-            impostaMisure(att, r);
+            if (eGruppo(p)) allineaMembri(p); else impostaMisure(att, r);
             modalitaDaModulo(att, r);
             righe.forEach((x, i) => P.aggiungiTarget(att, x, i === 0));
             await salvaPaziente(p);
@@ -1474,7 +1538,7 @@
                 att.descrizione = r.descrizione.trim();
                 att.suggerimenti = String(r.suggerimenti || '').trim();
                 att.cronometro = !!r.cronometro;
-                impostaMisure(att, r);
+                if (!eGruppo(p)) impostaMisure(att, r);
                 if (r.mantenimento) att.mantenimento = true; else delete att.mantenimento;
                 att.sessionType = r.sessionType === 'timedelay' ? 'timedelay' : 'independent';
                 if (r.sessionType === 'ecoico') { att.risposte = 'ecoico'; att.nomeP = 'Ecoica'; }
@@ -1858,7 +1922,7 @@
                 <label class="campo"><span>Prove per LU</span><input name="prove" type="number" min="1" max="200" inputmode="numeric" value="${a.prove || ''}" placeholder="in %"></label>
             </div>
             <p class="sotto piccolo" style="margin:-4px 0 10px">Con le prove per LU (es. 20) il dato entra quando se ne completano 20, anche in più sedute. Vuoto: dato in percentuale a ogni seduta.</p>
-            <div class="campo"><span>Sottoattività (facoltative)</span>
+            <div class="campo" ${eGruppo(p) ? grezzo('hidden') : ''}><span>Sottoattività (facoltative)</span>
                 <div class="sottoattivita" data-sotto>${(a.misure || []).map((m, i) => rigaSotto(i, m))}</div>
                 <button type="button" class="bt piccolo fantasma" data-sotto-aggiungi>${icona('plus')} Aggiungi sottoattività</button>
                 <span class="sotto piccolo">Tipo e prove vuoti: come l'attività. Es. Categorizza e Tact mix: in seduta ognuna ha i suoi tasti e il suo dato, sullo stesso target, e arriva a criterio per conto suo; l'attività quando ci arrivano tutte. In mantenimento: si segna, ma resta fuori da statistiche e criterio.</span></div>
@@ -1972,6 +2036,7 @@
                 if (m && x) {
                     x.setName += ' · ' + m.nome; x.setId += '~' + m.id; x.misura = m.id; x.misuraNome = m.nome;
                     if (m.mantenimento) { x.mantenimento = true; x.fuoriStatistiche = true; }
+                    if (m.bambino) { x.bambino = m.id; x.bambinoNome = m.nome; x.gruppo = p.id; }
                 }
                 return x;
             };

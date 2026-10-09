@@ -204,6 +204,20 @@ body.tice-aperto #notebook-tab-handle { display: none !important; }
 .tice .presa-testa { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
 .tice .presa-testa .presa-conto { margin-left: auto; font-size: 0.9rem; }
 .tice .presa.a-criterio .presa-testa b:first-child { color: var(--success-color, #2f7d4f); }
+.tice .presenti { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 12px; }
+.tice .pill-presenza { border: 1px solid var(--t-bordo); background: transparent; color: var(--text-secondary); border-radius: 999px; padding: 4px 12px; font: inherit; font-weight: 600; cursor: pointer; text-decoration: line-through; }
+.tice .pill-presenza.si { color: var(--text-primary); text-decoration: none; border-color: var(--accent-color); }
+.tice .avatar.gruppo { background: var(--accent-color); color: #fff; }
+/* gruppo: una riga compatta per bambino (nome, tasti, conteggio, annulla) */
+.tice .presa.compatta { display: grid; grid-template-columns: minmax(80px, 1fr) minmax(150px, 2.2fr) auto; align-items: center; gap: 6px 10px; padding-top: 6px; margin-top: 6px; }
+.tice .presa.compatta .presa-testa { margin: 0; flex-direction: column; align-items: flex-start; gap: 2px; }
+.tice .presa.compatta .presa-testa .presa-conto { margin: 0; font-size: .8rem; }
+.tice .presa.compatta .tasti { gap: 6px; }
+.tice .presa.compatta .tasto { min-height: 44px; padding: 4px; font-size: 1.1rem; }
+.tice .presa.compatta .tasto small { display: none; }
+.tice .presa.compatta .sotto-tasti { margin: 0; }
+.tice .presa.compatta .sotto-tasti .sequenza { display: none; }
+.tice .presa.compatta .lu-attesa, .tice .presa.compatta .nota-voce { grid-column: 1 / -1; margin: 0; order: 10; font-size: .75rem; }
 .tice .conto-ms { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .tice .pill.verde.chiara { opacity: 0.8; }
 .tice-foglio .sottoattivita { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 6px; }
