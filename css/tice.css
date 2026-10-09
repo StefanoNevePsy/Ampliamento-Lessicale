@@ -207,6 +207,12 @@ body.tice-aperto #notebook-tab-handle { display: none !important; }
 .tice .conto-ms { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .tice .pill.verde.chiara { opacity: 0.8; }
 .tice-foglio .sottoattivita { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 6px; }
+.tice-foglio .avviso-doppione { display: block; color: var(--warning-color, #b9770e); min-height: 1em; }
+.tice-foglio [data-cat-nuova] { margin-top: 6px; }
+.tice-foglio .elenco-modalita { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; max-height: 40vh; overflow-y: auto; }
+.tice-foglio .cat-mod .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.tice-foglio .cat-mod .chip { font-size: .8rem; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--t-bordo, rgba(0,0,0,.15)); }
+.tice-foglio .cat-mod .chip.nuova { border-color: var(--accent-color); }
 .tice-foglio .riga-sotto { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--t-bordo, rgba(0,0,0,.12)); border-radius: 12px; }
 .tice-foglio .riga-sotto-1, .tice-foglio .riga-sotto-2 { display: flex; align-items: center; gap: 10px; }
 .tice-foglio .riga-sotto .campo-in { flex: 1; min-width: 0; }
@@ -726,3 +732,4 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 #tice-stampa .st-ruolo { font-size: 6.5pt; font-weight: 400; color: #666; }
 #tice-stampa .st-pchip { display: inline-block; margin: .4mm 2mm .4mm 0; padding-left: 1.2mm; border-left: 1.4mm solid var(--c); }
 #tice-stampa .st-legenda-turni { font-size: 8pt; color: #555; margin: 0; }
+.tice-foglio [data-mod-nuova][hidden], .tice-foglio [data-cat-nuova][hidden] { display: none !important; }

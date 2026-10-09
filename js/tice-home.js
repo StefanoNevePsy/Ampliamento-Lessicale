@@ -625,7 +625,7 @@
         try { return JSON.parse(localStorage.getItem('tice_modalita') || 'null') || {}; } catch (e) { return {}; }
     }
     async function salvaDizionario(aggiunte) {
-        if (!aggiunte || (!Object.keys(aggiunte.sinonimi || {}).length && !(aggiunte.modalita || []).length)) return;
+        if (!aggiunte || (!Object.keys(aggiunte.sinonimi || {}).length && !(aggiunte.modalita || []).length && !(aggiunte.categorie || []).length)) return;
         if (EST.dizionario && EST.dizionario()) return EST.salvaDizionario(aggiunte);
         localStorage.setItem('tice_modalita', JSON.stringify(M.unisci(dizionario(), aggiunte)));
     }
@@ -977,6 +977,7 @@
                 ${limitato() ? '' : h`<button class="opzione" data-foglio="import">${icona('file-import')}<span class="corpo">Importa quaderni Numbers</span></button>
                 <button class="opzione" data-foglio="archivio">${icona('folder-open')}<span class="corpo">Archivio set</span></button>
                 <button class="opzione" data-foglio="opzioni">${icona('gear')}<span class="corpo">Impostazioni e tema</span></button>`}
+                ${limitato() ? '' : h`<button class="opzione" data-foglio="modalita">${icona('tags')}<span class="corpo">Categorie e modalità<small>Aggiungi categorie e tipi di attività, senza doppioni</small></span></button>`}
                 <button class="opzione" data-foglio="schermo">${icona('expand')}<span class="corpo">Schermo<small>Dimensione dell'interfaccia e schermo intero</small></span></button>
                 ${EST.opzioniMenu ? EST.opzioniMenu() : ''}
                 ${window.TicePwa && TicePwa.puoInstallare() ? h`<button class="opzione" data-foglio="installa">${icona('download')}<span class="corpo">Installa l'app<small>Si apre come un'app e funziona anche senza rete</small></span></button>` : ''}
@@ -984,6 +985,7 @@
             if (r && r.indexOf('est:') === 0 && EST.sceltaMenu) return EST.sceltaMenu(r.slice(4));
             if (r === 'installa') { TicePwa.installa(); return; }
             if (r === 'schermo') { await opzioniSchermo(); return; }
+            if (r === 'modalita') { await gestisciModalita(); disegna(); return; }
             if (r === 'giochi') chiudi();
             else if (r === 'cartelle') apriDaQui(openPatients);
             else if (r === 'import') vai('import');
@@ -1435,6 +1437,7 @@
             if (!puoProgrammi(p)) return;
             const r = await moduloAttivita(p, null);
             if (!r) return;
+            try { await risolviNuovaModalita(r); } catch (e) { avviso('Modalità non creata: ' + (e.message || e), 'errore'); r.modalita = ''; }
             const righe = String(r.target || '').split('\n').map((x) => x.trim()).filter(Boolean);
             const att = P.nuovaAttivita(p, Object.assign({}, r, { target: null, sessionType: r.sessionType === 'timedelay' ? 'timedelay' : 'independent' }));
             if (r.sessionType === 'ecoico') { att.risposte = 'ecoico'; att.nomeP = 'Ecoica'; }
@@ -1466,6 +1469,7 @@
                 att.stato = r;
             } else {
                 att.nome = r.nome.trim() || att.nome;
+                try { await risolviNuovaModalita(r); } catch (e) { avviso('Modalità non creata: ' + (e.message || e), 'errore'); r.modalita = att.modalita || ''; }
                 modalitaDaModulo(att, r);
                 att.descrizione = r.descrizione.trim();
                 att.suggerimenti = String(r.suggerimenti || '').trim();
@@ -1694,7 +1698,105 @@
         disegna();
     }
 
+    // ---------- categorie e modalità nuove, senza doppioni ----------
+    // Un nome uguale a meno di maiuscole, accenti e spazi è la stessa cosa
+    const stessaModalita = (nome) => { const n = M.normalizza(nome); return n ? M.elenco(dizionario()).modalita.find((m) => M.normalizza(m.nome) === n) : null; };
+    const stessaCategoria = (nome) => { const n = M.normalizza(nome); return n ? M.elenco(dizionario()).categorie.find((c) => M.normalizza(c.nome) === n) : null; };
+    const nomeCategoria = (id) => (M.elenco(dizionario()).categorie.find((c) => c.id === id) || {}).nome || '';
+    async function creaCategoria(nome) {
+        nome = String(nome || '').trim().slice(0, 60);
+        if (!nome) return null;
+        const c = stessaCategoria(nome);
+        if (c) return c.id;
+        const id = M.nuovoId(nome);
+        await salvaDizionario({ categorie: [{ id, nome }], modalita: [], sinonimi: {} });
+        return id;
+    }
+    async function creaModalita(nome, categoria) {
+        nome = String(nome || '').trim().slice(0, 60);
+        if (!nome) return null;
+        const m = stessaModalita(nome);
+        if (m) return m.id;
+        const id = M.nuovoId(nome);
+        await salvaDizionario({ modalita: [{ id, nome, categoria: categoria || 'altro' }], sinonimi: {} });
+        return id;
+    }
+    // Il campo "categoria" dei moduli: le esistenti o una nuova scritta sul posto
+    function sceltaCategoria(nome, scelta) {
+        const E = M.elenco(dizionario());
+        return h`<select class="campo-in" name="${nome}" data-cat-scelta aria-label="Categoria">${E.categorie.map((c) => h`<option value="${c.id}" ${scelta === c.id ? grezzo('selected') : ''}>${c.nome}</option>`)}<option value="+">+ Nuova categoria…</option></select>`;
+    }
+    const campoNuovaCategoria = (nome) => h`<input class="campo-in" name="${nome + '_nuova'}" maxlength="60" placeholder="Nome della nuova categoria" hidden data-cat-nuova data-doppione="categoria" autocomplete="off">`;
+    // Avvisi dal vivo sui doppioni e campi che compaiono con le scelte "+ nuova"
+    function agganciaNuove(el) {
+        el.querySelectorAll('[data-cat-scelta]').forEach((sel) => {
+            const nuova = sel.closest('.campo').querySelector('[data-cat-nuova]');
+            const mostra = () => { nuova.hidden = sel.value !== '+'; if (!nuova.hidden) nuova.focus(); };
+            sel.addEventListener('change', mostra);
+        });
+        el.querySelectorAll('[data-doppione]').forEach((inp) => {
+            const nota = inp.closest('.campo').querySelector('[data-doppione-nota]');
+            const prova = () => {
+                const x = inp.dataset.doppione === 'categoria' ? stessaCategoria(inp.value) : stessaModalita(inp.value);
+                // un avviso per campo: due campi nello stesso riquadro non si cancellano a vicenda
+                if (!x) { if (nota.dataset.di === inp.name) { nota.textContent = ''; delete nota.dataset.di; } return; }
+                nota.dataset.di = inp.name;
+                nota.textContent = inp.dataset.doppione === 'categoria' ? `Esiste già la categoria «${x.nome}»: verrà usata quella.` : `Esiste già «${x.nome}» in ${nomeCategoria(x.categoria)}: verrà usata quella.`;
+            };
+            inp.addEventListener('input', prova);
+            prova();
+        });
+    }
+    async function categoriaDalModulo(r, campo) {
+        return r[campo] === '+' ? creaCategoria(r[campo + '_nuova']) : r[campo];
+    }
+    // Il foglio per vedere e aggiungere categorie e modalità
+    async function gestisciModalita() {
+        for (;;) {
+            const E = M.elenco(dizionario());
+            const r = await foglio(h`<form><h2>Categorie e modalità</h2>
+                <p class="sotto piccolo">Servono a raggruppare le attività nel programma e nelle statistiche. Nel centro valgono per tutti.</p>
+                <div class="campo"><span>Nuova modalità (tipo di attività)</span>
+                    <div class="riga-campi"><input class="campo-in" name="mod" maxlength="60" placeholder="es. Echo to tact" data-doppione="modalita" autocomplete="off">
+                        ${sceltaCategoria('cat', 'altro')}</div>
+                    ${campoNuovaCategoria('cat')}
+                    <span class="sotto piccolo avviso-doppione" data-doppione-nota></span>
+                    <button class="bt piccolo primario" name="azione" value="modalita">${icona('plus')} Aggiungi la modalità</button></div>
+                <div class="campo"><span>Nuova categoria</span>
+                    <div class="riga-campi"><input class="campo-in" name="categoria" maxlength="60" placeholder="es. Repertori accademici" data-doppione="categoria" autocomplete="off"></div>
+                    <span class="sotto piccolo avviso-doppione" data-doppione-nota></span>
+                    <button class="bt piccolo" name="azione" value="categoria">${icona('plus')} Aggiungi la categoria</button></div>
+                <div class="elenco-modalita">${E.categorie.map((c) => { const ms = E.modalita.filter((m) => m.categoria === c.id); return h`<div class="cat-mod"><b>${c.nome}</b>${c.centro ? h` <span class="pill grigia">del centro</span>` : ''}<div class="chips">${ms.length ? ms.map((m) => h`<span class="chip ${m.centro ? 'nuova' : ''}">${m.nome}</span>`) : h`<span class="sotto piccolo">nessuna modalità</span>`}</div></div>`; })}</div>
+                <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Fatto</button></div></form>`, {
+                dopo: agganciaNuove,
+                invia: (form, bt) => { const d = Object.fromEntries(new FormData(form)); d.azione = bt && bt.value; return d; }
+            });
+            if (!r) return;
+            try {
+                if (r.azione === 'modalita') {
+                    if (!String(r.mod || '').trim()) { avviso('Scrivi il nome della modalità.', 'errore'); continue; }
+                    const gia = stessaModalita(r.mod);
+                    if (gia) { avviso(`«${gia.nome}» esiste già in ${nomeCategoria(gia.categoria)}.`); continue; }
+                    const cat = await categoriaDalModulo(r, 'cat');
+                    await creaModalita(r.mod, cat);
+                    avviso(`Modalità «${r.mod.trim()}» aggiunta in ${nomeCategoria(cat)}`);
+                } else if (r.azione === 'categoria') {
+                    if (!String(r.categoria || '').trim()) { avviso('Scrivi il nome della categoria.', 'errore'); continue; }
+                    const gia = stessaCategoria(r.categoria);
+                    if (gia) { avviso(`La categoria «${gia.nome}» esiste già.`); continue; }
+                    await creaCategoria(r.categoria);
+                    avviso(`Categoria «${r.categoria.trim()}» aggiunta`);
+                }
+            } catch (e) { avviso(e.message || String(e), 'errore'); return; }
+        }
+    }
+
     // Modalità scelta nel modulo, o riconosciuta dal nome quando è sicura
+    // "+ Nuova modalità…" nel modulo: la si crea (o si usa quella con lo stesso nome)
+    async function risolviNuovaModalita(r) {
+        if (r.modalita !== '+') return;
+        r.modalita = String(r.mod_nome || '').trim() ? await creaModalita(r.mod_nome, await categoriaDalModulo(r, 'mod_cat')) : '';
+    }
     function modalitaDaModulo(att, r) {
         if (r.modalita) { att.modalita = r.modalita; att.variante = String(r.variante || '').trim(); return; }
         const x = M.riconosci(att, dizionario());
@@ -1728,9 +1830,14 @@
         return foglio(h`<form><h2>${att ? 'Modifica attività' : 'Nuova attività'}</h2>
             <label class="campo"><span>Nome</span><input name="nome" required maxlength="120" value="${a.nome}" ${att ? '' : grezzo('autofocus')} placeholder="es. TACT, Imitazione motoria"></label>
             <div class="riga-campi">
-                <label class="campo"><span>Modalità</span><select name="modalita" class="campo-in"><option value="">Dal nome, in automatico</option>${opzioniModalita(a.modalita)}</select></label>
+                <label class="campo"><span>Modalità</span><select name="modalita" class="campo-in" data-mod-scelta><option value="">Dal nome, in automatico</option>${opzioniModalita(a.modalita)}<option value="+">+ Nuova modalità…</option></select></label>
                 <label class="campo"><span>Variante</span><input name="variante" maxlength="80" value="${a.variante || ''}" placeholder="es. intensivo"></label>
             </div>
+            <div class="campo nuova-modalita" data-mod-nuova hidden><span>Nuova modalità</span>
+                <div class="riga-campi"><input class="campo-in" name="mod_nome" maxlength="60" placeholder="Nome, es. Echo to tact" data-doppione="modalita" autocomplete="off">
+                    ${sceltaCategoria('mod_cat', 'altro')}</div>
+                ${campoNuovaCategoria('mod_cat')}
+                <span class="sotto piccolo avviso-doppione" data-doppione-nota></span></div>
             <label class="campo"><span>Descrizione (facoltativa)</span><input name="descrizione" maxlength="300" value="${a.descrizione || ''}"></label>
             <label class="campo"><span>Suggerimenti per chi somministra (facoltativi)</span><textarea name="suggerimenti" maxlength="3000" rows="3" placeholder="Come presentare lo stimolo, che aiuto dare, quando rinforzare, errori da evitare…">${a.suggerimenti || ''}</textarea>
                 <span class="sotto piccolo">In seduta compaiono sotto l'attività con il tasto «Suggerimenti». Per un solo target: dal target, «Suggerimenti per questo target».</span></label>
@@ -1767,6 +1874,9 @@
             </div>` : ''}
             <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`, {
             dopo: (el) => {
+                agganciaNuove(el);
+                const sm = el.querySelector('[data-mod-scelta]'), nm = el.querySelector('[data-mod-nuova]');
+                sm.addEventListener('change', () => { nm.hidden = sm.value !== '+'; if (!nm.hidden) nm.querySelector('input').focus(); });
                 const box = el.querySelector('[data-sotto]');
                 let n = box.children.length;
                 const nuova = () => { box.insertAdjacentHTML('beforeend', String(rigaSotto(n++, null))); box.lastElementChild.querySelector('input').focus(); };
