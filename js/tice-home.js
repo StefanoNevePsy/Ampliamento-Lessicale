@@ -284,6 +284,16 @@
         (p.history || []).forEach((s) => { if (!u || s.date > u) u = s.date; });
         return u;
     }
+    // età dalla data di nascita: "4 anni e 3 mesi" (sotto i 2 anni, in mesi)
+    function eta(p) {
+        if (!p.nascita) return '';
+        const n = new Date(p.nascita + 'T12:00:00'), o = new Date();
+        const mesi = (o.getFullYear() - n.getFullYear()) * 12 + o.getMonth() - n.getMonth() - (o.getDate() < n.getDate() ? 1 : 0);
+        if (mesi < 0) return '';
+        if (mesi < 24) return mesi + (mesi === 1 ? ' mese' : ' mesi');
+        const a = Math.floor(mesi / 12), m = mesi % 12;
+        return a + ' anni' + (m ? ' e ' + m + (m === 1 ? ' mese' : ' mesi') : '');
+    }
     function vistaBambini() {
         const q = T.cerca.trim().toLowerCase();
         const elenco = pazienti()
@@ -296,7 +306,7 @@
             return h`<button class="riga" data-a="apri-bambino" data-pid="${p.id}">
                 <span class="avatar">${p.photo ? h`<img src="${p.photo}" alt="">` : iniziali(p.name)}</span>
                 <span class="corpo"><span class="t1">${p.name}</span>
-                    <span class="t2">${EST.pillola ? EST.pillola(p) : ''}${b && risposte ? h`<span class="pill arancio">seduta in corso · ${risposte} risposte</span> ` : ''}${attive ? `${attive} attività in corso` : 'nessun programma'}${u ? ' · ultima ' + formatoData(P.giorno(u)) : ''}${p.category ? ' · ' + p.category : ''}</span></span>
+                    <span class="t2">${EST.pillola ? EST.pillola(p) : ''}${b && risposte ? h`<span class="pill arancio">seduta in corso · ${risposte} risposte</span> ` : ''}${attive ? `${attive} attività in corso` : 'nessun programma'}${u ? ' · ultima ' + formatoData(P.giorno(u)) : ''}${p.category ? ' · ' + p.category : ''}${eta(p) ? ' · ' + eta(p) : ''}</span></span>
                 ${icona('chevron-right')}
             </button>`;
         });
@@ -483,7 +493,7 @@
         if (unica && !unicaGioco && T.aperte[unica.id] === undefined) T.aperte[unica.id] = true;
         const perArea = perCategoria(lista);
         const nonOggi = b.data !== oggi();
-        return h`${barra({ indietro: 'vai-bambini', titolo: p.name,
+        return h`${barra({ indietro: 'vai-ritorno', titolo: p.name,
                 sotto: { testo: (nonOggi ? 'Seduta del ' : 'Oggi, ') + formatoData(b.data, true) + (chiDellaSeduta(p, b) ? ' · ' + chiDellaSeduta(p, b) : ''), azione: 'data' },
                 destra: h`<button class="ib" data-a="apri-cartella" aria-label="Cartella clinica" title="Cartella clinica">${icona('chart-line')}</button>
                     <button class="ib" data-a="vai-programma" aria-label="Programma" title="Programma">${icona('list-check')}</button>
@@ -877,7 +887,9 @@
         'vai-programma': () => vai('programma'),
         'apri-cartella': () => { if (T.pid) apriCartella(T.pid); },
         'vai-import': () => { if (!limitato()) vai('import'); },
-        'apri-bambino': (b) => { T.aperte = {}; vai('seduta', b.dataset.pid); },
+        'apri-bambino': (b) => { T.aperte = {}; T.ritorno = T.vista === 'turni' ? 'turni' : 'bambini'; vai('seduta', b.dataset.pid); },
+        // indietro dalla presa dati: dove si era (i turni del giorno o l'elenco dei bambini)
+        'vai-ritorno': () => vai(T.ritorno === 'bambini' || !VISTE.turni ? 'bambini' : 'turni'),
         giochi: () => chiudi(),
         menu: async () => {
             const r = await foglio(h`<h2>Centro TICE</h2><div class="opzioni">
@@ -907,8 +919,10 @@
                 <button class="opzione" data-foglio="giochi">${icona('gamepad')}<span class="corpo">Giochi con ${p.name}<small>Le sedute dei giochi vanno nella sua cartella</small></span></button>
                 <button class="opzione" data-foglio="stampa">${icona('print')}<span class="corpo">Stampa le griglie<small>Per prendere i dati su carta e ricopiarli dopo</small></span></button>
                 <button class="opzione" data-foglio="data">${icona('calendar-day')}<span class="corpo">Cambia la data della seduta<small>Per ricopiare un foglio di un altro giorno</small></span></button>
-                <button class="opzione" data-foglio="annulla">${icona('trash')}<span class="corpo">Annulla la seduta in corso</span></button>
+                <button class="opzione" data-foglio="annulla">${icona('rotate-left')}<span class="corpo">Annulla la seduta in corso</span></button>
+                ${limitato() ? '' : h`<button class="opzione" data-foglio="dati">${icona('pen')}<span class="corpo">Modifica i dati del bambino<small>Nome, data di nascita, categoria</small></span></button>`}
                 ${EST.opzioniBambino ? EST.opzioniBambino(p) : ''}
+                ${!limitato() && !(EST.condiviso && EST.condiviso(p.id)) ? h`<button class="opzione" data-foglio="elimina">${icona('trash')}<span class="corpo">Elimina il bambino<small>Con il suo programma e le sue sedute, da questo dispositivo</small></span></button>` : ''}
             </div><div class="bottoni"><button class="bt" data-foglio="chiudi">Chiudi</button></div>`);
             if (r && r.indexOf('est:') === 0 && EST.sceltaBambino) return EST.sceltaBambino(r.slice(4), p);
             if (r === 'programma') vai('programma');
@@ -917,17 +931,51 @@
             else if (r === 'data') azioni.data();
             else if (r === 'stampa') azioni['stampa-griglie']();
             else if (r === 'annulla') azioni['annulla-seduta']();
+            else if (r === 'dati') azioni['modifica-bambino']();
+            else if (r === 'elimina') azioni['elimina-bambino']();
+        },
+        'modifica-bambino': async () => {
+            const p = paz(T.pid);
+            if (!p || limitato()) return;
+            const r = await foglio(h`<form><h2>Dati del bambino</h2>
+                <label class="campo"><span>Nome (o iniziali)</span><input name="nome" required maxlength="80" value="${p.name || ''}" autocomplete="off"></label>
+                <label class="campo"><span>Data di nascita (facoltativa)</span><input name="nascita" type="date" value="${p.nascita || ''}" max="${oggi()}"></label>
+                <label class="campo"><span>Categoria (facoltativa)</span><input name="cat" maxlength="60" value="${p.category || ''}" placeholder="es. Aula 1" list="tice-categorie"></label>
+                <datalist id="tice-categorie">${[...new Set(pazienti().map((x) => x.category).filter(Boolean))].map((c) => h`<option value="${c}">`)}</datalist>
+                <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`);
+            if (!r || !r.nome.trim()) return;
+            p.name = r.nome.trim();
+            if (r.nascita) p.nascita = r.nascita; else delete p.nascita;
+            if (r.cat.trim()) p.category = r.cat.trim(); else delete p.category;
+            await salvaPaziente(p);
+            if (typeof populateGlobalPatientSelect === 'function') populateGlobalPatientSelect();
+            avviso('Dati salvati');
+            disegna();
+        },
+        'elimina-bambino': async () => {
+            const p = paz(T.pid);
+            if (!p || limitato()) return;
+            const n = (p.history || []).length;
+            if (!await conferma(`Eliminare ${p.name}?`, `${n ? `Le sue ${n} sedute e il programma vengono cancellati` : 'Il bambino viene cancellato'} da questo dispositivo. Non si può annullare.`, { ok: 'Elimina', pericolo: true })) return;
+            await DB.deletePatient(p.id);
+            if (typeof state !== 'undefined' && Array.isArray(state.patients)) state.patients = state.patients.filter((x) => x.id !== p.id);
+            eliminaBozza(p.id);
+            if (typeof populateGlobalPatientSelect === 'function') populateGlobalPatientSelect();
+            avviso(`${p.name} eliminato`);
+            vai('bambini');
         },
         'nuovo-bambino': async () => {
             if (limitato()) return;
             const r = await foglio(h`<form><h2>Nuovo bambino</h2>
                 <label class="campo"><span>Nome (o iniziali)</span><input name="nome" required maxlength="80" autofocus autocomplete="off"></label>
+                <label class="campo"><span>Data di nascita (facoltativa)</span><input name="nascita" type="date" max="${oggi()}"></label>
                 <label class="campo"><span>Categoria (facoltativa)</span><input name="cat" maxlength="60" placeholder="es. Aula 1" list="tice-categorie"></label>
                 <datalist id="tice-categorie">${[...new Set(pazienti().map((x) => x.category).filter(Boolean))].map((c) => h`<option value="${c}">`)}</datalist>
                 <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Crea</button></div></form>`);
             if (!r || !r.nome.trim()) return;
             const p = { id: Date.now().toString(), name: r.nome.trim(), history: [], programma: { attivita: [] } };
             if (r.cat.trim()) p.category = r.cat.trim();
+            if (r.nascita) p.nascita = r.nascita;
             await salvaPaziente(p);
             if (EST.nuovoBambino) await EST.nuovoBambino(p);
             vai('programma', p.id);

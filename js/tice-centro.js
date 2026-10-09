@@ -91,7 +91,7 @@
         const cond = Y.condiviso(p.id);
         return h`${!cond && Y.puo('creaPazienti') ? h`<button class="opzione" data-foglio="est:condividi">${icona('cloud-arrow-up')}<span class="corpo">Condividi con il centro<small>Lo vedranno le persone a cui verrà assegnato</small></span></button>` : ''}
             ${cond ? h`<button class="opzione" data-foglio="est:versioni">${icona('clock-rotate-left')}<span class="corpo">Versioni precedenti<small>Per recuperare dati cancellati o modificati per errore</small></span></button>` : ''}
-            ${cond && Y.puo('eliminaPazienti') ? h`<button class="opzione" data-foglio="est:archivia">${icona('box-archive')}<span class="corpo">Archivia per tutti<small>Sparisce dai dispositivi; resta sul Drive con le sue versioni</small></span></button>` : ''}`;
+            ${cond && Y.puo('eliminaPazienti') ? h`<button class="opzione" data-foglio="est:archivia">${icona('box-archive')}<span class="corpo">Elimina per tutti (archivia)<small>Sparisce dai dispositivi di tutti; resta sul Drive con le sue versioni e si può recuperare</small></span></button>` : ''}`;
     }
     async function sceltaBambino(k, p) {
         if (k === 'condividi') {
@@ -840,7 +840,7 @@
             'scarica-tutti': scaricaTutti,
             'pubblica-set': pubblicaSet
         },
-        aggancio: { chip, banner, pillola, opzioniBambino, sceltaBambino, opzioniMenu, sceltaMenu, nuovoBambino, puoProgrammi, dopo, limitato: tirocinante,
+        aggancio: { chip, banner, pillola, opzioniBambino, sceltaBambino, condiviso: (pid) => !!(Y.pronto() && Y.condiviso(pid)), opzioniMenu, sceltaMenu, nuovoBambino, puoProgrammi, dopo, limitato: tirocinante,
             // modalità e sinonimi: quelli del centro, uguali per tutti
             dizionario: () => (Y.attivo() && S.io ? S.modalita || {} : null),
             salvaDizionario: (aggiunte) => Y.aggiornaModalita(aggiunte) }
