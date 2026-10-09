@@ -668,7 +668,7 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 .tice .tt-g.scelto { border-color: currentColor; }
 .tice .tt-g.oggi { color: var(--taccuino-spot, var(--accent-color)); }
 .tice .tt-punto { position: absolute; bottom: 2px; width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: .55; }
-.tice .tt-pennello { position: sticky; top: 0; z-index: 3; background: var(--bg-primary, inherit); padding: 6px 0 8px; margin-bottom: 6px; }
+.tice .tt-pennello { position: sticky; top: 0; z-index: 3; background: var(--t-sfondo, var(--taccuino-carta, var(--t-sup))); padding: 6px 0 8px; margin-bottom: 6px; }
 .tice .tt-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .tice .tt-pers { border: 1px solid var(--tq-matita-forte, rgba(0,0,0,.25)); border-radius: 999px; padding: 5px 12px; background: transparent; color: inherit; font: inherit; font-size: .88rem; font-weight: 600; cursor: pointer; }
 .tice .tt-pers.tiro { border-style: dashed; }
@@ -712,7 +712,7 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 .tice .tt-in { display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 4px; width: 100%; min-height: 54px; padding: 6px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .tice .tt-in:disabled { cursor: default; }
 .tice .tt-in:hover:not(:disabled) { box-shadow: inset 0 0 0 2px var(--c); }
-.tice .tt-nome { display: inline-block; padding: 3px 10px; border-radius: 999px; background: var(--bg-primary, #fff); border: 1.5px solid var(--c); font-size: .95rem; font-weight: 700; white-space: nowrap; }
+.tice .tt-nome { display: inline-block; padding: 3px 10px; border-radius: 999px; background: var(--t-sup, #fff); color: var(--text-primary); border: 1.5px solid var(--c); font-size: .95rem; font-weight: 700; white-space: nowrap; }
 .tice .tt-nome.tiro { border-style: dashed; }
 .tice .tt-nota { width: 100%; text-align: center; font-size: .72rem; opacity: .75; font-style: italic; }
 .tice .tt-piu { opacity: .25; font-size: 1.1rem; margin: auto; }
