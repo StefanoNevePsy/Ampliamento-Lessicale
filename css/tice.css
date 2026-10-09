@@ -211,6 +211,8 @@ body.tice-aperto #notebook-tab-handle { display: none !important; }
 .tice-foglio .riga-sotto-1, .tice-foglio .riga-sotto-2 { display: flex; align-items: center; gap: 10px; }
 .tice-foglio .riga-sotto .campo-in { flex: 1; min-width: 0; }
 .tice-foglio .riga-sotto select.campo-in { flex: 0 0 auto; max-width: 45%; }
+.tice-foglio .riga-sotto .prove-sotto { flex: 0 0 64px; width: 64px; }
+.tice-foglio .riga-sotto-2 { flex-wrap: wrap; }
 .tice-foglio .riga-sotto .spunta-riga { margin: 0 !important; white-space: nowrap; align-items: center !important; }
 .tice .sotto-tasti .td-voce { flex: none; font-variant-numeric: tabular-nums; }
 .tice-foglio .scelta-rapida { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 12px; }

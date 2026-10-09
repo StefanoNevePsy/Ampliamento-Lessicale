@@ -116,7 +116,8 @@
     // più prese dati nella stessa attività (Categorizza, Tact mix…): come sul quaderno,
     // la riga del target e sotto ogni presa con le sue righe di caselle e il suo totale
     var misure = (a.misure || []).length >= 2 ? a.misure : null;
-    var nRighe = misure ? 1 + misure.length * righe : righe;
+    var righeDi = function (m) { var mm = +m.prove > 0 ? +m.prove : (inPerc ? 0 : marcate); return Math.max(Math.max(1, Math.ceil(mm / col)), righe); };
+    var nRighe = misure ? 1 + misure.reduce(function (n, m) { return n + righeDi(m); }, 0) : righe;
     var info = '<td class="st-info" rowspan="' + (nRighe + (opz.mantenimento && v.ultimoChiuso ? 1 : 0)) + '">' +
       '<div class="st-att-nome"><span class="st-pallino"></span>' + esc(a.nome) + '</div>' +
       (v.modalita && v.modalita.toLowerCase() !== String(a.nome).toLowerCase() ? '<div class="st-mod">' + esc(v.modalita) + '</div>' : '') +
@@ -127,10 +128,17 @@
     if (misure) {
       html += '<tr class="st-capo">' + info + etTarget(v.corrente, v.mantenimento ? 'mant.' : '') + '<td class="st-capo-spazio" colspan="' + (col + 1) + '"></td></tr>';
       misure.forEach(function (m) {
-        for (var rm = 0; rm < righe; rm++) {
-          html += '<tr class="st-sub' + (rm === 0 ? ' inizio' : '') + (rm === righe - 1 ? ' fine' : '') + '">' +
+        // prove della sottoattività, se indicate (altrimenti quelle dell'attività)
+        var mm = inPerc && !(+m.prove > 0) ? 0 : (+m.prove > 0 ? +m.prove : marcate);
+        var baseM = Math.max(1, Math.ceil(mm / col)), righeM = Math.max(baseM, righe);
+        var totM = function (r) {
+          if (r < righeM - 1) return '<td class="st-tot"></td>';
+          return '<td class="st-tot">' + (!mm ? '<b></b> %' : righeM > baseM ? '<b></b> / <b></b><div class="st-min">previste ' + mm + '</div>' : '<b></b> / ' + mm) + '</td>';
+        };
+        for (var rm = 0; rm < righeM; rm++) {
+          html += '<tr class="st-sub' + (rm === 0 ? ' inizio' : '') + (rm === righeM - 1 ? ' fine' : '') + '">' +
             '<td class="st-target st-presa">' + (rm === 0 ? '– ' + esc(m.nome) + (m.tipo ? ' <span class="st-badge' + (m.tipo === 'independent' ? ' chiaro' : '') + '">' + ({ independent: 'IND', timedelay: 'T/D', ecoico: 'ECO' })[m.tipo] + '</span>' : '') + (m.mantenimento ? ' <span class="st-mini">mant.</span>' : '') : '') + '</td>' +
-            rigaCaselle(col, marcate, rm * col) + totale(rm) + '</tr>';
+            rigaCaselle(col, mm, rm * col) + totM(rm) + '</tr>';
         }
       });
     }

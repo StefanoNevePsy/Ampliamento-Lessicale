@@ -124,10 +124,15 @@
     // L'attività "vista" da una voce: per una sottoattività con il proprio tipo, i suoi tasti
     function attPerVoce(att, k) {
         const m = misure(att).find((x) => x.id === msDi(k));
-        if (!m || !m.tipo) return att;
-        const tm = tipoMisura(att, m);
-        const a = Object.assign({}, att, { sessionType: tm.sessionType });
-        if (tm.eco) { a.risposte = 'ecoico'; a.nomeP = 'Ecoica'; } else { delete a.risposte; if (a.nomeP === 'Ecoica') delete a.nomeP; }
+        if (!m || (!m.tipo && !(+m.prove > 0))) return att;
+        const a = Object.assign({}, att);
+        // le prove per LU della sottoattività, se indicate, valgono più di quelle dell'attività
+        if (+m.prove > 0) a.prove = +m.prove;
+        if (m.tipo) {
+            const tm = tipoMisura(att, m);
+            a.sessionType = tm.sessionType;
+            if (tm.eco) { a.risposte = 'ecoico'; a.nomeP = 'Ecoica'; } else { delete a.risposte; if (a.nomeP === 'Ecoica') delete a.nomeP; }
+        }
         return a;
     }
     function attivitaDi(p, id) {
@@ -491,13 +496,13 @@
         const attM = attPerVoce(att, k), tm = tipoMisura(att, m);
         const tipoM = (v && v.sessionType) || tm.sessionType;
         const tot = v ? v.v + v.p + v.x : 0;
-        const lu = statoLU(att, v, t || null, m.id);
+        const lu = statoLU(attM, v, t || null, m.id);
         return h`<div class="presa ${crit ? 'a-criterio' : ''}">
             <div class="presa-testa"><b>${m.nome}</b>
                 ${m.tipo ? h`<span class="pill">${tm.eco ? 'Echo to tact' : tipoM === 'timedelay' ? 'T/D' : 'Indip.'}</span>` : ''}
                 ${m.mantenimento ? h`<span class="pill grigia" title="Il dato si prende ma resta fuori da statistiche e criterio">mantenimento</span>` : ''}
                 ${crit ? h`<span class="pill verde">${icona('flag-checkered')} criterio il ${formatoData(crit)}</span>` : ''}
-                <span class="presa-conto">${tot ? h`<b class="${classePct(Math.round(100 * v.v / tot), soglia)}">${Math.round(100 * v.v / tot)}%</b> <span class="sotto">${v.v}/${tot}${att.prove ? ' di ' + att.prove : ''}</span>` : h`<span class="sotto">${att.prove ? att.prove + ' prove' : ''}</span>`}</span></div>
+                <span class="presa-conto">${tot ? h`<b class="${classePct(Math.round(100 * v.v / tot), soglia)}">${Math.round(100 * v.v / tot)}%</b> <span class="sotto">${v.v}/${tot}${attM.prove ? ' di ' + attM.prove : ''}</span>` : h`<span class="sotto">${attM.prove ? attM.prove + ' prove' : ''}</span>`}</span></div>
             ${lu && (lu.prec || lu.oggi) ? h`<p class="sotto piccolo lu-attesa">${icona('hourglass-half')} ${lu.prec ? `${lu.prec.seq.length} in attesa dal ${formatoData(lu.prec.dal)} · ` : ''}${lu.blocchi.length ? 'salvando entra nei dati' + (lu.resto ? `, ${lu.resto} restano in attesa` : '') : `ne mancano ${lu.n - lu.resto} per la LU da ${lu.n}`}</p>` : ''}
             ${tasti(attM, tipoM, k)}
             <div class="sotto-tasti">
@@ -1323,7 +1328,7 @@
             const righe = Object.keys(b.voci).filter((k) => haDati(b.voci[k])).map((k) => {
                 const v = b.voci[k], a = attivitaDi(p, k), tot = v.v + v.p + v.x, pct = Math.round(100 * v.v / tot);
                 const tt = a && v.targetId ? (a.target || []).find((x) => x.id === v.targetId) : null;
-                const lu = a ? statoLU(a, v, tt, msDi(k)) : null;
+                const lu = a ? statoLU(attPerVoce(a, k), v, tt, msDi(k)) : null;
                 const mm = a ? misure(a).find((x) => x.id === msDi(k)) : null;
                 return h`<tr><td>${a ? a.nome : '?'}${mm ? ' · ' + mm.nome : ''}${lu ? h`<br><small class="sotto">${lu.blocchi.length ? `${lu.blocchi.length} LU nei dati` : 'non entra ancora nei dati'}${lu.resto ? ` · ${lu.resto}/${lu.n} in attesa` : ''}</small>` : ''}</td><td class="num">${v.v}/${tot}</td><td class="num"><b class="${classePct(pct, a && a.criterio && a.criterio.soglia)}">${pct}%</b></td></tr>`;
             });
@@ -1700,7 +1705,8 @@
     function impostaMisure(att, r) {
         const righe = Object.keys(r).filter((k) => /^ms_nome_\d+$/.test(k)).sort((x, y) => +x.slice(8) - +y.slice(8))
             .map((k) => { const i = k.slice(8); return { id: String(r['ms_id_' + i] || ''), nome: String(r[k] || '').trim(), mant: !!r['ms_mant_' + i],
-                tipo: ['independent', 'timedelay', 'ecoico'].includes(r['ms_tipo_' + i]) ? r['ms_tipo_' + i] : '', sugg: String(r['ms_sugg_' + i] || '').trim() }; })
+                tipo: ['independent', 'timedelay', 'ecoico'].includes(r['ms_tipo_' + i]) ? r['ms_tipo_' + i] : '', sugg: String(r['ms_sugg_' + i] || '').trim(),
+                prove: Math.min(200, parseInt(r['ms_prove_' + i], 10) || 0) }; })
             .filter((x) => x.nome);
         const viste = new Set();
         const nuove = righe.filter((x) => { const k = x.nome.toLowerCase(); if (viste.has(k)) return false; viste.add(k); return true; }).slice(0, 8);
@@ -1712,6 +1718,7 @@
             if (x.mant) m.mantenimento = true;
             if (x.tipo) m.tipo = x.tipo;
             if (x.sugg) m.suggerimenti = x.sugg;
+            if (x.prove > 0) m.prove = x.prove;
             return m;
         });
     }
@@ -1747,7 +1754,7 @@
             <div class="campo"><span>Sottoattività (facoltative)</span>
                 <div class="sottoattivita" data-sotto>${(a.misure || []).map((m, i) => rigaSotto(i, m))}</div>
                 <button type="button" class="bt piccolo fantasma" data-sotto-aggiungi>${icona('plus')} Aggiungi sottoattività</button>
-                <span class="sotto piccolo">Es. Categorizza e Tact mix: in seduta ognuna ha i suoi tasti e il suo dato, sullo stesso target, e arriva a criterio per conto suo; l'attività quando ci arrivano tutte. In mantenimento: si segna, ma resta fuori da statistiche e criterio.</span></div>
+                <span class="sotto piccolo">Tipo e prove vuoti: come l'attività. Es. Categorizza e Tact mix: in seduta ognuna ha i suoi tasti e il suo dato, sullo stesso target, e arriva a criterio per conto suo; l'attività quando ci arrivano tutte. In mantenimento: si segna, ma resta fuori da statistiche e criterio.</span></div>
             <label class="campo"><span>Secondi di time delay (solo per il time delay)</span><input name="tdSeconds" type="number" min="0" max="60" inputmode="numeric" value="${tdA != null ? tdA : ''}" placeholder="es. 0, 1, 2…">
                 <span class="sotto piccolo">Si vede in seduta e finisce nei dati di ogni seduta. Se lo cambi, il cambio resta segnato con la data${(a.tdCambi || []).length ? h` (finora: ${a.tdCambi.map((c) => `${formatoData(c.il)} ${c.da != null ? sec(c.da) + '→' : ''}${sec(c.a)}`).join(', ')})` : ''}.</span></label>
             ${att ? '' : h`<label class="campo"><span>Target, uno per riga (il primo è quello da cui si parte)</span><textarea name="target" placeholder="es. Animali: cane, gatto&#10;Frutta: mela, banana"></textarea>
@@ -1781,6 +1788,7 @@
             </div>
             <div class="riga-sotto-2">
                 <select class="campo-in" name="${'ms_tipo_' + i}" aria-label="Tipo di seduta della sottoattività">${opz.map(([v, n]) => h`<option value="${v}" ${v === tipo ? grezzo('selected') : ''}>${n}</option>`)}</select>
+                <input class="campo-in prove-sotto" name="${'ms_prove_' + i}" type="number" min="1" max="200" inputmode="numeric" value="${(m && m.prove) || ''}" placeholder="Prove" title="Prove per LU (vuoto: come l'attività)" aria-label="Prove per LU della sottoattività">
                 <input class="campo-in" name="${'ms_sugg_' + i}" maxlength="600" value="${(m && m.suggerimenti) || ''}" placeholder="Indicazioni per chi somministra (facoltative)" aria-label="Indicazioni della sottoattività">
             </div>
         </div>`;
@@ -1878,9 +1886,10 @@
                 // con più prese dati: quali erano già a criterio, per avvisare di quelle nuove
                 const primaM = misure(att).map((x) => x.mantenimento || !!P.criterioRaggiunto(P.sedute(p, att, t || undefined, x.id), att.criterio));
                 if (!giaIn && ((t && t.stato === 'attivo') || senza) && !prima && !att.mantenimento) controlla.push({ att, t: t || null, primaM });
-                if (P.conAttesa(att, t)) {
+                const attL = m ? attPerVoce(att, k) : att;
+                if (P.conAttesa(attL, t)) {
                     // LU contate: entrano nei dati solo a blocchi completi, il resto aspetta
-                    const n = +att.prove, k = P.chiaveAttesa(t, m && m.id), prec = P.inAttesaDi(att, t, m && m.id);
+                    const n = +attL.prove, k = P.chiaveAttesa(t, m && m.id), prec = P.inAttesaDi(att, t, m && m.id);
                     const seq = (v.sequenza || '').length === v.v + v.p + v.x ? v.sequenza : 'V'.repeat(v.v) + 'P'.repeat(v.p) + 'X'.repeat(v.x);
                     const { blocchi, resto } = P.dividiLU(prec && prec.seq, seq, n);
                     const testoOggi = [voceS.decisione ? '**' + voceS.decisione + '**' : '', voceS.nota].filter(Boolean).join(' — ');

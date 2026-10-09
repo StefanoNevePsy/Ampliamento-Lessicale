@@ -75,6 +75,14 @@ prova('più prese dati: la riga del target e sotto ogni presa con le sue caselle
   assert.strictEqual((t.match(/class="st-sub/g) || []).length, 2);
   assert.strictEqual((t.match(/st-tot/g) || []).length, 2, 'un totale per presa');
 });
+prova('sottoattività con le sue prove: caselle e totale suoi', () => {
+  const pz3 = { id: 'pz_nest3', name: 'Prova', history: [] };
+  const c = P.nuovaAttivita(pz3, { nome: 'Categorizzazione', prove: 10, target: 'Ambienti mix' });
+  c.misure = [{ id: 'm1', nome: 'Categorizza' }, { id: 'm2', nome: 'Tact mix', prove: 20 }];
+  const t = S.html(pz3, { spazio: 'previste', colonne: 10, ta: false }, dip);
+  assert.ok(t.includes('/ 10') && t.includes('/ 20'));
+  assert.strictEqual(conta(t, /class="st-c on"/g), 30, '10 + 20 caselle previste');
+});
 
 console.log(`\n${passati} test passati, ${falliti.length} falliti`);
 process.exit(falliti.length ? 1 : 0);
