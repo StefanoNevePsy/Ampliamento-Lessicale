@@ -267,21 +267,53 @@
     function moduloModello(pid, dowScelti, x) {
         const m = S.modello || TT.modelloVuoto();
         const c = Object.assign({}, TT.GIORNATA, m.orari || {});
-        const fasce = []; for (let t = TT.minuti(c.da); t < TT.minuti(c.a); t += (+c.fascia || 60)) fasce.push(TT.hhmm(t));
-        const fini = fasce.map((f) => TT.hhmm(Math.min(TT.minuti(f) + (+c.fascia || 60), TT.minuti(c.a))));
-        const da = (x && x.da) || fasce[0], a = (x && x.a) || fini[Math.min(1, fini.length - 1)];
+        // inizio libero, ore a tagli (50, 60 minuti…) × quante: la fine si calcola da sola
+        let ultimoTaglio = 0; try { ultimoTaglio = +localStorage.getItem('tice_turni_taglio') || 0; } catch (e) { /* niente */ }
+        const taglio = (x && x.taglio) || ultimoTaglio || +c.fascia || 60;
+        const da = (x && x.da) || c.da;
+        const n = (x && x.n) || (x ? Math.max(1, Math.round((TT.minuti(x.a) - TT.minuti(x.da)) / taglio)) : 2);
+        const a = (x && x.a) || TT.hhmm(TT.minuti(da) + n * taglio);
+        const TAGLI = [30, 40, 45, 50, 55, 60, 90];
         const gia = (x && x.persone) || [];
         const riga = (p) => h`<label class="spunta-riga tt-scelta"><input type="checkbox" name="p" value="${p.id}" ${gia.includes(p.id) ? grezzo('checked') : ''}><span>${p.nome}</span></label>`;
         const tutti = X.pazienti().slice().sort((u, v) => String(u.name).localeCompare(String(v.name), 'it'));
         return foglio(h`<form><h2>${pid ? nomeBambino(pid) : 'Aggiungi un bambino'}</h2>
             ${pid ? '' : h`<label class="campo"><span>Bambino</span><select name="pid" class="campo-in" required><option value="">Scegli…</option>${tutti.map((p) => h`<option value="${p.id}">${p.name}</option>`)}</select></label>`}
             <div class="campo"><span>Giorni</span><div class="tt-dow">${[1, 2, 3, 4, 5, 6, 7].map((d) => h`<label><input type="checkbox" name="dow" value="${d}" ${dowScelti.includes(d) ? grezzo('checked') : ''}><span>${TT.GIORNI_BREVI[d - 1]}</span></label>`)}</div></div>
-            <div class="riga-campi"><label class="campo"><span>Dalle</span><select name="da" class="campo-in">${fasce.map((f) => h`<option value="${f}" ${f === da ? grezzo('selected') : ''}>${oraT(f)}</option>`)}</select></label>
-                <label class="campo"><span>Alle</span><select name="a" class="campo-in">${fini.map((f) => h`<option value="${f}" ${f === a ? grezzo('selected') : ''}>${oraT(f)}</option>`)}</select></label></div>
+            <div class="riga-campi tt-orario">
+                <label class="campo"><span>Inizio</span><input name="da" class="campo-in" inputmode="numeric" required value="${da}" placeholder="14:10" autocomplete="off" data-tt-calc></label>
+                <label class="campo"><span>Ore da</span><select name="taglio" class="campo-in" data-tt-calc>${TAGLI.concat(TAGLI.includes(taglio) ? [] : [taglio]).map((t) => h`<option value="${t}" ${t === taglio ? grezzo('selected') : ''}>${t} min</option>`)}</select></label>
+                <label class="campo"><span>Quante</span><input name="n" type="number" min="1" max="10" class="campo-in" inputmode="numeric" value="${n}" data-tt-calc></label>
+                <label class="campo"><span>Fine</span><input name="a" class="campo-in" inputmode="numeric" required value="${a}" autocomplete="off" data-tt-fine></label></div>
+            <p class="sotto piccolo" data-tt-spiega></p>
             ${S.persone.length ? h`<div class="campo scelte-stampa"><span>Di solito con (facoltativo)</span>${S.persone.map(riga)}</div>` : ''}
             <div class="bottoni">${x ? h`<button type="button" class="bt" data-foglio="togli">${icona('trash')} Non viene</button>` : ''}
                 <button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`,
-        { invia: (form) => { const fd = new FormData(form); return { pid: pid || fd.get('pid'), dow: fd.getAll('dow').map(Number), da: fd.get('da'), a: fd.get('a'), persone: fd.getAll('p') }; } });
+        {
+            dopo: (el) => {
+                const fine = el.querySelector('[data-tt-fine]'), spiega = el.querySelector('[data-tt-spiega]');
+                const calcola = () => {
+                    const i = TT.leggiOra(el.querySelector('[name=da]').value), t = +el.querySelector('[name=taglio]').value, q = +el.querySelector('[name=n]').value;
+                    if (!i || !(t > 0) || !(q > 0)) { spiega.textContent = 'Scrivi l\'inizio come 14:10.'; return; }
+                    const m = TT.minuti(i) + t * q;
+                    if (m >= 24 * 60) { spiega.textContent = 'Si va oltre la mezzanotte: controlla.'; return; }
+                    fine.value = TT.hhmm(m);
+                    spiega.textContent = `${q} ${q === 1 ? 'ora' : 'ore'} da ${t} minuti: dalle ${oraT(i)} alle ${oraT(fine.value)}.`;
+                };
+                el.querySelectorAll('[data-tt-calc]').forEach((x) => x.addEventListener('input', calcola));
+                el.querySelectorAll('[data-tt-calc]').forEach((x) => x.addEventListener('change', calcola));
+                fine.addEventListener('input', () => { spiega.textContent = 'Fine scritta a mano.'; });
+                const i0 = TT.leggiOra(el.querySelector('[name=da]').value);
+                spiega.textContent = i0 ? `${n} ${n === 1 ? 'ora' : 'ore'} da ${taglio} minuti: dalle ${oraT(i0)} alle ${oraT(a)}.` : '';
+            },
+            invia: (form) => {
+                const fd = new FormData(form);
+                const da = TT.leggiOra(fd.get('da')), a = TT.leggiOra(fd.get('a'));
+                if (!da || !a) { avviso('Scrivi gli orari come 14:10.', 'errore'); return undefined; }
+                try { localStorage.setItem('tice_turni_taglio', String(fd.get('taglio'))); } catch (e) { /* niente */ }
+                return { pid: pid || fd.get('pid'), dow: fd.getAll('dow').map(Number), da, a, taglio: +fd.get('taglio'), n: +fd.get('n'), persone: fd.getAll('p') };
+            }
+        });
     }
 
     // Chi fa cosa oggi, in breve
@@ -327,7 +359,7 @@
             cambiaModello((m) => {
                 // i giorni tolti dalla scelta (se era quello toccato) e quelli aggiunti
                 if (!r.dow.includes(d)) m = TT.impostaModello(m, pid, d, null);
-                r.dow.forEach((k) => { m = TT.impostaModello(m, pid, k, { da: r.da, a: r.a, persone: r.persone }); });
+                r.dow.forEach((k) => { m = TT.impostaModello(m, pid, k, { da: r.da, a: r.a, taglio: r.taglio, n: r.n, persone: r.persone }); });
                 return m;
             });
         },
@@ -335,7 +367,7 @@
             const r = await moduloModello(null, [], null);
             if (!r || !r.pid || !r.dow.length) { if (r) avviso('Scegli il bambino e almeno un giorno.'); return; }
             if (r.a <= r.da) { avviso('L\'orario di fine viene prima di quello di inizio.', 'errore'); return; }
-            cambiaModello((m) => { r.dow.forEach((k) => { m = TT.impostaModello(m, r.pid, k, { da: r.da, a: r.a, persone: r.persone }); }); return m; });
+            cambiaModello((m) => { r.dow.forEach((k) => { m = TT.impostaModello(m, r.pid, k, { da: r.da, a: r.a, taglio: r.taglio, n: r.n, persone: r.persone }); }); return m; });
         },
         'tt-morari': async () => {
             const c = Object.assign({}, TT.GIORNATA, (S.modello || {}).orari || {});

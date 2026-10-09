@@ -139,7 +139,12 @@
   function impostaModello(modello, pid, dowN, dati) {
     modello = modello || modelloVuoto();
     modello.voci = (modello.voci || []).filter(function (x) { return !(x.pid === pid && x.dow === dowN); });
-    if (dati) modello.voci.push({ id: nuovoId('m'), pid: pid, dow: dowN, da: dati.da, a: dati.a, persone: (dati.persone || []).slice() });
+    if (dati) {
+      var v = { id: nuovoId('m'), pid: pid, dow: dowN, da: dati.da, a: dati.a, persone: (dati.persone || []).slice() };
+      // come è stato calcolato l'orario (tagli di N minuti × quante), per riproporlo
+      if (+dati.taglio > 0 && +dati.n > 0) { v.taglio = +dati.taglio; v.n = +dati.n; }
+      modello.voci.push(v);
+    }
     modello.ordine = modello.ordine || [];
     if (dati && modello.ordine.indexOf(pid) < 0) modello.ordine.push(pid);
     if (!modello.voci.some(function (x) { return x.pid === pid; })) modello.ordine = modello.ordine.filter(function (x) { return x !== pid; });
