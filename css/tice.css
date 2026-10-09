@@ -207,8 +207,10 @@ body.tice-aperto #notebook-tab-handle { display: none !important; }
 .tice .conto-ms { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .tice .pill.verde.chiara { opacity: 0.8; }
 .tice-foglio .sottoattivita { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 6px; }
-.tice-foglio .riga-sotto { display: flex; align-items: center; gap: 10px; }
+.tice-foglio .riga-sotto { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--t-bordo, rgba(0,0,0,.12)); border-radius: 12px; }
+.tice-foglio .riga-sotto-1, .tice-foglio .riga-sotto-2 { display: flex; align-items: center; gap: 10px; }
 .tice-foglio .riga-sotto .campo-in { flex: 1; min-width: 0; }
+.tice-foglio .riga-sotto select.campo-in { flex: 0 0 auto; max-width: 45%; }
 .tice-foglio .riga-sotto .spunta-riga { margin: 0 !important; white-space: nowrap; align-items: center !important; }
 .tice .sotto-tasti .td-voce { flex: none; font-variant-numeric: tabular-nums; }
 .tice-foglio .scelta-rapida { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 12px; }

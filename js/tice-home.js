@@ -38,7 +38,8 @@
     // ---------- stato ----------
     const T = { vista: 'turni', pid: null, aperte: {}, chiusiAperti: {}, suggerimenti: {}, cerca: '', importazioni: [] };
     // Suggerimenti per chi somministra: dell'attività e del target in corso
-    const suggerimentiDi = (att, t) => [att && att.suggerimenti, t && t.suggerimento].map((x) => String(x || '').trim()).filter(Boolean);
+    const suggerimentiDi = (att, t) => [att && att.suggerimenti, t && t.suggerimento].concat(((att && !att.temporanea && att.misure) || []).map((m) => m.suggerimenti))
+        .map((x) => String(x || '').trim()).filter(Boolean);
     const radice = () => document.getElementById('tice');
 
     function pazienti() { return (typeof state !== 'undefined' && state.patients) || []; }
@@ -115,6 +116,20 @@
     const baseId = (k) => String(k).split('~')[0];
     const msDi = (k) => String(k).split('~')[1] || null;
     const misure = (att) => (att && !att.temporanea && att.misure) || [];
+    // Il tipo di una sottoattività: il suo, se indicato, altrimenti quello dell'attività
+    function tipoMisura(att, m) {
+        if (!m || !m.tipo) return { sessionType: att.sessionType || 'independent', eco: att.risposte === 'ecoico' };
+        return { sessionType: m.tipo === 'timedelay' ? 'timedelay' : 'independent', eco: m.tipo === 'ecoico' };
+    }
+    // L'attività "vista" da una voce: per una sottoattività con il proprio tipo, i suoi tasti
+    function attPerVoce(att, k) {
+        const m = misure(att).find((x) => x.id === msDi(k));
+        if (!m || !m.tipo) return att;
+        const tm = tipoMisura(att, m);
+        const a = Object.assign({}, att, { sessionType: tm.sessionType });
+        if (tm.eco) { a.risposte = 'ecoico'; a.nomeP = 'Ecoica'; } else { delete a.risposte; if (a.nomeP === 'Ecoica') delete a.nomeP; }
+        return a;
+    }
     function attivitaDi(p, id) {
         id = baseId(id);
         const a = P.attivita(p, id);
@@ -129,8 +144,9 @@
             const c = att.temporanea ? null : P.targetCorrente(att);
             // una presa dati segue il target scelto per le altre della stessa attività
             const gia = Object.keys(b.voci).filter((x) => baseId(x) === att.id).map((x) => b.voci[x])[0];
+            const m = misure(att).find((x) => x.id === msDi(k));
             b.voci[k] = { v: 0, p: 0, x: 0, sequenza: '', nota: '', decisione: '', targetId: gia ? gia.targetId : (c ? c.target.id : null),
-                mantenimento: gia ? gia.mantenimento : !!(c && c.mantenimento), sessionType: att.sessionType || 'independent' };
+                mantenimento: gia ? gia.mantenimento : !!(c && c.mantenimento), sessionType: tipoMisura(att, m).sessionType };
         }
         return b.voci[k];
     }
@@ -442,6 +458,7 @@
                 ${h`<div class="sugg-testo">
                     ${att.suggerimenti ? h`<p>${att.suggerimenti}</p>` : ''}
                     ${t && t.suggerimento ? h`<p>${att.suggerimenti ? h`<b>${t.testo}:</b> ` : ''}${t.suggerimento}</p>` : ''}
+                    ${ms.filter((m) => m.suggerimenti).map((m) => h`<p><b>${m.nome}:</b> ${m.suggerimenti}</p>`)}
                 </div>`}
             </div>` : ''}
             ${aperta ? h`<div class="att-corpo">
@@ -471,15 +488,18 @@
     // Una delle prese dati dell'attività (es. Categorizzazione → «Categorizza», «Tact mix»)
     function presaDati(p, att, t, tipo, m, v, crit, soglia) {
         const k = att.id + '~' + m.id;
+        const attM = attPerVoce(att, k), tm = tipoMisura(att, m);
+        const tipoM = (v && v.sessionType) || tm.sessionType;
         const tot = v ? v.v + v.p + v.x : 0;
         const lu = statoLU(att, v, t || null, m.id);
         return h`<div class="presa ${crit ? 'a-criterio' : ''}">
             <div class="presa-testa"><b>${m.nome}</b>
+                ${m.tipo ? h`<span class="pill">${tm.eco ? 'Echo to tact' : tipoM === 'timedelay' ? 'T/D' : 'Indip.'}</span>` : ''}
                 ${m.mantenimento ? h`<span class="pill grigia" title="Il dato si prende ma resta fuori da statistiche e criterio">mantenimento</span>` : ''}
                 ${crit ? h`<span class="pill verde">${icona('flag-checkered')} criterio il ${formatoData(crit)}</span>` : ''}
                 <span class="presa-conto">${tot ? h`<b class="${classePct(Math.round(100 * v.v / tot), soglia)}">${Math.round(100 * v.v / tot)}%</b> <span class="sotto">${v.v}/${tot}${att.prove ? ' di ' + att.prove : ''}</span>` : h`<span class="sotto">${att.prove ? att.prove + ' prove' : ''}</span>`}</span></div>
             ${lu && (lu.prec || lu.oggi) ? h`<p class="sotto piccolo lu-attesa">${icona('hourglass-half')} ${lu.prec ? `${lu.prec.seq.length} in attesa dal ${formatoData(lu.prec.dal)} · ` : ''}${lu.blocchi.length ? 'salvando entra nei dati' + (lu.resto ? `, ${lu.resto} restano in attesa` : '') : `ne mancano ${lu.n - lu.resto} per la LU da ${lu.n}`}</p>` : ''}
-            ${tasti(att, tipo, k)}
+            ${tasti(attM, tipoM, k)}
             <div class="sotto-tasti">
                 <div class="sequenza" aria-label="Sequenza delle risposte">${(v ? v.sequenza : '').split('').map((r) => h`<i class="${r}"></i>`)}</div>
                 <button class="ib" data-a="annulla" data-id="${k}" aria-label="Annulla l'ultima di ${m.nome}" title="Annulla l'ultima">${icona('rotate-left')}</button>
@@ -1164,6 +1184,7 @@
             const p = paz(T.pid);
             const att = attivitaDi(p, b.dataset.id);
             const v = voce(p, att, b.dataset.id);
+            const attV = attPerVoce(att, b.dataset.id);
             const targets = (att.target || []).filter((t) => t.stato === 'attivo' || t.stato === 'criterio' || t.stato === 'repertorio' || t.id === v.targetId);
             const tV = v.targetId ? (att.target || []).find((x) => x.id === v.targetId) : null;
             const attesaV = P.conAttesa(att, tV) ? P.inAttesaDi(att, tV) : null;
@@ -1176,10 +1197,10 @@
                 </div></div>
                 <label class="campo"><span>Correggi i conteggi</span><div class="riga-campi">
                     <input name="v" type="number" min="0" max="999" inputmode="numeric" value="${v.v}" aria-label="Corrette">
-                    ${ecoico(att) ? h`<input name="eco" type="number" min="0" max="999" inputmode="numeric" value="${v.p}" aria-label="Ecoiche">
+                    ${ecoico(attV) ? h`<input name="eco" type="number" min="0" max="999" inputmode="numeric" value="${v.p}" aria-label="Ecoiche">
                     <input name="no" type="number" min="0" max="999" inputmode="numeric" value="${v.x}" aria-label="Errate">`
                         : h`<input name="no" type="number" min="0" max="999" inputmode="numeric" value="${v.p + v.x}" aria-label="Non corrette">`}
-                </div><span class="sotto piccolo">${ecoico(att) ? '✓ autonome · e+ ecoiche · ✗ errate' : '✓ corrette · poi le promptate (time delay) o le errate (indipendente)'}</span></label>
+                </div><span class="sotto piccolo">${ecoico(attV) ? '✓ autonome · e+ ecoiche · ✗ errate' : '✓ corrette · poi le promptate (time delay) o le errate (indipendente)'}</span></label>
                 <label class="campo"><span>Decisione (facoltativa)</span><input name="decisione" maxlength="200" value="${v.decisione || ''}" placeholder="es. Passa a 1&quot; T/D" list="tice-decisioni"></label>
                 <datalist id="tice-decisioni"><option value='Passa a 0" T/D'><option value='Passa a 1" T/D'><option value='Passa a 2" T/D'><option value="Probe"><option value="Stop"></datalist>
                 <label class="campo"><span>Nota</span><textarea name="nota" maxlength="2000">${v.nota || ''}</textarea></label>
@@ -1204,11 +1225,11 @@
                 });
             }
             v.sessionType = r.tipo === 'timedelay' ? 'timedelay' : 'independent';
-            convertiVoce(v, v.sessionType, att);
-            const no = ecoico(att) ? 'x' : nonCorretta(v.sessionType).toLowerCase();
+            convertiVoce(v, v.sessionType, attV);
+            const no = ecoico(attV) ? 'x' : nonCorretta(v.sessionType).toLowerCase();
             const nv = Math.max(0, Math.min(999, parseInt(r.v, 10) || 0));
             const nn = Math.max(0, Math.min(999, parseInt(r.no, 10) || 0));
-            const ne = ecoico(att) ? Math.max(0, Math.min(999, parseInt(r.eco, 10) || 0)) : v.p;
+            const ne = ecoico(attV) ? Math.max(0, Math.min(999, parseInt(r.eco, 10) || 0)) : v.p;
             if (nv !== v.v || nn !== v[no] || ne !== v.p) {
                 v.p = ne;
                 // la sequenza non corrisponde più ai conteggi: la si ricostruisce in blocco
@@ -1678,7 +1699,8 @@
     // Le prese dati scritte nel modulo: quelle già esistenti tengono il loro id (e i dati)
     function impostaMisure(att, r) {
         const righe = Object.keys(r).filter((k) => /^ms_nome_\d+$/.test(k)).sort((x, y) => +x.slice(8) - +y.slice(8))
-            .map((k) => { const i = k.slice(8); return { id: String(r['ms_id_' + i] || ''), nome: String(r[k] || '').trim(), mant: !!r['ms_mant_' + i] }; })
+            .map((k) => { const i = k.slice(8); return { id: String(r['ms_id_' + i] || ''), nome: String(r[k] || '').trim(), mant: !!r['ms_mant_' + i],
+                tipo: ['independent', 'timedelay', 'ecoico'].includes(r['ms_tipo_' + i]) ? r['ms_tipo_' + i] : '', sugg: String(r['ms_sugg_' + i] || '').trim() }; })
             .filter((x) => x.nome);
         const viste = new Set();
         const nuove = righe.filter((x) => { const k = x.nome.toLowerCase(); if (viste.has(k)) return false; viste.add(k); return true; }).slice(0, 8);
@@ -1688,6 +1710,8 @@
             const vecchia = prima.find((m) => m.id === x.id) || prima.find((m) => m.nome.toLowerCase() === x.nome.toLowerCase());
             const m = { id: vecchia ? vecchia.id : P.nuovoId('ms'), nome: x.nome };
             if (x.mant) m.mantenimento = true;
+            if (x.tipo) m.tipo = x.tipo;
+            if (x.sugg) m.suggerimenti = x.sugg;
             return m;
         });
     }
@@ -1746,11 +1770,19 @@
     }
     // Una riga del modulo: nome della sottoattività e i suoi flag (l'id tiene i dati già presi)
     function rigaSotto(i, m) {
+        const tipo = (m && m.tipo) || '';
+        const opz = [['', 'Tipo come l\'attività'], ['independent', 'Indipendente'], ['timedelay', 'Time delay'], ['ecoico', 'Echo to tact']];
         return h`<div class="riga-sotto">
-            <input type="hidden" name="${'ms_id_' + i}" value="${m ? m.id : ''}">
-            <input class="campo-in" name="${'ms_nome_' + i}" maxlength="60" value="${m ? m.nome : ''}" placeholder="es. Categorizza" aria-label="Nome della sottoattività">
-            <label class="spunta-riga" title="Il dato si prende ma resta fuori da statistiche e criterio"><input type="checkbox" name="${'ms_mant_' + i}" ${m && m.mantenimento ? grezzo('checked') : ''}> <span>Mantenimento</span></label>
-            <button type="button" class="ib" data-sotto-togli aria-label="Togli la sottoattività" title="Togli">${icona('xmark')}</button>
+            <div class="riga-sotto-1">
+                <input type="hidden" name="${'ms_id_' + i}" value="${m ? m.id : ''}">
+                <input class="campo-in" name="${'ms_nome_' + i}" maxlength="60" value="${m ? m.nome : ''}" placeholder="es. Categorizza" aria-label="Nome della sottoattività">
+                <label class="spunta-riga" title="Il dato si prende ma resta fuori da statistiche e criterio"><input type="checkbox" name="${'ms_mant_' + i}" ${m && m.mantenimento ? grezzo('checked') : ''}> <span>Mantenimento</span></label>
+                <button type="button" class="ib" data-sotto-togli aria-label="Togli la sottoattività" title="Togli">${icona('xmark')}</button>
+            </div>
+            <div class="riga-sotto-2">
+                <select class="campo-in" name="${'ms_tipo_' + i}" aria-label="Tipo di seduta della sottoattività">${opz.map(([v, n]) => h`<option value="${v}" ${v === tipo ? grezzo('selected') : ''}>${n}</option>`)}</select>
+                <input class="campo-in" name="${'ms_sugg_' + i}" maxlength="600" value="${(m && m.suggerimenti) || ''}" placeholder="Indicazioni per chi somministra (facoltative)" aria-label="Indicazioni della sottoattività">
+            </div>
         </div>`;
     }
 
