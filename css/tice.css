@@ -707,7 +707,7 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 .tice .tt-strumenti { margin-top: 10px; flex-wrap: wrap; }
 .tice-foglio .opzioni-rapide { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 10px; }
 .tice .tt-ora { font-size: .85rem; font-weight: 700; padding: 6px 8px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; vertical-align: middle; }
-.tice .tt-bambino { min-width: 130px; padding: 9px 8px 8px; font-weight: 700; font-size: 1.08rem; text-align: center; color: var(--text-primary); background: var(--t-sup, var(--bg-primary, #fff)); background-image: linear-gradient(var(--t), var(--t)); border-top: 4px solid var(--c) !important; }
+.tice .tt-bambino { min-width: 84px; padding: 7px 5px 6px; font-weight: 700; font-size: .9rem; line-height: 1.15; white-space: normal; text-align: center; color: var(--text-primary); background: var(--t-sup, var(--bg-primary, #fff)); background-image: linear-gradient(var(--t), var(--t)); border-top: 4px solid var(--c) !important; }
 .tice .tt-cella { padding: 0; background-image: linear-gradient(var(--t), var(--t)); vertical-align: top; }
 .tice .tt-in { display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 4px; width: 100%; min-height: 54px; padding: 6px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .tice .tt-in:disabled { cursor: default; }

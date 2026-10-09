@@ -14,7 +14,7 @@ prova('giornata: di serie il pomeriggio (14:10–18:10), bambini in colonna, anc
   let s = T.impostaGiornata(T.vuota(), G, { bambini: ['a', 'b'] });
   s = T.impostaCella(s, G, 'c', '07:30', ['p1']);
   const g = T.giornata(s, G);
-  assert.deepStrictEqual(g.bambini, ['a', 'b', 'c']);
+  assert.deepStrictEqual(g.bambini, ['c', 'a', 'b'], 'in ordine di arrivo: chi comincia prima (c alle 7:30) va per primo');
   assert.strictEqual(g.fasce[0], '07:30');
   assert.deepStrictEqual(g.fasce.slice(1), ['14:10', '15:10', '16:10', '17:10']);
 });

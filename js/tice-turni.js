@@ -182,6 +182,14 @@
         Object.keys(presenze).some(function (pid) { return (presenze[pid] || []).some(function (x) { return f >= x[0] && f < x[1]; }); });
     });
     var usate = piene.length ? fasce.slice(fasce.indexOf(piene[0]), fasce.indexOf(piene[piene.length - 1]) + 1) : [];
+    // in ordine di arrivo: prima chi comincia prima (a parità, l'ordine scelto)
+    var inizio = function (pid) {
+      var t = (presenze[pid] || []).map(function (x) { return x[0]; })
+        .concat(voci.filter(function (v) { return v.pid === pid && (v.persone || []).length; }).map(function (v) { return v.ora; })).sort()[0];
+      return t || '99:99';
+    };
+    var pos = {}; bambini.forEach(function (pid, i) { pos[pid] = i; });
+    bambini.sort(function (x, y) { var a = inizio(x), b = inizio(y); return a < b ? -1 : a > b ? 1 : pos[x] - pos[y]; });
     return { giorno: g, da: c.da, a: c.a, fascia: +c.fascia || 60, bambini: bambini, fasce: fasce, usate: usate, celle: celle, voci: voci,
       presenze: presenze, virtuale: virtuale, propria: !!propria.proprio };
   }
