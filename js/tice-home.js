@@ -351,7 +351,14 @@
     // In time delay la risposta non corretta è quella promptata, in indipendente è l'errore:
     // si punteggia solo corretta / promptata oppure corretta / errata
     const nonCorretta = (tipo) => (tipo === 'timedelay' ? 'P' : 'X');
+    // Echo to tact: si segna se lo dice da solo (✓), se lo ripete in ecoico (e+) o se no (✗)
+    const ecoico = (att) => att && att.risposte === 'ecoico';
     function tasti(att, tipo) {
+        if (ecoico(att)) return h`<div class="tasti">
+            <button class="tasto v" data-a="segna" data-id="${att.id}" data-r="V">✓<small>Autonoma</small></button>
+            <button class="tasto p" data-a="segna" data-id="${att.id}" data-r="P">e+<small>Ecoica</small></button>
+            <button class="tasto x" data-a="segna" data-id="${att.id}" data-r="X">✗<small>Errata</small></button>
+        </div>`;
         return h`<div class="tasti due">
             <button class="tasto v" data-a="segna" data-id="${att.id}" data-r="V">✓<small>Corretta</small></button>
             ${nonCorretta(tipo) === 'P'
@@ -360,7 +367,8 @@
         </div>`;
     }
     // Cambiando strategia le risposte non corrette passano dall'una all'altra colonna
-    function convertiVoce(v, tipo) {
+    function convertiVoce(v, tipo, att) {
+        if (ecoico(att)) return;
         const da = nonCorretta(tipo) === 'P' ? 'X' : 'P', a = nonCorretta(tipo);
         const k = da.toLowerCase(), j = a.toLowerCase();
         if (!v[k]) return;
@@ -397,7 +405,7 @@
             <button class="att-testa" data-a="apri-att" data-id="${att.id}" aria-expanded="${aperta ? 'true' : 'false'}">
                 <span class="corpo">
                     <span class="nome">${att.nome}
-                        ${tipo === 'timedelay' ? h` <span class="pill">T/D${tdS != null ? ' ' + sec(tdS) : ''}</span>` : ''}
+                        ${ecoico(att) ? h` <span class="pill">Echo to tact</span>` : tipo === 'timedelay' ? h` <span class="pill">T/D${tdS != null ? ' ' + sec(tdS) : ''}</span>` : ''}
                         ${att.temporanea ? h` <span class="pill grigia">solo oggi</span>` : ''}
                         ${att.stato && att.stato !== 'attivo' ? h` <span class="pill grigia">${att.stato}</span>` : ''}
                         ${mant ? h` <span class="pill arancio" title="${att.mantenimento ? 'Il dato si prende ma non entra nelle statistiche' : 'Il target ha già raggiunto il criterio: si registra come mantenimento finché non si apre il prossimo'}">mantenimento</span>` : ''}
@@ -664,7 +672,7 @@
             <button class="att-testa" ${modifica ? grezzo(`data-a="mod-att" data-id="${esc(att.id)}"`) : ''}>
                 <span class="corpo"><span class="nome">${att.nome}
                     ${(() => { const e = M.etichetta(att, dizionario()); return e && M.normalizza(e) !== M.normalizza(att.nome) ? h` <span class="pill grigia">${e}</span>` : ''; })()}
-                    ${att.sessionType === 'timedelay' ? (() => {
+                    ${ecoico(att) ? h` <span class="pill">Echo to tact</span>` : att.sessionType === 'timedelay' ? (() => {
                         const d = P.tdDi(att), u = (att.tdCambi || []).slice(-1)[0];
                         return h` <span class="pill" title="${u ? `Cambiato il ${formatoData(u.il)}${u.da != null ? ' da ' + sec(u.da) : ''} a ${sec(u.a)}` : 'Time delay'}">T/D${d != null ? ' ' + sec(d) : ''}</span>`;
                     })() : h` <span class="pill grigia">Indip.</span>`}
@@ -1124,8 +1132,10 @@
                 </div></div>
                 <label class="campo"><span>Correggi i conteggi</span><div class="riga-campi">
                     <input name="v" type="number" min="0" max="999" inputmode="numeric" value="${v.v}" aria-label="Corrette">
-                    <input name="no" type="number" min="0" max="999" inputmode="numeric" value="${v.p + v.x}" aria-label="Non corrette">
-                </div><span class="sotto piccolo">✓ corrette · poi le promptate (time delay) o le errate (indipendente)</span></label>
+                    ${ecoico(att) ? h`<input name="eco" type="number" min="0" max="999" inputmode="numeric" value="${v.p}" aria-label="Ecoiche">
+                    <input name="no" type="number" min="0" max="999" inputmode="numeric" value="${v.x}" aria-label="Errate">`
+                        : h`<input name="no" type="number" min="0" max="999" inputmode="numeric" value="${v.p + v.x}" aria-label="Non corrette">`}
+                </div><span class="sotto piccolo">${ecoico(att) ? '✓ autonome · e+ ecoiche · ✗ errate' : '✓ corrette · poi le promptate (time delay) o le errate (indipendente)'}</span></label>
                 <label class="campo"><span>Decisione (facoltativa)</span><input name="decisione" maxlength="200" value="${v.decisione || ''}" placeholder="es. Passa a 1&quot; T/D" list="tice-decisioni"></label>
                 <datalist id="tice-decisioni"><option value='Passa a 0" T/D'><option value='Passa a 1" T/D'><option value='Passa a 2" T/D'><option value="Probe"><option value="Stop"></datalist>
                 <label class="campo"><span>Nota</span><textarea name="nota" maxlength="2000">${v.nota || ''}</textarea></label>
@@ -1147,11 +1157,13 @@
                 v.mantenimento = !!(tt && tt.stato !== 'attivo');
             }
             v.sessionType = r.tipo === 'timedelay' ? 'timedelay' : 'independent';
-            convertiVoce(v, v.sessionType);
-            const no = nonCorretta(v.sessionType).toLowerCase();
+            convertiVoce(v, v.sessionType, att);
+            const no = ecoico(att) ? 'x' : nonCorretta(v.sessionType).toLowerCase();
             const nv = Math.max(0, Math.min(999, parseInt(r.v, 10) || 0));
             const nn = Math.max(0, Math.min(999, parseInt(r.no, 10) || 0));
-            if (nv !== v.v || nn !== v[no]) {
+            const ne = ecoico(att) ? Math.max(0, Math.min(999, parseInt(r.eco, 10) || 0)) : v.p;
+            if (nv !== v.v || nn !== v[no] || ne !== v.p) {
+                v.p = ne;
                 // la sequenza non corrisponde più ai conteggi: la si ricostruisce in blocco
                 v.v = nv; v[no] = nn;
                 v.sequenza = 'V'.repeat(v.v) + 'P'.repeat(v.p) + 'X'.repeat(v.x);
@@ -1350,7 +1362,8 @@
             const r = await moduloAttivita(p, null);
             if (!r) return;
             const righe = String(r.target || '').split('\n').map((x) => x.trim()).filter(Boolean);
-            const att = P.nuovaAttivita(p, Object.assign({}, r, { target: null }));
+            const att = P.nuovaAttivita(p, Object.assign({}, r, { target: null, sessionType: r.sessionType === 'timedelay' ? 'timedelay' : 'independent' }));
+            if (r.sessionType === 'ecoico') { att.risposte = 'ecoico'; att.nomeP = 'Ecoica'; }
             if (r.colore) att.colore = r.colore;
             modalitaDaModulo(att, r);
             righe.forEach((x, i) => P.aggiungiTarget(att, x, i === 0));
@@ -1383,7 +1396,9 @@
                 att.suggerimenti = String(r.suggerimenti || '').trim();
                 att.cronometro = !!r.cronometro;
                 if (r.mantenimento) att.mantenimento = true; else delete att.mantenimento;
-                att.sessionType = r.sessionType;
+                att.sessionType = r.sessionType === 'timedelay' ? 'timedelay' : 'independent';
+                if (r.sessionType === 'ecoico') { att.risposte = 'ecoico'; att.nomeP = 'Ecoica'; }
+                else if (ecoico(att)) { delete att.risposte; if (att.nomeP === 'Ecoica') delete att.nomeP; }
                 if (r.colore) att.colore = r.colore; else delete att.colore;
                 if (P.secondiTD(r.tdSeconds) != null) P.impostaTD(att, r.tdSeconds, { chi: chiOpera() });
                 att.criterio = { soglia: +r.soglia || 90, sedute: +r.sedute || 2 };
@@ -1627,8 +1642,10 @@
                 ${P.PALETTE.map((c) => h`<label><input type="radio" name="colore" value="${c}" ${a.colore === c ? grezzo('checked') : ''}><span style="--col:${c}"></span></label>`)}
             </div><span class="sotto piccolo">Lo stesso colore in seduta, nel programma e sui fogli stampati.</span></div>
             <div class="campo"><span>Tipo di seduta</span><div class="scelta">
-                <label><input type="radio" name="sessionType" value="independent" ${a.sessionType !== 'timedelay' ? grezzo('checked') : ''}><span>Indipendente</span></label>
-                <label><input type="radio" name="sessionType" value="timedelay" ${a.sessionType === 'timedelay' ? grezzo('checked') : ''}><span>Time delay</span></label></div></div>
+                <label><input type="radio" name="sessionType" value="independent" ${a.sessionType !== 'timedelay' && !ecoico(a) ? grezzo('checked') : ''}><span>Indipendente</span></label>
+                <label><input type="radio" name="sessionType" value="timedelay" ${a.sessionType === 'timedelay' && !ecoico(a) ? grezzo('checked') : ''}><span>Time delay</span></label>
+                <label><input type="radio" name="sessionType" value="ecoico" ${ecoico(a) ? grezzo('checked') : ''}><span>Echo to tact</span></label></div>
+                <span class="sotto piccolo">Echo to tact: in seduta ✓ se lo dice da solo, e+ se lo ripete in ecoico, ✗ se no.</span></div>
             <label class="spunta-riga"><input type="checkbox" name="mantenimento" ${a.mantenimento ? grezzo('checked') : ''}> <span><b>Mantenimento</b><br><span class="sotto piccolo">Il dato si prende in seduta, ma non entra nelle statistiche (LU del giorno, panoramica, grafici) e non porta a criterio.</span></span></label>
             <label class="spunta-riga"><input type="checkbox" name="cronometro" ${a.cronometro ? grezzo('checked') : ''}> <span><b>Cronometra (fluency)</b><br><span class="sotto piccolo">In seduta compare un cronometro che parte alla prima risposta: il grafico SCC mostra le risposte al minuto.</span></span></label>
             <div class="riga-campi">

@@ -252,6 +252,37 @@ console.log('Refusi e annotazioni dei quaderni');
   });
 }
 
+console.log('Echo to tact e date senza anno');
+{
+  const doc = [{ nome: 'SPEAKER', tabelle: [{ nome: 'TACT S+V', righe: [
+    ['Programma: TACT', null, null, null, null],
+    ['Criterio:', '90/100% per 2 sessioni consecutive', 'ECHOICO', 'RICHIESTA INDIPENDENTE', 'Decisione'],
+    ['STO', 'DATA', 'Echo +', 'Indipendente', null],
+    [null, null, null, null, null],
+    ['TACT S+V', '6/7', 15, 0, null],
+    ['Echo to tact', '7/7', 10, 5, null],
+    [null, '28/12', 2, 16, null],
+    [null, '3/1', 0, 18, null],
+    [null, '28(1', 0, 17, null]
+  ] }] }];
+  const pk = TiceImport.analizza(doc, 'eco.numbers');
+  const a = pk.attivita[0];
+  prova('colonne «Echo +» e «Indipendente»: tabella letta, attività Echo to tact', () => {
+    assert.ok(a, 'tabella saltata: ' + pk.avvisi.join(' | '));
+    assert.strictEqual(a.risposte, 'ecoico');
+    assert.strictEqual(a.sessionType, 'independent');
+    const x = pk.voci.find((y) => y.data && y.data.endsWith('-07-07'));
+    assert.strictEqual(x.v, 5); assert.strictEqual(x.p, 10);
+  });
+  prova('date senza anno (anche «28(1»): anno dedotto, e avanti di un anno dopo dicembre', () => {
+    const date = pk.voci.map((x) => x.data);
+    const anno = +date[0].slice(0, 4);
+    assert.deepStrictEqual(date.map((d) => d.slice(5)), ['07-06', '07-07', '12-28', '01-03', '01-28']);
+    assert.strictEqual(+date[3].slice(0, 4), anno + 1);
+    assert.ok(pk.avvisi.some((x) => /senza anno/.test(x)));
+  });
+}
+
 console.log('Applicare a un paziente');
 const paziente = { id: 'p1', name: 'Mario R', history: [
   { date: '2025-04-01T10:00:00.000Z', setName: 'Animali', mode: 'tact', correct: 5, total: 10, percentage: 50 }] };

@@ -55,6 +55,17 @@
     return parseFloat(s);
   }
   function due(n) { return (n < 10 ? '0' : '') + n; }
+  // "6/7", "28(9": giorno e mese senza anno (l'anno lo deduce chi chiama, dalle righe vicine)
+  function giornoMese(v) {
+    if (v instanceof Date) return null;
+    var m = /^(\d{1,2})\s*[\/.\-(]+\s*(\d{1,2})$/.exec(testo(v));
+    if (!m || +m[2] < 1 || +m[2] > 12 || +m[1] < 1 || +m[1] > 31) return null;
+    return { g: +m[1], m: +m[2] };
+  }
+  function conAnno(gm, anno) {
+    var d = new Date(Date.UTC(anno, gm.m - 1, gm.g));
+    return d.getUTCMonth() === gm.m - 1 ? anno + '-' + due(gm.m) + '-' + due(gm.g) : null;
+  }
   function dataIso(v) {
     // Le date di Numbers sono "ora locale scritta come UTC": si leggono in UTC.
     if (v instanceof Date) return isNaN(v) ? null : v.getUTCFullYear() + '-' + due(v.getUTCMonth() + 1) + '-' + due(v.getUTCDate());
@@ -92,8 +103,9 @@
       var t = testo(h).toLowerCase();
       if (!t) return;
       if (t === 'data' || t.indexOf('gg/') === 0) col.data = i;
-      else if (t.indexOf('corrett') >= 0) col.v = i;
-      else if (t.indexOf('prompt') >= 0 || t.indexOf('echo') >= 0) { col.p = i; nomeP = t.indexOf('echo') >= 0 ? 'Echo' : null; }
+      else if (t.indexOf('corrett') >= 0 || (t.indexOf('indipendent') >= 0 && col.v == null)) col.v = i;
+      // "Echo +", "Risposte echoiche", "Ecoico": le risposte ripetute in ecoico (Echo to tact)
+      else if (t.indexOf('prompt') >= 0 || t.indexOf('echo') >= 0 || /^eco/.test(t)) { col.p = i; nomeP = /echo|^eco/.test(t) ? 'Ecoica' : null; }
       else if (t.indexOf('x:') === 0 || t.indexOf('event') >= 0) col.evento = i;
       else if (t.indexOf('decision') >= 0) col.decisione = i;
     });
@@ -178,6 +190,7 @@
       origine: 'numbers'
     };
     if (mc.nomeP) att.nomeP = mc.nomeP;
+    if (mc.nomeP === 'Ecoica') { att.risposte = 'ecoico'; att.sessionType = 'independent'; }
     if (r1.some(function (x) { return testo(x).toLowerCase().indexOf('event') >= 0; }) || colonne.evento != null) {
       att.evento = colonne.evento != null ? etichetteEvento(r2[colonne.evento]) : ['Sì', 'No'];
     }
@@ -193,6 +206,17 @@
     // più righe stanno all'inizio del blocco), o la data torna indietro
     // (target paralleli nella stessa tabella).
     var corrente = null, righeDati = 0, precVuota = true, precDecisione = false, ultimaData = null;
+    // date senza anno ("6/7"): l'anno di una data completa della tabella, o quello in
+    // corso; si va avanti di un anno quando i mesi ricominciano (dicembre → gennaio)
+    var annoRif = null, vistaPrima = null, senzaAnno = 0, oggiIso = new Date().toISOString().slice(0, 10);
+    for (var ra = 3; ra < tab.righe.length && !annoRif; ra++) { var dc = dataIso(cella(tab, ra, colonne.data)); if (dc) annoRif = +dc.slice(0, 4); }
+    function deduci(gm) {
+      var base = vistaPrima ? +vistaPrima.slice(0, 4) : (annoRif || +oggiIso.slice(0, 4));
+      var c = conAnno(gm, base);
+      if (c && vistaPrima && (Date.parse(vistaPrima) - Date.parse(c)) / 86400000 > 200) c = conAnno(gm, base + 1);
+      if (c && !vistaPrima && !annoRif && c > oggiIso) c = conAnno(gm, base - 1);
+      return c;
+    }
     var voci = [];
     var mappate = Object.keys(colonne).map(function (k) { return colonne[k]; }).filter(function (c) { return c != null; });
     // time delay in vigore per le righe del target corrente (può aumentare a metà)
@@ -211,6 +235,8 @@
     for (var r = 3; r < tab.righe.length; r++) {
       var tSto = testo(cella(tab, r, colonne.sto));
       var d = dataIso(cella(tab, r, colonne.data));
+      if (!d) { var gm = giornoMese(cella(tab, r, colonne.data)); if (gm) { d = deduci(gm); if (d) senzaAnno++; } }
+      if (d) vistaPrima = d;
       var vRaw = cella(tab, r, colonne.v);
       var v = numero(vRaw);
       var p = colonne.p != null ? numero(cella(tab, r, colonne.p)) : null;
@@ -303,6 +329,7 @@
       return false;
     });
     correggiAnni(voci, function (x) { return x.data; }, function (x, d) { x.data = d; }, etich, avvisi);
+    if (senzaAnno) avvisi.push(etich + ': ' + senzaAnno + (senzaAnno === 1 ? ' data scritta' : ' date scritte') + ' senza anno, anno dedotto (' + voci.filter(function (x) { return x.data; }).map(function (x) { return x.data.slice(0, 4); }).filter(function (a, i, l) { return l.indexOf(a) === i; }).join(', ') + '): controlla che sia giusto.');
     voci.forEach(function (x) {
       var t = att.target.filter(function (y) { return y.id === x.targetId; })[0];
       if (t && (!t.inizio || x.data < t.inizio)) t.inizio = x.data;

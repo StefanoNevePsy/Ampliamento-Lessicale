@@ -65,6 +65,7 @@
 
   function strategia(v) {
     var a = v.att;
+    if (a.risposte === 'ecoico') return '<span class="st-badge" title="Echo to tact">ECO</span>';
     if (a.sessionType === 'timedelay') {
       var s = (v.corrente && v.corrente.tdSeconds) || a.tdSeconds;
       return '<span class="st-badge" title="Time delay">T/D' + (s ? ' ' + esc(s) + '″' : '') + '</span>';
@@ -134,6 +135,7 @@
       '<div class="st-legenda"><b>+</b> corretta' +
       '<span class="st-sep"></span><span class="st-badge">T/D</span> time delay: <b>P</b> promptata' +
       '<span class="st-sep"></span><span class="st-badge chiaro">IND</span> indipendente: <b>−</b> errata' +
+      '<span class="st-sep"></span><span class="st-badge">ECO</span> echo to tact: <b>e+</b> ecoica, <b>−</b> errata' +
       '<span class="st-sep"></span><span class="st-c on demo"></span> prove previste</div>';
     var cat = null;
     elenco.forEach(function (v) {
