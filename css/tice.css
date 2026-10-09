@@ -750,3 +750,18 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 
 .tice .tt-preciso { display: block; width: 100%; text-align: center; font-size: .72rem; font-weight: 700; color: var(--c); filter: brightness(1.25); line-height: 1.1; }
 @media print { .tt-preciso { color: #000; } }
+/* modulo dell'attività: sezioni, le parti facoltative si aprono a richiesta */
+.tice-foglio .modulo-att .sez { border-top: 1px solid var(--t-bordo, rgba(0,0,0,.12)); padding-top: 12px; margin-top: 12px; }
+.tice-foglio .modulo-att .sez:first-of-type { border-top: 0; padding-top: 0; margin-top: 0; }
+.tice-foglio .modulo-att .sez-titolo { font-size: .8rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; margin: 0 0 8px; color: var(--text-secondary); }
+.tice-foglio .modulo-att details.sez > summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 8px; min-height: 44px; align-items: center; }
+.tice-foglio .modulo-att details.sez > summary::-webkit-details-marker { display: none; }
+.tice-foglio .modulo-att details.sez > summary::before { content: '▸'; font-size: .9rem; color: var(--text-secondary); transition: transform .15s ease-out; }
+.tice-foglio .modulo-att details.sez[open] > summary::before { transform: rotate(90deg); }
+.tice-foglio .modulo-att details.sez > summary .sez-titolo { margin: 0; }
+.tice-foglio .modulo-att .aiuto { margin: -2px 0 10px; }
+.tice-foglio .modulo-att [data-se-tipo][hidden] { display: none !important; }
+.tice-foglio .pericolo-testo { color: var(--danger-color, #9f1d2c); }
+.tice-foglio .riga-sotto [data-sotto-togli] { min-width: 44px; min-height: 44px; }
+/* nei fogli lunghi Annulla / Salva restano sempre a portata */
+.tice-foglio form > .bottoni:last-child { position: sticky; bottom: calc(-16px - env(safe-area-inset-bottom, 0px)); background: var(--modal-bg); padding: 10px 0 calc(env(safe-area-inset-bottom, 0px) + 6px); margin-bottom: calc(-16px - env(safe-area-inset-bottom, 0px)); z-index: 2; box-shadow: 0 -8px 12px -10px rgba(0,0,0,.25); }

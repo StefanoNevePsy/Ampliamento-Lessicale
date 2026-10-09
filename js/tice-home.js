@@ -258,10 +258,24 @@
             document.body.appendChild(sfondo);
             const f = sfondo.firstChild;
             const chiudi = (v) => { sfondo.remove(); document.removeEventListener('keydown', tasto); risolvi(v); };
-            const tasto = (e) => { if (e.key === 'Escape') chiudi(null); };
+            // Toccare fuori o Esc con un modulo modificato: prima si chiede (un tocco
+            // distratto non deve buttare via un'attività scritta a metà)
+            let iniziale = null, chiedendo = false;
+            const statoForm = () => { const fm = f.querySelector('form'); return fm ? JSON.stringify([...new FormData(fm)]) + '|' + fm.querySelectorAll('input, textarea, select').length : ''; };
+            const lascia = async () => {
+                if (chiedendo || sfondo.querySelector('.tice-foglio-sfondo')) return;
+                if (iniziale != null && statoForm() !== iniziale) {
+                    chiedendo = true;
+                    const ok = await conferma('Scartare le modifiche?', 'Quello che hai scritto in questo foglio non è ancora salvato.', { ok: 'Scarta', pericolo: true });
+                    chiedendo = false;
+                    if (!ok) return;
+                }
+                chiudi(null);
+            };
+            const tasto = (e) => { if (e.key === 'Escape' && document.querySelectorAll('.tice-foglio-sfondo').length && document.querySelectorAll('.tice-foglio-sfondo')[document.querySelectorAll('.tice-foglio-sfondo').length - 1] === sfondo) lascia(); };
             document.addEventListener('keydown', tasto);
             sfondo.addEventListener('click', (e) => {
-                if (e.target === sfondo) return chiudi(null);
+                if (e.target === sfondo) return lascia();
                 const b = e.target.closest('[data-foglio]');
                 if (!b) return;
                 e.preventDefault();
@@ -275,6 +289,7 @@
                 if (r !== undefined) chiudi(r);
             });
             if (opzioni.dopo) opzioni.dopo(f);
+            iniziale = statoForm();
             const primo = f.querySelector('[autofocus]');
             if (primo) setTimeout(() => primo.focus(), 60);
         });
@@ -1532,6 +1547,7 @@
             } else if (typeof r === 'string') {
                 att.stato = r;
             } else {
+                if (['attivo', 'sospeso', 'terminato'].includes(r.stato)) att.stato = r.stato;
                 att.nome = r.nome.trim() || att.nome;
                 try { await risolviNuovaModalita(r); } catch (e) { avviso('Modalità non creata: ' + (e.message || e), 'errore'); r.modalita = att.modalita || ''; }
                 modalitaDaModulo(att, r);
@@ -1891,56 +1907,71 @@
     function moduloAttivita(p, att) {
         const a = att || { nome: '', area: '', descrizione: '', sessionType: 'independent', criterio: { soglia: 90, sedute: 2 }, prove: null };
         const tdA = att ? P.tdDi(att) : null;
-        return foglio(h`<form><h2>${att ? 'Modifica attività' : 'Nuova attività'}</h2>
-            <label class="campo"><span>Nome</span><input name="nome" required maxlength="120" value="${a.nome}" ${att ? '' : grezzo('autofocus')} placeholder="es. TACT, Imitazione motoria"></label>
-            <div class="riga-campi">
-                <label class="campo"><span>Modalità</span><select name="modalita" class="campo-in" data-mod-scelta><option value="">Dal nome, in automatico</option>${opzioniModalita(a.modalita)}<option value="+">+ Nuova modalità…</option></select></label>
-                <label class="campo"><span>Variante</span><input name="variante" maxlength="80" value="${a.variante || ''}" placeholder="es. intensivo"></label>
-            </div>
-            <div class="campo nuova-modalita" data-mod-nuova hidden><span>Nuova modalità</span>
-                <div class="riga-campi"><input class="campo-in" name="mod_nome" maxlength="60" placeholder="Nome, es. Echo to tact" data-doppione="modalita" autocomplete="off">
-                    ${sceltaCategoria('mod_cat', 'altro')}</div>
-                ${campoNuovaCategoria('mod_cat')}
-                <span class="sotto piccolo avviso-doppione" data-doppione-nota></span></div>
-            <label class="campo"><span>Descrizione (facoltativa)</span><input name="descrizione" maxlength="300" value="${a.descrizione || ''}"></label>
-            <label class="campo"><span>Suggerimenti per chi somministra (facoltativi)</span><textarea name="suggerimenti" maxlength="3000" rows="3" placeholder="Come presentare lo stimolo, che aiuto dare, quando rinforzare, errori da evitare…">${a.suggerimenti || ''}</textarea>
-                <span class="sotto piccolo">In seduta compaiono sotto l'attività con il tasto «Suggerimenti». Per un solo target: dal target, «Suggerimenti per questo target».</span></label>
-            <div class="campo"><span>Colore</span><div class="colori-att">
-                <label title="Automatico"><input type="radio" name="colore" value="" ${!a.colore ? grezzo('checked') : ''}><span class="auto" style="--col:${att ? P.coloreDi(p, att, true) : P.PALETTE[P.programma(p).attivita.length % P.PALETTE.length]}">A</span></label>
-                ${P.PALETTE.map((c) => h`<label><input type="radio" name="colore" value="${c}" ${a.colore === c ? grezzo('checked') : ''}><span style="--col:${c}"></span></label>`)}
-            </div><span class="sotto piccolo">Lo stesso colore in seduta, nel programma e sui fogli stampati.</span></div>
-            <div class="campo"><span>Tipo di seduta</span><div class="scelta">
-                <label><input type="radio" name="sessionType" value="independent" ${a.sessionType !== 'timedelay' && !ecoico(a) ? grezzo('checked') : ''}><span>Indipendente</span></label>
-                <label><input type="radio" name="sessionType" value="timedelay" ${a.sessionType === 'timedelay' && !ecoico(a) ? grezzo('checked') : ''}><span>Time delay</span></label>
-                <label><input type="radio" name="sessionType" value="ecoico" ${ecoico(a) ? grezzo('checked') : ''}><span>Echo to tact</span></label></div>
-                <span class="sotto piccolo">Echo to tact: in seduta ✓ se lo dice da solo, e+ se lo ripete in ecoico, ✗ se no.</span></div>
-            <label class="spunta-riga"><input type="checkbox" name="mantenimento" ${a.mantenimento ? grezzo('checked') : ''}> <span><b>Mantenimento</b><br><span class="sotto piccolo">Il dato si prende in seduta, ma non entra nelle statistiche (LU del giorno, panoramica, grafici) e non porta a criterio.</span></span></label>
-            <label class="spunta-riga"><input type="checkbox" name="cronometro" ${a.cronometro ? grezzo('checked') : ''}> <span><b>Cronometra (fluency)</b><br><span class="sotto piccolo">In seduta compare un cronometro che parte alla prima risposta: il grafico SCC mostra le risposte al minuto.</span></span></label>
-            <div class="riga-campi">
-                <label class="campo"><span>Criterio %</span><input name="soglia" type="number" min="10" max="100" inputmode="numeric" value="${a.criterio.soglia}"></label>
-                <label class="campo"><span>Giorni di fila</span><input name="sedute" type="number" min="1" max="10" inputmode="numeric" value="${a.criterio.sedute}"></label>
-                <label class="campo"><span>Prove per LU</span><input name="prove" type="number" min="1" max="200" inputmode="numeric" value="${a.prove || ''}" placeholder="in %"></label>
-            </div>
-            <p class="sotto piccolo" style="margin:-4px 0 10px">Con le prove per LU (es. 20) il dato entra quando se ne completano 20, anche in più sedute. Vuoto: dato in percentuale a ogni seduta.</p>
-            <div class="campo" ${eGruppo(p) ? grezzo('hidden') : ''}><span>Sottoattività (facoltative)</span>
+        const tipoA = ecoico(a) ? 'ecoico' : a.sessionType === 'timedelay' ? 'timedelay' : 'independent';
+        const nMis = (a.misure || []).length;
+        const conTesti = !!(a.descrizione || a.suggerimenti);
+        return foglio(h`<form class="modulo-att"><h2>${att ? 'Modifica attività' : 'Nuova attività'}</h2>
+            <section class="sez">
+                <label class="campo"><span>Nome</span><input name="nome" required maxlength="120" value="${a.nome}" ${att ? '' : grezzo('autofocus')} placeholder="es. TACT, Imitazione motoria"></label>
+                <div class="riga-campi">
+                    <label class="campo"><span>Modalità</span><select name="modalita" class="campo-in" data-mod-scelta><option value="">Dal nome, in automatico</option>${opzioniModalita(a.modalita)}<option value="+">+ Nuova modalità…</option></select></label>
+                    <label class="campo"><span>Variante</span><input name="variante" maxlength="80" value="${a.variante || ''}" placeholder="es. intensivo"></label>
+                </div>
+                <div class="campo nuova-modalita" data-mod-nuova hidden><span>Nuova modalità</span>
+                    <div class="riga-campi"><input class="campo-in" name="mod_nome" maxlength="60" placeholder="Nome, es. Echo to tact" data-doppione="modalita" autocomplete="off">
+                        ${sceltaCategoria('mod_cat', 'altro')}</div>
+                    ${campoNuovaCategoria('mod_cat')}
+                    <span class="sotto piccolo avviso-doppione" data-doppione-nota></span></div>
+                <div class="campo"><span>Colore <small class="sotto">· in seduta, nel programma e sui fogli</small></span><div class="colori-att">
+                    <label title="Automatico"><input type="radio" name="colore" value="" ${!a.colore ? grezzo('checked') : ''}><span class="auto" style="--col:${att ? P.coloreDi(p, att, true) : P.PALETTE[P.programma(p).attivita.length % P.PALETTE.length]}">A</span></label>
+                    ${P.PALETTE.map((c) => h`<label><input type="radio" name="colore" value="${c}" ${a.colore === c ? grezzo('checked') : ''}><span style="--col:${c}"></span></label>`)}
+                </div></div>
+            </section>
+            <section class="sez"><h3 class="sez-titolo">Come si prende il dato</h3>
+                <div class="campo"><span>Tipo di seduta</span><div class="scelta">
+                    <label><input type="radio" name="sessionType" value="independent" ${tipoA === 'independent' ? grezzo('checked') : ''}><span>Indipendente</span></label>
+                    <label><input type="radio" name="sessionType" value="timedelay" ${tipoA === 'timedelay' ? grezzo('checked') : ''}><span>Time delay</span></label>
+                    <label><input type="radio" name="sessionType" value="ecoico" ${tipoA === 'ecoico' ? grezzo('checked') : ''}><span>Echo to tact</span></label></div>
+                    <span class="sotto piccolo" data-se-tipo="independent" ${tipoA === 'independent' ? '' : grezzo('hidden')}>In seduta: ✓ corretta, ✗ errata.</span>
+                    <span class="sotto piccolo" data-se-tipo="ecoico" ${tipoA === 'ecoico' ? '' : grezzo('hidden')}>In seduta: ✓ se lo dice da solo, e+ se lo ripete in ecoico, ✗ se no.</span></div>
+                <label class="campo" data-se-tipo="timedelay" ${tipoA === 'timedelay' ? '' : grezzo('hidden')}><span>Secondi di time delay</span><input name="tdSeconds" type="number" min="0" max="60" inputmode="numeric" value="${tdA != null ? tdA : ''}" placeholder="es. 0, 1, 2…">
+                    <span class="sotto piccolo">In seduta: ✓ corretta, P promptata. Se cambi i secondi, il cambio resta segnato con la data${(a.tdCambi || []).length ? h` (finora: ${a.tdCambi.map((c) => `${formatoData(c.il)} ${c.da != null ? sec(c.da) + '→' : ''}${sec(c.a)}`).join(', ')})` : ''}.</span></label>
+                <div class="riga-campi">
+                    <label class="campo"><span>Prove per LU</span><input name="prove" type="number" min="1" max="200" inputmode="numeric" value="${a.prove || ''}" placeholder="vuoto = %"></label>
+                    <label class="campo"><span>Criterio %</span><input name="soglia" type="number" min="10" max="100" inputmode="numeric" value="${a.criterio.soglia}"></label>
+                    <label class="campo"><span>Giorni di fila</span><input name="sedute" type="number" min="1" max="10" inputmode="numeric" value="${a.criterio.sedute}"></label>
+                </div>
+                <p class="sotto piccolo aiuto">Con le prove per LU il dato entra quando se ne completano tante, anche in più sedute; vuoto: percentuale a ogni seduta.</p>
+                <label class="spunta-riga"><input type="checkbox" name="mantenimento" ${a.mantenimento ? grezzo('checked') : ''}> <span><b>Mantenimento</b> <span class="sotto piccolo">· si segna, ma fuori da statistiche e criterio</span></span></label>
+                <label class="spunta-riga"><input type="checkbox" name="cronometro" ${a.cronometro ? grezzo('checked') : ''}> <span><b>Cronometra (fluency)</b> <span class="sotto piccolo">· risposte al minuto, grafico SCC</span></span></label>
+            </section>
+            ${att ? '' : h`<section class="sez"><h3 class="sez-titolo">Target</h3>
+                <label class="campo"><span>Uno per riga: il primo è quello da cui si parte</span><textarea name="target" rows="3" placeholder="es. Animali: cane, gatto&#10;Frutta: mela, banana"></textarea>
+                    <span class="sotto piccolo">Vuoto: li scegli dopo dall'archivio dei set o da una lista; si può anche lavorare senza target.</span></label></section>`}
+            <details class="sez apribile" ${eGruppo(p) ? grezzo('hidden') : ''} ${nMis ? grezzo('open') : ''}><summary><span class="sez-titolo">Sottoattività</span> <span class="sotto piccolo">${nMis ? nMis + ' · ' : ''}più prese dati nella stessa attività</span></summary>
                 <div class="sottoattivita" data-sotto>${(a.misure || []).map((m, i) => rigaSotto(i, m))}</div>
                 <button type="button" class="bt piccolo fantasma" data-sotto-aggiungi>${icona('plus')} Aggiungi sottoattività</button>
-                <span class="sotto piccolo">Tipo e prove vuoti: come l'attività. Es. Categorizza e Tact mix: in seduta ognuna ha i suoi tasti e il suo dato, sullo stesso target, e arriva a criterio per conto suo; l'attività quando ci arrivano tutte. In mantenimento: si segna, ma resta fuori da statistiche e criterio.</span></div>
-            <label class="campo"><span>Secondi di time delay (solo per il time delay)</span><input name="tdSeconds" type="number" min="0" max="60" inputmode="numeric" value="${tdA != null ? tdA : ''}" placeholder="es. 0, 1, 2…">
-                <span class="sotto piccolo">Si vede in seduta e finisce nei dati di ogni seduta. Se lo cambi, il cambio resta segnato con la data${(a.tdCambi || []).length ? h` (finora: ${a.tdCambi.map((c) => `${formatoData(c.il)} ${c.da != null ? sec(c.da) + '→' : ''}${sec(c.a)}`).join(', ')})` : ''}.</span></label>
-            ${att ? '' : h`<label class="campo"><span>Target, uno per riga (il primo è quello da cui si parte)</span><textarea name="target" placeholder="es. Animali: cane, gatto&#10;Frutta: mela, banana"></textarea>
-                <span class="sotto piccolo">Lascia vuoto per sceglierli dall'archivio dei set o da una lista del Quaderno. Si può anche lavorare senza stimoli specifici.</span></label>`}
-            ${att ? h`<div class="opzioni" style="margin-top:6px">
-                ${att.stato === 'attivo' ? h`<button type="button" class="opzione" data-foglio="sospeso">${icona('pause')}<span class="corpo">Sospendi<small>Non compare più nella presa dati</small></span></button>
-                    <button type="button" class="opzione" data-foglio="terminato">${icona('flag-checkered')}<span class="corpo">Termina l'attività</span></button>`
-                    : h`<button type="button" class="opzione" data-foglio="attivo">${icona('play')}<span class="corpo">Riprendi l'attività</span></button>`}
-                <button type="button" class="opzione" data-foglio="elimina">${icona('trash')}<span class="corpo">Elimina dal programma</span></button>
-            </div>` : ''}
+                <p class="sotto piccolo aiuto">Ognuna ha i suoi tasti e il suo dato sullo stesso target, e arriva a criterio per conto suo; l'attività quando ci arrivano tutte. Tipo e prove vuoti: come l'attività.</p></details>
+            <details class="sez apribile" ${conTesti ? grezzo('open') : ''}><summary><span class="sez-titolo">Descrizione e suggerimenti</span> <span class="sotto piccolo">${conTesti ? 'compilati' : 'facoltativi'}</span></summary>
+                <label class="campo"><span>Descrizione</span><input name="descrizione" maxlength="300" value="${a.descrizione || ''}"></label>
+                <label class="campo"><span>Suggerimenti per chi somministra</span><textarea name="suggerimenti" maxlength="3000" rows="3" placeholder="Come presentare lo stimolo, che aiuto dare, quando rinforzare, errori da evitare…">${a.suggerimenti || ''}</textarea>
+                    <span class="sotto piccolo">In seduta, con il tasto dei suggerimenti.</span></label></details>
+            ${att ? h`<section class="sez"><h3 class="sez-titolo">Stato</h3>
+                <div class="scelta">
+                    <label><input type="radio" name="stato" value="attivo" ${att.stato === 'attivo' ? grezzo('checked') : ''}><span>Attiva</span></label>
+                    <label><input type="radio" name="stato" value="sospeso" ${att.stato === 'sospeso' ? grezzo('checked') : ''}><span>Sospesa</span></label>
+                    <label><input type="radio" name="stato" value="terminato" ${att.stato === 'terminato' ? grezzo('checked') : ''}><span>Terminata</span></label></div>
+                <span class="sotto piccolo">Sospesa o terminata: non compare nella presa dati; i dati restano.</span>
+                <button type="button" class="bt piccolo fantasma pericolo-testo" data-foglio="elimina" style="margin-top:10px">${icona('trash')} Elimina dal programma…</button></section>` : ''}
             <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`, {
             dopo: (el) => {
                 agganciaNuove(el);
                 const sm = el.querySelector('[data-mod-scelta]'), nm = el.querySelector('[data-mod-nuova]');
                 sm.addEventListener('change', () => { nm.hidden = sm.value !== '+'; if (!nm.hidden) nm.querySelector('input').focus(); });
+                // le parti che dipendono dal tipo di seduta compaiono solo quando servono
+                el.querySelectorAll('[name=sessionType]').forEach((r) => r.addEventListener('change', () => {
+                    el.querySelectorAll('[data-se-tipo]').forEach((x) => { x.hidden = x.dataset.seTipo !== r.value; });
+                }));
                 const box = el.querySelector('[data-sotto]');
                 let n = box.children.length;
                 const nuova = () => { box.insertAdjacentHTML('beforeend', String(rigaSotto(n++, null))); box.lastElementChild.querySelector('input').focus(); };
