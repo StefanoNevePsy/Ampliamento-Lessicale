@@ -1273,27 +1273,41 @@
             const attV = attPerVoce(att, b.dataset.id);
             const targets = (att.target || []).filter((t) => t.stato === 'attivo' || t.stato === 'criterio' || t.stato === 'repertorio' || t.id === v.targetId);
             const tV = v.targetId ? (att.target || []).find((x) => x.id === v.targetId) : null;
-            const attesaV = P.conAttesa(att, tV) ? P.inAttesaDi(att, tV) : null;
-            const r = await foglio(h`<form><h2>${att.nome}</h2>
-                ${targets.length > 1 ? h`<label class="campo"><span>Target registrato</span><select name="targetId">
-                    ${targets.map((t) => h`<option value="${t.id}" ${t.id === v.targetId ? grezzo('selected') : ''}>${t.testo} (${P.STATI_TARGET[t.stato]})</option>`)}</select></label>` : ''}
-                <div class="campo"><span>Tipo di seduta</span><div class="scelta">
-                    <label><input type="radio" name="tipo" value="independent" ${v.sessionType !== 'timedelay' ? grezzo('checked') : ''}><span>Indipendente</span></label>
-                    <label><input type="radio" name="tipo" value="timedelay" ${v.sessionType === 'timedelay' ? grezzo('checked') : ''}><span>Time delay</span></label>
-                </div></div>
-                <label class="campo"><span>Correggi i conteggi</span><div class="riga-campi">
-                    <input name="v" type="number" min="0" max="999" inputmode="numeric" value="${v.v}" aria-label="Corrette">
-                    ${ecoico(attV) ? h`<input name="eco" type="number" min="0" max="999" inputmode="numeric" value="${v.p}" aria-label="Ecoiche">
-                    <input name="no" type="number" min="0" max="999" inputmode="numeric" value="${v.x}" aria-label="Errate">`
-                        : h`<input name="no" type="number" min="0" max="999" inputmode="numeric" value="${v.p + v.x}" aria-label="Non corrette">`}
-                </div><span class="sotto piccolo">${ecoico(attV) ? '✓ autonome · e+ ecoiche · ✗ errate' : '✓ corrette · poi le promptate (time delay) o le errate (indipendente)'}</span></label>
+            const msV = msDi(b.dataset.id), mV = misure(att).find((x) => x.id === msV);
+            const attesaV = P.conAttesa(attV, tV) ? P.inAttesaDi(att, tV, msV) : null;
+            const eco = ecoico(attV), tipoV = v.sessionType === 'timedelay' ? 'timedelay' : 'independent';
+            const r = await foglio(h`<form class="modulo-att"><h2>${att.nome}${mV ? h` <span class="sotto">· ${mV.nome}</span>` : ''}</h2>
+                <label class="campo"><span>Nota</span><textarea name="nota" maxlength="2000" rows="3">${v.nota || ''}</textarea></label>
                 <label class="campo"><span>Decisione (facoltativa)</span><input name="decisione" maxlength="200" value="${v.decisione || ''}" placeholder="es. Passa a 1&quot; T/D" list="tice-decisioni"></label>
                 <datalist id="tice-decisioni"><option value='Passa a 0" T/D'><option value='Passa a 1" T/D'><option value='Passa a 2" T/D'><option value="Probe"><option value="Stop"></datalist>
-                <label class="campo"><span>Nota</span><textarea name="nota" maxlength="2000">${v.nota || ''}</textarea></label>
-                <label class="campo campo-chi"><span>Svolta da <small class="sotto">· solo se diverso da chi ha svolto la seduta</small></span><input name="operatore" maxlength="120" value="${v.operatore || ''}" placeholder="${chiDellaSeduta(p, bozza(p.id)) || 'Nome'}" autocomplete="off"></label>
-                ${attesaV ? h`<label class="spunta-riga"><input type="checkbox" name="scarta"> <span><b>Scarta le ${attesaV.seq.length} prove in attesa</b><br><span class="sotto piccolo">Registrate dal ${formatoData(attesaV.dal)} senza arrivare a una LU da ${att.prove}: non entreranno nei dati.</span></span></label>` : ''}
+                <label class="campo campo-chi"><span>Svolta da <small class="sotto">· solo se diversa da chi ha svolto la seduta</small></span><input name="operatore" maxlength="120" value="${v.operatore || ''}" placeholder="${chiDellaSeduta(p, bozza(p.id)) || 'Nome'}" autocomplete="off"></label>
+                <details class="sez apribile"><summary><span class="sez-titolo">Correggi i dati</span> <span class="sotto piccolo">${[targets.length > 1 ? 'target' : '', eco ? '' : 'tipo', 'conteggi', attesaV ? 'prove in attesa' : ''].filter(Boolean).join(', ')}</span></summary>
+                    ${targets.length > 1 ? h`<label class="campo"><span>Target registrato</span><select name="targetId">
+                        ${targets.map((t) => h`<option value="${t.id}" ${t.id === v.targetId ? grezzo('selected') : ''}>${t.testo} (${P.STATI_TARGET[t.stato]})</option>`)}</select></label>` : ''}
+                    ${eco ? '' : h`<div class="campo"><span>Tipo di seduta</span><div class="scelta">
+                        <label><input type="radio" name="tipo" value="independent" ${tipoV === 'independent' ? grezzo('checked') : ''}><span>Indipendente</span></label>
+                        <label><input type="radio" name="tipo" value="timedelay" ${tipoV === 'timedelay' ? grezzo('checked') : ''}><span>Time delay</span></label>
+                    </div><span class="sotto piccolo avviso-doppione" data-conversione></span></div>`}
+                    <div class="riga-campi conteggi">
+                        <label class="campo"><span>✓ ${eco ? 'Autonome' : 'Corrette'}</span><input name="v" type="number" min="0" max="999" inputmode="numeric" value="${v.v}"></label>
+                        ${eco ? h`<label class="campo"><span>e+ Ecoiche</span><input name="eco" type="number" min="0" max="999" inputmode="numeric" value="${v.p}"></label>
+                            <label class="campo"><span>✗ Errate</span><input name="no" type="number" min="0" max="999" inputmode="numeric" value="${v.x}"></label>`
+                            : h`<label class="campo"><span data-etichetta-no>${tipoV === 'timedelay' ? 'P Promptate' : '✗ Errate'}</span><input name="no" type="number" min="0" max="999" inputmode="numeric" value="${v.p + v.x}"></label>`}
+                    </div>
+                    ${attesaV ? h`<label class="spunta-riga"><input type="checkbox" name="scarta"> <span><b>Scarta le ${attesaV.seq.length} prove in attesa</b><br><span class="sotto piccolo">Registrate dal ${formatoData(attesaV.dal)} senza arrivare a una LU da ${attV.prove}: non entreranno nei dati.</span></span></label>` : ''}
+                </details>
                 ${att.temporanea ? h`<button type="button" class="bt pericolo" data-foglio="togli" style="width:100%">Togli dalla seduta</button>` : ''}
-                <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`);
+                <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`, {
+                dopo: (el) => {
+                    // cambiando tipo: l'etichetta dei conteggi e cosa succede alle risposte già segnate
+                    const conv = el.querySelector('[data-conversione]'), et = el.querySelector('[data-etichetta-no]');
+                    el.querySelectorAll('[name=tipo]').forEach((x) => x.addEventListener('change', () => {
+                        if (et) et.textContent = x.value === 'timedelay' ? 'P Promptate' : '✗ Errate';
+                        const n = x.value === 'timedelay' ? v.x : v.p;
+                        conv.textContent = x.value !== tipoV && n ? `Cambiando tipo, ${n} ${n === 1 ? 'risposta' : 'risposte'} ${x.value === 'timedelay' ? '✗' : 'P'} ${n === 1 ? 'diventa' : 'diventano'} ${x.value === 'timedelay' ? 'P' : '✗'}.` : '';
+                    }));
+                }
+            });
             if (r === 'togli') {
                 const bz = bozza(p.id);
                 bz.temp = bz.temp.filter((x) => x.id !== att.id);
@@ -1310,7 +1324,7 @@
                     x.targetId = r.targetId; x.mantenimento = !!(tt && tt.stato !== 'attivo');
                 });
             }
-            v.sessionType = r.tipo === 'timedelay' ? 'timedelay' : 'independent';
+            if (!eco) v.sessionType = r.tipo === 'timedelay' ? 'timedelay' : 'independent';
             convertiVoce(v, v.sessionType, attV);
             const no = ecoico(attV) ? 'x' : nonCorretta(v.sessionType).toLowerCase();
             const nv = Math.max(0, Math.min(999, parseInt(r.v, 10) || 0));
@@ -1326,7 +1340,7 @@
             v.nota = r.nota.trim();
             if (String(r.operatore || '').trim()) v.operatore = String(r.operatore).trim(); else delete v.operatore;
             if (r.scarta && attesaV && att.inAttesa) {
-                delete att.inAttesa[P.chiaveAttesa(tV)];
+                delete att.inAttesa[P.chiaveAttesa(tV, msV)];
                 if (!Object.keys(att.inAttesa).length) delete att.inAttesa;
                 await salvaPaziente(p);
             }
