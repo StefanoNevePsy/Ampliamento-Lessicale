@@ -104,8 +104,7 @@
       if (!t) return;
       if (t === 'data' || t.indexOf('gg/') === 0) col.data = i;
       else if (t.indexOf('corrett') >= 0 || (t.indexOf('indipendent') >= 0 && col.v == null)) col.v = i;
-      // "Echo +", "Risposte echoiche", "Ecoico": le risposte ripetute in ecoico (Echo to tact)
-      else if (t.indexOf('prompt') >= 0 || t.indexOf('echo') >= 0 || /^eco/.test(t)) { col.p = i; nomeP = /echo|^eco/.test(t) ? 'Ecoica' : null; }
+      else if (t.indexOf('prompt') >= 0 || t.indexOf('echo') >= 0 || /^eco/.test(t)) { col.p = i; nomeP = /echo|^eco/.test(t) ? 'Echo' : null; }
       else if (t.indexOf('x:') === 0 || t.indexOf('event') >= 0) col.evento = i;
       else if (t.indexOf('decision') >= 0) col.decisione = i;
     });
@@ -190,7 +189,6 @@
       origine: 'numbers'
     };
     if (mc.nomeP) att.nomeP = mc.nomeP;
-    if (mc.nomeP === 'Ecoica') { att.risposte = 'ecoico'; att.sessionType = 'independent'; }
     if (r1.some(function (x) { return testo(x).toLowerCase().indexOf('event') >= 0; }) || colonne.evento != null) {
       att.evento = colonne.evento != null ? etichetteEvento(r2[colonne.evento]) : ['Sì', 'No'];
     }

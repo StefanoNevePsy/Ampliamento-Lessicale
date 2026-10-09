@@ -267,10 +267,9 @@ console.log('Echo to tact e date senza anno');
   ] }] }];
   const pk = TiceImport.analizza(doc, 'eco.numbers');
   const a = pk.attivita[0];
-  prova('colonne «Echo +» e «Indipendente»: tabella letta, attività Echo to tact', () => {
+  prova('colonne «Echo +» e «Indipendente»: tabella letta (il tipo Echo to tact lo sceglie chi importa)', () => {
     assert.ok(a, 'tabella saltata: ' + pk.avvisi.join(' | '));
-    assert.strictEqual(a.risposte, 'ecoico');
-    assert.strictEqual(a.sessionType, 'independent');
+    assert.ok(!a.risposte);
     const x = pk.voci.find((y) => y.data && y.data.endsWith('-07-07'));
     assert.strictEqual(x.v, 5); assert.strictEqual(x.p, 10);
   });
