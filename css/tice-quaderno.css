@@ -194,3 +194,8 @@
     :root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients [style*="minmax(120px, 1fr)"] > div:nth-child(n+3) { border-top: 1px solid var(--q-matita) !important; }
 }
 :root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients #charts-container span[style*="background:rgba(99,102,241,0.15)"] { white-space: nowrap; }
+
+/* Visual: barre dei filtri e scelte nello stesso stile delle altre schede */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients #report-content [style*="background:rgba(var(--shade-rgb),0.2)"] { background: none !important; padding-left: 0 !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients #report-content button[style*="border-radius:8px"] { border-radius: 999px !important; min-height: 34px; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients #report-content button[style*="background:var(--accent-color)"], :root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients #report-content button[style*="background:rgba(99,102,241,0.2)"] { background: var(--text-primary) !important; color: var(--q-carta) !important; border-color: var(--text-primary) !important; }
