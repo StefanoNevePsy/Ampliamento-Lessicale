@@ -904,8 +904,9 @@ function vizFilterRange() {
 }
 function vizFilteredPatient(patient) {
     const { from, to } = vizFilterRange();
-    if (!from && !to) return patient;
-    const history = (patient.history || []).filter(h => {
+    const statistiche = (patient.history || []).filter(inStatistiche);
+    if (!from && !to) return Object.assign({}, patient, { history: statistiche });
+    const history = statistiche.filter(h => {
         const dk = getDateKey(h.date);
         return (!from || dk >= from) && (!to || dk <= to);
     });

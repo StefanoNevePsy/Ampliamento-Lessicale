@@ -228,6 +228,8 @@
     if (voce.nota) nota.push(voce.nota);
     if (nota.length) s.note = nota.join(' — ');
     if (voce.mantenimento) s.mantenimento = true;
+    // attività in mantenimento: il dato si prende ma non entra nelle statistiche
+    if (att.mantenimento) { s.mantenimento = true; s.fuoriStatistiche = true; }
     // attività cronometrata: il tempo di lavoro, per le risposte al minuto (SCC)
     if (voce.tempo) {
       var ms = (voce.tempo.ms || 0) + (voce.tempo.da ? Date.now() - voce.tempo.da : 0);
@@ -256,6 +258,7 @@
     };
     if (secondi(dati.tdSeconds) != null) att.tdSeconds = secondi(dati.tdSeconds);
     if (dati.mode) att.mode = String(dati.mode);
+    if (dati.mantenimento) att.mantenimento = true;
     if (dati.modalita) { att.modalita = String(dati.modalita); if (dati.variante) att.variante = String(dati.variante).trim(); }
     programma(p).attivita.push(att);
     if (dati.target) aggiungiTarget(att, dati.target, true);
@@ -323,9 +326,13 @@
     }
     return PALETTE[i % PALETTE.length];
   }
-  /** Senza target il dato si prende in percentuale a ogni seduta. */
+  /**
+   * In percentuale a ogni seduta: per scelta, o quando non c'è il numero di
+   * prove della LU (il «target» del quaderno). Con le prove indicate si lavora a
+   * LU anche senza stimoli specifici nel programma.
+   */
   function inPercentuale(att) {
-    return !!att && (att.scala === 'percentuale' || !(att.target || []).length);
+    return !!att && (att.scala === 'percentuale' || (!(+att.prove > 0) && !(att.target || []).length));
   }
 
   // ---------- learn unit contate: le prove aspettano di arrivare al numero previsto ----------

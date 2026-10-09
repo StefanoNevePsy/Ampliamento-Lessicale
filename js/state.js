@@ -155,12 +155,15 @@ function setCriterionThreshold(patientId, value, mode, setName) {
 // criterio, non per le learn unit.
 function luTotali(s) { return s && s.scala !== 'percentuale' ? (s.total || 0) : 0; }
 function luCorrette(s) { return s && s.scala !== 'percentuale' ? (s.correct || 0) : 0; }
+// Attività in mantenimento: il dato si registra ma resta fuori dalle statistiche
+function inStatistiche(h) { return !h || !h.fuoriStatistiche; }
 // Learn unit di un giorno. Per i giorni ricopiati dai quaderni Numbers vale la
 // tabella "Learn unit giornaliere" del quaderno, se c'è: è il conteggio fatto
 // dal centro, mentre le righe importate possono non coprire tutte le attività.
 function luDelGiorno(patient, dk, sessions) {
     let tot = 0, ok = 0;
-    (sessions || []).forEach(s => { tot += luTotali(s); ok += luCorrette(s); });
+    sessions = (sessions || []).filter(inStatistiche);
+    sessions.forEach(s => { tot += luTotali(s); ok += luCorrette(s); });
     const soloImport = !(sessions || []).length || sessions.every(s => s.fonte === 'numbers');
     if (soloImport && patient && patient.learnUnitStoriche) {
         let best = null;

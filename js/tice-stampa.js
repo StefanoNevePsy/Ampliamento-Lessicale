@@ -25,7 +25,7 @@
   };
   var CHIUSI = ['criterio', 'repertorio', 'chiuso'];
   // in percentuale: per scelta, o perché l'attività non ha target
-  var perc = function (a) { return a.scala === 'percentuale' || !(a.target || []).length; };
+  var perc = function (a) { return a.scala === 'percentuale' || (!(+a.prove > 0) && !(a.target || []).length); };
 
   function esc(v) {
     return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });

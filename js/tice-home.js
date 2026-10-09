@@ -336,7 +336,7 @@
         return { n, prec, oggi: seq.length, blocchi: d.blocchi, resto: d.resto.length };
     }
     function previsione(p, att, v) {
-        if (att.temporanea || !v || !haDati(v)) return null;
+        if (att.temporanea || att.mantenimento || !v || !haDati(v)) return null;
         const senza = !(att.target || []).length;
         const t = v.targetId ? att.target.find((x) => x.id === v.targetId) : null;
         if (!t && !senza) return null;
@@ -374,14 +374,14 @@
         const v = b.voci[att.id];
         const c = att.temporanea ? null : P.targetCorrente(att);
         const t = v && v.targetId ? att.target.find((x) => x.id === v.targetId) : (c && c.target);
-        const mant = v ? v.mantenimento : (c && c.mantenimento);
+        const mant = att.mantenimento || (v ? v.mantenimento : (c && c.mantenimento));
         const aperta = T.aperte[att.id];
         const tot = v ? v.v + v.p + v.x : 0;
         const pct = tot ? Math.round(100 * v.v / tot) : null;
         const soglia = (att.criterio && att.criterio.soglia) || 90;
         const tipo = (v && v.sessionType) || att.sessionType;
         const senzaTarget = !att.temporanea && !(att.target || []).length;
-        const aCriterio = !att.temporanea && (senzaTarget ? P.criterioRaggiunto(P.sedute(p, att), att.criterio)
+        const aCriterio = !att.temporanea && !att.mantenimento && (senzaTarget ? P.criterioRaggiunto(P.sedute(p, att), att.criterio)
             : t && t.stato === 'attivo' && P.criterioRaggiunto(P.sedute(p, att, t), att.criterio));
         const giocabile = t && t.setId && setArchivio().some((x) => x.id === t.setId);
         const giaOggi = !att.temporanea && t ? P.sedute(p, att, t).filter((x) => P.giorno(x.date) === b.data) : [];
@@ -400,10 +400,10 @@
                         ${tipo === 'timedelay' ? h` <span class="pill">T/D${tdS != null ? ' ' + sec(tdS) : ''}</span>` : ''}
                         ${att.temporanea ? h` <span class="pill grigia">solo oggi</span>` : ''}
                         ${att.stato && att.stato !== 'attivo' ? h` <span class="pill grigia">${att.stato}</span>` : ''}
-                        ${mant ? h` <span class="pill arancio" title="Il target ha già raggiunto il criterio: si registra come mantenimento finché non si apre il prossimo">mantenimento</span>` : ''}
+                        ${mant ? h` <span class="pill arancio" title="${att.mantenimento ? 'Il dato si prende ma non entra nelle statistiche' : 'Il target ha già raggiunto il criterio: si registra come mantenimento finché non si apre il prossimo'}">mantenimento</span>` : ''}
                         ${aCriterio ? h` <span class="pill verde">${icona('flag-checkered')} criterio</span>` : ''}
                     </span>
-                    ${t ? h`<span class="target">${t.setId ? h`${icona(giocabile ? 'layer-group' : 'triangle-exclamation')} ` : ''}${t.testo}${t.setId ? h` · ${etichettaModo(P.modoTarget(att, t))}` : ''}</span>` : (senzaTarget ? h`<span class="target">${icona('percent')} Dato in percentuale a ogni seduta</span>`
+                    ${t ? h`<span class="target">${t.setId ? h`${icona(giocabile ? 'layer-group' : 'triangle-exclamation')} ` : ''}${t.testo}${t.setId ? h` · ${etichettaModo(P.modoTarget(att, t))}` : ''}</span>` : (senzaTarget ? (P.inPercentuale(att) ? h`<span class="target">${icona('percent')} Dato in percentuale a ogni seduta</span>` : h`<span class="target">${icona('layer-group')} LU da ${att.prove} prove</span>`)
                         : !att.temporanea ? h`<span class="target"><i>Nessun target in corso: aggiungilo dal programma.</i></span>` : '')}
                     ${st ? h`<span class="target ta-riga">${icona('list-ol')} passo <b>${st.i + 1}/${passi.length}</b> · ${st.passo.testo}${st.giri ? h` <span class="pill grigia">giro ${st.giri + 1}</span>` : ''}</span>` : ''}
                     ${lu && (lu.prec || lu.oggi) ? h`<span class="target lu-attesa">${icona('hourglass-half')} ${lu.prec ? `${lu.prec.seq.length} prove in attesa dal ${formatoData(lu.prec.dal)} · ` : ''}${lu.blocchi.length
@@ -475,7 +475,8 @@
     function riassunto(p) {
         const b = bozza(p.id);
         let corrette = 0, prove = 0, n = 0;
-        Object.values(b.voci).forEach((v) => { if (haDati(v)) { n++; corrette += v.v; prove += v.v + v.p + v.x; } });
+        // le attività in mantenimento non entrano nel conto delle LU della giornata
+        Object.keys(b.voci).forEach((k) => { const v = b.voci[k], a = attivitaDi(p, k); if (haDati(v) && !(a && a.mantenimento)) { n++; corrette += v.v; prove += v.v + v.p + v.x; } });
         return { corrette, prove, n };
     }
     function testoPiede(p) {
@@ -668,6 +669,7 @@
                         return h` <span class="pill" title="${u ? `Cambiato il ${formatoData(u.il)}${u.da != null ? ' da ' + sec(u.da) : ''} a ${sec(u.a)}` : 'Time delay'}">T/D${d != null ? ' ' + sec(d) : ''}</span>`;
                     })() : h` <span class="pill grigia">Indip.</span>`}
                     ${att.stato !== 'attivo' ? h` <span class="pill arancio">${ETICHETTE_STATO[att.stato] || att.stato}</span>` : ''}
+                    ${att.mantenimento ? h` <span class="pill grigia" title="Il dato si prende ma non entra nelle statistiche">mantenimento</span>` : ''}
                     ${att.suggerimenti ? h` <span class="pill grigia" title="${att.suggerimenti}">${icona('lightbulb')} suggerimenti</span>` : ''}</span>
                     <span class="target">Criterio ${att.criterio.soglia}% per ${att.criterio.sedute} giorni${att.prove ? ' · ' + att.prove + ' prove' : ''}${att.descrizione ? ' · ' + att.descrizione : ''}</span></span>
                 ${modifica ? icona('pen') : ''}
@@ -676,7 +678,7 @@
                 ${chiusi.length ? h`<li><details class="chiusi" ${T.chiusiAperti[att.id] ? grezzo('open') : ''} data-chiusi="${att.id}"><summary class="sotto piccolo">${chiusi.length} ${chiusi.length === 1 ? 'target chiuso' : 'target chiusi'}</summary>
                     <ul class="targets" style="padding:0">${chiusi.map(riga)}</ul></details></li>` : ''}
                 ${aperti.map(riga)}
-                ${!t.length ? h`<li class="senza-target"><span class="punto"></span><span class="tt">${icona('percent')} Senza target: il dato si prende in percentuale a ogni seduta<small>${ultimaS ? `${P.sedute(p, att).length} sedute, ultima ${formatoData(P.giorno(ultimaS.date))} ${ultimaS.percentage}%` : 'Nessuna seduta ancora'}</small></span></li>` : ''}
+                ${!t.length ? h`<li class="senza-target"><span class="punto"></span><span class="tt">${P.inPercentuale(att) ? h`${icona('percent')} Senza numero di prove: il dato si prende in percentuale a ogni seduta` : h`${icona('layer-group')} LU da ${att.prove} prove: il dato entra quando se ne completano ${att.prove}`}<small>${ultimaS ? `${P.sedute(p, att).length} sedute, ultima ${formatoData(P.giorno(ultimaS.date))} ${ultimaS.percentage}%` : 'Nessuna seduta ancora'}</small></span></li>` : ''}
                 <li class="azioni-att">${modifica ? h`<button class="bt piccolo fantasma" data-a="nuovo-target" data-id="${att.id}">${icona('plus')} Target</button>` : ''}
                     ${P.sedute(p, att).length ? h`<button class="bt piccolo fantasma" data-a="scc-att" data-id="${att.id}">${icona('chart-line')} Andamento</button>` : ''}</li>
             </ul>
@@ -1380,6 +1382,7 @@
                 att.descrizione = r.descrizione.trim();
                 att.suggerimenti = String(r.suggerimenti || '').trim();
                 att.cronometro = !!r.cronometro;
+                if (r.mantenimento) att.mantenimento = true; else delete att.mantenimento;
                 att.sessionType = r.sessionType;
                 if (r.colore) att.colore = r.colore; else delete att.colore;
                 if (P.secondiTD(r.tdSeconds) != null) P.impostaTD(att, r.tdSeconds, { chi: chiOpera() });
@@ -1626,16 +1629,18 @@
             <div class="campo"><span>Tipo di seduta</span><div class="scelta">
                 <label><input type="radio" name="sessionType" value="independent" ${a.sessionType !== 'timedelay' ? grezzo('checked') : ''}><span>Indipendente</span></label>
                 <label><input type="radio" name="sessionType" value="timedelay" ${a.sessionType === 'timedelay' ? grezzo('checked') : ''}><span>Time delay</span></label></div></div>
+            <label class="spunta-riga"><input type="checkbox" name="mantenimento" ${a.mantenimento ? grezzo('checked') : ''}> <span><b>Mantenimento</b><br><span class="sotto piccolo">Il dato si prende in seduta, ma non entra nelle statistiche (LU del giorno, panoramica, grafici) e non porta a criterio.</span></span></label>
             <label class="spunta-riga"><input type="checkbox" name="cronometro" ${a.cronometro ? grezzo('checked') : ''}> <span><b>Cronometra (fluency)</b><br><span class="sotto piccolo">In seduta compare un cronometro che parte alla prima risposta: il grafico SCC mostra le risposte al minuto.</span></span></label>
             <div class="riga-campi">
                 <label class="campo"><span>Criterio %</span><input name="soglia" type="number" min="10" max="100" inputmode="numeric" value="${a.criterio.soglia}"></label>
                 <label class="campo"><span>Giorni di fila</span><input name="sedute" type="number" min="1" max="10" inputmode="numeric" value="${a.criterio.sedute}"></label>
-                <label class="campo"><span>Prove</span><input name="prove" type="number" min="1" max="200" inputmode="numeric" value="${a.prove || ''}" placeholder="—"></label>
+                <label class="campo"><span>Prove per LU</span><input name="prove" type="number" min="1" max="200" inputmode="numeric" value="${a.prove || ''}" placeholder="in %"></label>
             </div>
+            <p class="sotto piccolo" style="margin:-4px 0 10px">Con le prove per LU (es. 20) il dato entra quando se ne completano 20, anche in più sedute. Vuoto: dato in percentuale a ogni seduta.</p>
             <label class="campo"><span>Secondi di time delay (solo per il time delay)</span><input name="tdSeconds" type="number" min="0" max="60" inputmode="numeric" value="${tdA != null ? tdA : ''}" placeholder="es. 0, 1, 2…">
                 <span class="sotto piccolo">Si vede in seduta e finisce nei dati di ogni seduta. Se lo cambi, il cambio resta segnato con la data${(a.tdCambi || []).length ? h` (finora: ${a.tdCambi.map((c) => `${formatoData(c.il)} ${c.da != null ? sec(c.da) + '→' : ''}${sec(c.a)}`).join(', ')})` : ''}.</span></label>
             ${att ? '' : h`<label class="campo"><span>Target, uno per riga (il primo è quello da cui si parte)</span><textarea name="target" placeholder="es. Animali: cane, gatto&#10;Frutta: mela, banana"></textarea>
-                <span class="sotto piccolo">Lascia vuoto per sceglierli dall'archivio dei set o da una lista del Quaderno. Senza target, il dato si prende in percentuale a ogni seduta.</span></label>`}
+                <span class="sotto piccolo">Lascia vuoto per sceglierli dall'archivio dei set o da una lista del Quaderno. Si può anche lavorare senza stimoli specifici.</span></label>`}
             ${att ? h`<div class="opzioni" style="margin-top:6px">
                 ${att.stato === 'attivo' ? h`<button type="button" class="opzione" data-foglio="sospeso">${icona('pause')}<span class="corpo">Sospendi<small>Non compare più nella presa dati</small></span></button>
                     <button type="button" class="opzione" data-foglio="terminato">${icona('flag-checkered')}<span class="corpo">Termina l'attività</span></button>`
@@ -1724,8 +1729,8 @@
                 const senza = !(att.target || []).length;
                 const prima = t ? P.criterioRaggiunto(P.sedute(p, att, t), att.criterio) : senza ? P.criterioRaggiunto(P.sedute(p, att), att.criterio) : null;
                 if (t && !t.inizio) t.inizio = b.data;
-                if (t && t.stato === 'attivo' && !prima) controlla.push({ att, t });
-                if (senza && !prima) controlla.push({ att, t: null });
+                if (t && t.stato === 'attivo' && !prima && !att.mantenimento) controlla.push({ att, t });
+                if (senza && !prima && !att.mantenimento) controlla.push({ att, t: null });
                 if (P.conAttesa(att, t)) {
                     // LU contate: entrano nei dati solo a blocchi completi, il resto aspetta
                     const n = +att.prove, k = P.chiaveAttesa(t), prec = P.inAttesaDi(att, t);

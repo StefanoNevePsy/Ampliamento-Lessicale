@@ -22,7 +22,7 @@ prova('più LU nello stesso giorno', () => {
 prova('conteggio delle risposte di un blocco', () => {
   assert.deepStrictEqual(P.contaRisposte('VVPXV'), { v: 3, p: 1, x: 1 });
 });
-prova('aspettano solo le attività a target con le prove per LU', () => {
+prova('aspettano le attività con le prove per LU, con o senza stimoli', () => {
   const pz = {};
   const lu = P.nuovaAttivita(pz, { nome: 'Tact', prove: 10, target: 'Animali' });
   const senzaProve = P.nuovaAttivita(pz, { nome: 'Mand', target: 'Cibo' });
@@ -31,7 +31,12 @@ prova('aspettano solo le attività a target con le prove per LU', () => {
   const crono = P.nuovaAttivita(pz, { nome: 'Fluency', prove: 10, target: 'x', cronometro: true });
   assert.strictEqual(P.conAttesa(lu, lu.target[0]), true);
   assert.strictEqual(P.conAttesa(senzaProve, senzaProve.target[0]), false);
-  assert.strictEqual(P.conAttesa(senzaTarget, null), false);
+  // le prove per LU sono il «target» del quaderno: valgono anche senza stimoli specifici
+  assert.strictEqual(P.conAttesa(senzaTarget, null), true);
+  assert.strictEqual(P.inPercentuale(senzaTarget), false);
+  const libera = P.nuovaAttivita(pz, { nome: 'Gioco libero' });
+  assert.strictEqual(P.inPercentuale(libera), true);
+  assert.strictEqual(P.conAttesa(libera, null), false);
   assert.strictEqual(P.conAttesa(perc, perc.target[0]), false);
   assert.strictEqual(P.conAttesa(crono, crono.target[0]), false);
   const ta = P.nuovaAttivita(pz, { nome: 'Autonomie', prove: 10 });

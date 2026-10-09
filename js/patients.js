@@ -655,7 +655,7 @@ function renderOverviewTab(patient) {
     const content = document.getElementById('report-content');
     if (!content) return;
 
-    const history = patient.history || [];
+    const history = (patient.history || []).filter(inStatistiche);
     const byDate = {};
     history.forEach(h => {
         const dk = getDateKey(h.date);
@@ -1662,6 +1662,7 @@ function renderActivitiesTab(patient, sortBy) {
         let badgeHtml = '';
         if (isMastered) badgeHtml += `<span class="criterion-badge"><i class="fa-solid fa-trophy"></i> CRITERIO</span>`;
         if (isRepertorio) badgeHtml += `<span class="repertorio-badge"><i class="fa-solid fa-star"></i> REPERTORIO</span>`;
+        if (sessions.length && sessions.every(h => !inStatistiche(h))) badgeHtml += `<span class="repertorio-badge" style="background:rgba(var(--ink-rgb),0.08);color:var(--text-secondary);" title="Il dato si prende ma non entra nelle statistiche"><i class="fa-solid fa-rotate"></i> MANTENIMENTO</span>`;
 
         const typeColor = typeGroup === 'timedelay' ? 'var(--warning-color)' : 'var(--success-color)';
         const typeLbl = getSessionTypeLabel(typeGroup);
@@ -3246,7 +3247,7 @@ const FICTIONAL_NAMES = [
 ];
 
 function _buildPatientSummaryForAI(patient, fakeName) {
-    const history = patient.history || [];
+    const history = (patient.history || []).filter(inStatistiche);
     if (history.length === 0) return null;
 
     const sorted = [...history].sort((a, b) => new Date(a.date) - new Date(b.date));
