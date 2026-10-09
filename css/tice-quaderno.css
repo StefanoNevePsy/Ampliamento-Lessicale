@@ -128,3 +128,69 @@
     100% { opacity: 0; transform: rotate(-6deg) scale(1); }
 }
 @media (prefers-reduced-motion: reduce) { :root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tq-timbro span { animation: none; opacity: .95; } }
+
+/* ==========================================================================
+   Cartella clinica (grafici, giornate, attività, visual, diario) nello stesso
+   quaderno. È l'app di base, con molti stili scritti direttamente nel codice:
+   qui si correggono con !important, solo nell'aspetto «quaderno».
+   ========================================================================== */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients { background: var(--q-carta) !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients > .modal-header { background: var(--q-carta) !important; border-bottom: 1px solid var(--q-matita) !important; box-shadow: none !important; align-items: flex-end; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients > .modal-header h2 { display: flex; flex-direction: column; gap: 2px; font-family: var(--f-display); font-weight: 400; font-size: clamp(1.9rem, 6vw, 2.5rem) !important; line-height: 1.02; letter-spacing: -0.015em; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients > .modal-header h2 i { display: none; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients > .modal-header h2::before { content: 'Centro TICE'; font-family: var(--f-testo); font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; font-weight: 600; color: var(--text-secondary); }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients > .modal-header .btn { width: auto !important; height: auto !important; min-height: 40px; border-radius: 999px !important; padding: 8px 18px !important; background: transparent !important; border: 1px solid var(--q-matita-forte) !important; color: var(--text-primary) !important; box-shadow: none !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients #patient-title { display: none; }
+
+/* intestazione del bambino */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients #charts-container > div:first-child [style*="font-size:1.1rem; font-weight:700"] { font-family: var(--f-display); font-weight: 400 !important; font-size: clamp(1.7rem, 6vw, 2.2rem) !important; line-height: 1.05; letter-spacing: -0.01em; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients #charts-container > div:first-child > div[style*="border-radius:50%"] { background: none !important; border: 1.5px dashed var(--q-matita-forte) !important; color: var(--text-primary) !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients #charts-container span[style*="background:rgba(99,102,241,0.15)"] { background: none !important; border: 1px solid var(--q-matita-forte); color: var(--text-secondary) !important; border-radius: 999px !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients .btn-ghost[style*="border-color"], :root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients #charts-container > div:first-child .btn { border-color: var(--q-matita-forte) !important; color: var(--text-primary) !important; background: transparent !important; border-radius: 999px !important; min-height: 40px; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients #charts-container > div:first-child .btn-danger { color: var(--q-spot) !important; }
+
+/* schede: un segmento d'inchiostro, come Settimana/Mese di PsyDiary */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients #report-tabs { background: transparent !important; border: 1px solid var(--q-matita-forte); border-radius: 999px !important; padding: 3px !important; position: sticky; top: 0; z-index: 3; background-color: var(--q-carta) !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients .report-tab { background: transparent !important; color: var(--text-secondary) !important; border-radius: 999px !important; min-height: 40px; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients .report-tab.active { background: var(--text-primary) !important; color: var(--q-carta) !important; }
+
+/* filtri e ordinamenti: pillole a matita */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients [style*="flex-wrap:wrap; background:"] { background: none !important; padding-left: 0 !important; padding-right: 0 !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients #charts-container button[style*="border-radius:6px"] { border-radius: 999px !important; background: transparent !important; color: var(--text-primary) !important; border: 1px solid var(--q-matita-forte) !important; min-height: 32px; padding: 4px 12px !important; font-size: .75rem !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients #charts-container button[style*="border:1px solid var(--accent-color"] { background: var(--text-primary) !important; color: var(--q-carta) !important; border-color: var(--text-primary) !important; }
+
+/* numeri del periodo: niente riquadri colorati, cifre grandi in Gloock su una riga a matita */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients [style*="minmax(120px, 1fr)"] { gap: 0 !important; border-top: 1px solid var(--q-matita); border-bottom: 1px solid var(--q-matita); }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients [style*="minmax(120px, 1fr)"] > div { background: none !important; border: 0 !important; border-radius: 0 !important; padding: 14px 8px !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients [style*="minmax(120px, 1fr)"] > div + div { border-left: 1px solid var(--q-matita) !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients [style*="minmax(120px, 1fr)"] [style*="font-size:1.5rem; font-weight:800"] { font-family: var(--f-display); font-weight: 400 !important; font-size: 2.3rem !important; line-height: 1.05; color: var(--text-primary) !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients [style*="minmax(120px, 1fr)"] [style*="text-transform:uppercase"] { letter-spacing: .1em; font-weight: 600; font-size: .66rem !important; margin-top: 4px; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients [style*="minmax(120px, 1fr)"] [style*="color:#666"] { color: var(--text-secondary) !important; }
+
+/* riquadri dei grafici e delle giornate: fogli a matita, senza strisce colorate */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients .chart-wrapper { background: transparent !important; border: 1px solid var(--q-matita) !important; border-radius: 14px !important; box-shadow: none !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients .chart-wrapper > h4, :root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients .chart-wrapper h4[style*="color:var(--accent-color)"], :root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients #charts-container h4[style*="color:var(--accent-color)"] { font-family: var(--f-display); font-weight: 400 !important; font-size: 1.3rem !important; color: var(--text-primary) !important; letter-spacing: -0.005em; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients .chart-wrapper > h4 i, :root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients #charts-container h4 > i { color: var(--q-spot); font-size: .7em; vertical-align: .15em; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients .chart-wrapper [style*="font-weight:bold; font-size:1rem"] { font-family: var(--f-display); font-weight: 400 !important; font-size: 1.2rem !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients .chart-wrapper [style*="color:#666"] { color: var(--text-secondary) !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients .date-detail-panel, :root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients .activity-details-panel { border-top: 1px dashed var(--q-matita) !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients .chart-wrapper span[style*="background:rgba(245,158,11,0.15)"], :root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients .chart-wrapper span[style*="background:rgba(99,102,241,0.15)"] { background: none !important; border: 1px solid currentColor; border-radius: 999px !important; }
+
+/* note del giorno e diario: leggibili, con il retino al posto del giallo */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients .daily-note-card { position: relative; isolation: isolate; background: none !important; border: 1px dashed var(--q-matita-forte) !important; border-left-width: 1px !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients .daily-note-card::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; opacity: .45; background-image: radial-gradient(var(--taccuino-retino) 1px, transparent 1.25px); background-size: 6px 6px; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients .daily-note-content, :root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients .diary-note-text { color: var(--text-primary) !important; font-size: .95rem !important; line-height: 1.6 !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients [style*="color:#eab308"] { color: var(--q-spot) !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients .btn-icon[style*="234,179,8"] { border-color: var(--q-matita-forte) !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients .diary-entry { border-color: var(--q-matita) !important; background: transparent !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients .diary-entry > div:first-child { background: none !important; border-bottom: 1px solid var(--q-matita); }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients .diary-entry > div:first-child span[style*="font-weight:bold"] { font-family: var(--f-display); font-weight: 400 !important; font-size: 1.25rem !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients .diary-entry span[style*="width:20px; height:20px"] { display: none !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients .diary-entry span[style*="color:#eab308"], :root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients .daily-note-card span[style*="color:#eab308"] { font-family: var(--f-mano); font-weight: 400 !important; font-size: 1.15rem !important; }
+
+@media (max-width: 560px) {
+    :root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients [style*="minmax(120px, 1fr)"] { grid-template-columns: 1fr 1fr !important; }
+    :root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients [style*="minmax(120px, 1fr)"] > div:nth-child(odd) { border-left: 0 !important; }
+    :root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients [style*="minmax(120px, 1fr)"] > div:nth-child(n+3) { border-top: 1px solid var(--q-matita) !important; }
+}
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients #charts-container span[style*="background:rgba(99,102,241,0.15)"] { white-space: nowrap; }
