@@ -19,8 +19,9 @@ const ESTERNI = 'tice-esterni';
 const CDN = ['https://www.gstatic.com/firebasejs/', 'https://unpkg.com/peerjs@'];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILE)));
-  // la prima installazione è subito attiva; gli aggiornamenti aspettano "Aggiorna"
+  // la versione nuova si attiva appena scaricata: l'app si ricarica da sola nel
+  // primo momento tranquillo (bozze e dati restano nel dispositivo)
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILE)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {

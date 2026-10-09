@@ -52,6 +52,7 @@
         if (S.caricando || (!forza && S.chiave === k && S.personeCaricate && S.fonte === fonte())) return;
         S.caricando = true; S.errore = '';
         S.fonte = fonte();
+        S.caricatoIl = Date.now();
         // dal centro: intanto si mostra l'ultima copia ricordata, poi arriva quella aggiornata
         if (remoto() && Y.turniRicordati && (S.chiave !== k || !S.personeCaricate)) {
             try {
@@ -600,6 +601,12 @@
         if (cosa === 'turni' && TiceHome.attuale().vista === 'turni') TiceHome.ridisegna();
         // il centro è diventato pronto (o non lo è più): i turni si rileggono da lì
         if (cosa === 'stato' && S.fonte && S.fonte !== fonte() && ['turni', 'turni-modello'].includes(TiceHome.attuale().vista)) rileggiSeCambiata();
+        // dopo ogni sincronizzazione riuscita si rileggono anche i turni in vista
+        // (le modifiche fatte da un altro dispositivo compaiono senza riaprire l'app)
+        if (cosa === 'stato' && Y.S && Y.S.ultimo && Y.S.ultimo !== S.ultimaSync && !Y.S.lavoro) {
+            const prima = S.ultimaSync; S.ultimaSync = Y.S.ultimo;
+            if (prima && remoto() && !S.caricando && Date.now() - (S.caricatoIl || 0) > 60000 && ['turni', 'turni-modello'].includes(TiceHome.attuale().vista)) { S.personeCaricate = false; carica(true); }
+        }
     });
 
     // Chi è in turno con un bambino in un giorno (nell'ordine delle fasce): serve alla

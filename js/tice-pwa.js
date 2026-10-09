@@ -28,12 +28,18 @@
     function registra() {
         if (!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
         let ricaricando = false;
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
+        // Versione nuova attiva: si ricarica appena non c'è un foglio aperto
+        // (un modulo a metà o la fine seduta), o quando l'app torna in primo piano
+        const tranquillo = () => !document.querySelector('.tice-foglio-sfondo, .modal.open, .modal[style*="flex"]');
+        const ricarica = () => {
             if (ricaricando) return;
+            if (document.visibilityState === 'visible' && !tranquillo()) { setTimeout(ricarica, 2000); return; }
             ricaricando = true;
             location.reload();
-        });
-        navigator.serviceWorker.register('sw.js').then((reg) => {
+        };
+        const giaControllata = !!navigator.serviceWorker.controller;
+        navigator.serviceWorker.addEventListener('controllerchange', () => { if (giaControllata) ricarica(); });
+        navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((reg) => {
             const proponi = (w) => banda('È disponibile una versione nuova dell\'app.', () => w.postMessage('aggiorna'), 'Aggiorna');
             if (reg.waiting && navigator.serviceWorker.controller) proponi(reg.waiting);
             reg.addEventListener('updatefound', () => {
@@ -44,8 +50,10 @@
                     if (w.state === 'installed' && navigator.serviceWorker.controller) proponi(w);
                 });
             });
-            // controlla aggiornamenti quando l'app torna in primo piano
+            // controlla aggiornamenti all'apertura, quando l'app torna in primo piano e ogni 10 minuti
+            reg.update().catch(() => {});
             document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+            setInterval(() => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); }, 600000);
         }).catch((e) => console.warn('service worker', e));
     }
 
