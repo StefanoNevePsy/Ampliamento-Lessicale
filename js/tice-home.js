@@ -304,6 +304,8 @@
         document.querySelectorAll('.tice-avviso').forEach((x) => x.remove());
         const d = document.createElement('div');
         d.className = 'tice-avviso' + (tipo === 'errore' ? ' errore' : '');
+        d.setAttribute('role', tipo === 'errore' ? 'alert' : 'status');
+        d.setAttribute('aria-live', tipo === 'errore' ? 'assertive' : 'polite');
         d.textContent = testo;
         document.body.appendChild(d);
         clearTimeout(timerAvviso);
@@ -317,7 +319,7 @@
         return h`<header class="tice-barra">
             ${indietro ? h`<button class="ib" data-a="${indietro}" aria-label="Indietro">${icona('arrow-left')}</button>`
                 : h`<button class="marchio" data-a="vai-bambini" aria-label="Centro TICE"><img src="img/tice/logo-bianco.svg" alt="TICE"></button>`}
-            <div class="titolo">${titolo}${sotto ? h`<span class="sotto-titolo" ${sotto.azione ? grezzo(`data-a="${sotto.azione}" style="cursor:pointer"`) : ''}>${sotto.testo}</span>` : ''}</div>
+            <div class="titolo"><span class="titolo-testo">${titolo}</span>${sotto ? (sotto.azione ? h`<button type="button" class="sotto-titolo tocca" data-a="${sotto.azione}"><span class="tocca-testo">${sotto.testo}</span>${icona('chevron-down')}</button>` : h`<span class="sotto-titolo">${sotto.testo}</span>`) : ''}</div>
             ${EST.chip ? EST.chip() : ''}
             ${destra || ''}
         </header>`;
@@ -494,9 +496,7 @@
                     ${t ? h`<span class="target">${t.setId ? h`${icona(giocabile ? 'layer-group' : 'triangle-exclamation')} ` : ''}${t.testo}${t.setId ? h` · ${etichettaModo(P.modoTarget(att, t))}` : ''}</span>` : (senzaTarget ? (P.inPercentuale(att) ? h`<span class="target">${icona('percent')} Dato in percentuale a ogni seduta</span>` : h`<span class="target">${icona('layer-group')} LU da ${att.prove} prove</span>`)
                         : !att.temporanea ? h`<span class="target"><i>Nessun target in corso: aggiungilo dal programma.</i></span>` : '')}
                     ${st ? h`<span class="target ta-riga">${icona('list-ol')} passo <b>${st.i + 1}/${passi.length}</b> · ${st.passo.testo}${st.giri ? h` <span class="pill grigia">giro ${st.giri + 1}</span>` : ''}</span>` : ''}
-                    ${lu && (lu.prec || lu.oggi) ? h`<span class="target lu-attesa">${icona('hourglass-half')} ${lu.prec ? `${lu.prec.seq.length} prove in attesa dal ${formatoData(lu.prec.dal)} · ` : ''}${lu.blocchi.length
-                        ? `salvando, ${lu.blocchi.length === 1 ? 'una LU completa entra' : lu.blocchi.length + ' LU complete entrano'} nei dati${lu.resto ? `, ${lu.resto} prove restano in attesa` : ''}`
-                        : `ne mancano ${lu.n - lu.resto} per completare la LU da ${lu.n}`}</span>` : ''}
+                    ${lu && (lu.prec || lu.oggi) ? h`<span class="target lu-attesa">${icona('hourglass-half')} ${testoLU(lu)}</span>` : ''}
                     ${oggiT ? h`<span class="target">${icona('circle-check')} già oggi: ${oggiV}/${oggiT} (${Math.round(100 * oggiV / oggiT)}%)${(() => { const chi = [...new Set(giaOggi.map((x) => x.operatore).filter(Boolean))]; return chi.length ? h` <span class="chi">· ${chi.join(', ')}</span>` : ''; })()}</span>` : ''}
                 </span>
                 <span class="conto">${ms.length ? h`<span class="piccolo sotto conto-ms">${ms.map((m, i) => { const x = vm[i], n = x ? x.v + x.p + x.x : 0; return h`<span>${m.nome}: <b class="${n ? classePct(Math.round(100 * x.v / n), soglia) : ''}">${n ? Math.round(100 * x.v / n) + '%' : '—'}</b></span>`; })}</span>` : tot ? h`<b class="${classePct(pct, soglia)}">${pct}%</b><br><span class="piccolo sotto">${v.v}/${tot}${att.prove ? ' di ' + att.prove : ''}</span>`
@@ -533,6 +533,14 @@
             </div>` : ''}
         </div>`;
     }
+    // Le prove che non arrivano a una LU intera non si perdono: restano da parte e la completano la volta dopo
+    function testoLU(lu) {
+        const prima = lu.prec ? `${lu.prec.seq.length} ${lu.prec.seq.length === 1 ? 'prova tenuta' : 'prove tenute'} da parte dal ${formatoData(lu.prec.dal)} · ` : '';
+        if (lu.blocchi.length) return prima + `salvando, ${lu.blocchi.length === 1 ? 'la LU' : lu.blocchi.length + ' LU'} da ${lu.n} ${lu.blocchi.length === 1 ? 'entra' : 'entrano'} nei dati`
+            + (lu.resto ? `; ${lu.resto} ${lu.resto === 1 ? 'prova resta' : 'prove restano'} da parte per la prossima seduta` : '');
+        const m = lu.n - lu.resto;
+        return prima + `ancora ${m} ${m === 1 ? 'prova' : 'prove'} per la LU da ${lu.n}: se non ci arrivi, si completa nella prossima seduta`;
+    }
     // Una delle prese dati dell'attività (es. Categorizzazione → «Categorizza», «Tact mix»)
     function presaDati(p, att, t, tipo, m, v, crit, soglia) {
         const k = att.id + '~' + m.id;
@@ -546,7 +554,7 @@
                 ${m.mantenimento ? h`<span class="pill grigia" title="Il dato si prende ma resta fuori da statistiche e criterio">mantenimento</span>` : ''}
                 ${crit ? h`<span class="pill verde">${icona('flag-checkered')} criterio il ${formatoData(crit)}</span>` : ''}
                 <span class="presa-conto">${tot ? h`<b class="${classePct(Math.round(100 * v.v / tot), soglia)}">${Math.round(100 * v.v / tot)}%</b> <span class="sotto">${v.v}/${tot}${attM.prove ? ' di ' + attM.prove : ''}</span>` : h`<span class="sotto">${attM.prove ? attM.prove + ' prove' : ''}</span>`}</span></div>
-            ${lu && (lu.prec || lu.oggi) ? h`<p class="sotto piccolo lu-attesa">${icona('hourglass-half')} ${lu.prec ? `${lu.prec.seq.length} in attesa dal ${formatoData(lu.prec.dal)} · ` : ''}${lu.blocchi.length ? 'salvando entra nei dati' + (lu.resto ? `, ${lu.resto} restano in attesa` : '') : `ne mancano ${lu.n - lu.resto} per la LU da ${lu.n}`}</p>` : ''}
+            ${lu && (lu.prec || lu.oggi) ? h`<p class="sotto piccolo lu-attesa">${icona('hourglass-half')} ${testoLU(lu)}</p>` : ''}
             ${tasti(attM, tipoM, k)}
             <div class="sotto-tasti">
                 <div class="sequenza" aria-label="Sequenza delle risposte">${(v ? v.sequenza : '').split('').map((r) => h`<i class="${r}"></i>`)}</div>
@@ -1439,7 +1447,7 @@
                 <label class="campo campo-chi"><span>Chi ha svolto la seduta${!b.operatore && cal.nomi.length ? h` <small class="sotto">· dal calendario</small>` : ''}</span><input name="operatore" maxlength="120" required value="${operatore}" placeholder="Nome, o più nomi separati da +" list="tice-chi" autocomplete="off">
                     <datalist id="tice-chi">${suggeriti.map((n) => h`<option value="${n}">`)}</datalist></label>
                 <label class="campo"><span>Note sulla seduta (vanno nel diario del giorno)</span><textarea name="nota" maxlength="5000" placeholder="Comportamento, rinforzatori, osservazioni…"></textarea></label>
-                <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Continua</button><button class="bt primario">${icona('check')} Salva</button></div></form>`);
+                <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Torna alla seduta</button><button class="bt primario">${icona('check')} Salva</button></div></form>`);
             if (!dati) return;
             try { localStorage.setItem('tice_operatore', dati.operatore.trim().split('+')[0].trim()); } catch (e) { /* niente */ }
             await salvaSeduta(p, b, dati);
