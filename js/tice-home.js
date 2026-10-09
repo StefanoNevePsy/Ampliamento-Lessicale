@@ -592,6 +592,16 @@
         });
     }, 1000);
 
+    // Per il calendario: la seduta di un bambino in quel giorno è in corso (bozza) o già salvata?
+    function statoSeduta(pid, g) {
+        const p = paz(pid);
+        if (!p) return null;
+        const b = T.bozza && T.bozza.pid === pid ? T.bozza : leggiBozza(pid);
+        const prove = b && b.data === g ? Object.values(b.voci).filter(haDati).reduce((n, v) => n + v.v + v.p + v.x, 0) : 0;
+        const ultima = (p.history || []).map((x) => String(x.date || '')).filter((d) => d && P.giorno(d) === g).sort().pop();
+        const ora = ultima && !/T12:00:00(\.000)?Z?$/.test(ultima) ? new Date(ultima).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '';
+        return { prove, salvata: !!ultima, ora };
+    }
     function riassunto(p) {
         const b = bozza(p.id);
         let corrette = 0, prove = 0, n = 0;
@@ -2560,7 +2570,7 @@
         },
         attuale: () => ({ vista: T.vista, pid: T.pid }),
         ridisegna: () => { if (!radice().hidden) { T.mantieniScroll = true; disegna(); } },
-        strumenti: { h, grezzo, icona, foglio, conferma, avviso, barra, vai: (v, pid) => vai(v, pid), paz, pazienti, salvaPaziente, formatoData, T, stampa, limitato: () => limitato(), banner: () => (EST.banner ? EST.banner() : '') }
+        strumenti: { h, grezzo, icona, foglio, conferma, avviso, barra, vai: (v, pid) => vai(v, pid), paz, pazienti, salvaPaziente, formatoData, T, stampa, statoSeduta, limitato: () => limitato(), banner: () => (EST.banner ? EST.banner() : '') }
     };
     if (document.readyState === 'complete') avvia();
     else window.addEventListener('load', avvia);

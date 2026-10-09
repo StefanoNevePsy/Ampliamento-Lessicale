@@ -118,7 +118,7 @@ body.tice-aperto #notebook-tab-handle { display: none !important; }
 .tice .bt.largo { width: 100%; }
 .tice .bt[disabled] { opacity: 0.5; pointer-events: none; }
 .tice .ib {
-    width: 42px; height: 42px; flex-shrink: 0; display: grid; place-items: center;
+    width: 44px; height: 44px; flex-shrink: 0; display: grid; place-items: center;
     border-radius: 12px; border: 1px solid var(--t-bordo); background: var(--t-sup); color: var(--text-primary);
     cursor: pointer; font-size: 1rem;
 }
@@ -211,7 +211,7 @@ body.tice-aperto #notebook-tab-handle { display: none !important; }
 .tice .presa-testa .presa-conto { margin-left: auto; font-size: 0.9rem; }
 .tice .presa.a-criterio .presa-testa b:first-child { color: var(--success-color, #2f7d4f); }
 .tice .presenti { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 12px; }
-.tice .pill-presenza { border: 1px solid var(--t-bordo); background: transparent; color: var(--text-secondary); border-radius: 999px; padding: 4px 12px; font: inherit; font-weight: 600; cursor: pointer; text-decoration: line-through; }
+.tice .pill-presenza { border: 1px solid var(--t-bordo); background: transparent; color: var(--text-secondary); border-radius: 999px; padding: 4px 14px; min-height: 44px; font: inherit; font-weight: 600; cursor: pointer; text-decoration: line-through; }
 .tice .pill-presenza.si { color: var(--text-primary); text-decoration: none; border-color: var(--accent-color); }
 .tice .avatar.gruppo { background: var(--accent-color); color: #fff; }
 /* gruppo: una riga compatta per bambino (nome, tasti, conteggio, annulla) */
@@ -473,7 +473,7 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 .tice .att.con-hint > * { grid-column: 1 / -1; }
 .tice .att.con-hint > .att-testa { grid-column: 1; grid-row: 1; }
 .tice .att.con-hint > .hint-tasto { grid-column: 2; grid-row: 1; align-self: center; margin-right: 10px; }
-.tice .hint-tasto { width: 38px; height: 38px; border-radius: 999px; color: var(--accent-color); border-style: dashed; border-color: rgba(var(--accent-rgb), 0.5); background: rgba(var(--accent-rgb), 0.06); }
+.tice .hint-tasto { width: 44px; height: 44px; border-radius: 999px; color: var(--accent-color); border-style: dashed; border-color: rgba(var(--accent-rgb), 0.5); background: rgba(var(--accent-rgb), 0.06); }
 .tice .hint-tasto.on { background: var(--accent-color); border-style: solid; border-color: var(--accent-color); color: #fff; }
 .tice .att-suggerimenti { padding-top: 0; }
 .tice .att-suggerimenti .sugg-testo { margin-top: 0; }
@@ -673,10 +673,11 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 .tice .tt-g small { font-weight: 500; font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; opacity: .7; }
 .tice .tt-g.scelto { border-color: currentColor; }
 .tice .tt-g.oggi { color: var(--taccuino-spot, var(--accent-color)); }
+.tice .tt-modello .tt-giorno-m.oggi { color: var(--taccuino-spot, var(--accent-color)); box-shadow: inset 0 -3px 0 currentColor; }
 .tice .tt-punto { position: absolute; bottom: 2px; width: 5px; height: 5px; border-radius: 50%; background: currentColor; opacity: .55; }
 .tice .tt-pennello { position: sticky; top: 0; z-index: 3; background: var(--t-sfondo, var(--taccuino-carta, var(--t-sup))); padding: 6px 0 8px; margin-bottom: 6px; }
 .tice .tt-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
-.tice .tt-pers { border: 1px solid var(--tq-matita-forte, rgba(0,0,0,.25)); border-radius: 999px; padding: 5px 12px; background: transparent; color: inherit; font: inherit; font-size: .88rem; font-weight: 600; cursor: pointer; }
+.tice .tt-pers { border: 1px solid var(--tq-matita-forte, rgba(0,0,0,.25)); border-radius: 999px; padding: 5px 14px; min-height: 44px; background: transparent; color: inherit; font: inherit; font-size: .88rem; font-weight: 600; cursor: pointer; }
 .tice .tt-pers.tiro { border-style: dashed; }
 .tice .tt-pers.attiva { background: var(--text-primary, #222); color: var(--taccuino-carta, #fff); border-color: var(--text-primary, #222); border-style: solid; }
 .tice .tt-pers.fine { border-color: transparent; text-decoration: underline; }
@@ -685,7 +686,7 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 .tice .tt-griglia { border-collapse: separate; border-spacing: 0; min-width: 100%; }
 .tice .tt-griglia th, .tice .tt-griglia td { border-right: 1px solid var(--tq-matita, rgba(0,0,0,.12)); border-bottom: 1px solid var(--tq-matita, rgba(0,0,0,.12)); }
 .tice .tt-griglia thead th { position: sticky; top: 0; z-index: 2; }
-.tice .tt-angolo, .tice .tt-ora { position: sticky; left: 0; z-index: 1; background: var(--t-sup, var(--bg-primary, var(--taccuino-carta, #fff))); }
+.tice .tt-angolo, .tice .tt-ora { position: sticky; left: 0; z-index: 1; background: var(--taccuino-carta, var(--t-sup, var(--bg-primary, #fff))); }
 .tice .tt-angolo { z-index: 3; }
 .tice .tt-griglia:not(.tt-modello) .tt-angolo, .tice .tt-griglia:not(.tt-modello) .tt-ora { width: 1%; }
 .tice .tt-ora small { display: block; font-weight: 400; font-size: .7rem; opacity: .6; }
@@ -702,7 +703,16 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 .tice-foglio .tt-dow label { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border: 1px solid var(--tq-matita-forte, rgba(0,0,0,.25)); border-radius: 999px; cursor: pointer; text-transform: capitalize; }
 .tice-foglio .tt-dow label:has(input:checked) { background: var(--text-primary, #222); color: var(--taccuino-carta, #fff); }
 .tice-foglio .tt-dow input { position: absolute; opacity: 0; pointer-events: none; }
-.tice .tt-apri { display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; border: 0; background: none; color: inherit; font: inherit; font-weight: 700; cursor: pointer; padding: 2px 4px; border-radius: 8px; }
+.tice .tt-apri { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; width: 100%; min-height: 44px; border: 0; background: none; color: inherit; font: inherit; font-weight: 700; cursor: pointer; padding: 4px; border-radius: 8px; }
+.tice .tt-griglia:not(.tt-modello) thead .tt-bambino { padding: 3px; }
+.tice .tt-apri-nome { display: inline-flex; align-items: center; gap: 6px; }
+.tice .tt-stato { display: inline-flex; align-items: center; gap: 4px; font-size: .7rem; font-weight: 600; white-space: nowrap; padding: 1px 7px; border-radius: 999px; }
+.tice .tt-stato i { font-size: .9em; }
+.tice .tt-stato.in-corso { background: var(--taccuino-spot, var(--accent-color)); color: #fff; }
+.tice .tt-stato.salvata { border: 1px solid currentColor; opacity: .75; }
+.tice .tt-griglia-box.in-modifica { border: 2px dashed var(--taccuino-spot, var(--accent-color)); }
+.tice .tt-modo { display: flex; justify-content: flex-end; margin: 0 0 8px; }
+.tice .tt-modo-fine { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
 .tice .tt-apri i { font-size: .75em; opacity: .55; }
 .tice .tt-apri:hover { background: var(--tq-hover, rgba(0,0,0,.05)); }
 .tice .tt-apri:hover i { opacity: 1; }
