@@ -76,7 +76,7 @@ goto PAUSA
 if not exist ".git" (
     echo La cartella non e' un repository git. Inizializzo...
     git init
-    git remote add origin https://github.com/StefanoNevePsy/Ampliamento-Lessicale.git 2>nul
+    git remote add origin https://github.com/StefanoNevePsy/centro-tice.git 2>nul
     git fetch origin claude/psychology-app-setup-CmBhq
     git reset --hard FETCH_HEAD
     git checkout -B claude/psychology-app-setup-CmBhq

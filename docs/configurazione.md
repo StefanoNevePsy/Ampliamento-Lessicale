@@ -178,7 +178,7 @@ portinaio al Drive.*
 3. GitHub → **Actions → Deploy su GitHub Pages → Run workflow** → nel campo *branch*
    scrivi `claude/quaderno-tice` → **Run workflow**.
 4. Dopo 2–3 minuti l'app è su
-   **`https://stefanonevepsy.github.io/Ampliamento-Lessicale/`**.
+   **`https://stefanonevepsy.github.io/centro-tice/`**.
 
 > [!NOTE]
 > Sul sito c'è un solo spazio: pubblicando questa branch, il sito diventa l'edizione del
