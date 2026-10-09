@@ -99,6 +99,12 @@ body.tice-aperto #notebook-tab-handle { display: none !important; }
 .tice h2 { font-size: 1.15rem; margin: 18px 2px 8px; }
 .tice h3 { font-size: 0.78rem; margin: 18px 4px 6px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; }
 .tice .sotto { color: var(--text-secondary); font-size: 0.88rem; }
+.tice-main > p.sotto, .tice-foglio p.sotto { max-width: 75ch; }
+/* quello che si legge o si copia (target, note, suggerimenti) si può selezionare */
+.tice .target, .tice .nota-voce, .tice .sugg-testo, .tice .att-suggerimenti p, .tice .tt-nota, .tice-foglio .sugg-testo { user-select: text; -webkit-user-select: text; }
+.tice .riga-riordina { margin: 8px 0 0; }
+.tice .riga-riordina .link { padding: 12px 4px; margin: -12px 0; }
+.tice .riga-riordina .link, .tice .link { border: 0; background: none; padding: 0; font: inherit; font-weight: 600; text-decoration: underline; color: var(--taccuino-spot, var(--accent-color)); cursor: pointer; }
 .tice .piccolo { font-size: 0.8rem; }
 .tice .vuoto { text-align: center; color: var(--text-secondary); padding: 28px 12px; }
 
@@ -326,7 +332,9 @@ body.tice-aperto #notebook-tab-handle { display: none !important; }
 .tice-foglio .riga-campi > * { flex: 1; min-width: 0; }
 .tice-foglio .scelta { display: flex; gap: 6px; }
 .tice-foglio .scelta label { flex: 1; }
-.tice-foglio .scelta input { display: none; }
+.tice-foglio .scelta label { position: relative; }
+.tice-foglio .scelta input { position: absolute; inset: 0; opacity: 0; margin: 0; pointer-events: none; }
+.tice-foglio .scelta input:focus-visible + span { outline: 2px solid var(--accent-color); outline-offset: 2px; }
 .tice-foglio .scelta span { display: block; text-align: center; padding: 10px 6px; border-radius: 10px; border: 1px solid rgba(var(--ink-rgb),0.16); font-weight: 650; font-size: 0.9rem; cursor: pointer; }
 .tice-foglio .scelta input:checked + span { background: var(--accent-color); border-color: var(--accent-color); color: #fff; }
 .tice-foglio .bottoni { display: flex; gap: 8px; margin-top: 16px; }

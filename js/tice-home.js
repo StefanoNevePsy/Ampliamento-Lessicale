@@ -838,11 +838,10 @@
                 destra: h`<button class="ib" data-a="apri-cartella" aria-label="Cartella clinica" title="Cartella clinica">${icona('chart-line')}</button>` })}
             <main class="tice-main">
                 <p class="sotto">Le attività in corso compaiono nella presa dati con il loro target. Quando un target raggiunge il criterio l'app propone di passare al successivo.</p>
-                <button class="bt largo fantasma" data-a="stampa-griglie" style="margin-bottom:8px">${icona('print')} Stampa le griglie per la presa dati su carta</button>
                 ${modifica ? h`<button class="bt primario largo" data-a="nuova-att">${icona('plus')} Nuova attività</button>`
                     : h`<div class="banda">${icona('lock')}<div>Il programma lo modificano le professioniste: tu registri le sedute.</div></div>`}
-                ${modifica && senza.length ? h`<div class="banda">${icona('layer-group')}<div>${senza.length} ${senza.length === 1 ? 'attività non ha' : 'attività non hanno'} ancora una modalità del centro.
-                    <button class="bt piccolo" style="margin-top:6px" data-a="classifica">Riordina le modalità</button></div></div>` : ''}
+                <button class="bt largo fantasma" data-a="stampa-griglie" style="margin-top:8px">${icona('print')} Stampa le griglie per la presa dati su carta</button>
+                ${modifica && senza.length ? h`<p class="sotto piccolo riga-riordina">${icona('layer-group')} ${senza.length} ${senza.length === 1 ? 'attività non ha' : 'attività non hanno'} ancora una modalità del centro · <button class="link" data-a="classifica">riordina</button></p>` : ''}
                 ${gruppi.map((g) => h`<h3>${g.area}</h3>${g.att.map((a) => schedaProgramma(p, a))}`)}
                 ${!attive.length ? h`<div class="vuoto">Nessuna attività in corso.</div>` : ''}
                 ${altre.length ? h`<details style="margin-top:18px"><summary>Sospese e terminate (${altre.length})</summary>${altre.map((a) => schedaProgramma(p, a))}</details>` : ''}
