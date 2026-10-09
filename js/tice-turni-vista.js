@@ -31,6 +31,8 @@
     }
     async function modifica(k, fn) {
         if (remoto()) return Y.modificaTurni(k, fn);
+        // centro in uso ma collegamento non ancora pronto: niente salvataggi solo qui, che poi sparirebbero
+        if (Y && Y.attivo() && Y.S && Y.S.io) throw new Error('il collegamento con il centro non è ancora pronto: riprova tra qualche secondo.');
         const L = locale();
         L[k] = fn(L[k] ? JSON.parse(JSON.stringify(L[k])) : null);
         salvaLocale(L);
@@ -38,10 +40,18 @@
     }
 
     // ---------- caricamento ----------
+    // Da dove vengono i dati in memoria: all'avvio la vista può caricarsi prima che
+    // il collegamento con il centro sia pronto (dati locali); appena lo è si rilegge
+    const fonte = () => (remoto() ? 'centro' : 'locale');
+    function rileggiSeCambiata() {
+        if (S.fonte && S.fonte !== fonte() && !S.caricando) { S.personeCaricate = false; S.chiave = null; S.modello = null; carica(true); return true; }
+        return false;
+    }
     async function carica(forza) {
         const k = TT.lunedi(S.giorno);
-        if (S.caricando || (!forza && S.chiave === k && S.personeCaricate)) return;
+        if (S.caricando || (!forza && S.chiave === k && S.personeCaricate && S.fonte === fonte())) return;
         S.caricando = true; S.errore = '';
+        S.fonte = fonte();
         try {
             const serve = forza || !S.personeCaricate;
             const [sett, pers, mod] = await Promise.all([leggi(k), serve ? leggi('persone') : null, serve ? leggi('modello') : null]);
@@ -50,6 +60,13 @@
             S.chiave = k;
             if (pers) { S.persone = (pers.dati && pers.dati.persone) || []; S.personeCaricate = true; setTimeout(() => allineaAlCentro(), 0); }
             if (mod) S.modello = mod.dati || TT.modelloVuoto();
+            // una settimana tipo rimasta solo su questo dispositivo (salvata prima che il
+            // collegamento fosse pronto) e nessuna sul centro: la si porta sul centro
+            const qui = remoto() && mod && !(mod.dati && (mod.dati.voci || []).length) ? locale().modello : null;
+            if (qui && (qui.voci || []).length && puo()) {
+                try { S.modello = await Y.modificaTurni('modello', (x) => (x && (x.voci || []).length ? x : qui)); avviso('Settimana tipo recuperata da questo dispositivo e salvata sul centro'); }
+                catch (e) { console.warn('settimana tipo locale', e); }
+            }
         } catch (e) {
             S.errore = e.message || String(e);
         }
@@ -160,7 +177,7 @@
 
     // ---------- vista ----------
     function vistaTurni() {
-        if (S.chiave !== TT.lunedi(S.giorno) || !S.personeCaricate) carica();
+        if (!rileggiSeCambiata() && (S.chiave !== TT.lunedi(S.giorno) || !S.personeCaricate)) carica();
         else allineaAlCentro();
         const modifica = puo();
         const gi = TT.giornata(S.sett, S.giorno, S.modello);
@@ -233,7 +250,7 @@
     // ---------- settimana tipo ----------
     // Righe = bambini, colonne = giorni; in ogni incrocio quando viene e con chi di solito.
     function vistaModello() {
-        if (!S.personeCaricate) carica();
+        if (!rileggiSeCambiata() && !S.personeCaricate) carica();
         const m = S.modello || TT.modelloVuoto();
         const modifica = puo();
         const conDom = (m.voci || []).some((x) => x.dow === 7);
@@ -562,16 +579,20 @@
     };
     // il riepilogo aperto/chiuso resta com'era
     document.addEventListener('toggle', (e) => { if (e.target.classList && e.target.classList.contains('tt-riepilogo')) S.riepilogoAperto = e.target.open; }, true);
-    if (Y && Y.alCambio) Y.alCambio((cosa) => { if (cosa === 'turni' && TiceHome.attuale().vista === 'turni') TiceHome.ridisegna(); });
+    if (Y && Y.alCambio) Y.alCambio((cosa) => {
+        if (cosa === 'turni' && TiceHome.attuale().vista === 'turni') TiceHome.ridisegna();
+        // il centro è diventato pronto (o non lo è più): i turni si rileggono da lì
+        if (cosa === 'stato' && S.fonte && S.fonte !== fonte() && ['turni', 'turni-modello'].includes(TiceHome.attuale().vista)) rileggiSeCambiata();
+    });
 
     // Chi è in turno con un bambino in un giorno (nell'ordine delle fasce): serve alla
     // seduta per sapere chi l'ha svolta senza chiederlo. Più l'elenco delle persone.
     async function chiDi(pid, g) {
-        const k = TT.lunedi(g);
+        const k = TT.lunedi(g), fresco = S.fonte === fonte();
         const [sett, pers, mod] = await Promise.all([
-            k === S.chiave && S.sett ? { dati: S.sett } : leggi(k),
-            S.personeCaricate ? { dati: { persone: S.persone } } : leggi('persone'),
-            S.modello ? { dati: S.modello } : leggi('modello')]);
+            fresco && k === S.chiave && S.sett ? { dati: S.sett } : leggi(k),
+            fresco && S.personeCaricate ? { dati: { persone: S.persone } } : leggi('persone'),
+            fresco && S.modello ? { dati: S.modello } : leggi('modello')]);
         const elenco = (pers.dati && pers.dati.persone) || [];
         const gi = TT.giornata(sett.dati || TT.vuota(), g, mod.dati || null);
         const ids = [];
