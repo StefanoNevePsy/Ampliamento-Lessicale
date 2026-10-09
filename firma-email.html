@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Firma email</title>
+<style>
+  body { margin: 0; padding: 32px 16px; background: #f4f1ec; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color: #363a43; }
+  .guida { max-width: 620px; margin: 0 auto 24px; font-size: 14px; line-height: 1.5; }
+  .guida h1 { font-size: 18px; margin: 0 0 8px; }
+  .guida ol { padding-left: 20px; margin: 6px 0; }
+  .foglio { max-width: 620px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 28px 24px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  button { font: inherit; font-weight: 600; padding: 8px 16px; border-radius: 999px; border: 0; background: #363a43; color: #fff; cursor: pointer; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="guida">
+  <h1>Firma email — Centro TICE</h1>
+  <ol>
+    <li>Premi <b>Copia la firma</b> (oppure seleziona la firma qui sotto e copiala).</li>
+    <li><b>Gmail</b> (dal computer): ⚙︎ → Visualizza tutte le impostazioni → Generali → Firma → Crea nuova → incolla → Salva modifiche in fondo.</li>
+    <li><b>Spark</b>: Impostazioni → Firme → + → incolla. Sul Mac: Spark → Impostazioni → Firme.</li>
+  </ol>
+  <button type="button" onclick="copia()">Copia la firma</button> <span id="esito"></span>
+</div>
+<div class="foglio">
+<!-- FIRMA: da qui -->
+<table id="firma" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:Helvetica,Arial,sans-serif;color:#363a43;">
+  <tr>
+    <td style="padding:0 18px 0 0;vertical-align:middle;">
+      <a href="https://centrotice.it" style="text-decoration:none;"><img src="https://stefanonevepsy.github.io/Ampliamento-Lessicale/img/tice/firma-logo.png" width="72" height="72" alt="Centro TICE" style="display:block;width:72px;height:72px;border:0;"></a>
+    </td>
+    <td style="padding:0 0 0 18px;vertical-align:middle;border-left:2px solid #fb8e28;">
+      <div style="font-size:17px;line-height:22px;font-weight:bold;color:#363a43;">Stefano Neve</div>
+      <div style="font-size:13px;line-height:18px;color:#6b6f78;padding-bottom:8px;">Centro TICE</div>
+      <div style="font-size:13px;line-height:20px;">
+        <a href="tel:+393202933699" style="color:#363a43;text-decoration:none;">+39 320 293 3699</a>
+      </div>
+      <div style="font-size:13px;line-height:20px;">
+        <a href="mailto:stefano.neve@centrotice.it" style="color:#363a43;text-decoration:none;">stefano.neve@centrotice.it</a>
+      </div>
+      <div style="font-size:13px;line-height:20px;">
+        <a href="https://centrotice.it" style="color:#fb8e28;text-decoration:none;font-weight:bold;">centrotice.it</a>
+      </div>
+    </td>
+  </tr>
+</table>
+<!-- FIRMA: fino a qui -->
+</div>
+<script>
+function copia() {
+  const el = document.getElementById('firma'), r = document.createRange();
+  r.selectNode(el);
+  const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  document.getElementById('esito').textContent = ok ? 'Copiata: ora incollala in Gmail o Spark.' : 'Selezionata: premi Cmd+C (o Ctrl+C).';
+}
+</script>
+</body>
+</html>
