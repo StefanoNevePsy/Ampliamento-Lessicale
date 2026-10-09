@@ -594,6 +594,12 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 #tice-stampa .st-min { font-size: 6pt; color: #666; margin-top: .4mm; }
 #tice-stampa .st-crono { font-size: 6.5pt; color: #444; margin-top: .5mm; }
 #tice-stampa .st-mant td { height: 6.5mm; }
+#tice-stampa .st-capo td.st-target, #tice-stampa .st-capo .st-capo-spazio { height: 5.5mm; }
+#tice-stampa .st-capo .st-capo-spazio { border-left: 0; border-right: 0; }
+#tice-stampa .st-presa { padding-left: 4mm; font-weight: 600; }
+#tice-stampa .st-sub.inizio td { border-top: 1.2pt solid var(--c); }
+#tice-stampa .st-sub td.st-c:first-of-type { border-left: 1.5pt solid var(--c); }
+#tice-stampa .st-sub td.st-tot { border-right: 1.5pt solid var(--c); }
 #tice-stampa .st-note { margin-top: 3mm; border: .5pt solid #9a9a9a; border-radius: 1.5mm; min-height: 24mm; padding: 1.2mm 2mm; break-inside: avoid; }
 #tice-stampa .st-note.piccola { min-height: 0; font-size: 8pt; }
 #tice-stampa .st-tabta { width: 100%; table-layout: fixed; }

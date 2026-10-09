@@ -66,5 +66,15 @@ prova('riempi il foglio: più righe, prima ai dati in percentuale, senza superar
   assert.ok(per('Correlazioni') <= 13, 'senza esagerare');
 });
 
+prova('più prese dati: la riga del target e sotto ogni presa con le sue caselle e il suo totale', () => {
+  const pz2 = { id: 'pz_nest', name: 'Prova', history: [] };
+  const c = P.nuovaAttivita(pz2, { nome: 'Categorizzazione', prove: 10, target: 'Ambienti mix' });
+  c.misure = [{ id: 'm1', nome: 'Categorizza' }, { id: 'm2', nome: 'Tact mix' }];
+  const t = S.html(pz2, { spazio: 'previste', ta: false }, dip);
+  assert.ok(t.includes('– Categorizza') && t.includes('– Tact mix'));
+  assert.strictEqual((t.match(/class="st-sub/g) || []).length, 2);
+  assert.strictEqual((t.match(/st-tot/g) || []).length, 2, 'un totale per presa');
+});
+
 console.log(`\n${passati} test passati, ${falliti.length} falliti`);
 process.exit(falliti.length ? 1 : 0);

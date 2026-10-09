@@ -113,14 +113,28 @@
       if (!t) return '<td class="st-target vuoto">target: ______________</td>';
       return '<td class="st-target">' + (extra ? '<span class="st-mini">' + extra + '</span> ' : '') + esc(t.testo) + '</td>';
     };
-    var info = '<td class="st-info" rowspan="' + (righe + (opz.mantenimento && v.ultimoChiuso ? 1 : 0)) + '">' +
+    // più prese dati nella stessa attività (Categorizza, Tact mix…): come sul quaderno,
+    // la riga del target e sotto ogni presa con le sue righe di caselle e il suo totale
+    var misure = (a.misure || []).length >= 2 ? a.misure : null;
+    var nRighe = misure ? 1 + misure.length * righe : righe;
+    var info = '<td class="st-info" rowspan="' + (nRighe + (opz.mantenimento && v.ultimoChiuso ? 1 : 0)) + '">' +
       '<div class="st-att-nome"><span class="st-pallino"></span>' + esc(a.nome) + '</div>' +
       (v.modalita && v.modalita.toLowerCase() !== String(a.nome).toLowerCase() ? '<div class="st-mod">' + esc(v.modalita) + '</div>' : '') +
       '<div class="st-meta">' + strategia(v) + (a.cronometro ? ' <span class="st-badge chiaro" title="Cronometrata"><i class="fa-solid fa-stopwatch"></i></span>' : '') +
       ' <span class="st-crit">' + esc(criterio(a)) + '</span></div>' +
       (opz.prossimi && v.prossimo ? '<div class="st-poi">poi: ' + esc(v.prossimo.testo) + '</div>' : '') + '</td>';
     var html = '<table class="st-att"' + stile + '><tbody>';
-    for (var r = 0; r < righe; r++) {
+    if (misure) {
+      html += '<tr class="st-capo">' + info + etTarget(v.corrente, v.mantenimento ? 'mant.' : '') + '<td class="st-capo-spazio" colspan="' + (col + 1) + '"></td></tr>';
+      misure.forEach(function (m) {
+        for (var rm = 0; rm < righe; rm++) {
+          html += '<tr class="st-sub' + (rm === 0 ? ' inizio' : '') + (rm === righe - 1 ? ' fine' : '') + '">' +
+            '<td class="st-target st-presa">' + (rm === 0 ? '– ' + esc(m.nome) : '') + '</td>' +
+            rigaCaselle(col, marcate, rm * col) + totale(rm) + '</tr>';
+        }
+      });
+    }
+    for (var r = 0; r < (misure ? 0 : righe); r++) {
       html += '<tr>' + (r === 0 ? info : '') +
         (r === 0 ? etTarget(v.corrente, v.mantenimento ? 'mant.' : '') : '<td class="st-target segue">' + (r === 1 ? '↳ segue' : '') + '</td>') +
         rigaCaselle(col, marcate, r * col) + totale(r) + '</tr>';
@@ -194,7 +208,8 @@
   }
   function altezzaBlocco(v, righe, opz) {
     var mant = opz.mantenimento && v.ultimoChiuso ? MM.mant : 0;
-    return Math.max(righe * MM.riga + mant, altezzaInfo(v, opz)) + MM.spazio;
+    var n = (v.att.misure || []).length >= 2 ? v.att.misure.length : 1;
+    return Math.max(righe * n * MM.riga + (n > 1 ? MM.mant : 0) + mant, altezzaInfo(v, opz)) + MM.spazio;
   }
   /**
    * Righe per ogni attività (v.righe):
