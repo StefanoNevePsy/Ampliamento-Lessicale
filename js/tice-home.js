@@ -2582,7 +2582,9 @@
     function agganciaIndietro() {
         const segna = () => { try { history.pushState({ tice: 1 }, ''); } catch (e) { /* niente */ } };
         if (!(history.state && history.state.tice)) { try { history.replaceState({ tice: 0 }, ''); } catch (e) { /* niente */ } segna(); }
-        window.addEventListener('popstate', () => {
+        window.addEventListener('popstate', (e) => {
+            // solo il ritorno alla nostra voce di base (un cambio di #… non è un «indietro»)
+            if (!e.state || e.state.tice !== 0) return;
             const fogli = document.querySelectorAll('.tice-foglio-sfondo');
             if (fogli.length) { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); segna(); return; }
             const r = radice();

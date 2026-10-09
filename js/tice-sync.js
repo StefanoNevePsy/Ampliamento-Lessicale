@@ -74,9 +74,35 @@
             });
             return gis;
         }
+        // App installata (PWA) su telefono: il pulsante di Google apre una finestrella che
+        // lì resta bianca. Si usa invece il giro classico: si va alla pagina di Google e
+        // si torna qui con il token nell'indirizzo (#id_token=…), che si legge e si cancella.
+        const installata = () => { try { return matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true; } catch (e) { return false; } };
+        const K_NONCE = 'tice:nonce';
+        const indirizzoRitorno = () => location.origin + location.pathname.replace(/index\.html$/, '');
+        function accediRitorno() {
+            const b = new Uint8Array(16); crypto.getRandomValues(b);
+            const nonce = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+            try { localStorage.setItem(K_NONCE, nonce); } catch (e) { /* ok */ }
+            const q = new URLSearchParams({ client_id: cfgApp().googleClientId, redirect_uri: indirizzoRitorno(), response_type: 'id_token',
+                scope: 'openid email profile', nonce, prompt: 'select_account' });
+            if (utente && utente.email) q.set('login_hint', utente.email);
+            location.assign('https://accounts.google.com/o/oauth2/v2/auth?' + q.toString());
+        }
+        function leggiRitorno() {
+            const h = location.hash || '';
+            if (!/(^#|&)(id_token|error)=/.test(h)) return;
+            const q = new URLSearchParams(h.slice(1));
+            try { history.replaceState(history.state, '', location.pathname + location.search); } catch (e) { /* ok */ }
+            let nonce = null;
+            try { nonce = localStorage.getItem(K_NONCE); localStorage.removeItem(K_NONCE); } catch (e) { /* ok */ }
+            const t = q.get('id_token'), d = t && payload(t);
+            if (t && d && nonce && d.nonce === nonce && d.aud === cfgApp().googleClientId) imposta(t);
+        }
         function inizia() {
+            if (!cfgApp().dev && cfgApp().googleClientId) leggiRitorno();
             try {
-                const t = sessionStorage.getItem(K_TOKEN);
+                const t = !token && sessionStorage.getItem(K_TOKEN);
                 if (t) imposta(t);
                 if (!utente) { const u = JSON.parse(localStorage.getItem(K_UTENTE) || 'null'); if (u && u.email) utente = u; }
                 if (cfgApp().dev) token = sessionStorage.getItem(K_TOKEN + ':dev') || token;
@@ -93,6 +119,11 @@
                     el.querySelector('p').textContent = 'Completa l\'accesso nel browser…';
                     accediNativo().catch((e) => { el.querySelector('p').textContent = e.message; });
                 };
+                return Promise.resolve();
+            }
+            if (installata()) {
+                el.innerHTML = '<button type="button" class="bt primario"><i class="fa-brands fa-google"></i> Accedi con Google</button>';
+                el.querySelector('button').onclick = accediRitorno;
                 return Promise.resolve();
             }
             return caricaGIS().then(() => google.accounts.id.renderButton(el, {
