@@ -747,3 +747,6 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 #tice-stampa .st-pchip { display: inline-block; margin: .4mm 2mm .4mm 0; padding-left: 1.2mm; border-left: 1.4mm solid var(--c); }
 #tice-stampa .st-legenda-turni { font-size: 8pt; color: #555; margin: 0; }
 .tice-foglio [data-mod-nuova][hidden], .tice-foglio [data-cat-nuova][hidden] { display: none !important; }
+
+.tice .tt-preciso { display: block; width: 100%; text-align: center; font-size: .72rem; font-weight: 700; color: var(--c); filter: brightness(1.25); line-height: 1.1; }
+@media print { .tt-preciso { color: #000; } }

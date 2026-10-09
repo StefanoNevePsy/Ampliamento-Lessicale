@@ -201,12 +201,15 @@
         const righe = ridotte ? gi.usate : gi.fasce;
         const terapeuti = S.persone.filter((p) => p.ruolo !== 'tirocinante'), tiro = S.persone.filter((p) => p.ruolo === 'tirocinante');
         const chip = (p) => h`<button class="tt-pers ${S.pennello.includes(p.id) ? 'attiva' : ''} ${p.ruolo === 'tirocinante' ? 'tiro' : ''}" data-a="tt-pennello" data-id="${p.id}" aria-pressed="${S.pennello.includes(p.id)}">${p.nome}</button>`;
+        const orarioPreciso = (pid, ora) => TT.orarioPreciso(gi, pid, ora, oraT);
         const cella = (pid, ora) => {
             const v = gi.celle[pid + '|' + ora];
             const c = TT.colore(pid);
+            const prec = orarioPreciso(pid, ora);
             return h`<td class="tt-cella ${v && conf[v.id] ? 'conf' : ''} ${TT.presente(gi, pid, ora) ? '' : 'fuori'}" style="--c:${c};--t:${TT.tinta(c, 0.10)}">
                 <button class="tt-in" ${modifica ? grezzo(`data-a="tt-cella" data-pid="${pid}" data-ora="${ora}"`) : X.paz(pid) ? grezzo(`data-a="apri-bambino" data-pid="${pid}"`) : grezzo('disabled')} title="${v && conf[v.id] ? conf[v.id].join(' · ') : nomeBambino(pid) + ', ' + oraT(ora)}">
                     ${v ? (v.persone || []).map((p) => h`<span class="tt-nome ${(persona(p) || {}).ruolo === 'tirocinante' ? 'tiro' : ''}">${breve(nomePersona(p))}</span>`) : ''}
+                    ${prec ? h`<span class="tt-preciso">${icona('clock')} ${prec}</span>` : ''}
                     ${v && v.nota ? h`<span class="tt-nota">${v.nota}</span>` : ''}
                     ${v && conf[v.id] ? h`<span class="tt-avviso">${icona('triangle-exclamation')}</span>` : ''}
                     ${!v && modifica ? h`<span class="tt-piu">+</span>` : ''}

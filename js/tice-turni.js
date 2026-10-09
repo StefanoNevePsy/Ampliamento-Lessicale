@@ -157,6 +157,18 @@
     var m = minuti(ora);
     return m < minuti(a) && m + (+durata || 60) > minuti(da);
   }
+  /** Arrivo o uscita a metà fascia: "dalle 14:20", "fino alle 16:50" (vuoto se coincide con la fascia). */
+  function orarioPreciso(gi, pid, ora, fmt) {
+    fmt = fmt || function (x) { return x; };
+    var ini = minuti(ora), fin = ini + (+gi.fascia || 60), out = [];
+    ((gi.presenze && gi.presenze[pid]) || []).forEach(function (x) {
+      var d = minuti(x[0]), e = minuti(x[1]);
+      if (d >= fin || e <= ini) return;
+      if (d > ini) out.push('dalle ' + fmt(x[0]));
+      if (e < fin) out.push('fino alle ' + fmt(x[1]));
+    });
+    return out.join(' · ');
+  }
   function presente(gi, pid, ora) {
     var r = gi.presenze && gi.presenze[pid];
     if (!r || !r.length) return true;
@@ -370,7 +382,8 @@
         var v = dip.vuota ? null : gi.celle[pid + '|' + ora];
         var c = colore(pid);
         html += '<td class="st-cella' + (v && conf[v.id] ? ' st-conf' : '') + (!presente(gi, pid, ora) ? ' st-fuori' : '') + '" style="--c:' + c + ';--t:' + tinta(c, 0.10) + '">' +
-          (v ? (v.persone || []).map(function (p) { return '<div class="st-pers">' + esc(nomeP(p)) + '</div>'; }).join('') + (v.nota ? '<div class="st-nota-t">' + esc(v.nota) + '</div>' : '') : '') + '</td>';
+          (v ? (v.persone || []).map(function (p) { return '<div class="st-pers">' + esc(nomeP(p)) + '</div>'; }).join('') + (v.nota ? '<div class="st-nota-t">' + esc(v.nota) + '</div>' : '') : '') +
+          (function () { var t = orarioPreciso(gi, pid, ora, oraT); return t ? '<div class="st-nota-t"><b>' + esc(t) + '</b></div>' : ''; })() + '</td>';
       });
       html += '</tr>';
     });
@@ -389,7 +402,7 @@
 
   return {
     vuota: vuota, giornata: giornata, modelloVuoto: modelloVuoto, dow: dow, dalModello: dalModello, impostaModello: impostaModello,
-    presente: presente, materializza: materializza, ripristina: ripristina, fineFascia: fineFascia, leggiOra: leggiOra, impostaCella: impostaCella, alternaPersona: alternaPersona, impostaGiornata: impostaGiornata,
+    presente: presente, orarioPreciso: orarioPreciso, materializza: materializza, ripristina: ripristina, fineFascia: fineFascia, leggiOra: leggiOra, impostaCella: impostaCella, alternaPersona: alternaPersona, impostaGiornata: impostaGiornata,
     occupati: occupati, copiaGiornata: copiaGiornata, stampaGiornata: stampaGiornata, GIORNATA: GIORNATA,
     GIORNI: GIORNI, GIORNI_BREVI: GIORNI_BREVI, RUOLI: RUOLI,
     daIso: daIso, iso: iso, piu: piu, lunedi: lunedi, giorni: giorni, minuti: minuti, hhmm: hhmm, fine: fine,
