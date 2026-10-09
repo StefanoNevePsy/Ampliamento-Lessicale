@@ -152,10 +152,19 @@
             if (n.nome !== p.nome || n.email !== p.email) cambiate = true;
             out.push(n);
         });
+        // una persona scritta a mano che è chiaramente un utente del centro ("Stefano" e
+        // "Stefano Neve"): resta (i turni già assegnati la usano) ma come doppione nascosto
+        const primo = (n) => String(n || '').trim().toLowerCase().split(/\s+/)[0];
+        out.forEach((p) => {
+            if (p.email || p.aliasDi) return;
+            const n = String(p.nome || '').trim().toLowerCase();
+            const cand = centro.filter((c) => c.nome.toLowerCase() === n || (primo(c.nome) === n && centro.filter((x) => primo(x.nome) === n).length === 1));
+            if (cand.length === 1) { p.aliasDi = cand[0].email; p.nome = cand[0].nome; cambiate = true; }
+        });
         centro.forEach((c) => {
             if (out.some((p) => p.email === c.email)) return;
             // una persona già scritta a mano con lo stesso nome diventa quella del centro
-            const uguale = out.find((p) => !p.email && p.nome.toLowerCase() === c.nome.toLowerCase());
+            const uguale = out.find((p) => !p.email && !p.aliasDi && p.nome.toLowerCase() === c.nome.toLowerCase());
             if (uguale) uguale.email = c.email; else out.push({ id: TT.nuovoId('p'), nome: c.nome, ruolo: c.ruolo, email: c.email });
             cambiate = true;
         });
@@ -180,6 +189,9 @@
         return e && e.nome ? e.nome : '—';
     };
     const persona = (id) => S.persone.find((p) => p.id === id);
+    // l'elenco da mostrare: senza i doppioni uniti a un utente del centro
+    const visibili = () => S.persone.filter((p) => !p.aliasDi);
+    const idsDi = (p) => [p.id].concat(S.persone.filter((x) => x.aliasDi && x.aliasDi === p.email).map((x) => x.id));
     const nomePersona = (id) => (persona(id) || {}).nome || '?';
     const breve = (nome) => { const p = String(nome || '').trim().split(/\s+/); return p.length > 1 ? p[0] + ' ' + p[1][0] + '.' : p[0] || '?'; };
     function lunga(g) {
@@ -200,7 +212,7 @@
         const ridotte = !tutte && gi.usate.length && gi.usate.length < gi.fasce.length;
         const ora0 = new Date(), adesso = ora0.getHours() * 60 + ora0.getMinutes();
         const righe = ridotte ? gi.usate : gi.fasce;
-        const terapeuti = S.persone.filter((p) => p.ruolo !== 'tirocinante'), tiro = S.persone.filter((p) => p.ruolo === 'tirocinante');
+        const terapeuti = visibili().filter((p) => p.ruolo !== 'tirocinante'), tiro = visibili().filter((p) => p.ruolo === 'tirocinante');
         const chip = (p) => h`<button class="tt-pers ${S.pennello.includes(p.id) ? 'attiva' : ''} ${p.ruolo === 'tirocinante' ? 'tiro' : ''}" data-a="tt-pennello" data-id="${p.id}" aria-pressed="${S.pennello.includes(p.id)}">${p.nome}</button>`;
         const orarioPreciso = (pid, ora) => TT.orarioPreciso(gi, pid, ora, oraT);
         const cella = (pid, ora) => {
@@ -308,7 +320,7 @@
         const a = (x && x.a) || TT.hhmm(TT.minuti(da) + n * taglio);
         const TAGLI = [30, 40, 45, 50, 55, 60, 90];
         const gia = (x && x.persone) || [];
-        const riga = (p) => h`<label class="spunta-riga tt-scelta"><input type="checkbox" name="p" value="${p.id}" ${gia.includes(p.id) ? grezzo('checked') : ''}><span>${p.nome}</span></label>`;
+        const riga = (p) => h`<label class="spunta-riga tt-scelta"><input type="checkbox" name="p" value="${p.id}" ${idsDi(p).some((id) => gia.includes(id)) ? grezzo('checked') : ''}><span>${p.nome}</span></label>`;
         const tutti = X.pazienti().slice().sort((u, v) => String(u.name).localeCompare(String(v.name), 'it'));
         return foglio(h`<form><h2>${pid ? nomeBambino(pid) : 'Aggiungi un bambino'}</h2>
             ${pid ? '' : h`<label class="campo"><span>Bambino</span><select name="pid" class="campo-in" required><option value="">Scegli…</option>${tutti.map((p) => h`<option value="${p.id}">${p.name}</option>`)}</select></label>`}
@@ -319,7 +331,7 @@
                 <label class="campo"><span>Quante</span><input name="n" type="number" min="1" max="10" class="campo-in" inputmode="numeric" value="${n}" data-tt-calc></label>
                 <label class="campo"><span>Fine</span><input name="a" class="campo-in" inputmode="numeric" required value="${a}" autocomplete="off" data-tt-fine></label></div>
             <p class="sotto piccolo" data-tt-spiega></p>
-            ${S.persone.length ? h`<div class="campo scelte-stampa"><span>Di solito con (facoltativo)</span>${S.persone.map(riga)}</div>` : ''}
+            ${visibili().length ? h`<div class="campo scelte-stampa"><span>Di solito con (facoltativo)</span>${visibili().map(riga)}</div>` : ''}
             <div class="bottoni">${x ? h`<button type="button" class="bt" data-foglio="togli">${icona('trash')} Non viene</button>` : ''}
                 <button type="button" class="bt" data-foglio="chiudi">Annulla</button><button class="bt primario">Salva</button></div></form>`,
         {
@@ -351,7 +363,7 @@
 
     // Chi fa cosa oggi, in breve
     function riepilogo(gi) {
-        const righe = S.persone.map((p) => ({ p, v: gi.voci.filter((v) => (v.persone || []).includes(p.id)).sort((a, b) => a.ora.localeCompare(b.ora)) })).filter((x) => x.v.length);
+        const righe = visibili().map((p) => ({ p, v: gi.voci.filter((v) => (v.persone || []).some((id) => idsDi(p).includes(id))).sort((a, b) => a.ora.localeCompare(b.ora)) })).filter((x) => x.v.length);
         if (!righe.length) return '';
         return h`<details class="tt-riepilogo" ${S.riepilogoAperto ? grezzo('open') : ''}><summary class="sotto">Per persona (${righe.length})</summary>
             <ul>${righe.map(({ p, v }) => h`<li><b>${p.nome}</b> ${v.map((x) => h`<span class="tt-rchip" style="--c:${TT.colore(x.pid)}">${oraT(x.ora)} ${nomeBambino(x.pid)}</span>`)}</li>`)}</ul></details>`;
@@ -361,9 +373,9 @@
     function scegliPersone(v, gi, pid, ora) {
         const occ = TT.occupati(S.sett, S.giorno, ora, pid, S.modello);
         const gia = (v && v.persone) || [];
-        const riga = (p) => h`<label class="spunta-riga tt-scelta"><input type="checkbox" name="p" value="${p.id}" ${gia.includes(p.id) ? grezzo('checked') : ''}>
+        const riga = (p) => h`<label class="spunta-riga tt-scelta"><input type="checkbox" name="p" value="${p.id}" ${idsDi(p).some((id) => gia.includes(id)) ? grezzo('checked') : ''}>
             <span>${p.nome}${occ[p.id] ? h` <span class="pill arancio">con ${nomeBambino(occ[p.id])}</span>` : ''}</span></label>`;
-        const t = S.persone.filter((p) => p.ruolo !== 'tirocinante'), r = S.persone.filter((p) => p.ruolo === 'tirocinante');
+        const t = visibili().filter((p) => p.ruolo !== 'tirocinante'), r = visibili().filter((p) => p.ruolo === 'tirocinante');
         return foglio(h`<form><h2>${nomeBambino(pid)}</h2><p class="sotto">${lunga(S.giorno)}, ${oraT(ora)}–${oraT(TT.hhmm(TT.minuti(ora) + gi.fascia))}</p>
             ${S.persone.length ? '' : h`<p class="sotto">Ancora nessuna persona: aggiungile da «Persone dei turni».</p>`}
             ${t.length ? h`<div class="campo scelte-stampa"><span>Terapeuti</span>${t.map(riga)}</div>` : ''}
@@ -557,7 +569,7 @@
             const centro = remoto() && Y.eAdmin && Y.eAdmin();
             if (centro) await allineaAlCentro(true);
             const r = await foglio(h`<form><h2>Persone dei turni</h2><p class="sotto">Chi si può assegnare ai bambini. Il nome compare nelle celle e sui fogli stampati.</p>
-                ${S.persone.map((p, i) => h`<div class="riga-campi tt-riga-p"><label class="campo"><span>Nome${p.email ? h` <small class="sotto">· dal centro</small>` : ''}</span><input name="${'nome' + i}" value="${p.nome}" maxlength="40" ${p.email ? grezzo('readonly') : ''}></label>
+                ${S.persone.map((p, i) => p.aliasDi ? '' : h`<div class="riga-campi tt-riga-p"><label class="campo"><span>Nome${p.email ? h` <small class="sotto">· dal centro</small>` : ''}</span><input name="${'nome' + i}" value="${p.nome}" maxlength="40" ${p.email ? grezzo('readonly') : ''}></label>
                     <label class="campo"><span>Ruolo</span><select name="${'ruolo' + i}" class="campo-in"><option value="terapeuta" ${p.ruolo !== 'tirocinante' ? grezzo('selected') : ''}>Terapeuta</option><option value="tirocinante" ${p.ruolo === 'tirocinante' ? grezzo('selected') : ''}>Tirocinante</option></select></label>
                     ${p.email ? h`<span class="sotto piccolo tt-dal-centro" title="Esce da sola quando le togli l'accesso">${icona('user-check')}</span>` : h`<label class="spunta-riga" title="Toglila dall'elenco"><input type="checkbox" name="${'via' + i}"> <span>togli</span></label>`}</div>`)}
                 <div class="riga-campi"><label class="campo"><span>Nuova persona</span><input name="nuovo" maxlength="40" placeholder="Nome e iniziale del cognome"></label>
