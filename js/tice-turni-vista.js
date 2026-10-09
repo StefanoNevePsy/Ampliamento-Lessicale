@@ -52,6 +52,18 @@
         if (S.caricando || (!forza && S.chiave === k && S.personeCaricate && S.fonte === fonte())) return;
         S.caricando = true; S.errore = '';
         S.fonte = fonte();
+        // dal centro: intanto si mostra l'ultima copia ricordata, poi arriva quella aggiornata
+        if (remoto() && Y.turniRicordati && (S.chiave !== k || !S.personeCaricate)) {
+            try {
+                const [cs, cp, cm] = await Promise.all([Y.turniRicordati(k), Y.turniRicordati('persone'), Y.turniRicordati('modello')]);
+                if (cs || cm) {
+                    S.sett = (cs && cs.dati) || TT.vuota(); S.chiave = k;
+                    if (cp && cp.dati) { S.persone = cp.dati.persone || []; }
+                    if (cm && cm.dati) S.modello = cm.dati;
+                    TiceHome.ridisegna();
+                }
+            } catch (e) { /* si aspetta il centro */ }
+        }
         try {
             const serve = forza || !S.personeCaricate;
             const [sett, pers, mod] = await Promise.all([leggi(k), serve ? leggi('persone') : null, serve ? leggi('modello') : null]);

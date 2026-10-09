@@ -814,7 +814,9 @@
     window.TiceSync = {
         S, Auth, chiama, ErroreRete, ErroreCustode,
         avvia, sincronizza, condividi, esci, creaChiave, inserisciChiave, cambiaChiave, mostraFrase, dispositivi, togliDispositivo,
-        ripristina, versioni, anteprimaVersione, preparaCentro, eAdmin, leggiModalita, aggiornaModalita, leggiTurni, modificaTurni, ruolo: () => (S.io && S.io.ruolo) || null,
+        ripristina, versioni, anteprimaVersione, preparaCentro, eAdmin, leggiModalita, aggiornaModalita, leggiTurni, modificaTurni,
+        // l'ultima copia dei turni vista su questo dispositivo, subito (senza rete)
+        turniRicordati: async (k) => { try { const x = await meta('turni:' + k); return x && x.dati !== undefined ? x : null; } catch (e) { return null; } }, ruolo: () => (S.io && S.io.ruolo) || null,
         attivo: () => !!cfgApp().custodeUrl,
         pronto, condiviso: (pid) => S.condivisi.has(pid), inAttesa: (pid) => S.coda.has(pid),
         puo: (cosa) => !S.io || !S.io.permessi || !!S.io.permessi[cosa],

@@ -131,7 +131,7 @@
       (out.presenze[x.pid] = out.presenze[x.pid] || []).push([x.da, x.a]);
       if (!(x.persone || []).length) return;
       fasce.forEach(function (f) {
-        if (f >= x.da && f < x.a) out.voci.push({ id: 'm:' + x.id + ':' + f, pid: x.pid, giorno: g, ora: f, durata: +c.fascia || 60, persone: x.persone.slice(), nota: '', modello: true });
+        if (siSovrappone(f, c.fascia, x.da, x.a)) out.voci.push({ id: 'm:' + x.id + ':' + f, pid: x.pid, giorno: g, ora: f, durata: +c.fascia || 60, persone: x.persone.slice(), nota: '', modello: true });
       });
     });
     return out;
@@ -151,10 +151,16 @@
     return modello;
   }
   /** Il bambino è al centro in quella fascia? (senza orari indicati: sì) */
+  // La fascia [ora, ora + durata) tocca l'orario [da, a)? Con inizi liberi (14:20)
+  // le fasce di serie (14:10, 15:10…) non coincidono: conta la sovrapposizione
+  function siSovrappone(ora, durata, da, a) {
+    var m = minuti(ora);
+    return m < minuti(a) && m + (+durata || 60) > minuti(da);
+  }
   function presente(gi, pid, ora) {
     var r = gi.presenze && gi.presenze[pid];
     if (!r || !r.length) return true;
-    return r.some(function (x) { return ora >= x[0] && ora < x[1]; });
+    return r.some(function (x) { return siSovrappone(ora, gi.fascia, x[0], x[1]); });
   }
 
   /** Impostazioni e bambini della giornata (anche quelli con turni ma non in elenco). */
@@ -179,7 +185,7 @@
     // le fasce davvero riempite: dalla prima all'ultima con almeno un turno
     var piene = fasce.filter(function (f) {
       return voci.some(function (v) { return v.ora === f && (v.persone || []).length; }) ||
-        Object.keys(presenze).some(function (pid) { return (presenze[pid] || []).some(function (x) { return f >= x[0] && f < x[1]; }); });
+        Object.keys(presenze).some(function (pid) { return (presenze[pid] || []).some(function (x) { return siSovrappone(f, c.fascia, x[0], x[1]); }); });
     });
     var usate = piene.length ? fasce.slice(fasce.indexOf(piene[0]), fasce.indexOf(piene[piene.length - 1]) + 1) : [];
     // in ordine di arrivo: prima chi comincia prima (a parità, l'ordine scelto)

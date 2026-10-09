@@ -101,5 +101,15 @@ prova('occupati e stampa tengono conto della settimana tipo', () => {
   assert.ok(html.includes('Elisa') && html.includes('st-fuori'));
 });
 
+prova('inizio libero (14:20, ore da 50): il bambino c\'è nelle fasce di serie che tocca', () => {
+  let m = T.modelloVuoto();
+  const gL = T.lunedi(G);
+  m = T.impostaModello(m, 'x', 1, { da: '14:20', a: '16:00', persone: ['p1'] });
+  const gi = T.giornata(T.vuota(), gL, m);
+  assert.ok(gi.bambini.includes('x'));
+  assert.ok(T.presente(gi, 'x', '14:10') && T.presente(gi, 'x', '15:10'), 'nelle fasce 14:10 e 15:10');
+  assert.ok(!T.presente(gi, 'x', '16:10'), 'non dalle 16:10');
+  assert.deepStrictEqual(gi.voci.filter((v) => v.pid === 'x').map((v) => v.ora), ['14:10', '15:10']);
+});
 console.log(`\n${passati} test passati, ${falliti.length} falliti`);
 process.exit(falliti.length ? 1 : 0);
