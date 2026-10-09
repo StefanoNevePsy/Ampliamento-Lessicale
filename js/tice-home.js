@@ -34,6 +34,24 @@
     }
     const grezzo = (s) => new Grezzo(s);
     const icona = (n) => grezzo(`<i class="fa-solid fa-${n}"></i>`);
+    // Aspetto: «quaderno» (righe a matita, testate, annotazioni a mano) o «classico»,
+    // com'era prima: si sceglie dal menu e resta su questo dispositivo
+    const stile = () => { try { return localStorage.getItem('tice_stile') === 'classico' ? 'classico' : 'quaderno'; } catch (e) { return 'quaderno'; } };
+    const applicaStile = () => { document.documentElement.dataset.ticeStile = stile(); };
+    applicaStile();
+    // La testata della pagina: un'etichetta spaziata e il titolo grande, come le pagine di PsyDiary
+    const testata = (eti, titolo, o = {}) => h`<div class="tq-testata">
+        ${o.azione ? h`<button type="button" class="eti tq-eti tocca-eti" data-a="${o.azione}">${eti} ${icona('chevron-down')}</button>` : h`<span class="eti tq-eti">${eti}</span>`}
+        <h1 class="tq-titolo">${titolo}${o.mano ? h` <span class="mano">${o.mano}</span>` : ''}</h1></div>`;
+    // il timbro sulla pagina quando una seduta è salvata
+    function timbro(testo) {
+        document.querySelectorAll('.tq-timbro').forEach((x) => x.remove());
+        const d = document.createElement('div');
+        d.className = 'tq-timbro'; d.setAttribute('aria-hidden', 'true');
+        d.innerHTML = `<span>${String(testo).replace(/[<>&]/g, '')}</span>`;
+        document.body.appendChild(d);
+        setTimeout(() => d.remove(), 2200);
+    }
 
     // ---------- stato ----------
     const T = { vista: 'turni', pid: null, aperte: {}, chiusiAperti: {}, suggerimenti: {}, cerca: '', importazioni: [] };
@@ -362,6 +380,7 @@
                 <button class="ib" data-a="giochi" aria-label="Giochi e attività dell'app" title="Giochi e attività">${icona('gamepad')}</button>
                 <button class="ib" data-a="menu" aria-label="Altro">${icona('ellipsis-vertical')}</button>` })}
             <main class="tice-main">
+                ${testata('Centro TICE · ' + pazienti().length + (pazienti().length === 1 ? ' bambino' : ' bambini'), 'Tutti i bambini')}
                 ${EST.banner ? EST.banner() : ''}
                 ${pazienti().length > 6 ? h`<input class="cerca" type="search" placeholder="Cerca un bambino" value="${T.cerca}" data-cambio="cerca" aria-label="Cerca">` : ''}
                 ${righe.length ? h`<div class="scheda">${righe}</div>`
@@ -486,7 +505,7 @@
             ${hint ? h`<button class="ib hint-tasto ${T.suggerimenti[att.id] ? 'on' : ''}" data-a="suggerimenti" data-id="${att.id}" aria-expanded="${T.suggerimenti[att.id] ? 'true' : 'false'}" aria-label="Suggerimenti" title="Suggerimenti per chi somministra">${icona('lightbulb')}</button>` : ''}
             <button class="att-testa" data-a="apri-att" data-id="${att.id}" aria-expanded="${aperta ? 'true' : 'false'}">
                 <span class="corpo">
-                    <span class="nome">${att.nome}
+                    <span class="nome"><span class="nome-testo">${att.nome}</span>
                         ${ecoico(att) ? h` <span class="pill">Echo to tact</span>` : tipo === 'timedelay' ? h` <span class="pill">T/D${tdS != null ? ' ' + sec(tdS) : ''}</span>` : ''}
                         ${att.temporanea ? h` <span class="pill grigia">solo oggi</span>` : ''}
                         ${att.stato && att.stato !== 'attivo' ? h` <span class="pill grigia">${att.stato}</span>` : ''}
@@ -519,7 +538,7 @@
                 </div>` : ''}
                 ${ms.length ? ms.map((m, i) => presaDati(p, att, t, tipo, m, vm[i], critM[i], soglia)) : h`${tasti(att, tipo)}
                 <div class="sotto-tasti">
-                    <div class="sequenza" aria-label="Sequenza delle risposte">${(v ? v.sequenza : '').split('').map((r) => h`<i class="${r}"></i>`)}</div>
+                    <div class="sequenza ${ecoico(att) ? 'eco' : ''}" aria-label="Sequenza delle risposte">${(v ? v.sequenza : '').split('').map((r) => h`<i class="${r}"></i>`)}</div>
                     ${st ? h`<button class="ib" data-a="salta-passo" data-id="${att.id}" aria-label="Salta il passo" title="Salta il passo">${icona('forward')}</button>
                     <button class="ib" data-a="apri-ta" data-id="${att.id}" aria-label="Lista dei passi" title="Lista dei passi">${icona('list-ol')}</button>` : ''}
                     ${tipo === 'timedelay' ? h`<button class="bt piccolo fantasma td-voce" data-a="td-voce" data-id="${att.id}" title="Cambia il time delay">${icona('stopwatch')} ${tdS != null ? sec(tdS) : 'T/D ?'}</button>` : ''}
@@ -557,7 +576,7 @@
             ${lu && (lu.prec || lu.oggi) ? h`<p class="sotto piccolo lu-attesa">${icona('hourglass-half')} ${testoLU(lu)}</p>` : ''}
             ${tasti(attM, tipoM, k)}
             <div class="sotto-tasti">
-                <div class="sequenza" aria-label="Sequenza delle risposte">${(v ? v.sequenza : '').split('').map((r) => h`<i class="${r}"></i>`)}</div>
+                <div class="sequenza ${tm.eco ? 'eco' : ''}" aria-label="Sequenza delle risposte">${(v ? v.sequenza : '').split('').map((r) => h`<i class="${r}"></i>`)}</div>
                 <button class="ib" data-a="annulla" data-id="${k}" aria-label="Annulla l'ultima di ${m.nome}" title="Annulla l'ultima">${icona('rotate-left')}</button>
                 <button class="ib" data-a="nota-voce" data-id="${k}" aria-label="Nota e opzioni di ${m.nome}" title="Nota e opzioni">${icona('pen')}</button>
             </div>
@@ -631,6 +650,7 @@
                     <button class="ib" data-a="vai-programma" aria-label="Programma" title="Programma">${icona('list-check')}</button>
                     <button class="ib" data-a="menu-bambino" aria-label="Altro">${icona('ellipsis-vertical')}</button>` })}
             <main class="tice-main">
+                ${testata((eGruppo(p) ? 'Gruppo · ' : 'Seduta · ') + (nonOggi ? 'del ' : 'oggi, ') + new Date(b.data + 'T12:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'long' }) + (chiDellaSeduta(p, b) ? ' · ' + chiDellaSeduta(p, b) : ''), p.name, { azione: 'data' })}
                 ${nonOggi ? h`<div class="banda">${icona('calendar-day')}<div>Stai registrando una seduta del <b>${formatoData(b.data, true)}</b>, non di oggi.</div></div>` : ''}
                 ${eGruppo(p) ? h`<div class="presenti"><span class="sotto piccolo">Presenti oggi</span>${membriDi(p).map((x) => h`<button class="pill-presenza ${presente(b, x.id) ? 'si' : ''}" data-a="presente" data-pid="${x.id}" aria-pressed="${presente(b, x.id) ? 'true' : 'false'}">${presente(b, x.id) ? icona('check') : icona('xmark')} ${x.name}</button>`)}</div>` : ''}
                 ${!P.programma(p).attivita.length ? h`<div class="scheda imbottita">
@@ -802,7 +822,7 @@
         const ultimaS = !t.length ? P.sedute(p, att).slice(-1)[0] : null;
         return h`<div class="scheda" data-prog="${att.id}" style="--col:${P.coloreDi(p, att)}">
             <button class="att-testa" ${modifica ? grezzo(`data-a="mod-att" data-id="${esc(att.id)}"`) : ''}>
-                <span class="corpo"><span class="nome">${att.nome}
+                <span class="corpo"><span class="nome"><span class="nome-testo">${att.nome}</span>
                     ${(() => { const e = M.etichetta(att, dizionario()); return e && M.normalizza(e) !== M.normalizza(att.nome) ? h` <span class="pill grigia">${e}</span>` : ''; })()}
                     ${ecoico(att) ? h` <span class="pill">Echo to tact</span>` : att.sessionType === 'timedelay' ? (() => {
                         const d = P.tdDi(att), u = (att.tdCambi || []).slice(-1)[0];
@@ -837,6 +857,7 @@
         return h`${barra({ indietro: 'vai-seduta', titolo: 'Programma', sotto: { testo: p.name },
                 destra: h`<button class="ib" data-a="apri-cartella" aria-label="Cartella clinica" title="Cartella clinica">${icona('chart-line')}</button>` })}
             <main class="tice-main">
+                ${testata('Programma · ' + attive.length + (attive.length === 1 ? ' attività in corso' : ' attività in corso'), p.name)}
                 <p class="sotto">Le attività in corso compaiono nella presa dati con il loro target. Quando un target raggiunge il criterio l'app propone di passare al successivo.</p>
                 ${modifica ? h`<button class="bt primario largo" data-a="nuova-att">${icona('plus')} Nuova attività</button>`
                     : h`<div class="banda">${icona('lock')}<div>Il programma lo modificano le professioniste: tu registri le sedute.</div></div>`}
@@ -1042,12 +1063,19 @@
                 <button class="opzione" data-foglio="opzioni">${icona('gear')}<span class="corpo">Impostazioni e tema</span></button>`}
                 ${limitato() ? '' : h`<button class="opzione" data-foglio="modalita">${icona('tags')}<span class="corpo">Categorie e modalità<small>Aggiungi categorie e tipi di attività, senza doppioni</small></span></button>`}
                 <button class="opzione" data-foglio="schermo">${icona('expand')}<span class="corpo">Schermo<small>Dimensione dell'interfaccia e schermo intero</small></span></button>
+                <button class="opzione" data-foglio="aspetto">${icona('pen-nib')}<span class="corpo">Aspetto · ${stile() === 'quaderno' ? 'quaderno' : 'classico'}<small>${stile() === 'quaderno' ? 'Torna all\'aspetto classico, senza righe e annotazioni' : 'Passa al quaderno: testate, righe a matita, annotazioni'}</small></span></button>
                 ${EST.opzioniMenu ? EST.opzioniMenu() : ''}
                 ${window.TicePwa && TicePwa.puoInstallare() ? h`<button class="opzione" data-foglio="installa">${icona('download')}<span class="corpo">Installa l'app<small>Si apre come un'app e funziona anche senza rete</small></span></button>` : ''}
             </div><div class="bottoni"><button class="bt" data-foglio="chiudi">Chiudi</button></div>`);
             if (r && r.indexOf('est:') === 0 && EST.sceltaMenu) return EST.sceltaMenu(r.slice(4));
             if (r === 'installa') { TicePwa.installa(); return; }
             if (r === 'schermo') { await opzioniSchermo(); return; }
+            if (r === 'aspetto') {
+                try { localStorage.setItem('tice_stile', stile() === 'quaderno' ? 'classico' : 'quaderno'); } catch (e) { /* niente */ }
+                applicaStile(); disegna();
+                avviso(stile() === 'quaderno' ? 'Aspetto: quaderno' : 'Aspetto: classico');
+                return;
+            }
             if (r === 'modalita') { await gestisciModalita(); disegna(); return; }
             if (r === 'giochi') chiudi();
             else if (r === 'cartelle') apriDaQui(openPatients);
@@ -1450,7 +1478,7 @@
             let ultimo = '';
             try { ultimo = localStorage.getItem('tice_operatore') || ''; } catch (e) { /* niente */ }
             const suggeriti = [...new Set([ultimo, ...cal.persone].filter(Boolean))];
-            const dati = await foglio(h`<form><h2>Fine seduta</h2>
+            const dati = await foglio(h`<form class="fine-seduta"><h2>Fine seduta</h2>
                 <table class="tabella" style="margin-bottom:14px"><tbody>${righe}</tbody>
                     <tfoot><tr><th>Learn unit</th><th class="num">${r0.corrette}/${r0.prove}</th><th class="num">${Math.round(100 * r0.corrette / r0.prove)}%</th></tr></tfoot></table>
                 <label class="campo campo-chi"><span>Chi ha svolto la seduta${!b.operatore && cal.nomi.length ? h` <small class="sotto">· dal calendario</small>` : ''}</span><input name="operatore" maxlength="120" required value="${operatore}" placeholder="Nome, o più nomi separati da +" list="tice-chi" autocomplete="off">
@@ -2183,6 +2211,7 @@
         await salvaPaziente(p);
         eliminaBozza(p.id);
         T.aperte = {};
+        timbro('Salvata · ' + formatoData(b.data));
         avviso(`Seduta salvata${attese.length ? ' · in attesa di completare la LU: ' + attese.map((x) => `${x.nome} ${x.n}/${x.di}`).join(', ') : ''}${passati.length ? ' · time delay: ' + passati.join(', ') : ''}`);
         disegna();
         // Criteri raggiunti con questa seduta: si propone il passo successivo
@@ -2569,7 +2598,7 @@
         },
         attuale: () => ({ vista: T.vista, pid: T.pid }),
         ridisegna: () => { if (!radice().hidden) { T.mantieniScroll = true; disegna(); } },
-        strumenti: { h, grezzo, icona, foglio, conferma, avviso, barra, vai: (v, pid) => vai(v, pid), paz, pazienti, salvaPaziente, formatoData, T, stampa, statoSeduta, limitato: () => limitato(), banner: () => (EST.banner ? EST.banner() : '') }
+        strumenti: { h, grezzo, icona, foglio, conferma, avviso, barra, vai: (v, pid) => vai(v, pid), paz, pazienti, salvaPaziente, formatoData, T, stampa, statoSeduta, testata, limitato: () => limitato(), banner: () => (EST.banner ? EST.banner() : '') }
     };
     if (document.readyState === 'complete') avvia();
     else window.addEventListener('load', avvia);

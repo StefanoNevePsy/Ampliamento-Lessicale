@@ -195,6 +195,14 @@
     const nomePersona = (id) => (persona(id) || {}).nome || '?';
     // «Stefano Neve» → «Stefano N.»; «Greta (tirocinio)» resta «Greta»: le parentesi non sono un cognome
     const breve = (nome) => { const p = String(nome || '').replace(/\(.*?\)/g, ' ').trim().split(/\s+/).filter((x) => /^\p{L}/u.test(x)); return p.length > 1 ? p[0] + ' ' + p[1][0] + '.' : p[0] || String(nome || '?').trim(); };
+    // «Venerdì · settimana 41»
+    function etiGiorno(g) {
+        const d = TT.daIso(g), w = d.toLocaleDateString('it-IT', { weekday: 'long' });
+        const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+        t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
+        const sett = Math.ceil(((t - Date.UTC(t.getUTCFullYear(), 0, 1)) / 86400000 + 1) / 7);
+        return w + ' · settimana ' + sett;
+    }
     function lunga(g) {
         const d = TT.daIso(g);
         const s = d.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -265,6 +273,7 @@
                     <button class="ib" data-a="giochi" aria-label="Giochi e attività dell'app" title="Giochi e attività">${icona('gamepad')}</button>
                     <button class="ib" data-a="menu" aria-label="Altro">${icona('ellipsis-vertical')}</button>` })}
             <main class="tice-main tt-main">
+                ${X.testata ? X.testata(etiGiorno(S.giorno), TT.daIso(S.giorno).toLocaleDateString('it-IT', { day: 'numeric', month: 'long' }), { azione: 'tt-data', mano: S.giorno === oggi() ? 'oggi' : '' }) : ''}
                 ${X.banner()}
                 <div class="tt-nav">
                     <button class="bt piccolo" data-a="tt-giorno" data-d="-1" aria-label="Giorno prima">${icona('chevron-left')}</button>
@@ -337,6 +346,7 @@
         }, 0);
         return h`${barra({ indietro: 'vai-bambini', titolo: 'Settimana tipo', sotto: { testo: pids.length ? `${pids.length} bambini · ${Math.round(ore / 60)} ore a settimana` : 'Chi viene, quando, con chi' } })}
             <main class="tice-main tt-main">
+                ${X.testata ? X.testata(pids.length ? `${pids.length} bambini · ${Math.round(ore / 60)} ore a settimana` : 'Chi viene, quando, con chi', 'Settimana tipo') : ''}
                 <p class="sotto">La settimana che si ripete: ogni giornata del calendario parte da qui. Un cambio dell'ultimo minuto si fa sulla giornata e vale solo per quel giorno; le modifiche qui valgono per tutti i giorni non ritoccati.</p>
                 ${!modifica ? h`<div class="banda">${icona('lock')}<div>La settimana tipo la organizzano le professioniste: qui la vedi.</div></div>` : ''}
                 ${pids.length ? h`<div class="tt-griglia-box"><table class="tt-griglia tt-modello">

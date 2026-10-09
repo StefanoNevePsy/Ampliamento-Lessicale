@@ -1,0 +1,130 @@
+/* ==========================================================================
+   Centro TICE · aspetto «quaderno»
+   Tutto qui è attivo solo con il tema Taccuino e l'aspetto «quaderno» (menu →
+   Aspetto). Con «classico» l'app torna esattamente com'era: niente di questo
+   file si applica. Gli ingredienti sono quelli di PsyDiary: testate con
+   un'etichetta spaziata e il titolo in Gloock, righe a matita al posto delle
+   schede piene, il colore come evidenziatore, poche annotazioni a mano in
+   vermiglio, il timbro a fine seduta.
+   ========================================================================== */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] {
+    --q-matita: rgba(var(--ink-rgb), 0.16);
+    --q-matita-forte: rgba(var(--ink-rgb), 0.32);
+    --q-spot: var(--taccuino-spot, var(--accent-color));
+    --q-carta: var(--taccuino-carta);
+    --q-evid: 34%;
+}
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"][data-theme="taccuino-scuro"] { --q-evid: 42%; }
+
+/* --- testata: etichetta spaziata + titolo grande ---------------------------- */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tq-testata { display: block; margin: 6px 2px 14px; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tq-eti { display: inline-flex; align-items: center; gap: 6px; font-size: .74rem; letter-spacing: .12em; text-transform: uppercase; font-weight: 600; color: var(--text-secondary); }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] button.tq-eti { border: 0; background: none; padding: 12px 0 8px; margin: -12px 0 -8px; cursor: pointer; font-family: inherit; text-align: left; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] button.tq-eti i { font-size: .8em; opacity: .7; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tq-titolo { margin: 2px 0 0; font-family: var(--f-display); font-weight: 400; font-size: clamp(2rem, 7.5vw, 2.75rem); line-height: 1.02; letter-spacing: -0.015em; color: var(--text-primary); text-wrap: balance; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tq-titolo .mano { font-size: .62em; margin-left: 4px; vertical-align: .08em; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .mano { font-family: var(--f-mano); font-weight: 400; color: var(--q-spot); letter-spacing: 0; text-transform: none; }
+/* con la testata, la barra in alto resta leggera: indietro e i comandi */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice:has(.tq-testata) .tice-barra .titolo { visibility: hidden; }
+
+/* --- etichette di sezione con la riga a matita (come i giorni di PsyDiary) -- */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice h3 { display: flex; align-items: center; gap: 10px; margin: 26px 2px 10px; font-size: .74rem; letter-spacing: .12em; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice h3::after { content: ''; flex: 1; height: 1px; background: var(--q-matita); }
+
+/* --- attività: fogli, il colore come evidenziatore sul nome ---------------- */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .att[style*="--col"], :root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .scheda[data-prog] { padding-left: 0; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .att[style*="--col"]::before, :root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .scheda[data-prog]::before { display: none; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .att[style*="--col"] > .att-testa, :root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .scheda[data-prog] > .att-testa { background: none; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .att, :root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .scheda[data-prog] { border-radius: 14px; border-color: var(--q-matita); box-shadow: 0 1px 0 rgba(var(--ink-rgb), .05); }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .att + .att, :root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .scheda + .scheda { margin-top: 12px; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .nome-testo {
+    background: linear-gradient(transparent 66%, color-mix(in srgb, var(--col, var(--q-spot)) var(--q-evid), transparent) 66%, color-mix(in srgb, var(--col, var(--q-spot)) var(--q-evid), transparent) 97%, transparent 97%);
+    -webkit-box-decoration-break: clone; box-decoration-break: clone;
+    padding: 0 3px; margin: 0 -3px; border-radius: 2px;
+}
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .att-testa .nome, :root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .scheda[data-prog] .att-testa .nome { font-size: 1.3rem; line-height: 1.2; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .att-corpo { border-top: 1px dashed var(--q-matita); padding-top: 12px; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .att .conto b { font-family: var(--f-display); font-weight: 400; font-size: 1.5rem; }
+
+/* tasti di risposta: stessi colori, finitura da timbro */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .tasto { border-radius: 12px; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .16), inset 0 -3px 0 rgba(0, 0, 0, .12); position: relative; overflow: hidden; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .tasto::after { content: ''; position: absolute; inset: 0; opacity: 0; pointer-events: none; background-image: radial-gradient(rgba(255, 255, 255, .5) 1px, transparent 1.3px); background-size: 5px 5px; transition: opacity .3s cubic-bezier(.22, 1, .36, 1); }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .tasto:active::after { opacity: 1; transition-duration: 0s; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .tasto small { letter-spacing: .06em; text-transform: uppercase; font-size: .66rem; }
+
+/* la sequenza come sul foglio dati: v, P, x tracciati a mano */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .sequenza { gap: 2px 6px; align-items: center; min-height: 26px; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .sequenza i { width: auto; height: auto; border-radius: 0; background: none !important; font-family: var(--f-mano); font-style: normal; font-size: 1.45rem; line-height: 1; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .sequenza i.V { color: var(--t-v); }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .sequenza i.P { color: var(--t-p); }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .sequenza i.X { color: var(--t-x); }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .sequenza i.V::before { content: 'v'; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .sequenza i.P::before { content: 'P'; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .sequenza i.X::before { content: 'x'; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .sequenza.eco i.P::before { content: 'e+'; }
+
+/* annotazioni a mano, poche: le note sulla LU e le note della voce restano stampate */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .vuoto { font-family: var(--f-mano); color: var(--q-spot); font-size: 1.55rem; line-height: 1.3; padding: 36px 12px; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .vuoto .bottoni, :root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .vuoto button { font-family: var(--f-testo); font-size: .95rem; }
+
+/* --- elenco dei bambini: righe a matita, iniziali in un cerchio tratteggiato */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .tice-main > .scheda:has(> .riga) { background: none; border: 0; box-shadow: none; border-radius: 0; border-top: 1px solid var(--q-matita); border-bottom: 1px solid var(--q-matita); }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .riga { padding-left: 4px; padding-right: 4px; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .riga .t1 { font-size: 1.3rem; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .avatar:not(.gruppo) { background: none; border: 1.5px dashed var(--q-matita-forte); }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .avatar.gruppo { background: none; border: 1.5px solid var(--q-matita-forte); color: var(--text-primary); }
+
+/* --- calendario: un foglio a righe ----------------------------------------- */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .tt-griglia-box { border-color: var(--q-matita); background: var(--q-carta); }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .tt-griglia th, :root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .tt-griglia td { border-right-color: rgba(var(--ink-rgb), .08); border-bottom-color: var(--q-matita); }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .tt-bambino { border-top: 0 !important; background: var(--q-carta) !important; background-image: none !important; padding-bottom: 8px; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .tt-apri-nome { font-family: var(--f-display); font-weight: 400; font-size: 1.12rem; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .tt-apri-nome { display: inline; line-height: 1.25; -webkit-box-decoration-break: clone; box-decoration-break: clone; background: linear-gradient(transparent 64%, color-mix(in srgb, var(--c) var(--q-evid), transparent) 64%, color-mix(in srgb, var(--c) var(--q-evid), transparent) 96%, transparent 96%); padding: 0 3px; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .tt-apri i { display: none; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .tt-stato { background: none !important; border: 0 !important; color: var(--q-spot) !important; opacity: 1; font-family: var(--f-mano); font-weight: 400; font-size: 1.02rem; padding: 0; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .tt-stato i { display: none; }
+/* il bambino c'è: la cella prende appena il suo colore; quando non c'è, carta bianca */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .tt-cella { background-image: linear-gradient(color-mix(in srgb, var(--c) 9%, transparent), color-mix(in srgb, var(--c) 9%, transparent)); }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .tt-cella.fuori { background-image: none; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .tt-ora { font-family: var(--f-display); font-weight: 400; font-size: 1rem; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .tt-ora small { font-family: var(--f-testo); }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .tt-angolo, :root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .tt-ora { background: var(--q-carta); }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .tt-griglia tr.adesso td { box-shadow: inset 0 2px 0 var(--q-spot); }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .tt-nome { background: var(--q-carta); border-width: 1px; font-weight: 650; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .tt-g.scelto { border-radius: 999px; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .tt-modello .tt-giorno-m { font-family: var(--f-display); font-weight: 400; font-size: 1rem; text-transform: capitalize; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .tt-bambino-riga { border-left: 0 !important; background: var(--q-carta) !important; font-family: var(--f-display); font-weight: 400; font-size: 1.05rem; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .tt-griglia-box.in-modifica { border-style: dashed; border-color: var(--q-spot); }
+
+/* --- piede della seduta ---------------------------------------------------- */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .piede { background: var(--q-carta); box-shadow: none; border-top: 1px solid var(--q-matita); }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .piede .riassunto b { font-family: var(--f-display); font-weight: 400; font-size: 1.15rem; }
+
+/* --- fogli: titoli in Gloock ----------------------------------------------- */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice-foglio h2 { font-family: var(--f-display); font-weight: 400; font-size: 1.6rem; letter-spacing: -0.01em; line-height: 1.1; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice-foglio .sez-titolo, :root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice-foglio .eti { letter-spacing: .12em; }
+/* fine seduta: i numeri grandi, come una pagina di registro */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice-foglio .fine-seduta .tabella td, :root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice-foglio .fine-seduta .tabella th { border-top-color: var(--q-matita); padding: 8px 4px; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice-foglio .fine-seduta .tabella td.num b, :root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice-foglio .fine-seduta .tabella tfoot th:last-child { font-family: var(--f-display); font-weight: 400; font-size: 1.35rem; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice-foglio .fine-seduta .tabella tfoot th { border-top: 1.5px solid var(--q-matita-forte); padding-top: 10px; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice-foglio .fine-seduta .tabella tfoot th:first-child { font-size: .74rem; letter-spacing: .12em; text-transform: uppercase; }
+
+/* --- suggerimenti e note: il retino a puntini al posto della striscia ------- */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .sugg-testo, :root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice-hint-gioco .fumetto { border-left: 0; position: relative; isolation: isolate; background: none; border: 1px dashed var(--q-matita-forte); }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tice .sugg-testo::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; opacity: .5; background-image: radial-gradient(var(--taccuino-retino) 1px, transparent 1.25px); background-size: 6px 6px; }
+
+/* --- il timbro a fine seduta ----------------------------------------------- */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tq-timbro { display: grid; place-items: center; position: fixed; inset: 0; z-index: 2147482000; pointer-events: none; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tq-timbro span {
+    font-family: var(--f-display); font-size: 1.9rem; letter-spacing: .04em; text-transform: uppercase; color: var(--q-spot);
+    border: 3px double var(--q-spot); border-radius: 10px; padding: 8px 20px; background: color-mix(in srgb, var(--q-carta) 88%, transparent);
+    transform: rotate(-6deg) scale(1); opacity: 0;
+    animation: tq-timbro 2.2s cubic-bezier(.22, 1, .36, 1) forwards;
+}
+@keyframes tq-timbro {
+    0% { opacity: 0; transform: rotate(-6deg) scale(1.6); }
+    12% { opacity: .95; transform: rotate(-6deg) scale(1); }
+    75% { opacity: .95; transform: rotate(-6deg) scale(1); }
+    100% { opacity: 0; transform: rotate(-6deg) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { :root[data-theme^="taccuino"][data-tice-stile="quaderno"] .tq-timbro span { animation: none; opacity: .95; } }
