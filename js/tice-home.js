@@ -507,6 +507,7 @@
                 <span class="corpo">
                     <span class="nome"><span class="nome-testo">${att.nome}</span>
                         ${ecoico(att) ? h` <span class="pill">Echo to tact</span>` : tipo === 'timedelay' ? h` <span class="pill">T/D${tdS != null ? ' ' + sec(tdS) : ''}</span>` : ''}
+                        ${att.field ? h` <span class="pill field" title="Field: ${att.field} stimoli fra cui scegliere">F${att.field}</span>` : ''}
                         ${att.temporanea ? h` <span class="pill grigia">solo oggi</span>` : ''}
                         ${att.stato && att.stato !== 'attivo' ? h` <span class="pill grigia">${att.stato}</span>` : ''}
                         ${mant ? h` <span class="pill arancio" title="${att.mantenimento ? 'Il dato si prende ma non entra nelle statistiche' : 'Il target ha già raggiunto il criterio: si registra come mantenimento finché non si apre il prossimo'}">mantenimento</span>` : ''}
@@ -514,6 +515,7 @@
                     </span>
                     ${t ? h`<span class="target">${t.setId ? h`${icona(giocabile ? 'layer-group' : 'triangle-exclamation')} ` : ''}${t.testo}${t.setId ? h` · ${etichettaModo(P.modoTarget(att, t))}` : ''}</span>` : (senzaTarget ? (P.inPercentuale(att) ? h`<span class="target">${icona('percent')} Dato in percentuale a ogni seduta</span>` : h`<span class="target">${icona('layer-group')} LU da ${att.prove} prove</span>`)
                         : !att.temporanea ? h`<span class="target"><i>Nessun target in corso: aggiungilo dal programma.</i></span>` : '')}
+                    ${att.promptVisivo ? h`<span class="target riga-prompt">P: ${casellePrompt(att.promptVisivo)}</span>` : ''}
                     ${st ? h`<span class="target ta-riga">${icona('list-ol')} passo <b>${st.i + 1}/${passi.length}</b> · ${st.passo.testo}${st.giri ? h` <span class="pill grigia">giro ${st.giri + 1}</span>` : ''}</span>` : ''}
                     ${lu && (lu.prec || lu.oggi) ? h`<span class="target lu-attesa">${icona('hourglass-half')} ${testoLU(lu)}</span>` : ''}
                     ${oggiT ? h`<span class="target">${icona('circle-check')} già oggi: ${oggiV}/${oggiT} (${Math.round(100 * oggiV / oggiT)}%)${(() => { const chi = [...new Set(giaOggi.map((x) => x.operatore).filter(Boolean))]; return chi.length ? h` <span class="chi">· ${chi.join(', ')}</span>` : ''; })()}</span>` : ''}
@@ -571,6 +573,7 @@
             <div class="presa-testa"><b>${m.nome}</b>
                 ${m.tipo ? h`<span class="pill">${tm.eco ? 'Echo to tact' : tipoM === 'timedelay' ? 'T/D' : 'Indip.'}</span>` : ''}
                 ${m.mantenimento ? h`<span class="pill grigia" title="Il dato si prende ma resta fuori da statistiche e criterio">mantenimento</span>` : ''}
+                ${m.field ? h`<span class="pill field" title="Field: ${m.field} stimoli">F${m.field}</span>` : ''}
                 ${crit ? h`<span class="pill verde">${icona('flag-checkered')} criterio il ${formatoData(crit)}</span>` : ''}
                 <span class="presa-conto">${tot ? h`<b class="${classePct(Math.round(100 * v.v / tot), soglia)}">${Math.round(100 * v.v / tot)}%</b> <span class="sotto">${v.v}/${tot}${attM.prove ? ' di ' + attM.prove : ''}</span>` : h`<span class="sotto">${attM.prove ? attM.prove + ' prove' : ''}</span>`}</span></div>
             ${lu && (lu.prec || lu.oggi) ? h`<p class="sotto piccolo lu-attesa">${icona('hourglass-half')} ${testoLU(lu)}</p>` : ''}
@@ -830,6 +833,7 @@
                     })() : h` <span class="pill grigia">Indip.</span>`}
                     ${att.stato !== 'attivo' ? h` <span class="pill arancio">${ETICHETTE_STATO[att.stato] || att.stato}</span>` : ''}
                     ${att.mantenimento ? h` <span class="pill grigia" title="Il dato si prende ma non entra nelle statistiche">mantenimento</span>` : ''}
+                    ${att.field ? h` <span class="pill field">F${att.field}</span>` : ''}
                     ${att.suggerimenti ? h` <span class="pill grigia" title="${att.suggerimenti}">${icona('lightbulb')} suggerimenti</span>` : ''}</span>
                     <span class="target">${(att.misure || []).length ? h`${icona('table-cells')} ${att.misure.map((m) => m.nome + (m.mantenimento ? ' (mant.)' : '')).join(' · ')} — ` : ''}Criterio ${att.criterio.soglia}% per ${att.criterio.sedute} giorni${att.prove ? ' · ' + att.prove + ' prove' : ''}${att.descrizione ? ' · ' + att.descrizione : ''}</span></span>
                 ${modifica ? icona('pen') : ''}
@@ -1580,6 +1584,7 @@
             const att = P.nuovaAttivita(p, Object.assign({}, r, { target: null, sessionType: r.sessionType === 'timedelay' ? 'timedelay' : 'independent' }));
             if (r.sessionType === 'ecoico') { att.risposte = 'ecoico'; att.nomeP = 'Ecoica'; }
             if (r.colore) att.colore = r.colore;
+            impostaField(att, r.field, r.promptVisivo);
             if (eGruppo(p)) allineaMembri(p); else impostaMisure(att, r);
             modalitaDaModulo(att, r);
             righe.forEach((x, i) => P.aggiungiTarget(att, x, i === 0));
@@ -1622,6 +1627,7 @@
                 if (P.secondiTD(r.tdSeconds) != null) P.impostaTD(att, r.tdSeconds, { chi: chiOpera() });
                 att.criterio = { soglia: +r.soglia || 90, sedute: +r.sedute || 2 };
                 att.prove = +r.prove || null;
+                impostaField(att, r.field, r.promptVisivo);
                 rinominaSedute(p, att);   // nome e categoria delle sedute
             }
             att.modificato = new Date().toISOString();
@@ -1942,12 +1948,24 @@
         if (x.modalita && x.certo) { att.modalita = x.modalita; att.variante = String(r.variante || '').trim() || x.variante; }
         else { delete att.modalita; att.variante = String(r.variante || '').trim(); }
     }
+    // Field (quanti stimoli fra cui scegliere) e prompt visivo (le caselle «prima poi dopo»)
+    function impostaField(o, field, prompt) {
+        const f = parseInt(field, 10);
+        if (f >= 1 && f <= 20) o.field = f; else delete o.field;
+        const pv = String(prompt || '').trim().slice(0, 200);
+        if (pv) o.promptVisivo = pv; else delete o.promptVisivo;
+    }
+    // le caselle: «prima | poi | dopo» → tre quadrati con la parola sotto
+    const casellePrompt = (pv) => {
+        const parti = String(pv || '').split(/[|,·]/).map((x) => x.trim()).filter(Boolean);
+        return h`<span class="caselle-prompt" title="Prompt visivo">${parti.length > 1 ? parti.map((x) => h`<span class="casella"><i></i><small>${x}</small></span>`) : h`<span class="casella-testo">${pv}</span>`}</span>`;
+    };
     // Le prese dati scritte nel modulo: quelle già esistenti tengono il loro id (e i dati)
     function impostaMisure(att, r) {
         const righe = Object.keys(r).filter((k) => /^ms_nome_\d+$/.test(k)).sort((x, y) => +x.slice(8) - +y.slice(8))
             .map((k) => { const i = k.slice(8); return { id: String(r['ms_id_' + i] || ''), nome: String(r[k] || '').trim(), mant: !!r['ms_mant_' + i],
                 tipo: ['independent', 'timedelay', 'ecoico'].includes(r['ms_tipo_' + i]) ? r['ms_tipo_' + i] : '', sugg: String(r['ms_sugg_' + i] || '').trim(),
-                prove: Math.min(200, parseInt(r['ms_prove_' + i], 10) || 0) }; })
+                prove: Math.min(200, parseInt(r['ms_prove_' + i], 10) || 0), field: r['ms_field_' + i] }; })
             .filter((x) => x.nome);
         const viste = new Set();
         const nuove = righe.filter((x) => { const k = x.nome.toLowerCase(); if (viste.has(k)) return false; viste.add(k); return true; }).slice(0, 8);
@@ -1960,6 +1978,7 @@
             if (x.tipo) m.tipo = x.tipo;
             if (x.sugg) m.suggerimenti = x.sugg;
             if (x.prove > 0) m.prove = x.prove;
+            impostaField(m, x.field, vecchia && vecchia.promptVisivo);
             return m;
         });
     }
@@ -2000,6 +2019,11 @@
                     <label class="campo"><span>Criterio %</span><input name="soglia" type="number" min="10" max="100" inputmode="numeric" value="${a.criterio.soglia}"></label>
                     <label class="campo"><span>Giorni di fila</span><input name="sedute" type="number" min="1" max="10" inputmode="numeric" value="${a.criterio.sedute}"></label>
                 </div>
+                <div class="riga-campi">
+                    <label class="campo campo-field"><span>Field <small class="sotto">· stimoli fra cui scegliere</small></span><input name="field" type="number" min="1" max="20" inputmode="numeric" value="${a.field || ''}" placeholder="es. 3"></label>
+                    <label class="campo"><span>Prompt visivo <small class="sotto">· caselle</small></span><input name="promptVisivo" maxlength="200" value="${a.promptVisivo || ''}" placeholder="es. prima | poi | dopo"></label>
+                </div>
+                <p class="sotto piccolo aiuto">Field: F3 = tre stimoli presentati, uno da scegliere. Prompt visivo: le caselle separate da | (prima | poi | dopo) compaiono in seduta come quadrati da indicare.</p>
                 <p class="sotto piccolo aiuto">Con le prove per LU il dato entra quando se ne completano tante, anche in più sedute; vuoto: percentuale a ogni seduta.</p>
                 <label class="spunta-riga"><input type="checkbox" name="mantenimento" ${a.mantenimento ? grezzo('checked') : ''}> <span><b>Mantenimento</b> <span class="sotto piccolo">· si segna, ma fuori da statistiche e criterio</span></span></label>
                 <label class="spunta-riga"><input type="checkbox" name="cronometro" ${a.cronometro ? grezzo('checked') : ''}> <span><b>Cronometra (fluency)</b> <span class="sotto piccolo">· risposte al minuto, grafico SCC</span></span></label>
@@ -2053,6 +2077,7 @@
             <div class="riga-sotto-2">
                 <select class="campo-in" name="${'ms_tipo_' + i}" aria-label="Tipo di seduta della sottoattività">${opz.map(([v, n]) => h`<option value="${v}" ${v === tipo ? grezzo('selected') : ''}>${n}</option>`)}</select>
                 <input class="campo-in prove-sotto" name="${'ms_prove_' + i}" type="number" min="1" max="200" inputmode="numeric" value="${(m && m.prove) || ''}" placeholder="Prove" title="Prove per LU (vuoto: come l'attività)" aria-label="Prove per LU della sottoattività">
+                <input class="campo-in prove-sotto" name="${'ms_field_' + i}" type="number" min="1" max="20" inputmode="numeric" value="${(m && m.field) || ''}" placeholder="Field" title="Field: quanti stimoli fra cui scegliere (vuoto: come l'attività)" aria-label="Field della sottoattività">
                 <input class="campo-in" name="${'ms_sugg_' + i}" maxlength="600" value="${(m && m.suggerimenti) || ''}" placeholder="Indicazioni per chi somministra (facoltative)" aria-label="Indicazioni della sottoattività">
             </div>
         </div>`;

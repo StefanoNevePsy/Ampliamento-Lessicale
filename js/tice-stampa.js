@@ -64,6 +64,11 @@
   }
 
   function strategia(v) {
+    var f = v.att.field ? ' <span class="st-badge chiaro" title="Field">F' + esc(v.att.field) + '</span>' : '';
+    var pv = v.att.promptVisivo ? ' <span class="st-mini" title="Prompt visivo">P: ' + esc(v.att.promptVisivo) + '</span>' : '';
+    return strategiaTipo(v) + f + pv;
+  }
+  function strategiaTipo(v) {
     var a = v.att;
     if (a.risposte === 'ecoico') return '<span class="st-badge" title="Echo to tact">ECO</span>';
     if (a.sessionType === 'timedelay') {
@@ -137,7 +142,7 @@
         };
         for (var rm = 0; rm < righeM; rm++) {
           html += '<tr class="st-sub' + (rm === 0 ? ' inizio' : '') + (rm === righeM - 1 ? ' fine' : '') + '">' +
-            '<td class="st-target st-presa">' + (rm === 0 ? '– ' + esc(m.nome) + (m.tipo ? ' <span class="st-badge' + (m.tipo === 'independent' ? ' chiaro' : '') + '">' + ({ independent: 'IND', timedelay: 'T/D', ecoico: 'ECO' })[m.tipo] + '</span>' : '') + (m.mantenimento ? ' <span class="st-mini">mant.</span>' : '') : '') + '</td>' +
+            '<td class="st-target st-presa">' + (rm === 0 ? '– ' + esc(m.nome) + (m.tipo ? ' <span class="st-badge' + (m.tipo === 'independent' ? ' chiaro' : '') + '">' + ({ independent: 'IND', timedelay: 'T/D', ecoico: 'ECO' })[m.tipo] + '</span>' : '') + (m.field ? ' <span class="st-badge chiaro">F' + esc(m.field) + '</span>' : '') + (m.mantenimento ? ' <span class="st-mini">mant.</span>' : '') : '') + '</td>' +
             rigaCaselle(col, mm, rm * col) + totM(rm) + '</tr>';
         }
       });

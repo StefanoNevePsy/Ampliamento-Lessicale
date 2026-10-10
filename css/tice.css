@@ -793,3 +793,11 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 .tice-foglio .riga-sotto [data-sotto-togli] { min-width: 44px; min-height: 44px; }
 /* nei fogli lunghi Annulla / Salva restano sempre a portata */
 .tice-foglio form > .bottoni:last-child { position: sticky; bottom: calc(-16px - env(safe-area-inset-bottom, 0px)); background: var(--modal-bg); padding: 10px 0 calc(env(safe-area-inset-bottom, 0px) + 6px); margin-bottom: calc(-16px - env(safe-area-inset-bottom, 0px)); z-index: 2; box-shadow: 0 -8px 12px -10px rgba(0,0,0,.25); }
+
+/* field e caselle del prompt visivo */
+.tice .pill.field { font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.tice .riga-prompt { display: flex; align-items: center; gap: 6px; }
+.tice .caselle-prompt { display: inline-flex; gap: 8px; align-items: flex-start; vertical-align: middle; }
+.tice .caselle-prompt .casella { display: inline-flex; flex-direction: column; align-items: center; gap: 1px; }
+.tice .caselle-prompt .casella i { display: block; width: 18px; height: 15px; border: 1.5px solid currentColor; border-radius: 2px; }
+.tice .caselle-prompt .casella small { font-size: .68rem; line-height: 1; }
