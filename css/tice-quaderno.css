@@ -199,3 +199,38 @@
 :root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients #report-content [style*="background:rgba(var(--shade-rgb),0.2)"] { background: none !important; padding-left: 0 !important; }
 :root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients #report-content button[style*="border-radius:8px"] { border-radius: 999px !important; min-height: 34px; }
 :root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients #report-content button[style*="background:var(--accent-color)"], :root[data-theme^="taccuino"][data-tice-stile="quaderno"] #modal-patients #report-content button[style*="background:rgba(99,102,241,0.2)"] { background: var(--text-primary) !important; color: var(--q-carta) !important; border-color: var(--text-primary) !important; }
+
+/* ==========================================================================
+   Il resto dell'app (giochi, archivio set, editor, impostazioni, condivisione):
+   stesso quaderno. Testate in Gloock, «Chiudi» sobrio, niente bottoni
+   arcobaleno, carta senza la scheda incorniciata. Solo nell'aspetto «quaderno».
+   ========================================================================== */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .modal-fs:not(#modal-patients) { background: var(--q-carta) !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .modal-fs:not(#modal-patients) > .modal-header { background: var(--q-carta) !important; border-bottom: 1px solid var(--q-matita) !important; box-shadow: none !important; align-items: flex-end; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .modal-fs:not(#modal-patients) > .modal-header h2 { display: flex; flex-direction: column; gap: 2px; font-family: var(--f-display); font-weight: 400; font-size: clamp(1.9rem, 6vw, 2.5rem) !important; line-height: 1.02; letter-spacing: -0.015em; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .modal-fs:not(#modal-patients) > .modal-header h2 i { display: none; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .modal-fs:not(#modal-patients) > .modal-header h2::before { content: 'Centro TICE'; font-family: var(--f-testo); font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; font-weight: 600; color: var(--text-secondary); }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .modal-fs > .modal-header .btn-danger { width: auto !important; height: auto !important; min-height: 40px; border-radius: 999px !important; padding: 8px 18px !important; background: transparent !important; border: 1px solid var(--q-matita-forte) !important; color: var(--text-primary) !important; box-shadow: none !important; }
+
+/* bottoni colorati «a mano» nell'HTML: tutti a matita, l'unico colore è il vermiglio */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .btn-ghost[style*="border-color"], :root[data-theme^="taccuino"][data-tice-stile="quaderno"] .btn-ghost[style*="color:"], :root[data-theme^="taccuino"][data-tice-stile="quaderno"] .btn-icon[style*="border-color"] { border-color: var(--q-matita-forte) !important; color: var(--text-primary) !important; background: transparent !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .btn, :root[data-theme^="taccuino"][data-tice-stile="quaderno"] .btn-icon, :root[data-theme^="taccuino"][data-tice-stile="quaderno"] .btn-float { border-radius: 999px; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .btn-danger:not(.modal-header .btn-danger) { background: transparent !important; color: var(--q-spot) !important; border: 1px solid currentColor !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .btn-success { background: var(--text-primary) !important; color: var(--q-carta) !important; border-color: var(--text-primary) !important; }
+
+/* schermata dei giochi: carta aperta, testata in Gloock */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .app-shell { background: transparent !important; border: 0 !important; box-shadow: none !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .app-shell > header h1 .tice-torna span { font-family: var(--f-display); font-weight: 400; font-size: 1.6rem; letter-spacing: -0.01em; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .app-shell > header { border-bottom: 1px solid var(--q-matita); }
+
+/* archivio: intestazioni di categoria come etichette con la riga, schede a matita */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .lib-category-header { background: none !important; border: 0 !important; border-bottom: 1px solid var(--q-matita) !important; border-radius: 0 !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .lib-category-header h3, :root[data-theme^="taccuino"][data-tice-stile="quaderno"] .lib-category-header span:first-of-type { font-family: var(--f-testo) !important; font-size: .78rem !important; letter-spacing: .12em; text-transform: uppercase; font-weight: 600; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .set-card, :root[data-theme^="taccuino"][data-tice-stile="quaderno"] .lib-card { background: transparent !important; border: 1px solid var(--q-matita) !important; box-shadow: none !important; border-radius: 14px !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .set-card h3, :root[data-theme^="taccuino"][data-tice-stile="quaderno"] .set-card h4, :root[data-theme^="taccuino"][data-tice-stile="quaderno"] .lib-card h3, :root[data-theme^="taccuino"][data-tice-stile="quaderno"] .lib-card h4 { font-family: var(--f-display); font-weight: 400 !important; font-size: 1.3rem !important; }
+
+/* finestre (impostazioni, istruzioni…): titoli in Gloock, linguette a pillola */
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .modal .modal-header h2, :root[data-theme^="taccuino"][data-tice-stile="quaderno"] .modal .modal-header h3 { font-family: var(--f-display); font-weight: 400; font-size: 1.6rem; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .modal .modal-header h2 i, :root[data-theme^="taccuino"][data-tice-stile="quaderno"] .modal .modal-header h3 i { display: none; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .modal-dialog .modal-heading { font-family: var(--f-display); font-weight: 400 !important; font-size: 1.7rem !important; }
+:root[data-theme^="taccuino"][data-tice-stile="quaderno"] .modal-dialog .modal-heading > i { display: none; }
