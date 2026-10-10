@@ -90,7 +90,6 @@
         // lì resta bianca. Si usa invece il giro classico: si va alla pagina di Google e
         // si torna qui con il token nell'indirizzo (#id_token=…), che si legge e si cancella.
         const installata = () => { try { return matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true; } catch (e) { return false; } };
-        const telefono = () => { try { return matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 900; } catch (e) { return false; } };
         const K_NONCE = 'tice:nonce';
         const indirizzoRitorno = () => location.origin + location.pathname.replace(/index\.html$/, '');
         function accediRitorno() {
@@ -134,9 +133,7 @@
                 };
                 return Promise.resolve();
             }
-            // solo sul telefono: sul Mac l'app di Safari aprirebbe Google nel browser, e il ritorno
-            // con l'accesso finirebbe lì invece che nell'app; il pulsante di Google invece funziona
-            if (installata() && telefono()) {
+            if (installata()) {
                 el.innerHTML = '<button type="button" class="bt primario"><i class="fa-brands fa-google"></i> Accedi con Google</button>';
                 el.querySelector('button').onclick = accediRitorno;
                 return Promise.resolve();
