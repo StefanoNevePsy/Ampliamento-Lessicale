@@ -823,3 +823,4 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 .tice-foglio .mod-gruppo { margin: 14px 2px 6px; }
 .tice-foglio .mod-voce.scelta { border-color: var(--accent-color); }
 .tice-foglio .mod-voce[hidden], .tice-foglio [data-gruppo][hidden], .tice-foglio [data-gruppo-voci][hidden], .tice-foglio .mod-speciali[hidden] { display: none !important; }
+.tice-foglio [data-si-ta][hidden], .tice-foglio [data-no-ta][hidden] { display: none !important; }

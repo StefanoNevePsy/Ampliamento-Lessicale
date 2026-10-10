@@ -1626,7 +1626,9 @@
             const r = await moduloAttivita(p, null);
             if (!r) return;
             try { await risolviNuovaModalita(r); } catch (e) { avviso('Modalità non creata: ' + (e.message || e), 'errore'); r.modalita = ''; }
-            const righe = String(r.target || '').split('\n').map((x) => x.trim()).filter(Boolean);
+            const passiTA = r.ta ? String(r.taPassi || '').split('\n').map((x) => x.trim()).filter(Boolean) : [];
+            const righe = passiTA.length ? [String(r.taCompito || '').trim() || String(r.nome || '').trim() || 'Compito']
+                : String(r.target || '').split('\n').map((x) => x.trim()).filter(Boolean);
             const att = P.nuovaAttivita(p, Object.assign({}, r, { target: null, sessionType: r.sessionType === 'timedelay' ? 'timedelay' : 'independent' }));
             if (r.sessionType === 'ecoico') { att.risposte = 'ecoico'; att.nomeP = 'Ecoica'; }
             if (r.colore) att.colore = r.colore;
@@ -1635,6 +1637,7 @@
             if (eGruppo(p)) allineaMembri(p); else impostaMisure(att, r);
             modalitaDaModulo(att, r);
             righe.forEach((x, i) => P.aggiungiTarget(att, x, i === 0));
+            if (passiTA.length && att.target && att.target[0]) att.target[0].passi = P.nuoviPassi(passiTA, []);
             await salvaPaziente(p);
             if (!righe.length) {
                 // nessun target scritto: si sceglie subito da set, liste o a mano
@@ -2096,8 +2099,14 @@
                 <label class="spunta-riga"><input type="checkbox" name="cronometro" ${a.cronometro ? grezzo('checked') : ''}> <span><b>Cronometra (fluency)</b> <span class="sotto piccolo">· risposte al minuto, grafico SCC</span></span></label>
             </section>
             ${att ? '' : h`<section class="sez"><h3 class="sez-titolo">Target</h3>
-                <label class="campo"><span>Uno per riga: il primo è quello da cui si parte</span><textarea name="target" rows="3" placeholder="es. Animali: cane, gatto&#10;Frutta: mela, banana"></textarea>
-                    <span class="sotto piccolo">Vuoto: li scegli dopo dall'archivio dei set o da una lista; si può anche lavorare senza target.</span></label></section>`}
+                <label class="spunta-riga"><input type="checkbox" name="ta" data-ta-scelta> <span><b>È una task analysis</b> <span class="sotto piccolo">· un compito diviso in passi, uno alla volta in seduta</span></span></label>
+                <label class="campo" data-no-ta><span>Uno per riga: il primo è quello da cui si parte</span><textarea name="target" rows="3" placeholder="es. Animali: cane, gatto&#10;Frutta: mela, banana"></textarea>
+                    <span class="sotto piccolo">Vuoto: li scegli dopo dall'archivio dei set o da una lista; si può anche lavorare senza target.</span></label>
+                <div data-si-ta hidden>
+                    <label class="campo"><span>Compito <small class="sotto">· vuoto: il nome dell'attività</small></span><input name="taCompito" maxlength="200" placeholder="es. Lavarsi le mani"></label>
+                    <label class="campo"><span>Passi, uno per riga, nell'ordine in cui si fanno</span><textarea name="taPassi" rows="7" placeholder="Apre il rubinetto&#10;Mette le mani sotto l'acqua&#10;Prende il sapone"></textarea>
+                        <span class="sotto piccolo">In seduta compare un passo alla volta; finito l'ultimo si ricomincia. I passi si cambiano poi dal programma.</span></label>
+                </div></section>`}
             <details class="sez apribile" ${eGruppo(p) ? grezzo('hidden') : ''} ${nMis ? grezzo('open') : ''}><summary><span class="sez-titolo">Sottoattività</span> <span class="sotto piccolo">${nMis ? nMis + ' · ' : ''}più prese dati nella stessa attività</span></summary>
                 <div class="sottoattivita" data-sotto>${(a.misure || []).map((m, i) => rigaSotto(i, m))}</div>
                 <button type="button" class="bt piccolo fantasma" data-sotto-aggiungi>${icona('plus')} Aggiungi sottoattività</button>
@@ -2139,6 +2148,11 @@
                 });
                 sm.addEventListener('change', etichetta);
                 sm.addEventListener('change', () => { nm.hidden = sm.value !== '+'; if (!nm.hidden) nm.querySelector('input').focus(); });
+                const ta = el.querySelector('[data-ta-scelta]');
+                if (ta) ta.addEventListener('change', () => {
+                    el.querySelector('[data-si-ta]').hidden = !ta.checked; el.querySelector('[data-no-ta]').hidden = ta.checked;
+                    if (ta.checked) el.querySelector('[name=taPassi]').focus();
+                });
                 // le parti che dipendono dal tipo di seduta compaiono solo quando servono
                 el.querySelectorAll('[name=sessionType]').forEach((r) => r.addEventListener('change', () => {
                     el.querySelectorAll('[data-se-tipo]').forEach((x) => { x.hidden = x.dataset.seTipo !== r.value; });
