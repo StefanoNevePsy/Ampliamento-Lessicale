@@ -767,11 +767,19 @@
             </div>
             <div class="mod-elenco">${cats.map((c) => h`<p class="eti mod-gruppo" data-gruppo="${c.id}">${c.nome}</p><div class="opzioni" data-gruppo-voci="${c.id}">${E.modalita.filter((m) => m.categoria === c.id).map((m) => voce(m, c))}</div>`)}</div>
             <p class="sotto mod-nessuna" hidden>Nessuna modalità con questo nome.</p>
-            <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button type="button" class="bt" data-foglio="m:+">${icona('plus')} Nuova modalità</button></div></div>`, {
+            <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button type="button" class="bt" data-foglio="m:+" data-mod-nuova-bt>${icona('plus')} Nuova modalità</button></div></div>`, {
             dopo: (f) => {
                 let cat = '';
                 const q = f.querySelector('[data-mod-cerca]');
+                // con una categoria scelta (e magari un nome scritto) «nuova» la crea già lì
+                const nb = f.querySelector('[data-mod-nuova-bt]');
+                const aggiornaNuova = () => {
+                    const nome = q.value.trim(), c = cats.find((x) => x.id === cat);
+                    nb.dataset.foglio = 'm:+' + (c ? '|' + c.id + '|' + nome : nome ? '||' + nome : '');
+                    nb.innerHTML = String(icona('plus')) + ' ' + (c || nome ? `Aggiungi ${nome ? '«' + esc(nome) + '»' : 'una modalità'}${c ? ' a ' + esc(c.nome) : ''}` : 'Nuova modalità');
+                };
                 const filtra = () => {
+                    aggiornaNuova();
                     const t = q.value.trim().toLowerCase();
                     let n = 0;
                     f.querySelectorAll('.mod-voce').forEach((v) => { v.hidden = (cat && v.dataset.cat !== cat) || (t && !v.dataset.testo.includes(t)); if (!v.hidden) n++; });
@@ -787,7 +795,7 @@
                 if (matchMedia('(pointer: fine)').matches) q.focus();
             }
         });
-        return r && r.indexOf('m:') === 0 ? r.slice(2) : null;
+        return r && r.indexOf('m:') === 0 ? r.slice(2) : null;   // «+|categoria|nome» per una nuova
     }
     function rigaModalita(k, id, st) {
         const E = M.elenco(dizionario());
@@ -2119,7 +2127,15 @@
                 bm.addEventListener('click', async () => {
                     const v = await scegliModalita(sm.value === '+' ? '' : sm.value);
                     if (v == null) return;
-                    sm.value = v; etichetta(); sm.dispatchEvent(new Event('change', { bubbles: true }));
+                    const [scelta, cat, nome] = v.split('|');
+                    sm.value = scelta; etichetta(); sm.dispatchEvent(new Event('change', { bubbles: true }));
+                    if (scelta === '+') {
+                        const n = nm.querySelector('[name=mod_nome]'), c = nm.querySelector('[name=mod_cat]');
+                        if (nome) { n.value = nome; n.dispatchEvent(new Event('input', { bubbles: true })); }
+                        if (cat && c) { c.value = cat; c.dispatchEvent(new Event('change', { bubbles: true })); }
+                        bm.innerHTML = `<span>Nuova: ${esc(nome || '…')}${cat && c ? ` <small>${esc(c.selectedOptions[0].textContent)}</small>` : ''}</span><i class="fa-solid fa-magnifying-glass"></i>`;
+                        if (!nome) n.focus();
+                    }
                 });
                 sm.addEventListener('change', etichetta);
                 sm.addEventListener('change', () => { nm.hidden = sm.value !== '+'; if (!nm.hidden) nm.querySelector('input').focus(); });
