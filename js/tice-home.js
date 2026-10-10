@@ -539,6 +539,7 @@
                     <span class="ta-punti">${passi.map((ps, k) => h`<i class="${k === st.i ? 'qui' : ''} ${((v && v.esiti && v.esiti[ps.id]) || '').slice(-1)}"></i>`)}</span>
                 </div>` : ''}
                 ${ms.length ? ms.map((m, i) => presaDati(p, att, t, tipo, m, vm[i], critM[i], soglia)) : h`${tasti(att, tipo)}
+                ${righeCondizioni(att.condizioni, tipo, ecoico(att))}
                 <div class="sotto-tasti">
                     <div class="sequenza ${ecoico(att) ? 'eco' : ''}" aria-label="Sequenza delle risposte">${(v ? v.sequenza : '').split('').map((r) => h`<i class="${r}"></i>`)}</div>
                     ${st ? h`<button class="ib" data-a="salta-passo" data-id="${att.id}" aria-label="Salta il passo" title="Salta il passo">${icona('forward')}</button>
@@ -578,6 +579,7 @@
                 <span class="presa-conto">${tot ? h`<b class="${classePct(Math.round(100 * v.v / tot), soglia)}">${Math.round(100 * v.v / tot)}%</b> <span class="sotto">${v.v}/${tot}${attM.prove ? ' di ' + attM.prove : ''}</span>` : h`<span class="sotto">${attM.prove ? attM.prove + ' prove' : ''}</span>`}</span></div>
             ${lu && (lu.prec || lu.oggi) ? h`<p class="sotto piccolo lu-attesa">${icona('hourglass-half')} ${testoLU(lu)}</p>` : ''}
             ${tasti(attM, tipoM, k)}
+            ${righeCondizioni(m.condizioni || att.condizioni, tipoM, tm.eco)}
             <div class="sotto-tasti">
                 <div class="sequenza ${tm.eco ? 'eco' : ''}" aria-label="Sequenza delle risposte">${(v ? v.sequenza : '').split('').map((r) => h`<i class="${r}"></i>`)}</div>
                 <button class="ib" data-a="annulla" data-id="${k}" aria-label="Annulla l'ultima di ${m.nome}" title="Annulla l'ultima">${icona('rotate-left')}</button>
@@ -1585,6 +1587,7 @@
             if (r.sessionType === 'ecoico') { att.risposte = 'ecoico'; att.nomeP = 'Ecoica'; }
             if (r.colore) att.colore = r.colore;
             impostaField(att, r.field, r.promptVisivo);
+            impostaCondizioni(att, r.cV, r.cP, r.cX);
             if (eGruppo(p)) allineaMembri(p); else impostaMisure(att, r);
             modalitaDaModulo(att, r);
             righe.forEach((x, i) => P.aggiungiTarget(att, x, i === 0));
@@ -1628,6 +1631,7 @@
                 att.criterio = { soglia: +r.soglia || 90, sedute: +r.sedute || 2 };
                 att.prove = +r.prove || null;
                 impostaField(att, r.field, r.promptVisivo);
+                impostaCondizioni(att, r.cV, r.cP, r.cX);
                 rinominaSedute(p, att);   // nome e categoria delle sedute
             }
             att.modificato = new Date().toISOString();
@@ -1960,12 +1964,29 @@
         const parti = String(pv || '').split(/[|,·]/).map((x) => x.trim()).filter(Boolean);
         return h`<span class="caselle-prompt" title="Prompt visivo">${parti.length > 1 ? parti.map((x) => h`<span class="casella"><i></i><small>${x}</small></span>`) : h`<span class="casella-testo">${pv}</span>`}</span>`;
     };
+    // Cosa vale come ✓, P/e+ e ✗: per attività e sottoattività (vuoto = nessuna indicazione)
+    function impostaCondizioni(o, v, pp, x) {
+        const c = {}; [['V', v], ['P', pp], ['X', x]].forEach(([k, t]) => { t = String(t || '').trim().slice(0, 200); if (t) c[k] = t; });
+        if (Object.keys(c).length) o.condizioni = c; else delete o.condizioni;
+    }
+    // in seduta, sotto i tasti: solo le risposte che quell'attività usa
+    function righeCondizioni(c, tipo, eco) {
+        if (!c) return '';
+        const usate = eco ? ['V', 'P', 'X'] : ['V', nonCorretta(tipo)];
+        const segno = { V: '✓', P: eco ? 'e+' : 'P', X: '✗' };
+        const r = usate.filter((k) => c[k]);
+        return r.length ? h`<p class="condizioni">${r.map((k) => h`<span class="cond ${k.toLowerCase()}"><b>${segno[k]}</b> ${c[k]}</span>`)}</p>` : '';
+    }
+    const campiCondizioni = (pre, c) => h`<div class="riga-campi campi-cond">
+        <label class="campo"><span>✓ vale come corretta</span><input name="${pre + 'cV'}" maxlength="200" value="${(c && c.V) || ''}" placeholder="es. ordina le 3 carte giuste"></label>
+        <label class="campo"><span>P / e+ promptata</span><input name="${pre + 'cP'}" maxlength="200" value="${(c && c.P) || ''}" placeholder="es. con le caselle prima/poi/dopo"></label>
+        <label class="campo"><span>✗ errata</span><input name="${pre + 'cX'}" maxlength="200" value="${(c && c.X) || ''}" placeholder="es. ordine sbagliato o nessuna risposta"></label></div>`;
     // Le prese dati scritte nel modulo: quelle già esistenti tengono il loro id (e i dati)
     function impostaMisure(att, r) {
         const righe = Object.keys(r).filter((k) => /^ms_nome_\d+$/.test(k)).sort((x, y) => +x.slice(8) - +y.slice(8))
             .map((k) => { const i = k.slice(8); return { id: String(r['ms_id_' + i] || ''), nome: String(r[k] || '').trim(), mant: !!r['ms_mant_' + i],
                 tipo: ['independent', 'timedelay', 'ecoico'].includes(r['ms_tipo_' + i]) ? r['ms_tipo_' + i] : '', sugg: String(r['ms_sugg_' + i] || '').trim(),
-                prove: Math.min(200, parseInt(r['ms_prove_' + i], 10) || 0), field: r['ms_field_' + i] }; })
+                prove: Math.min(200, parseInt(r['ms_prove_' + i], 10) || 0), field: r['ms_field_' + i], cV: r['ms_' + i + '_cV'], cP: r['ms_' + i + '_cP'], cX: r['ms_' + i + '_cX'] }; })
             .filter((x) => x.nome);
         const viste = new Set();
         const nuove = righe.filter((x) => { const k = x.nome.toLowerCase(); if (viste.has(k)) return false; viste.add(k); return true; }).slice(0, 8);
@@ -1979,6 +2000,7 @@
             if (x.sugg) m.suggerimenti = x.sugg;
             if (x.prove > 0) m.prove = x.prove;
             impostaField(m, x.field, vecchia && vecchia.promptVisivo);
+            impostaCondizioni(m, x.cV, x.cP, x.cX);
             return m;
         });
     }
@@ -2023,6 +2045,7 @@
                     <label class="campo campo-field"><span>Field <small class="sotto">· stimoli fra cui scegliere</small></span><input name="field" type="number" min="1" max="20" inputmode="numeric" value="${a.field || ''}" placeholder="es. 3"></label>
                     <label class="campo"><span>Prompt visivo <small class="sotto">· caselle</small></span><input name="promptVisivo" maxlength="200" value="${a.promptVisivo || ''}" placeholder="es. prima | poi | dopo"></label>
                 </div>
+                <div class="campo"><span>Cosa vale come… <small class="sotto">· facoltativo, compare in seduta sotto i tasti</small></span>${campiCondizioni('', a.condizioni)}</div>
                 <p class="sotto piccolo aiuto">Field: F3 = tre stimoli presentati, uno da scegliere. Prompt visivo: le caselle separate da | (prima | poi | dopo) compaiono in seduta come quadrati da indicare.</p>
                 <p class="sotto piccolo aiuto">Con le prove per LU il dato entra quando se ne completano tante, anche in più sedute; vuoto: percentuale a ogni seduta.</p>
                 <label class="spunta-riga"><input type="checkbox" name="mantenimento" ${a.mantenimento ? grezzo('checked') : ''}> <span><b>Mantenimento</b> <span class="sotto piccolo">· si segna, ma fuori da statistiche e criterio</span></span></label>
@@ -2080,6 +2103,7 @@
                 <input class="campo-in prove-sotto" name="${'ms_field_' + i}" type="number" min="1" max="20" inputmode="numeric" value="${(m && m.field) || ''}" placeholder="Field" title="Field: quanti stimoli fra cui scegliere (vuoto: come l'attività)" aria-label="Field della sottoattività">
                 <input class="campo-in" name="${'ms_sugg_' + i}" maxlength="600" value="${(m && m.suggerimenti) || ''}" placeholder="Indicazioni per chi somministra (facoltative)" aria-label="Indicazioni della sottoattività">
             </div>
+            <details class="cond-sotto" ${m && m.condizioni ? grezzo('open') : ''}><summary class="sotto piccolo">Cosa vale come ✓, P, ✗${m && m.condizioni ? ' · indicato' : ''}</summary>${campiCondizioni('ms_' + i + '_', m && m.condizioni)}</details>
         </div>`;
     }
 

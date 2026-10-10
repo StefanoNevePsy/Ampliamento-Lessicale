@@ -801,3 +801,13 @@ body.tice-tirocinante [onclick^="openDayTagPicker"] { display: none !important; 
 .tice .caselle-prompt .casella { display: inline-flex; flex-direction: column; align-items: center; gap: 1px; }
 .tice .caselle-prompt .casella i { display: block; width: 18px; height: 15px; border: 1.5px solid currentColor; border-radius: 2px; }
 .tice .caselle-prompt .casella small { font-size: .68rem; line-height: 1; }
+
+/* cosa vale come ✓ / P / ✗ */
+.tice .condizioni { display: flex; flex-direction: column; gap: 2px; margin: 8px 2px 0; font-size: .84rem; color: var(--text-secondary); user-select: text; }
+.tice .condizioni b { display: inline-block; min-width: 1.6em; }
+.tice .condizioni .v b { color: var(--t-v); } .tice .condizioni .p b { color: var(--t-p); } .tice .condizioni .x b { color: var(--t-x); }
+.tice .presa.compatta .condizioni { grid-column: 1 / -1; order: 11; margin: 0; }
+.tice-foglio .campi-cond { flex-wrap: wrap; }
+.tice-foglio .campi-cond > * { min-width: 140px; }
+.tice-foglio .cond-sotto { margin-top: 4px; }
+.tice-foglio .cond-sotto summary { cursor: pointer; padding: 8px 0; }
