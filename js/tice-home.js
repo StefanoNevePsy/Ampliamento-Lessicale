@@ -753,6 +753,42 @@
             return ms.length ? h`<optgroup label="${c.nome}">${ms.map((m) => h`<option value="${m.id}" ${scelta === m.id ? grezzo('selected') : ''}>${m.nome}</option>`)}</optgroup>` : '';
         });
     }
+    // Scelta della modalità: un foglio con ricerca e filtro per categoria al posto della tendina
+    async function scegliModalita(attuale) {
+        const E = M.elenco(dizionario());
+        const voce = (m, c) => h`<button type="button" class="opzione mod-voce ${m.id === attuale ? 'scelta' : ''}" data-foglio="${'m:' + m.id}" data-cat="${c.id}" data-testo="${(m.nome + ' ' + c.nome).toLowerCase()}">
+            <span class="corpo">${m.nome}<small>${c.nome}</small></span>${m.id === attuale ? icona('check') : ''}</button>`;
+        const cats = E.categorie.filter((c) => E.modalita.some((m) => m.categoria === c.id));
+        const r = await foglio(h`<div class="sceglie-mod"><h2>Modalità</h2>
+            <input class="cerca" type="search" placeholder="Cerca una modalità" aria-label="Cerca una modalità" data-mod-cerca autocomplete="off">
+            <div class="mod-filtri" role="group" aria-label="Categoria"><button type="button" class="bt piccolo on" data-mod-cat="">Tutte</button>${cats.map((c) => h`<button type="button" class="bt piccolo" data-mod-cat="${c.id}">${c.nome}</button>`)}</div>
+            <div class="opzioni mod-speciali">
+                <button type="button" class="opzione ${!attuale ? 'scelta' : ''}" data-foglio="m:"><span class="corpo">Dal nome, in automatico<small>L'app la riconosce dal nome dell'attività</small></span></button>
+            </div>
+            <div class="mod-elenco">${cats.map((c) => h`<p class="eti mod-gruppo" data-gruppo="${c.id}">${c.nome}</p><div class="opzioni" data-gruppo-voci="${c.id}">${E.modalita.filter((m) => m.categoria === c.id).map((m) => voce(m, c))}</div>`)}</div>
+            <p class="sotto mod-nessuna" hidden>Nessuna modalità con questo nome.</p>
+            <div class="bottoni"><button type="button" class="bt" data-foglio="chiudi">Annulla</button><button type="button" class="bt" data-foglio="m:+">${icona('plus')} Nuova modalità</button></div></div>`, {
+            dopo: (f) => {
+                let cat = '';
+                const q = f.querySelector('[data-mod-cerca]');
+                const filtra = () => {
+                    const t = q.value.trim().toLowerCase();
+                    let n = 0;
+                    f.querySelectorAll('.mod-voce').forEach((v) => { v.hidden = (cat && v.dataset.cat !== cat) || (t && !v.dataset.testo.includes(t)); if (!v.hidden) n++; });
+                    f.querySelectorAll('[data-gruppo]').forEach((g) => { const vis = [...f.querySelectorAll(`[data-gruppo-voci="${g.dataset.gruppo}"] .mod-voce`)].some((v) => !v.hidden); g.hidden = !vis; g.nextElementSibling.hidden = !vis; });
+                    f.querySelector('.mod-speciali').hidden = !!(t || cat);
+                    f.querySelector('.mod-nessuna').hidden = n > 0;
+                };
+                q.addEventListener('input', filtra);
+                f.querySelectorAll('[data-mod-cat]').forEach((b) => b.addEventListener('click', () => {
+                    cat = b.dataset.modCat; f.querySelectorAll('[data-mod-cat]').forEach((x) => x.classList.toggle('on', x === b)); filtra();
+                }));
+                const sc = f.querySelector('.mod-voce.scelta'); if (sc) sc.scrollIntoView({ block: 'center' });
+                if (matchMedia('(pointer: fine)').matches) q.focus();
+            }
+        });
+        return r && r.indexOf('m:') === 0 ? r.slice(2) : null;
+    }
     function rigaModalita(k, id, st) {
         const E = M.elenco(dizionario());
         const da = (c) => grezzo(`data-cambio="${c}" data-k="${esc(k)}" data-att="${esc(id)}"`);
@@ -2073,6 +2109,19 @@
             dopo: (el) => {
                 agganciaNuove(el);
                 const sm = el.querySelector('[data-mod-scelta]'), nm = el.querySelector('[data-mod-nuova]');
+                // la tendina resta (è lei che va nel modulo) ma si sceglie dal foglio con la ricerca
+                sm.hidden = true;
+                const bm = document.createElement('button');
+                bm.type = 'button'; bm.className = 'campo-in scegli-mod';
+                const etichetta = () => { const o = sm.selectedOptions[0]; const g = o && o.parentElement.tagName === 'OPTGROUP' ? o.parentElement.label : ''; bm.innerHTML = `<span>${o && o.value ? esc(o.textContent) : 'Dal nome, in automatico'}${g ? ` <small>${esc(g)}</small>` : ''}</span><i class="fa-solid fa-magnifying-glass"></i>`; };
+                etichetta();
+                sm.after(bm);
+                bm.addEventListener('click', async () => {
+                    const v = await scegliModalita(sm.value === '+' ? '' : sm.value);
+                    if (v == null) return;
+                    sm.value = v; etichetta(); sm.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+                sm.addEventListener('change', etichetta);
                 sm.addEventListener('change', () => { nm.hidden = sm.value !== '+'; if (!nm.hidden) nm.querySelector('input').focus(); });
                 // le parti che dipendono dal tipo di seduta compaiono solo quando servono
                 el.querySelectorAll('[name=sessionType]').forEach((r) => r.addEventListener('change', () => {
